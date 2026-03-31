@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <!-- Background -->
+  <rect width="192" height="192" rx="32" fill="#1A5276"/>
+  <!-- White box (article/colis) -->
+  <rect x="44" y="72" width="104" height="80" rx="8" fill="white" opacity="0.95"/>
+  <!-- Box flap top left -->
+  <path d="M44 72 L96 56 L96 72 Z" fill="white" opacity="0.7"/>
+  <!-- Box flap top right -->
+  <path d="M148 72 L96 56 L96 72 Z" fill="white" opacity="0.55"/>
+  <!-- Arrow down (arrivée) -->
+  <path d="M96 30 L96 52" stroke="#4ADE80" stroke-width="7" stroke-linecap="round"/>
+  <path d="M80 40 L96 56 L112 40" fill="none" stroke="#4ADE80" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Horizontal line on box -->
+  <rect x="64" y="100" width="64" height="6" rx="3" fill="#1A5276" opacity="0.3"/>
+  <rect x="64" y="116" width="40" height="6" rx="3" fill="#1A5276" opacity="0.2"/>
+</svg>
