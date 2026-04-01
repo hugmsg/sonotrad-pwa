@@ -458,6 +458,12 @@
         <button onclick="App.reloadCodes()" style="margin-top:10px;background:#EBF5FB;color:var(--brand);border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻ Recharger les codes existants</button>
       </div>
 
+      <div class="card" style="margin-bottom:12px;">
+        <p style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:10px;">🔧 Diagnostic API</p>
+        <button onclick="App.runDiag()" style="background:#F0FDF4;color:#14532D;border:1px solid #86EFAC;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;width:100%;margin-bottom:8px;">▶ Tester les endpoints</button>
+        <div id="diag-result" style="font-size:12px;font-family:monospace;background:#F8FAFC;border-radius:6px;padding:8px;display:none;white-space:pre-wrap;word-break:break-all;color:#334155;"></div>
+      </div>
+
       <div class="card" style="border:1px solid #FECACA;">
         <p style="font-size:14px;font-weight:700;color:#991B1B;margin-bottom:10px;">⚠️ Données locales</p>
         <button onclick="App.clearHistory()" style="background:#FEF2F2;color:#991B1B;border:1px solid #FECACA;padding:10px 16px;border-radius:8px;font-size:14px;cursor:pointer;width:100%;">Effacer l'historique local</button>
@@ -806,7 +812,7 @@ const App = {
 
     try {
       const url  = S.apiUrl + '?action=production';
-      const resp = await fetch(url, { mode: 'cors' });
+      const resp = await fetch(url);
       const data = await resp.json();
       S.deps       = Array.isArray(data) ? data : (data.data || []);
       S.depsLoaded = true;
@@ -958,7 +964,7 @@ const App = {
   async _fetchCodes() {
     if (!S.apiUrl) return;
     try {
-      const r = await fetch(S.apiUrl + '?action=codes', { mode: 'cors' });
+      const r = await fetch(S.apiUrl + '?action=codes');
       const d = await r.json();
       if (Array.isArray(d.codes)) {
         S.codes   = new Set(d.codes.map(c => c.toUpperCase()));
@@ -991,6 +997,47 @@ const App = {
     if (url) this._fetchCodes();
   },
 
+  /* ─ Diagnostic ─ */
+  async runDiag() {
+    const box = document.getElementById('diag-result');
+    box.style.display = 'block';
+    box.textContent = 'Tests en cours...\n';
+    const url = S.apiUrl;
+    if (!url) { box.textContent = '❌ URL API non configurée'; return; }
+
+    const log = s => { box.textContent += s + '\n'; };
+
+    // Test 1 : GET codes
+    try {
+      const t0 = Date.now();
+      const r  = await fetch(url + '?action=codes');
+      const d  = await r.json();
+      log(`✅ GET ?action=codes → ${d.count || d.codes?.length || '?'} codes (${Date.now()-t0}ms)`);
+    } catch(e) { log('❌ GET ?action=codes → ' + e.message); }
+
+    // Test 2 : GET production
+    try {
+      const t0 = Date.now();
+      const r  = await fetch(url + '?action=production');
+      const raw = await r.text();
+      const d  = JSON.parse(raw);
+      const n  = Array.isArray(d) ? d.length : (d.data?.length ?? '?');
+      log(`✅ GET ?action=production → ${n} articles (${Date.now()-t0}ms)`);
+    } catch(e) { log('❌ GET ?action=production → ' + e.message); }
+
+    // Test 3 : POST FormData (ping)
+    try {
+      const t0   = Date.now();
+      const form = new FormData();
+      form.append('payload', JSON.stringify({ action: 'ping' }));
+      const r    = await fetch(url, { method: 'POST', body: form });
+      const raw  = await r.text();
+      log(`✅ POST FormData → ${raw.substring(0,80)} (${Date.now()-t0}ms)`);
+    } catch(e) { log('❌ POST FormData → ' + e.message); }
+
+    log('─── Fin des tests ───');
+  },
+
   /* ─ Toast ─ */
   toast(msg, ms = 2800) {
     const el = document.getElementById('toast');
@@ -1012,7 +1059,11 @@ function _timeStr()  { return new Date().toLocaleTimeString('fr-FR', { hour: '2-
 function _sleep(ms)  { return new Promise(r => setTimeout(r, ms)); }
 
 async function _post(url, payload) {
-  const r = await fetch(url, { method: 'POST', mode: 'cors', body: JSON.stringify(payload) });
+  // FormData évite le CORS preflight (multipart/form-data est une "simple request")
+  // AppScript reçoit les données via e.parameter.payload
+  const form = new FormData();
+  form.append('payload', JSON.stringify(payload));
+  const r = await fetch(url, { method: 'POST', body: form });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   const text = await r.text();
   try { return JSON.parse(text); } catch { return { status: 'ok', raw: text }; }
