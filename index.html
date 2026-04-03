@@ -1,541 +1,1156 @@
-// ═══════════════════════════════════════════════════════════════════════════════
-// SONOTRAD — Extensions AppScript pour la nouvelle PWA
-// Fichier : appscript_additions.gs
-//
-// INSTRUCTIONS D'INSTALLATION
-// ────────────────────────────
-// 1. Ouvre le Planning Script dans AppScript
-//    (Script ID : 1LBlp2pcouWliPZZp1ISJjjWKQerlwvQcUJOBhLH8GUL-kP2V)
-//
-// 2. Remplace ta fonction doGet(e) existante par celle ci-dessous
-//    (elle conserve le comportement actuel + ajoute ?action=codes)
-//
-// 3. Remplace ta fonction doPost(e) existante par celle ci-dessous
-//    (elle conserve l'upload photo existant + ajoute arrival / departure_photo)
-//
-// 4. Ajoute toutes les nouvelles fonctions (getSonotradCodes, saveArrival,
-//    saveDeparturePhotos, getOrCreateFolder) à la suite dans le fichier
-//
-// 5. Redéploie l'application web :
-//    Déployer → Gérer les déploiements → ✏️ → Nouvelle version → Déployer
-//    ⚠️  L'URL ne change pas, mais la version doit être mise à jour !
-//
-// 6. Dans la PWA (Réglages), colle l'URL de l'application web
-// ═══════════════════════════════════════════════════════════════════════════════
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1A5276">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Sonotrad">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.svg">
+  <title>Sonotrad</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root { --brand: #1A5276; --accent: #2E86C1; }
 
+    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
 
-// ── IDs centraux (identiques à Constantes.gs de la Bibliothèque) ────────────
-const MASTER_FILE_ID   = '12R3-Z05UKhuUgUbAbWsflvFtI6u69o2zKv4pdGKhHHU';
-const BCB_SHEET_ID     = '1yf4uvb67nOUpmpBDsXhRrF0ETDb3xeSC5bP3Z2DQZ5k';
-const AGORA_SHEET_ID   = '1wpGvSHiglz2wNM8ww19i6A6QgEWgW0tLGmq6ua-FN5Y';
-const RAPIDO_SHEET_ID  = '1RSBnUwqm7SQhkHSy82hcmNSRXLqZWpapD6NSVo-Ao40';
-const PIDEO_SHEET_ID   = '16GgXrb7GS08g4shiZz-iN0V0JqIjUNo2-TGpIqe3yjU';
-const ACHAT_SHEET_ID   = '1Lv_SFmVvKejhw_SLaf28hcp7r6QyksLheYqn8mR_eog';
-const SINISTRE_SHEET_ID= '1-lpS3uu9TS16_8mE7FBALkYnOj4vvpIMvZFAmYTq_VY';
-// SPREADSHEET_ID (Planning) = déjà défini dans ton script existant
-
-// Table de toutes les sources : { fileId, sheetName, startRow, codeCol (1-based) }
-const ALL_SOURCES = [
-  { id: MASTER_FILE_ID,  sheet: null,        start: 2, col: 1 }, // Master — col A (on scannera toutes les cols)
-  { id: PIDEO_SHEET_ID,  sheet: 'Stockage',  start: 8, col: 3 }, // CONFIG A — LOXAM PIDEO
-  { id: AGORA_SHEET_ID,  sheet: 'Liste',     start: 9, col: 2 }, // CONFIG B — AGORASTORE
-  { id: SINISTRE_SHEET_ID,sheet:'Stockage',  start: 8, col: 3 }, // CONFIG C — SINISTRES
-  { id: ACHAT_SHEET_ID,  sheet: 'Liste',     start: 9, col: 2 }, // CONFIG D — ACHATS
-  { id: RAPIDO_SHEET_ID, sheet: 'Réception', start: 9, col: 3 }, // CONFIG E — RAPIDO
-  { id: BCB_SHEET_ID,    sheet: 'Liste',     start: 9, col: 2 }, // CONFIG F — BCB
-];
-
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// doGet — REMPLACER la version existante par celle-ci
-//
-// ⚠️  CRITIQUE : chaque branche est enveloppée dans un try-catch.
-//     Sans ça, si une fonction plante, AppScript redirige vers une page
-//     d'erreur Google qui n'a pas de headers CORS → "Failed to fetch" côté PWA.
-// ═══════════════════════════════════════════════════════════════════════════════
-function doGet(e) {
-  const action = e.parameter.action || '';
-
-  // ── NOUVEAU : tous les codes existants (anti-doublons PWA) ────────────────
-  if (action === 'codes') {
-    try { return getSonotradCodes(); }
-    catch(err) { return _jsonResponse({ status:'error', error: err.toString(), codes:[], count:0 }); }
-  }
-
-  // ── Données de production (liste des articles pour départs) ───────────────
-  // On appelle getProductionDataSafe() en priorité (lecture bulk, pas de getRichTextValues).
-  // Si elle échoue on tente l'ancienne getProductionData() comme fallback.
-  if (action === 'production') {
-    try { return getProductionDataSafe(); }
-    catch(err1) {
-      try { return getProductionData(); }
-      catch(err2) {
-        return _jsonResponse({ status:'error', errorSafe: err1.toString(), errorLegacy: err2.toString(), data:[] });
-      }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: #F0F4F8;
+      -webkit-font-smoothing: antialiased;
+      overscroll-behavior: none;
     }
-  }
 
-  // ── Endpoint debug : liste les onglets du Planning Script ─────────────────
-  if (action === 'debug_sheets') {
-    try {
-      const ss     = SpreadsheetApp.getActiveSpreadsheet();
-      const sheets = ss.getSheets().map(s => ({ name: s.getName(), rows: s.getLastRow(), cols: s.getLastColumn() }));
-      return _jsonResponse({ status:'ok', spreadsheetName: ss.getName(), sheets });
-    } catch(err) { return _jsonResponse({ status:'error', error: err.toString() }); }
-  }
+    .app { max-width: 480px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; }
 
-  // ── Données des départs ───────────────────────────────────────────────────
-  try { return getDepartsData(); }
-  catch(err) { return _jsonResponse({ status:'error', error: err.toString(), data:[] }); }
-}
+    /* ── Header ── */
+    .header {
+      background: var(--brand);
+      color: white;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      min-height: 52px;
+    }
 
+    /* ── Main ── */
+    .main-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 16px 80px;
+      -webkit-overflow-scrolling: touch;
+    }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// doPost — REMPLACER la version existante par celle-ci
-//
-// Gère deux formats d'entrée :
-//   • FormData (nouvelle PWA)  → e.parameter.payload  (JSON stringifié)
-//   • JSON body (ancienne PWA) → e.postData.contents   (JSON direct)
-// ═══════════════════════════════════════════════════════════════════════════════
-function doPost(e) {
-  try {
-    let payload;
+    /* ── Bottom nav ── */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 480px;
+      background: white;
+      border-top: 1px solid #E2E8F0;
+      display: flex;
+      z-index: 100;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .nav-tab {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 8px 4px;
+      cursor: pointer;
+      color: #94A3B8;
+      font-size: 11px;
+      font-weight: 500;
+      gap: 2px;
+      border: none;
+      background: none;
+    }
+    .nav-tab.active { color: var(--brand); }
+    .nav-tab .icon { font-size: 22px; line-height: 1; }
 
-    // Format 1 : FormData envoyé par la nouvelle PWA (champ "payload")
-    if (e.parameter && e.parameter.payload) {
-      payload = JSON.parse(e.parameter.payload);
+    /* ── Cards ── */
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
 
-    // Format 2 : JSON body brut (ancienne PWA ou appels directs)
-    } else if (e.postData && e.postData.contents) {
-      payload = JSON.parse(e.postData.contents);
+    /* ── Module buttons ── */
+    .module-btn {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 16px;
+      border-radius: 12px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 600;
+      width: 100%;
+      margin-bottom: 10px;
+      text-align: left;
+      transition: transform 0.12s, opacity 0.12s;
+    }
+    .module-btn:active { transform: scale(0.97); opacity: 0.85; }
+    .module-btn.loxam  { background: #EBF5FB; border-color: #2E86C1; color: #1A5276; }
+    .module-btn.bcb    { background: #FEF3E8; border-color: #D35400; color: #7D2A00; }
+    .module-btn.agora  { background: #F5EEF8; border-color: #8E44AD; color: #5B2C6F; }
+    .module-btn.rapido { background: #F0FDF4; border-color: #16A34A; color: #14532D; }
 
+    /* ── Steps indicator ── */
+    .steps { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 4px 0 18px; }
+    .step-dot { width: 8px; height: 8px; border-radius: 50%; background: #CBD5E1; transition: all 0.3s; }
+    .step-dot.active { width: 24px; border-radius: 4px; background: var(--brand); }
+    .step-dot.done   { background: var(--accent); }
+
+    /* ── Code badge ── */
+    .code-badge {
+      font-size: 30px;
+      font-weight: 900;
+      letter-spacing: 8px;
+      color: var(--brand);
+      font-family: 'Courier New', monospace;
+      text-align: center;
+      padding: 18px 16px 18px 24px;
+      background: #EBF5FB;
+      border-radius: 12px;
+      border: 2px dashed var(--accent);
+      position: relative;
+    }
+
+    /* ── Photo grid ── */
+    .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .photo-thumb {
+      aspect-ratio: 1;
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative;
+      background: #F1F5F9;
+    }
+    .photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .photo-thumb .rm-btn {
+      position: absolute; top: 4px; right: 4px;
+      background: rgba(0,0,0,0.65); color: white; border-radius: 50%;
+      width: 22px; height: 22px; font-size: 13px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; border: none; line-height: 1;
+    }
+    .photo-add-btn {
+      aspect-ratio: 1;
+      border-radius: 8px;
+      border: 2px dashed #CBD5E1;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      cursor: pointer; color: #94A3B8; font-size: 12px;
+      gap: 4px; background: #F8FAFC;
+    }
+    .photo-add-btn:active { background: #F1F5F9; }
+
+    /* ── Buttons ── */
+    .btn { padding: 13px 20px; border-radius: 10px; font-size: 15px; font-weight: 600; border: none; cursor: pointer; transition: opacity 0.15s, transform 0.1s; }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--brand); color: white; width: 100%; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary { background: #F1F5F9; color: #475569; }
+
+    /* ── FAB ── */
+    .fab {
+      position: fixed; bottom: 76px; right: 16px;
+      width: 58px; height: 58px; border-radius: 50%;
+      background: var(--brand); color: white; font-size: 30px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 16px rgba(26,82,118,0.45);
+      cursor: pointer; border: none;
+      transition: transform 0.15s, box-shadow 0.15s;
+      z-index: 50;
+    }
+    .fab:active { transform: scale(0.88); }
+
+    /* ── Misc ── */
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .online  { background: #4ADE80; }
+    .offline { background: #F87171; }
+
+    .input-field {
+      width: 100%; padding: 11px 13px;
+      border: 1.5px solid #E2E8F0; border-radius: 8px;
+      font-size: 15px; background: #F8FAFC; color: #1E293B;
+      outline: none; transition: border-color 0.2s;
+    }
+    .input-field:focus { border-color: var(--accent); background: white; }
+
+    .label-sm { font-size: 12px; font-weight: 600; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 5px; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { width: 38px; height: 38px; border: 3px solid #E2E8F0; border-top-color: var(--brand); border-radius: 50%; animation: spin 0.75s linear infinite; margin: 0 auto 16px; }
+
+    #toast {
+      position: fixed; bottom: 84px; left: 50%; transform: translateX(-50%);
+      background: #1E293B; color: white; padding: 9px 20px;
+      border-radius: 20px; font-size: 14px; font-weight: 500;
+      z-index: 300; opacity: 0; transition: opacity 0.25s;
+      white-space: nowrap; pointer-events: none; max-width: 90%;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .back-btn { display: flex; align-items: center; gap: 5px; color: white; font-size: 15px; cursor: pointer; border: none; background: none; padding: 0; }
+    .back-btn.hidden { display: none; }
+
+    .code-mono { font-family: 'Courier New', monospace; font-weight: 700; letter-spacing: 2px; color: var(--brand); }
+
+    .history-row { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid #F1F5F9; }
+    .mod-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+
+    .dep-card {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 13px 14px; background: white; border-radius: 12px;
+      margin-bottom: 10px; cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      transition: transform 0.12s;
+    }
+    .dep-card:active { transform: scale(0.98); }
+
+    .chip { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+    .chip-blue   { background: #DBEAFE; color: #1D4ED8; }
+    .chip-yellow { background: #FEF3C7; color: #92400E; }
+    .chip-green  { background: #D1FAE5; color: #065F46; }
+
+    .warn-box { background: #FFFBEB; border-left: 4px solid #F59E0B; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
+    .warn-box p { font-size: 13px; color: #78350F; line-height: 1.4; }
+  </style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       HEADER
+       ══════════════════════════════════════════════════════════════════════ -->
+  <header class="header">
+    <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
+      <button class="back-btn hidden" id="btn-back" onclick="App.goBack()">
+        <span style="font-size:20px;">‹</span>
+        <span id="back-label">Retour</span>
+      </button>
+      <div id="header-logo" style="display:flex;align-items:center;gap:8px;">
+        <strong style="font-size:18px;letter-spacing:1.5px;">SONOTRAD</strong>
+        <span style="font-size:11px;opacity:0.6;font-weight:400;">Arrivées & Départs</span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+      <div style="display:flex;align-items:center;gap:5px;font-size:12px;opacity:0.9;">
+        <span class="status-dot online" id="status-dot"></span>
+        <span id="status-text">En ligne</span>
+      </div>
+      <button onclick="App.go('settings')" style="background:rgba(255,255,255,0.15);border:none;color:white;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;">⚙</button>
+    </div>
+  </header>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       MAIN CONTENT
+       ══════════════════════════════════════════════════════════════════════ -->
+  <main class="main-content">
+
+    <!-- ── VIEW : ARRIVALS ──────────────────────────────────────────────── -->
+    <div class="view active" id="view-arrivals">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <h2 style="font-size:20px;font-weight:700;color:#1E293B;">Arrivées récentes</h2>
+        <span id="pending-badge" style="display:none;background:#F59E0B;color:white;padding:2px 9px;border-radius:10px;font-size:12px;font-weight:600;"></span>
+      </div>
+
+      <div id="api-warning" class="warn-box" style="display:none;">
+        <p><strong>⚠️ API non configurée</strong><br>
+        L'app fonctionne en mode local uniquement. <a onclick="App.go('settings')" style="color:#2E86C1;cursor:pointer;text-decoration:underline;">Configurer l'URL →</a></p>
+      </div>
+
+      <div id="arrival-list"></div>
+
+      <div id="no-arrivals" style="text-align:center;padding:48px 0 32px;color:#94A3B8;display:none;">
+        <div style="font-size:52px;margin-bottom:12px;">📦</div>
+        <p style="font-size:16px;font-weight:600;">Aucune arrivée enregistrée</p>
+        <p style="font-size:13px;margin-top:4px;">Appuyez sur + pour commencer</p>
+      </div>
+    </div>
+
+    <!-- ── VIEW : NEW ARRIVAL ────────────────────────────────────────────── -->
+    <div class="view" id="view-new-arrival">
+      <div class="steps">
+        <div class="step-dot active" id="dot-1"></div>
+        <div class="step-dot" id="dot-2"></div>
+        <div class="step-dot" id="dot-3"></div>
+      </div>
+
+      <!-- Step 1 : Module selection -->
+      <div id="step-1">
+        <p style="font-size:17px;font-weight:700;color:#1E293B;margin-bottom:4px;">Quel type d'arrivée ?</p>
+        <p style="font-size:13px;color:#64748B;margin-bottom:18px;">Sélectionne la provenance du lot</p>
+
+        <button class="module-btn loxam" onclick="App.selectModule('loxam')">
+          <span style="font-size:30px;line-height:1;">🏗️</span>
+          <div><div>LOXAM / PIDEO</div><div style="font-size:12px;font-weight:400;opacity:0.7;margin-top:2px;">Matériel de levage & manutention</div></div>
+        </button>
+
+        <button class="module-btn bcb" onclick="App.selectModule('bcb')">
+          <span style="font-size:30px;line-height:1;">🚛</span>
+          <div><div>BCB</div><div style="font-size:12px;font-weight:400;opacity:0.7;margin-top:2px;">Véhicules & lots industriels</div></div>
+        </button>
+
+        <button class="module-btn agora" onclick="App.selectModule('agorastore')">
+          <span style="font-size:30px;line-height:1;">🏷️</span>
+          <div><div>Agorastore</div><div style="font-size:12px;font-weight:400;opacity:0.7;margin-top:2px;">Enchères & surplus</div></div>
+        </button>
+
+        <button class="module-btn rapido" onclick="App.selectModule('rapido')">
+          <span style="font-size:30px;line-height:1;">⚡</span>
+          <div><div>Rapido</div><div style="font-size:12px;font-weight:400;opacity:0.7;margin-top:2px;">Réception Rapido</div></div>
+        </button>
+      </div>
+
+      <!-- Step 2 : Code + Photos -->
+      <div id="step-2" style="display:none;">
+        <p style="font-size:17px;font-weight:700;color:#1E293B;margin-bottom:4px;" id="step2-title">Code article</p>
+        <p style="font-size:13px;color:#64748B;margin-bottom:14px;">Code unique généré automatiquement · Photos de réception</p>
+
+        <!-- Code -->
+        <div style="position:relative;margin-bottom:16px;">
+          <div class="code-badge" id="code-display">· · · · · ·</div>
+          <button onclick="App.regenerateCode()" title="Générer un autre code"
+            style="position:absolute;top:50%;right:10px;transform:translateY(-50%);background:var(--accent);color:white;border:none;border-radius:8px;padding:8px 11px;cursor:pointer;font-size:18px;line-height:1;">↻</button>
+        </div>
+        <div id="code-status" style="text-align:center;font-size:12px;color:#94A3B8;margin-bottom:14px;min-height:16px;"></div>
+
+        <!-- Photos -->
+        <div style="margin-bottom:16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <span style="font-size:14px;font-weight:600;color:#1E293B;">Photos <span style="font-weight:400;color:#64748B;">(facultatif)</span></span>
+            <span id="photo-count-2" style="font-size:12px;color:#64748B;">0 photo</span>
+          </div>
+          <div class="photo-grid" id="photo-grid-2">
+            <div class="photo-add-btn" onclick="App.triggerInput('photo-input-2')">
+              <span style="font-size:28px;">📷</span><span>Ajouter</span>
+            </div>
+          </div>
+          <input type="file" id="photo-input-2" accept="image/*" multiple style="display:none;" onchange="App.handlePhotos(event, 'arrival')">
+        </div>
+
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-secondary" onclick="App.showStep(1)" style="flex-shrink:0;">‹ Retour</button>
+          <button class="btn btn-primary" id="btn-next-2" onclick="App.goToStep3()" style="flex:1;">Continuer →</button>
+        </div>
+      </div>
+
+      <!-- Step 3 : Optional info + Submit -->
+      <div id="step-3" style="display:none;">
+        <p style="font-size:17px;font-weight:700;color:#1E293B;margin-bottom:4px;">Informations</p>
+        <p style="font-size:13px;color:#64748B;margin-bottom:16px;">Tous les champs sont facultatifs</p>
+
+        <!-- Recap pill -->
+        <div id="s3-recap" style="display:flex;align-items:center;gap:10px;padding:10px 13px;background:#F8FAFC;border-radius:8px;border:1px solid #E2E8F0;margin-bottom:18px;">
+          <span id="s3-icon" style="font-size:22px;"></span>
+          <div style="flex:1;min-width:0;">
+            <span id="s3-module" style="font-size:13px;font-weight:600;color:#1E293B;"></span>
+            <span style="color:#CBD5E1;margin:0 6px;">·</span>
+            <span id="s3-code"   style="font-size:14px;font-weight:800;color:var(--brand);font-family:monospace;letter-spacing:2px;"></span>
+            <span style="color:#CBD5E1;margin:0 6px;">·</span>
+            <span id="s3-photos" style="font-size:13px;color:#64748B;"></span>
+          </div>
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <label class="label-sm" for="inp-chauffeur">Chauffeur</label>
+          <input type="text" id="inp-chauffeur" class="input-field" placeholder="Nom du chauffeur...">
+        </div>
+        <div style="margin-bottom:12px;">
+          <label class="label-sm" for="inp-date">Date d'arrivée</label>
+          <input type="date" id="inp-date" class="input-field">
+        </div>
+        <div style="margin-bottom:18px;">
+          <label class="label-sm" for="inp-etat">État / Remarques</label>
+          <textarea id="inp-etat" class="input-field" rows="3" placeholder="État du matériel, dommages constatés, manques..." style="resize:none;"></textarea>
+        </div>
+
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-secondary" onclick="App.showStep(2)" style="flex-shrink:0;">‹ Retour</button>
+          <button class="btn btn-primary" id="btn-submit" onclick="App.submitArrival()" style="flex:1;">✓ Enregistrer l'arrivée</button>
+        </div>
+      </div>
+
+      <!-- Step 4 : Sending -->
+      <div id="step-4" style="display:none;text-align:center;padding:40px 0;">
+        <div class="spinner" id="send-spinner"></div>
+        <p style="font-size:17px;font-weight:700;color:#1E293B;" id="send-msg">Envoi en cours...</p>
+        <p style="font-size:13px;color:#64748B;margin-top:4px;" id="send-detail"></p>
+      </div>
+    </div>
+
+    <!-- ── VIEW : DEPARTURES ─────────────────────────────────────────────── -->
+    <div class="view" id="view-departures">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <h2 style="font-size:20px;font-weight:700;color:#1E293B;">Départs en cours</h2>
+        <button onclick="App.loadDepartures(true)" style="background:#EBF5FB;color:var(--brand);border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻ Actualiser</button>
+      </div>
+
+      <div id="dep-loading" style="text-align:center;padding:40px;display:none;">
+        <div class="spinner"></div>
+        <p style="color:#64748B;">Chargement de la liste...</p>
+      </div>
+
+      <div id="dep-list"></div>
+
+      <div id="no-departures" style="text-align:center;padding:48px 0 32px;color:#94A3B8;display:none;">
+        <div style="font-size:52px;margin-bottom:12px;">🚛</div>
+        <p style="font-size:16px;font-weight:600;">Aucun article en production</p>
+        <p style="font-size:13px;margin-top:4px;">Les articles actifs du Planning apparaîtront ici</p>
+      </div>
+    </div>
+
+    <!-- ── VIEW : DEPARTURE DETAIL ──────────────────────────────────────── -->
+    <div class="view" id="view-dep-detail">
+      <div id="dep-detail-body"></div>
+    </div>
+
+    <!-- ── VIEW : HISTORY ───────────────────────────────────────────────── -->
+    <div class="view" id="view-history">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <h2 style="font-size:20px;font-weight:700;color:#1E293B;">Historique</h2>
+        <button onclick="App.clearHistory()" style="background:#FEF2F2;color:#991B1B;border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">Effacer</button>
+      </div>
+      <div id="hist-list"></div>
+      <div id="no-history" style="text-align:center;padding:48px 0 32px;color:#94A3B8;">
+        <div style="font-size:52px;margin-bottom:12px;">🕐</div>
+        <p style="font-size:16px;font-weight:600;">Aucun historique</p>
+      </div>
+    </div>
+
+    <!-- ── VIEW : SETTINGS ──────────────────────────────────────────────── -->
+    <div class="view" id="view-settings">
+      <h2 style="font-size:20px;font-weight:700;color:#1E293B;margin-bottom:18px;">Réglages</h2>
+
+      <div class="card" style="margin-bottom:12px;">
+        <p style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:14px;">🔗 API AppScript</p>
+        <div style="margin-bottom:10px;">
+          <label class="label-sm" for="set-url">URL du Planning Script (Web App)</label>
+          <input type="url" id="set-url" class="input-field" placeholder="https://script.google.com/macros/s/..." style="font-size:12px;">
+          <p style="font-size:11px;color:#94A3B8;margin-top:5px;">AppScript → Déployer → Gérer les déploiements → URL d'application web</p>
+        </div>
+        <button class="btn btn-primary" onclick="App.saveSettings()">Enregistrer</button>
+      </div>
+
+      <div class="card" style="margin-bottom:12px;">
+        <p style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:10px;">ℹ️ Informations</p>
+        <p style="font-size:13px;color:#64748B;">Version 1.0.0 · Sonotrad</p>
+        <p style="font-size:13px;color:#64748B;margin-top:3px;" id="info-codes">Codes en cache : –</p>
+        <p style="font-size:13px;color:#64748B;margin-top:3px;" id="info-hist">Entrées historique : –</p>
+        <button onclick="App.reloadCodes()" style="margin-top:10px;background:#EBF5FB;color:var(--brand);border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻ Recharger les codes existants</button>
+      </div>
+
+      <div class="card" style="margin-bottom:12px;">
+        <p style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:10px;">🔧 Diagnostic API</p>
+        <button onclick="App.runDiag()" style="background:#F0FDF4;color:#14532D;border:1px solid #86EFAC;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;width:100%;margin-bottom:8px;">▶ Tester les endpoints</button>
+        <div id="diag-result" style="font-size:12px;font-family:monospace;background:#F8FAFC;border-radius:6px;padding:8px;display:none;white-space:pre-wrap;word-break:break-all;color:#334155;"></div>
+      </div>
+
+      <div class="card" style="border:1px solid #FECACA;">
+        <p style="font-size:14px;font-weight:700;color:#991B1B;margin-bottom:10px;">⚠️ Données locales</p>
+        <button onclick="App.clearHistory()" style="background:#FEF2F2;color:#991B1B;border:1px solid #FECACA;padding:10px 16px;border-radius:8px;font-size:14px;cursor:pointer;width:100%;">Effacer l'historique local</button>
+      </div>
+    </div>
+
+  </main><!-- /main-content -->
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       BOTTOM NAV
+       ══════════════════════════════════════════════════════════════════════ -->
+  <nav class="bottom-nav">
+    <button class="nav-tab active" data-tab="arrivals" onclick="App.go('arrivals')">
+      <span class="icon">📥</span><span>Arrivées</span>
+    </button>
+    <button class="nav-tab" data-tab="departures" onclick="App.go('departures')">
+      <span class="icon">📤</span><span>Départs</span>
+    </button>
+    <button class="nav-tab" data-tab="history" onclick="App.go('history')">
+      <span class="icon">🕐</span><span>Historique</span>
+    </button>
+  </nav>
+
+  <!-- FAB -->
+  <button class="fab" id="fab" onclick="App.startNewArrival()">+</button>
+
+  <!-- Toast -->
+  <div id="toast"></div>
+
+</div><!-- /app -->
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     APP JAVASCRIPT
+     ════════════════════════════════════════════════════════════════════════ -->
+<script>
+
+// ── CONSTANTES ──────────────────────────────────────────────────────────────
+
+const MODULES = {
+  loxam:      { label: 'LOXAM / PIDEO', icon: '🏗️', iconBg: '#EBF5FB' },
+  bcb:        { label: 'BCB',           icon: '🚛', iconBg: '#FEF3E8' },
+  agorastore: { label: 'Agorastore',    icon: '🏷️', iconBg: '#F5EEF8' },
+  rapido:     { label: 'Rapido',        icon: '⚡', iconBg: '#F0FDF4' },
+};
+
+const SK = {
+  API:      'snt_api_url',
+  CODES:    'snt_codes',
+  CODES_TS: 'snt_codes_ts',
+  HISTORY:  'snt_history',
+};
+
+const CODES_TTL = 30 * 60 * 1000; // 30 min
+
+// ── STATE ────────────────────────────────────────────────────────────────────
+
+const S = {
+  view:        'arrivals',
+  prevView:    'arrivals',
+  apiUrl:      localStorage.getItem(SK.API) || '',
+  codes:       new Set(JSON.parse(localStorage.getItem(SK.CODES) || '[]')),
+  codesTs:     +(localStorage.getItem(SK.CODES_TS) || 0),
+  history:     JSON.parse(localStorage.getItem(SK.HISTORY) || '[]'),
+  online:      navigator.onLine,
+
+  // Arrival form
+  arr: {
+    step: 1, module: null, code: '',
+    photos: [],          // [{dataUrl, name}]
+    chauffeur: '', date: '', etat: '',
+  },
+
+  // Departure
+  deps:       [],
+  depsLoaded: false,
+  selDep:     null,
+  depPhotos:  [],      // [{dataUrl}]
+
+  submitting: false,
+};
+
+// ── APP ──────────────────────────────────────────────────────────────────────
+
+const App = {
+
+  /* ─ Navigation ─ */
+  go(view) {
+    S.prevView = S.view;
+    S.view = view;
+    this._render();
+    if (view === 'arrivals')   this._renderArrivalList();
+    if (view === 'history')    this._renderHistory();
+    if (view === 'departures' && !S.depsLoaded) this.loadDepartures();
+    if (view === 'settings')   this._fillSettings();
+  },
+
+  goBack() { this.go(S.prevView); },
+
+  _render() {
+    const v = S.view;
+
+    // Views
+    document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+    const mapId = { 'dep-detail': 'dep-detail' };
+    const viewId = 'view-' + (mapId[v] || v);
+    const el = document.getElementById(viewId);
+    if (el) el.classList.add('active');
+
+    // Nav tabs
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    const tab = document.querySelector(`[data-tab="${v}"]`);
+    if (tab) tab.classList.add('active');
+
+    // FAB
+    const fab = document.getElementById('fab');
+    fab.style.display = (v === 'arrivals') ? 'flex' : 'none';
+
+    // Header back / logo
+    const inForm = ['new-arrival','settings','dep-detail'].includes(v);
+    document.getElementById('btn-back').classList.toggle('hidden', !inForm);
+    document.getElementById('header-logo').style.display = inForm ? 'none' : 'flex';
+    const labels = { 'new-arrival': 'Annuler', 'settings': 'Réglages', 'dep-detail': 'Départs' };
+    document.getElementById('back-label').textContent = labels[v] || 'Retour';
+
+    // API warning
+    const w = document.getElementById('api-warning');
+    if (w) w.style.display = (!S.apiUrl && v === 'arrivals') ? 'block' : 'none';
+  },
+
+  /* ─ Arrivals list ─ */
+  _renderArrivalList() {
+    const list = document.getElementById('arrival-list');
+    const none = document.getElementById('no-arrivals');
+    const items = S.history.filter(h => h.type !== 'departure').slice(-15).reverse();
+    if (!items.length) {
+      list.innerHTML = '';
+      none.style.display = 'block';
+      return;
+    }
+    none.style.display = 'none';
+    list.innerHTML = items.map(r => {
+      const m = MODULES[r.module] || { icon: '📦', iconBg: '#F1F5F9', label: r.module };
+      return `
+        <div class="history-row">
+          <div class="mod-icon" style="background:${m.iconBg}">${m.icon}</div>
+          <div style="flex:1;min-width:0;">
+            <div class="code-mono" style="font-size:16px;">${r.code}</div>
+            <div style="font-size:12px;color:#64748B;margin-top:2px;">${m.label} · ${r.date} · ${r.photos || 0} photo(s)</div>
+            ${r.chauffeur ? `<div style="font-size:12px;color:#475569;">🚛 ${r.chauffeur}</div>` : ''}
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-size:10px;color:#94A3B8;">${r.sentAt || ''}</div>
+            ${r.offline ? '<span class="chip chip-yellow" style="font-size:10px;margin-top:2px;display:inline-block;">local</span>' : ''}
+          </div>
+        </div>`;
+    }).join('');
+  },
+
+  /* ─ New arrival ─ */
+  startNewArrival() {
+    S.arr = { step: 1, module: null, code: '', photos: [], chauffeur: '', date: todayStr(), etat: '' };
+    this.go('new-arrival');
+    this.showStep(1);
+  },
+
+  showStep(n) {
+    [1,2,3,4].forEach(i => {
+      const el = document.getElementById('step-' + i);
+      if (el) el.style.display = (i === n) ? 'block' : 'none';
+    });
+    [1,2,3].forEach(i => {
+      const d = document.getElementById('dot-' + i);
+      if (!d) return;
+      d.className = 'step-dot' + (i === n ? ' active' : i < n ? ' done' : '');
+    });
+    S.arr.step = n;
+  },
+
+  selectModule(mod) {
+    S.arr.module = mod;
+    const m = MODULES[mod];
+    document.getElementById('step2-title').textContent = `${m.icon}  ${m.label}`;
+    this.showStep(2);
+    this._genCode();
+    this._renderPhotoGrid('photo-grid-2', S.arr.photos, 'arrival');
+  },
+
+  async _genCode() {
+    const dispEl  = document.getElementById('code-display');
+    const statEl  = document.getElementById('code-status');
+    dispEl.textContent = '· · · · · ·';
+    statEl.textContent = '';
+
+    // Refresh codes if stale
+    if (S.apiUrl && Date.now() - S.codesTs > CODES_TTL) {
+      statEl.textContent = 'Vérification des codes existants...';
+      await this._fetchCodes();
+    }
+
+    let code, tries = 0;
+    do { code = _randCode(); tries++; } while (S.codes.has(code) && tries < 50000);
+
+    S.arr.code = code;
+    S.codes.add(code);   // reserve
+    dispEl.textContent = code;
+    dispEl.style.transition = 'transform 0.15s';
+    dispEl.style.transform = 'scale(1.06)';
+    setTimeout(() => { dispEl.style.transform = ''; }, 180);
+    statEl.textContent = S.codes.size > 1 ? `✓ Unique parmi ${S.codes.size} codes connus` : '';
+  },
+
+  regenerateCode() {
+    if (S.arr.code) S.codes.delete(S.arr.code);
+    this._genCode();
+  },
+
+  /* ─ Photos (shared) ─ */
+  triggerInput(id) { document.getElementById(id).click(); },
+
+  async handlePhotos(evt, target) {
+    const files = Array.from(evt.target.files);
+    if (!files.length) return;
+    for (const f of files) {
+      const dataUrl = await _compress(f, 1200, 0.82);
+      if (target === 'arrival') S.arr.photos.push({ dataUrl, name: f.name });
+      else                      S.depPhotos.push({ dataUrl, name: f.name });
+    }
+    evt.target.value = '';
+    if (target === 'arrival') {
+      this._renderPhotoGrid('photo-grid-2', S.arr.photos, 'arrival');
     } else {
-      return _jsonResponse({ status: 'error', error: 'Payload introuvable dans la requête' });
+      this._renderDepPhotoGrid();
     }
+  },
 
-    const action = payload.action || '';
+  _renderPhotoGrid(gridId, photos, target) {
+    const grid = document.getElementById(gridId);
+    if (!grid) return;
+    const countId = target === 'arrival' ? 'photo-count-2' : null;
+    if (countId) document.getElementById(countId).textContent = `${photos.length} photo${photos.length > 1 ? 's' : ''}`;
 
-    // ── NOUVEAU : enregistrement d'une arrivée (métadonnées + photos) ─────
-    if (action === 'arrival') {
-      return saveArrival(payload);
+    const inputId = target === 'arrival' ? 'photo-input-2' : 'dep-photo-input';
+    grid.innerHTML = photos.map((p, i) => `
+      <div class="photo-thumb">
+        <img src="${p.dataUrl}" loading="lazy">
+        <button class="rm-btn" onclick="App.removePhoto(${i},'${target}')">✕</button>
+      </div>`).join('') + `
+      <div class="photo-add-btn" onclick="App.triggerInput('${inputId}')">
+        <span style="font-size:26px;">📷</span><span>Ajouter</span>
+      </div>`;
+  },
+
+  removePhoto(idx, target) {
+    if (target === 'arrival') {
+      S.arr.photos.splice(idx, 1);
+      this._renderPhotoGrid('photo-grid-2', S.arr.photos, 'arrival');
+    } else {
+      S.depPhotos.splice(idx, 1);
+      this._renderDepPhotoGrid();
     }
+  },
 
-    // ── NOUVEAU : photos d'un départ ───────────────────────────────────────
-    if (action === 'departure_photo') {
-      return saveDeparturePhotos(payload);
-    }
+  goToStep3() {
+    if (!S.arr.code || S.arr.code.length !== 6) { this.toast('Code manquant, actualisez'); return; }
+    const m = MODULES[S.arr.module] || {};
+    document.getElementById('s3-icon').textContent   = m.icon || '📦';
+    document.getElementById('s3-module').textContent = m.label || '';
+    document.getElementById('s3-code').textContent   = S.arr.code;
+    document.getElementById('s3-photos').textContent = `${S.arr.photos.length} photo(s)`;
+    document.getElementById('inp-date').value        = S.arr.date;
+    this.showStep(3);
+  },
 
-    // ── NOUVEAU : ping de diagnostic ───────────────────────────────────────
-    if (action === 'ping') {
-      return _jsonResponse({ status: 'ok', message: 'pong', ts: new Date().toISOString() });
-    }
+  /* ─ Submit arrival ─ */
+  async submitArrival() {
+    if (S.submitting) return;
+    S.arr.chauffeur = document.getElementById('inp-chauffeur').value.trim();
+    S.arr.date      = document.getElementById('inp-date').value || todayStr();
+    S.arr.etat      = document.getElementById('inp-etat').value.trim();
+    S.submitting    = true;
 
-    // ── Existant : upload photo simple (backward compat avec ancienne PWA) ──
-    return savePhotoLegacy(payload, e);
+    this.showStep(4);
+    const { code, module, chauffeur, date, etat, photos } = S.arr;
+    const setMsg = (m, d='') => {
+      document.getElementById('send-msg').textContent    = m;
+      document.getElementById('send-detail').textContent = d;
+    };
 
-  } catch (err) {
-    return _jsonResponse({ status: 'error', error: err.toString() });
-  }
-}
-
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// NOUVELLE FONCTION : getSonotradCodes
-//
-// Source unique : colonne B (col 2) de la 1ère feuille du Master Sheet.
-// Hugo a confirmé : tous les codes sont là, 1 par ligne à partir de la ligne 2.
-//
-// Formats acceptés (historique Sonotrad) :
-//   - 4 lettres majuscules           ex: ABCD
-//   - 6 lettres majuscules           ex: FXHAUX  ← format principal
-//   - 6 alphanumériques (A-Z + 0-9)  ex: FX3H2U  ← quelques lignes, grand client
-//
-// Temps estimé : 1 openById + 1 getRange → ~3-5s au lieu de 26s.
-// ═══════════════════════════════════════════════════════════════════════════════
-function getSonotradCodes() {
-  const codesSet = new Set();
-  const log      = [];
-
-  // Accepte les 3 formats de codes Sonotrad
-  const CODE_RE = /^([A-Z]{4}|[A-Z]{6}|[A-Z0-9]{6})$/;
-
-  // ── Source principale : Master Sheet, 1ère feuille, colonne B ────────────
-  try {
-    const masterSS    = SpreadsheetApp.openById(MASTER_FILE_ID);
-    const masterSheet = masterSS.getSheets()[0];             // 1ère feuille
-    const lastRow     = masterSheet.getLastRow();
-
-    if (lastRow >= 2) {
-      // Lit uniquement la colonne B (col 2), de la ligne 2 à la dernière ligne
-      const values = masterSheet.getRange(2, 2, lastRow - 1, 1).getValues();
-      values.forEach(row => {
-        const v = String(row[0] || '').trim().toUpperCase();
-        if (CODE_RE.test(v)) codesSet.add(v);
-      });
-    }
-    log.push('Master col B, ' + lastRow + ' lignes → ' + codesSet.size + ' codes valides');
-  } catch(e) {
-    log.push('Master ERREUR: ' + e.message);
-  }
-
-  // ── Filet de sécurité : Planning actif, col B de chaque onglet ────────────
-  // Capture les codes saisis récemment mais pas encore synchronisés dans le Master
-  try {
-    const planSS  = SpreadsheetApp.getActiveSpreadsheet();
-    const before  = codesSet.size;
-    planSS.getSheets().forEach(sheet => {
-      const lastRow = sheet.getLastRow();
-      if (lastRow < 2) return;
-      try {
-        // Lit col A et col B pour couvrir les différents formats d'onglets
-        const nCols = Math.min(sheet.getLastColumn(), 2);
-        sheet.getRange(2, 1, lastRow - 1, nCols).getValues().forEach(row => {
-          row.forEach(cell => {
-            const v = String(cell || '').trim().toUpperCase();
-            if (CODE_RE.test(v)) codesSet.add(v);
-          });
-        });
-      } catch(e2) { /* onglet inaccessible, on ignore */ }
-    });
-    log.push('Planning actif → ' + (codesSet.size - before) + ' codes supplémentaires');
-  } catch(e) { log.push('Planning ERREUR: ' + e.message); }
-
-  return _jsonResponse({
-    status : 'ok',
-    codes  : Array.from(codesSet),
-    count  : codesSet.size,
-    log    : log,    // visible dans le diagnostic PWA
-  });
-}
-
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// NOUVELLE FONCTION : getProductionDataSafe
-//
-// Remplacement robuste de getProductionData() :
-// • Lecture en un seul appel getValues() bulk (pas de getRichTextValues)
-// • getRichTextValues() sur des milliers de cellules peut provoquer un timeout
-//   AppScript qui ferme la connexion HTTP → "Failed to fetch" côté PWA
-// • On récupère la même structure de données que l'ancienne fonction
-// ═══════════════════════════════════════════════════════════════════════════════
-function getProductionDataSafe() {
-  const ss    = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheets()[0]; // 1er onglet = Planning principal
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 8) return _jsonResponse({ status:'ok', data:[] });
-
-  // Lecture bulk : lignes 8 à fin, colonnes A→V (1→22)
-  const numRows = lastRow - 7;
-  const values  = sheet.getRange(8, 1, numRows, 22).getValues();
-
-  // Récupère aussi les formules de col B pour extraire les hyperlinks si présents
-  // (getFormulas() ne cause pas de timeout contrairement à getRichTextValues)
-  let formulas;
-  try {
-    formulas = sheet.getRange(8, 2, numRows, 1).getFormulas();
-  } catch(e) {
-    formulas = null;
-  }
-
-  const result = [];
-  values.forEach(function(row, i) {
-    const valA = row[0];
-    const isParti = row[17] === true || row[17] === 'TRUE' || row[17] === 1;
-    if (valA === '' || valA === null || valA === undefined) return; // ligne vide
-    if (isParti) return; // article parti
-
-    // Tente d'extraire l'URL Drive depuis la formule de col B (ex: =HYPERLINK("url","code"))
-    let lienDrive = '';
-    if (formulas && formulas[i] && formulas[i][0]) {
-      const m = formulas[i][0].match(/HYPERLINK\s*\(\s*"([^"]+)"/i);
-      if (m) lienDrive = m[1];
-    }
-
-    result.push({
-      id:             i,
-      codeplanning:   String(row[1]  || '').trim(),  // col B
-      sousTitre:      String(row[2]  || '').trim(),  // col C
-      titrePrincipal: String(row[4]  || '').trim(),  // col E
-      lienDrive:      lienDrive,
-      isParti:        false,
-      status: {
-        enCours:    !!(row[12]),  // col M
-        aControler: !!(row[13]),  // col N
-        termine:    !!(row[14]),  // col O
-        mail:       !!(row[15]),  // col P
-        cmd:        !!(row[16]),  // col Q
-        deCote:     !!(row[18]),  // col S
-      },
-      refs: [
-        String(row[19] || ''),   // col T
-        String(row[20] || ''),   // col U
-        String(row[21] || ''),   // col V
-      ],
-    });
-  });
-
-  return _jsonResponse({ status:'ok', data: result, count: result.length });
-}
-
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// NOUVELLE FONCTION : saveArrival
-// Payload attendu :
-//   { action, code, module, chauffeur, date, etat, photos: [dataUrl, ...] }
-// ═══════════════════════════════════════════════════════════════════════════════
-function saveArrival(payload) {
-  const { code, module, chauffeur, date, etat, photos } = payload;
-
-  if (!code || !/^[A-Z]{6}$/.test(code)) {
-    return _jsonResponse({ status: 'error', error: 'Code invalide : ' + code });
-  }
-
-  const ts = new Date();
-
-  // ── 1. Écriture dans le bon onglet selon le module ───────────────────────
-  try {
-    switch (module) {
-
-      case 'loxam': {
-        // Planning Sheet → onglet 'Arrivées' (col A=code, B=chauffeur, C=date, D=état, E=timestamp)
-        const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Arrivées');
-        if (sheet) {
-          sheet.appendRow([code, chauffeur || '', date || _dateStr(ts), etat || '', ts]);
-        }
-        break;
-      }
-
-      case 'bcb': {
-        // BCB Sheet → onglet 'Liste'
-        // Structure BCB : col A=Slct, B=code, C=#Inter, D=Chauffeur, E=Date arrivée, F=Coût, G=!, H=ID BCB...
-        const bcbSS    = SpreadsheetApp.openById(BCB_SHEET_ID);
-        const bcbSheet = bcbSS.getSheetByName('Liste');
-        if (bcbSheet) {
-          bcbSheet.appendRow([
-            '',                           // A : Slct
-            code,                         // B : Code 6 lettres
-            '',                           // C : # Intervention
-            chauffeur || '',              // D : Chauffeur
-            date || _dateStr(ts),         // E : Date arrivée
-            '',                           // F : Coût
-            '',                           // G : !
-            '',                           // H : ID BCB
-            '',                           // I : Vendeur
-            '',                           // J : Ref vendeur
-            '',                           // K : Type véhicule
-            etat || '',                   // L : Remarques (colonne supplémentaire)
-          ]);
-        }
-        break;
-      }
-
-      case 'agorastore': {
-        // Agorastore Sheet → onglet 'Liste'
-        const agoraSS    = SpreadsheetApp.openById(AGORA_SHEET_ID);
-        const agoraSheet = agoraSS.getSheetByName('Liste');
-        if (agoraSheet) {
-          agoraSheet.appendRow([
-            '',                     // A : Slct
-            code,                   // B : Code 6 lettres
-            '',                     // C : Ref
-            chauffeur || '',        // D : Chauffeur
-            date || _dateStr(ts),   // E : Date arrivée
-            etat || '',             // F : État / remarques
-            ts,                     // G : Timestamp saisie
-          ]);
-        }
-        break;
-      }
-
-      case 'rapido': {
-        // Rapido Sheet → onglet 'Réception'
-        const rapidoSS    = SpreadsheetApp.openById(RAPIDO_SHEET_ID);
-        const rapidoSheet = rapidoSS.getSheetByName('Réception');
-        if (rapidoSheet) {
-          rapidoSheet.appendRow([
-            '',                     // A
-            '',                     // B
-            code,                   // C : Code 6 lettres (col 3 = codeCol pour Rapido)
-            chauffeur || '',        // D : Chauffeur
-            date || _dateStr(ts),   // E : Date arrivée
-            etat || '',             // F : Remarques
-            ts,                     // G : Timestamp
-          ]);
-        }
-        break;
-      }
-
-      default:
-        Logger.log('Module inconnu: ' + module);
-    }
-  } catch (sheetErr) {
-    Logger.log('Erreur écriture sheet : ' + sheetErr);
-    // On continue quand même pour sauvegarder les photos
-  }
-
-  // ── 2. Création du dossier Drive & sauvegarde des photos ─────────────────
-  const savedPhotos = [];
-  if (photos && photos.length > 0) {
     try {
-      // Dossier parent : 'Arrivées Photos PWA' à la racine de Mon Drive
-      const parentFolder = _getOrCreateFolder(null, 'Arrivées Photos PWA');
-      // Sous-dossier par code article
-      const articleFolder = _getOrCreateFolder(parentFolder.getId(), code);
+      if (!S.apiUrl) {
+        setMsg('💾 Mode hors-ligne', 'Sauvegardé localement');
+        await _sleep(800);
+        this._saveHistory({ code, module, chauffeur, date, etat, photos: photos.length, type: 'arrival', offline: true });
+        this._showSuccess(code, true);
+        return;
+      }
 
-      photos.forEach((dataUrl, i) => {
-        try {
-          // Nettoyer le préfixe data URI
-          const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
-          const blob = Utilities.newBlob(
-            Utilities.base64Decode(base64),
-            'image/jpeg',
-            code + '_arrivee_' + String(i + 1).padStart(2, '0') + '.jpg'
-          );
-          const file = articleFolder.createFile(blob);
-          savedPhotos.push({ name: file.getName(), url: file.getUrl() });
-        } catch (photoErr) {
-          Logger.log('Erreur photo ' + i + ' : ' + photoErr);
-        }
-      });
-    } catch (driveErr) {
-      Logger.log('Erreur Drive : ' + driveErr);
+      setMsg('Envoi en cours...', `Code ${code} · ${photos.length} photo(s)`);
+      const payload = { action: 'arrival', code, module, chauffeur, date, etat, photos: photos.map(p => p.dataUrl) };
+      const res = await _post(S.apiUrl, payload);
+      if (res.status !== 'ok' && res.status !== 'success') throw new Error(res.error || 'Réponse inattendue');
+
+      setMsg('✓ Enregistré !', `Code ${code}`);
+      this._saveHistory({ code, module, chauffeur, date, etat, photos: photos.length, type: 'arrival' });
+      await _sleep(700);
+      this._showSuccess(code, false);
+
+    } catch(err) {
+      console.error(err);
+      document.getElementById('send-spinner').style.display = 'none';
+      setMsg('⚠️ Erreur d\'envoi', err.message);
+      this._saveHistory({ code, module, chauffeur, date, etat, photos: photos.length, type: 'arrival', error: true });
+      await _sleep(3200);
+      this._showSuccess(code, true);
+    } finally {
+      S.submitting = false;
     }
-  }
+  },
 
-  return _jsonResponse({
-    status:       'ok',
-    code:         code,
-    module:       module,
-    photosCount:  savedPhotos.length,
-    photos:       savedPhotos,
-    savedAt:      ts.toISOString(),
+  _showSuccess(code, offline) {
+    document.getElementById('step-4').innerHTML = `
+      <div style="text-align:center;padding:28px 0;">
+        <div style="font-size:60px;margin-bottom:14px;">${offline ? '💾' : '✅'}</div>
+        <p style="font-size:20px;font-weight:700;color:#1E293B;margin-bottom:8px;">
+          ${offline ? 'Sauvegardé localement' : 'Arrivée enregistrée !'}
+        </p>
+        <div style="font-family:monospace;font-size:28px;font-weight:900;color:var(--brand);letter-spacing:6px;margin:16px 0 20px;">${code}</div>
+        <button class="btn btn-primary" onclick="App.go('arrivals')" style="max-width:220px;margin:0 auto 12px;">← Arrivées</button>
+        <br>
+        <button onclick="App.startNewArrival()" style="background:none;border:none;color:var(--accent);font-size:15px;font-weight:600;cursor:pointer;padding:8px;">+ Nouvelle arrivée</button>
+      </div>`;
+  },
+
+  /* ─ Departures ─ */
+  async loadDepartures(force = false) {
+    if (!force && S.depsLoaded) return;
+    document.getElementById('dep-loading').style.display   = 'block';
+    document.getElementById('no-departures').style.display = 'none';
+    document.getElementById('dep-list').innerHTML          = '';
+
+    if (!S.apiUrl) {
+      document.getElementById('dep-loading').style.display   = 'none';
+      document.getElementById('no-departures').style.display = 'block';
+      return;
+    }
+
+    try {
+      const url  = S.apiUrl + '?action=production';
+      const resp = await _fetchWithTimeout(url, {}, 40000);
+      const data = await resp.json();
+      S.deps       = Array.isArray(data) ? data : (data.data || []);
+      S.depsLoaded = true;
+      this._renderDepList();
+    } catch(e) {
+      document.getElementById('dep-list').innerHTML = `
+        <div class="card" style="border-left:4px solid #F87171;">
+          <p style="color:#991B1B;font-weight:600;">Impossible de charger les départs</p>
+          <p style="font-size:12px;color:#64748B;margin-top:3px;">${e.message}</p>
+        </div>`;
+    } finally {
+      document.getElementById('dep-loading').style.display = 'none';
+    }
+  },
+
+  _renderDepList() {
+    const list = document.getElementById('dep-list');
+    const none = document.getElementById('no-departures');
+    if (!S.deps.length) { list.innerHTML = ''; none.style.display = 'block'; return; }
+    none.style.display = 'none';
+    list.innerHTML = S.deps.map((d, i) => {
+      const code  = d.codeplanning || d.code || '------';
+      const titre = d.titrePrincipal || d.titre || code;
+      const chip  = d.status?.enCours ? '<span class="chip chip-blue">En cours</span>'
+                  : d.status?.aControler ? '<span class="chip chip-yellow">À contrôler</span>' : '';
+      return `
+        <div class="dep-card" onclick="App.openDep(${i})">
+          <div style="width:44px;height:44px;background:#EBF5FB;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">📤</div>
+          <div style="flex:1;min-width:0;">
+            <div class="code-mono" style="font-size:14px;">${code}</div>
+            <div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titre}</div>
+            ${d.sousTitre ? `<div style="font-size:12px;color:#64748B;">${d.sousTitre}</div>` : ''}
+            ${chip ? `<div style="margin-top:4px;">${chip}</div>` : ''}
+          </div>
+          <span style="color:#CBD5E1;font-size:20px;align-self:center;">›</span>
+        </div>`;
+    }).join('');
+  },
+
+  openDep(idx) {
+    S.selDep    = S.deps[idx];
+    S.depPhotos = [];
+    this.go('dep-detail');
+    this._renderDepDetail();
+  },
+
+  _renderDepDetail() {
+    const d = S.selDep;
+    if (!d) return;
+    const code  = d.codeplanning || d.code || '------';
+    const titre = d.titrePrincipal || code;
+    document.getElementById('dep-detail-body').innerHTML = `
+      <div class="card" style="margin-bottom:12px;">
+        <div class="code-mono" style="font-size:24px;letter-spacing:4px;margin-bottom:6px;">${code}</div>
+        <div style="font-size:16px;font-weight:600;color:#1E293B;">${titre}</div>
+        ${d.sousTitre ? `<div style="font-size:13px;color:#64748B;margin-top:2px;">${d.sousTitre}</div>` : ''}
+        ${d.lienDrive ? `<a href="${d.lienDrive}" target="_blank" rel="noopener" style="display:inline-block;margin-top:10px;font-size:13px;color:var(--accent);">📁 Ouvrir le dossier Drive</a>` : ''}
+      </div>
+      <div class="card">
+        <p style="font-size:14px;font-weight:600;color:#1E293B;margin-bottom:10px;">Photos du départ</p>
+        <div class="photo-grid" id="dep-photo-grid" style="margin-bottom:10px;"></div>
+        <input type="file" id="dep-photo-input" accept="image/*" multiple style="display:none;" onchange="App.handlePhotos(event,'dep')">
+        <p id="dep-photo-count" style="font-size:12px;color:#64748B;margin-bottom:10px;">0 photo ajoutée</p>
+        <button onclick="App.triggerInput('dep-photo-input')" style="background:#EBF5FB;color:var(--brand);border:none;padding:12px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;width:100%;">📷 Ajouter des photos</button>
+      </div>
+      <div style="margin-top:14px;">
+        <button class="btn btn-primary" id="btn-dep-submit" onclick="App.submitDep()">📤 Enregistrer les photos de départ</button>
+      </div>`;
+    this._renderDepPhotoGrid();
+  },
+
+  _renderDepPhotoGrid() {
+    const grid = document.getElementById('dep-photo-grid');
+    const cnt  = document.getElementById('dep-photo-count');
+    if (!grid) return;
+    const n = S.depPhotos.length;
+    if (cnt) cnt.textContent = `${n} photo${n > 1 ? 's' : ''} ajoutée${n > 1 ? 's' : ''}`;
+    grid.innerHTML = S.depPhotos.map((p, i) => `
+      <div class="photo-thumb">
+        <img src="${p.dataUrl}">
+        <button class="rm-btn" onclick="App.removePhoto(${i},'dep')">✕</button>
+      </div>`).join('');
+  },
+
+  async submitDep() {
+    const d = S.selDep;
+    if (!d) return;
+    if (!S.depPhotos.length) { this.toast('Ajoutez au moins une photo'); return; }
+    const btn = document.getElementById('btn-dep-submit');
+    if (btn) { btn.disabled = true; btn.textContent = 'Envoi...'; }
+    const code = d.codeplanning || d.code;
+    try {
+      if (S.apiUrl) {
+        await _post(S.apiUrl, { action: 'departure_photo', code, photos: S.depPhotos.map(p => p.dataUrl) });
+      }
+      this._saveHistory({ code, type: 'departure', photos: S.depPhotos.length, module: 'planning', date: todayStr() });
+      this.toast('✓ Photos enregistrées !');
+      await _sleep(1100);
+      S.depsLoaded = false; // Force refresh next time
+      this.go('departures');
+    } catch(e) {
+      this.toast('Erreur : ' + e.message);
+      if (btn) { btn.disabled = false; btn.textContent = '📤 Enregistrer les photos de départ'; }
+    }
+  },
+
+  /* ─ History ─ */
+  _renderHistory() {
+    const list = document.getElementById('hist-list');
+    const none = document.getElementById('no-history');
+    const items = [...S.history].reverse();
+    if (!items.length) { list.innerHTML = ''; none.style.display = 'block'; return; }
+    none.style.display = 'none';
+    list.innerHTML = items.map(r => {
+      const isDepart = r.type === 'departure';
+      const m = MODULES[r.module] || { icon: isDepart ? '📤' : '📦', iconBg: '#F1F5F9', label: r.module || '' };
+      return `
+        <div class="history-row">
+          <div class="mod-icon" style="background:${isDepart ? '#F0FDF4' : m.iconBg};">${isDepart ? '📤' : m.icon}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span class="code-mono" style="font-size:15px;">${r.code}</span>
+              ${r.offline ? '<span class="chip chip-yellow" style="font-size:10px;">local</span>' : ''}
+              ${r.error   ? '<span class="chip" style="background:#FEF2F2;color:#991B1B;font-size:10px;">erreur</span>' : ''}
+            </div>
+            <div style="font-size:12px;color:#64748B;">${isDepart ? 'Départ' : m.label} · ${r.date || ''} · ${r.photos || 0} photo(s)</div>
+          </div>
+          <span style="font-size:10px;color:#94A3B8;flex-shrink:0;">${r.sentAt || ''}</span>
+        </div>`;
+    }).join('');
+  },
+
+  _saveHistory(entry) {
+    S.history.push({ ...entry, sentAt: _timeStr() });
+    if (S.history.length > 120) S.history = S.history.slice(-120);
+    localStorage.setItem(SK.HISTORY, JSON.stringify(S.history));
+  },
+
+  clearHistory() {
+    if (!confirm('Effacer tout l\'historique local ?')) return;
+    S.history = [];
+    localStorage.removeItem(SK.HISTORY);
+    this._renderHistory();
+    this._renderArrivalList();
+    this.toast('Historique effacé');
+  },
+
+  /* ─ Codes ─ */
+  async _fetchCodes() {
+    if (!S.apiUrl) return;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=codes', {}, 40000);
+      const d = await r.json();
+      if (Array.isArray(d.codes)) {
+        S.codes   = new Set(d.codes.map(c => c.toUpperCase()));
+        S.codesTs = Date.now();
+        localStorage.setItem(SK.CODES,    JSON.stringify(d.codes));
+        localStorage.setItem(SK.CODES_TS, S.codesTs.toString());
+      }
+    } catch(e) { console.warn('Codes fetch failed:', e.message); }
+  },
+
+  async reloadCodes() {
+    S.codesTs = 0;
+    await this._fetchCodes();
+    document.getElementById('info-codes').textContent = `Codes en cache : ${S.codes.size}`;
+    this.toast(`${S.codes.size} codes chargés`);
+  },
+
+  /* ─ Settings ─ */
+  _fillSettings() {
+    document.getElementById('set-url').value        = S.apiUrl;
+    document.getElementById('info-codes').textContent = `Codes en cache : ${S.codes.size}`;
+    document.getElementById('info-hist').textContent  = `Entrées historique : ${S.history.length}`;
+  },
+
+  saveSettings() {
+    const url = document.getElementById('set-url').value.trim();
+    S.apiUrl  = url;
+    localStorage.setItem(SK.API, url);
+    this.toast('✓ Réglages sauvegardés');
+    if (url) this._fetchCodes();
+  },
+
+  /* ─ Diagnostic ─ */
+  async runDiag() {
+    const box = document.getElementById('diag-result');
+    box.style.display = 'block';
+    box.textContent = 'Tests en cours...\n';
+    const url = S.apiUrl;
+    if (!url) { box.textContent = '❌ URL API non configurée'; return; }
+
+    const log = s => { box.textContent += s + '\n'; };
+
+    // Test 1 : GET codes
+    try {
+      const t0 = Date.now();
+      const r  = await fetch(url + '?action=codes');
+      const d  = await r.json();
+      log(`✅ GET ?action=codes → ${d.count || d.codes?.length || '?'} codes (${Date.now()-t0}ms)`);
+    } catch(e) { log('❌ GET ?action=codes → ' + e.message); }
+
+    // Test 2 : GET codes — affiche aussi le log interne
+    try {
+      const t0  = Date.now();
+      const r   = await _fetchWithTimeout(url + '?action=codes', {}, 40000);
+      const d   = await r.json();
+      log(`✅ GET ?action=codes → ${d.count} codes (${Date.now()-t0}ms)`);
+      if (d.log) d.log.forEach(l => log('   · ' + l));
+    } catch(e) { log('❌ GET ?action=codes → ' + e.message); }
+
+    // Test 3 : GET production (nouvelle fonction safe)
+    try {
+      const t0  = Date.now();
+      const r   = await _fetchWithTimeout(url + '?action=production', {}, 40000);
+      const raw = await r.text();
+      let d;
+      try { d = JSON.parse(raw); }
+      catch { log('⚠️  Réponse non-JSON (' + raw.length + ' chars): ' + raw.substring(0,150)); throw new Error('JSON invalide'); }
+      if (d.status === 'error') {
+        log('❌ GET ?action=production → ' + (d.errorSafe || d.error || JSON.stringify(d)));
+      } else {
+        const n = d.data?.length ?? (Array.isArray(d) ? d.length : '?');
+        log(`✅ GET ?action=production → ${n} articles (${Date.now()-t0}ms)`);
+      }
+    } catch(e) { log('❌ GET ?action=production → ' + e.message); }
+
+    // Test 4 : GET debug_sheets (liste les onglets du Planning Script)
+    try {
+      const t0  = Date.now();
+      const r   = await _fetchWithTimeout(url + '?action=debug_sheets', {}, 20000);
+      const d   = await r.json();
+      if (d.status === 'ok') {
+        log(`✅ Planning Script : "${d.spreadsheetName}"`);
+        d.sheets.forEach(s => log(`   · Onglet "${s.name}" — ${s.rows} lignes × ${s.cols} cols`));
+      } else { log('❌ debug_sheets → ' + d.error); }
+    } catch(e) { log('❌ debug_sheets → ' + e.message); }
+
+    // Test 5 : POST FormData (ping)
+    try {
+      const t0   = Date.now();
+      const form = new FormData();
+      form.append('payload', JSON.stringify({ action: 'ping' }));
+      const r    = await fetch(url, { method: 'POST', body: form });
+      const raw  = await r.text();
+      log(`✅ POST FormData → ${raw.substring(0,80)} (${Date.now()-t0}ms)`);
+    } catch(e) { log('❌ POST FormData → ' + e.message); }
+
+    log('─── Fin des tests ───');
+  },
+
+  /* ─ Toast ─ */
+  toast(msg, ms = 2800) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.style.opacity = '1';
+    setTimeout(() => { el.style.opacity = '0'; }, ms);
+  },
+};
+
+// ── UTILS ────────────────────────────────────────────────────────────────────
+
+function _randCode() {
+  const C = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  return Array.from({ length: 6 }, () => C[Math.floor(Math.random() * 26)]).join('');
+}
+
+function todayStr() { return new Date().toISOString().split('T')[0]; }
+function _timeStr()  { return new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
+function _sleep(ms)  { return new Promise(r => setTimeout(r, ms)); }
+
+// Fetch avec timeout (AppScript peut être lent)
+function _fetchWithTimeout(resource, options = {}, timeoutMs = 45000) {
+  const ctrl = new AbortController();
+  const tid  = setTimeout(() => ctrl.abort(), timeoutMs);
+  return fetch(resource, { ...options, signal: ctrl.signal })
+    .finally(() => clearTimeout(tid));
+}
+
+async function _post(url, payload) {
+  // FormData évite le CORS preflight (multipart/form-data est une "simple request")
+  // AppScript reçoit les données via e.parameter.payload
+  const form = new FormData();
+  form.append('payload', JSON.stringify(payload));
+  const r = await _fetchWithTimeout(url, { method: 'POST', body: form }, 60000);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const text = await r.text();
+  try { return JSON.parse(text); } catch { return { status: 'ok', raw: text }; }
+}
+
+function _compress(file, maxW = 1200, q = 0.82) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      let { width: w, height: h } = img;
+      if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', q));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      const fr = new FileReader();
+      fr.onload = e => resolve(e.target.result);
+      fr.readAsDataURL(file);
+    };
+    img.src = url;
   });
 }
 
+// ── INIT ─────────────────────────────────────────────────────────────────────
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// NOUVELLE FONCTION : saveDeparturePhotos
-// Payload attendu :
-//   { action, code, photos: [dataUrl, ...] }
-// ═══════════════════════════════════════════════════════════════════════════════
-function saveDeparturePhotos(payload) {
-  const { code, photos } = payload;
+function _updateOnline() {
+  S.online = navigator.onLine;
+  const d = document.getElementById('status-dot');
+  const t = document.getElementById('status-text');
+  if (d) { d.className = 'status-dot ' + (navigator.onLine ? 'online' : 'offline'); }
+  if (t) { t.textContent = navigator.onLine ? 'En ligne' : 'Hors ligne'; }
+}
 
-  if (!code) return _jsonResponse({ status: 'error', error: 'Code manquant' });
+window.addEventListener('online',  _updateOnline);
+window.addEventListener('offline', _updateOnline);
 
-  const savedPhotos = [];
-  try {
-    // Cherche d'abord un dossier existant avec ce code, sinon crée dans 'Départs Photos PWA'
-    const parentFolder  = _getOrCreateFolder(null, 'Départs Photos PWA');
-    const articleFolder = _getOrCreateFolder(parentFolder.getId(), code);
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW:', e));
+}
 
-    (photos || []).forEach((dataUrl, i) => {
-      try {
-        const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
-        const blob = Utilities.newBlob(
-          Utilities.base64Decode(base64),
-          'image/jpeg',
-          code + '_depart_' + String(i + 1).padStart(2, '0') + '.jpg'
-        );
-        const file = articleFolder.createFile(blob);
-        savedPhotos.push({ name: file.getName(), url: file.getUrl() });
-      } catch (e) { Logger.log('Photo depart err: ' + e); }
-    });
-  } catch (err) {
-    return _jsonResponse({ status: 'error', error: err.toString() });
+document.addEventListener('DOMContentLoaded', () => {
+  App.go('arrivals');
+  _updateOnline();
+  // Load codes in background if cache is stale
+  if (S.apiUrl && Date.now() - S.codesTs > CODES_TTL) {
+    App._fetchCodes();
   }
-
-  return _jsonResponse({ status: 'ok', code, photosCount: savedPhotos.length, photos: savedPhotos });
-}
-
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// ANCIENNE FONCTION : savePhotoLegacy
-// Maintient la compatibilité avec l'ancienne PWA Google
-// ═══════════════════════════════════════════════════════════════════════════════
-function savePhotoLegacy(payload, e) {
-  // L'ancienne PWA envoyait : { photo: base64, code: "XXXX" }
-  // ou directement le body brut — adapter selon ton implémentation actuelle
-  try {
-    const photoData = payload.photo || payload.image || '';
-    const code      = payload.code || 'INCONNU';
-
-    if (!photoData) return _jsonResponse({ status: 'error', error: 'Pas de photo dans le payload' });
-
-    const base64 = photoData.replace(/^data:image\/\w+;base64,/, '');
-    const blob   = Utilities.newBlob(Utilities.base64Decode(base64), 'image/jpeg', code + '_photo.jpg');
-
-    const parentFolder  = _getOrCreateFolder(null, 'Départs Photos PWA');
-    const articleFolder = _getOrCreateFolder(parentFolder.getId(), code);
-    const file          = articleFolder.createFile(blob);
-
-    return _jsonResponse({ status: 'ok', fileName: file.getName(), folderName: articleFolder.getName() });
-  } catch (err) {
-    return _jsonResponse({ status: 'error', error: err.toString() });
-  }
-}
-
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// UTILITAIRES INTERNES
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * Retourne une réponse JSON avec les bons headers CORS.
- */
-function _jsonResponse(obj) {
-  return ContentService
-    .createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-/**
- * Crée ou récupère un dossier Drive par son nom.
- * @param {string|null} parentId  - ID du dossier parent (null = racine Mon Drive)
- * @param {string}      name      - Nom du dossier
- * @returns {Folder}
- */
-function _getOrCreateFolder(parentId, name) {
-  let parent;
-  if (parentId) {
-    parent = DriveApp.getFolderById(parentId);
-  } else {
-    parent = DriveApp.getRootFolder();
-  }
-
-  const it = parent.getFoldersByName(name);
-  if (it.hasNext()) return it.next();
-  return parent.createFolder(name);
-}
-
-/**
- * Formate une date en 'YYYY-MM-DD'.
- */
-function _dateStr(d) {
-  return Utilities.formatDate(d || new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
-}
-
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// FONCTION DE TEST (à lancer manuellement dans l'éditeur AppScript)
-// ═══════════════════════════════════════════════════════════════════════════════
-function testGetCodes() {
-  const result = getSonotradCodes();
-  const data   = JSON.parse(result.getContent());
-  Logger.log('Nombre de codes trouvés : ' + data.count);
-  Logger.log('Premiers codes : ' + data.codes.slice(0, 10).join(', '));
-}
-
-function testSaveArrival() {
-  const fakePayload = {
-    action:    'arrival',
-    code:      'TESTAA',
-    module:    'loxam',
-    chauffeur: 'Jean Test',
-    date:      '2026-03-30',
-    etat:      'Test depuis AppScript — bon état',
-    photos:    [], // Pas de photos dans le test
-  };
-  const result = saveArrival(fakePayload);
-  Logger.log(result.getContent());
-}
+});
+</script>
+</body>
+</html>
