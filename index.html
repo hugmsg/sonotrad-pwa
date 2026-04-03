@@ -857,9 +857,19 @@ const App = {
     }
   },
 
+  // Retourne le statut courant d'un article (le plus avancé dans la séquence)
+  // Séquence : enCours → aControler → termine  (deCote est indépendant)
+  _depCurrentStatus(d) {
+    if (!d.status) return null;
+    if (d.status.deCote)     return 'deCote';
+    if (d.status.termine)    return 'termine';
+    if (d.status.aControler) return 'aControler';
+    if (d.status.enCours)    return 'enCours';
+    return null;
+  },
+
   setDepFilter(filter) {
     S.depFilter = filter;
-    // Met à jour l'apparence des boutons
     document.querySelectorAll('.dep-filter-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.filter === filter);
     });
@@ -870,18 +880,16 @@ const App = {
     const list = document.getElementById('dep-list');
     const none = document.getElementById('no-departures');
 
-    // Applique le filtre actif
+    // Filtre basé sur le statut courant uniquement (pas les cases précédentes)
     const filtered = S.depFilter === 'all'
       ? S.deps
-      : S.deps.filter(d => d.status && d.status[S.depFilter]);
+      : S.deps.filter(d => this._depCurrentStatus(d) === S.depFilter);
 
-    // Compte par statut pour afficher les badges sur les boutons
+    // Compte par statut courant pour les badges
     const counts = { all: S.deps.length, enCours: 0, aControler: 0, termine: 0, deCote: 0 };
     S.deps.forEach(d => {
-      if (d.status?.enCours)    counts.enCours++;
-      if (d.status?.aControler) counts.aControler++;
-      if (d.status?.termine)    counts.termine++;
-      if (d.status?.deCote)     counts.deCote++;
+      const cur = this._depCurrentStatus(d);
+      if (cur && counts[cur] !== undefined) counts[cur]++;
     });
     document.querySelectorAll('.dep-filter-btn').forEach(btn => {
       const f   = btn.dataset.filter;
@@ -893,17 +901,18 @@ const App = {
     if (!filtered.length) { list.innerHTML = ''; none.style.display = 'block'; return; }
     none.style.display = 'none';
     list.innerHTML = filtered.map((d, i) => {
-      // On garde l'index réel dans S.deps pour openDep()
       const realIdx = S.deps.indexOf(d);
       const code  = d.code || '------';
       const titre = d.module || code;
-      // Chips : affiche tous les statuts actifs (une ligne peut être "En cours" ET "Mail" etc.)
-      const chips = [
-        d.status?.enCours    ? '<span class="chip chip-blue">En cours</span>'    : '',
-        d.status?.aControler ? '<span class="chip chip-yellow">À contrôler</span>' : '',
-        d.status?.termine    ? '<span class="chip chip-green">Terminé</span>'    : '',
-        d.status?.deCote     ? '<span class="chip" style="background:#F3E8FF;color:#6B21A8;">De côté</span>' : '',
-      ].filter(Boolean).join(' ');
+      // Chip unique = statut courant uniquement
+      const cur   = this._depCurrentStatus(d);
+      const chipMap = {
+        enCours:    '<span class="chip chip-blue">En cours</span>',
+        aControler: '<span class="chip chip-yellow">À contrôler</span>',
+        termine:    '<span class="chip chip-green">Terminé</span>',
+        deCote:     '<span class="chip" style="background:#F3E8FF;color:#6B21A8;">De côté</span>',
+      };
+      const chips = cur ? chipMap[cur] : '';
       return `
         <div class="dep-card" onclick="App.openDep(${realIdx})">
           <div style="width:44px;height:44px;background:#EBF5FB;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">📤</div>
@@ -911,7 +920,7 @@ const App = {
             <div class="code-mono" style="font-size:14px;">${code}</div>
             <div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titre}</div>
             ${d.chantier ? `<div style="font-size:12px;color:#64748B;">${d.chantier}</div>` : ''}
-            ${chips ? `<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;">${chips}</div>` : ''}
+            ${chips ? `<div style="margin-top:4px;">${chips}</div>` : ''}
           </div>
           <span style="color:#CBD5E1;font-size:20px;align-self:center;">›</span>
         </div>`;
