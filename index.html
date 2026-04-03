@@ -947,7 +947,20 @@ const App = {
         ${d.description ? `<div style="font-size:12px;color:#94A3B8;margin-top:4px;line-height:1.4;">${d.description}</div>` : ''}
         ${d.debut || d.fin ? `<div style="font-size:12px;color:#64748B;margin-top:6px;">📅 ${d.debut ? 'Début ' + d.debut.slice(0,10) : ''} ${d.fin ? '→ Fin ' + d.fin.slice(0,10) : ''}</div>` : ''}
         ${d.commande ? `<div style="font-size:12px;color:#64748B;margin-top:2px;">🔖 Commande : ${d.commande}</div>` : ''}
-        ${d.lienDrive ? `<a href="${d.lienDrive}" target="_blank" rel="noopener" style="display:inline-block;margin-top:10px;font-size:13px;color:var(--accent);">📁 Ouvrir le dossier Drive</a>` : ''}
+        ${d.lienDrive ? `
+        <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <a href="${d.lienDrive}" target="_blank" rel="noopener"
+             style="font-size:13px;color:var(--accent);font-weight:600;text-decoration:none;">
+            📁 Ouvrir dans Drive
+          </a>
+          ${/\/folders\//.test(d.lienDrive) ? `<button onclick="App.loadDriveFiles('${(d.lienDrive.match(/\/folders\/([a-zA-Z0-9_-]+)/)||[])[1]}')"
+            id="btn-drive-files"
+            style="background:#EBF5FB;color:var(--brand);border:none;padding:5px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+            📂 Voir les fichiers
+          </button>` : ''}
+        </div>
+        <div id="drive-files-panel" style="margin-top:8px;"></div>
+        ` : ''}
       </div>
       <div class="card">
         <p style="font-size:14px;font-weight:600;color:#1E293B;margin-bottom:10px;">Photos du départ</p>
@@ -960,6 +973,56 @@ const App = {
         <button class="btn btn-primary" id="btn-dep-submit" onclick="App.submitDep()">📤 Enregistrer les photos de départ</button>
       </div>`;
     this._renderDepPhotoGrid();
+  },
+
+  async loadDriveFiles(folderId) {
+    if (!folderId) return;
+    const panel = document.getElementById('drive-files-panel');
+    const btn   = document.getElementById('btn-drive-files');
+    if (!panel) return;
+
+    // Spinner pendant le chargement
+    if (btn) { btn.disabled = true; btn.textContent = 'Chargement…'; }
+    panel.innerHTML = '<p style="font-size:12px;color:#94A3B8;">Récupération des fichiers…</p>';
+
+    try {
+      const url  = S.apiUrl + '?action=drive_files&folderId=' + encodeURIComponent(folderId);
+      const resp = await _fetchWithTimeout(url, {}, 30000);
+      const data = await resp.json();
+
+      if (data.status !== 'ok' || !data.files?.length) {
+        panel.innerHTML = '<p style="font-size:12px;color:#94A3B8;">Dossier vide ou inaccessible.</p>';
+        if (btn) { btn.disabled = false; btn.textContent = '📂 Voir les fichiers'; }
+        return;
+      }
+
+      // Icône selon le type MIME
+      const icon = mime => {
+        if (mime.includes('image'))       return '🖼️';
+        if (mime.includes('pdf'))         return '📄';
+        if (mime.includes('spreadsheet')) return '📊';
+        if (mime.includes('document'))    return '📝';
+        if (mime.includes('video'))       return '🎬';
+        if (mime.includes('folder'))      return '📁';
+        return '📎';
+      };
+
+      panel.innerHTML = `
+        <div style="border-top:1px solid #F1F5F9;margin-top:4px;padding-top:8px;">
+          <p style="font-size:11px;color:#94A3B8;margin-bottom:6px;">${data.count} fichier${data.count > 1 ? 's' : ''} dans le dossier</p>
+          ${data.files.map(f => `
+            <a href="${f.url}" target="_blank" rel="noopener"
+               style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #F8FAFC;text-decoration:none;">
+              <span style="font-size:18px;flex-shrink:0;">${icon(f.mimeType)}</span>
+              <span style="font-size:13px;color:#1E293B;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.name}</span>
+              <span style="color:#CBD5E1;font-size:14px;">›</span>
+            </a>`).join('')}
+        </div>`;
+      if (btn) btn.style.display = 'none'; // masque le bouton une fois chargé
+    } catch(e) {
+      panel.innerHTML = `<p style="font-size:12px;color:#EF4444;">Erreur : ${e.message}</p>`;
+      if (btn) { btn.disabled = false; btn.textContent = '📂 Réessayer'; }
+    }
   },
 
   _renderDepPhotoGrid() {
