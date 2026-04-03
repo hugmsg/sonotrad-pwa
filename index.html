@@ -216,6 +216,25 @@
     .history-row { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid #F1F5F9; }
     .mod-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
 
+    .dep-filter-btn {
+      flex-shrink: 0;
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1.5px solid #CBD5E1;
+      background: white;
+      color: #64748B;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .dep-filter-btn.active {
+      background: var(--brand);
+      border-color: var(--brand);
+      color: white;
+    }
+
     .dep-card {
       display: flex; align-items: flex-start; gap: 12px;
       padding: 13px 14px; background: white; border-radius: 12px;
@@ -404,6 +423,15 @@
         <button onclick="App.loadDepartures(true)" style="background:#EBF5FB;color:var(--brand);border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻ Actualiser</button>
       </div>
 
+      <!-- Filtres par statut -->
+      <div id="dep-filters" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
+        <button class="dep-filter-btn active" data-filter="all"        onclick="App.setDepFilter('all')">Tous</button>
+        <button class="dep-filter-btn"        data-filter="enCours"    onclick="App.setDepFilter('enCours')">En cours</button>
+        <button class="dep-filter-btn"        data-filter="aControler" onclick="App.setDepFilter('aControler')">À contrôler</button>
+        <button class="dep-filter-btn"        data-filter="termine"    onclick="App.setDepFilter('termine')">Terminé</button>
+        <button class="dep-filter-btn"        data-filter="deCote"     onclick="App.setDepFilter('deCote')">De côté</button>
+      </div>
+
       <div id="dep-loading" style="text-align:center;padding:40px;display:none;">
         <div class="spinner"></div>
         <p style="color:#64748B;">Chargement de la liste...</p>
@@ -541,6 +569,7 @@ const S = {
   depsLoaded: false,
   selDep:     null,
   depPhotos:  [],      // [{dataUrl}]
+  depFilter:  'all',   // 'all' | 'enCours' | 'aControler' | 'termine' | 'deCote'
 
   submitting: false,
 };
@@ -828,24 +857,61 @@ const App = {
     }
   },
 
+  setDepFilter(filter) {
+    S.depFilter = filter;
+    // Met à jour l'apparence des boutons
+    document.querySelectorAll('.dep-filter-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.filter === filter);
+    });
+    this._renderDepList();
+  },
+
   _renderDepList() {
     const list = document.getElementById('dep-list');
     const none = document.getElementById('no-departures');
-    if (!S.deps.length) { list.innerHTML = ''; none.style.display = 'block'; return; }
+
+    // Applique le filtre actif
+    const filtered = S.depFilter === 'all'
+      ? S.deps
+      : S.deps.filter(d => d.status && d.status[S.depFilter]);
+
+    // Compte par statut pour afficher les badges sur les boutons
+    const counts = { all: S.deps.length, enCours: 0, aControler: 0, termine: 0, deCote: 0 };
+    S.deps.forEach(d => {
+      if (d.status?.enCours)    counts.enCours++;
+      if (d.status?.aControler) counts.aControler++;
+      if (d.status?.termine)    counts.termine++;
+      if (d.status?.deCote)     counts.deCote++;
+    });
+    document.querySelectorAll('.dep-filter-btn').forEach(btn => {
+      const f   = btn.dataset.filter;
+      const cnt = counts[f] || 0;
+      const label = { all: 'Tous', enCours: 'En cours', aControler: 'À contrôler', termine: 'Terminé', deCote: 'De côté' }[f];
+      btn.textContent = cnt > 0 ? `${label} (${cnt})` : label;
+    });
+
+    if (!filtered.length) { list.innerHTML = ''; none.style.display = 'block'; return; }
     none.style.display = 'none';
-    list.innerHTML = S.deps.map((d, i) => {
+    list.innerHTML = filtered.map((d, i) => {
+      // On garde l'index réel dans S.deps pour openDep()
+      const realIdx = S.deps.indexOf(d);
       const code  = d.code || '------';
-      const titre = d.module || code;           // col F : CONTAINER / MODULOX / …
-      const chip  = d.status?.enCours ? '<span class="chip chip-blue">En cours</span>'
-                  : d.status?.aControler ? '<span class="chip chip-yellow">À contrôler</span>' : '';
+      const titre = d.module || code;
+      // Chips : affiche tous les statuts actifs (une ligne peut être "En cours" ET "Mail" etc.)
+      const chips = [
+        d.status?.enCours    ? '<span class="chip chip-blue">En cours</span>'    : '',
+        d.status?.aControler ? '<span class="chip chip-yellow">À contrôler</span>' : '',
+        d.status?.termine    ? '<span class="chip chip-green">Terminé</span>'    : '',
+        d.status?.deCote     ? '<span class="chip" style="background:#F3E8FF;color:#6B21A8;">De côté</span>' : '',
+      ].filter(Boolean).join(' ');
       return `
-        <div class="dep-card" onclick="App.openDep(${i})">
+        <div class="dep-card" onclick="App.openDep(${realIdx})">
           <div style="width:44px;height:44px;background:#EBF5FB;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">📤</div>
           <div style="flex:1;min-width:0;">
             <div class="code-mono" style="font-size:14px;">${code}</div>
             <div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titre}</div>
             ${d.chantier ? `<div style="font-size:12px;color:#64748B;">${d.chantier}</div>` : ''}
-            ${chip ? `<div style="margin-top:4px;">${chip}</div>` : ''}
+            ${chips ? `<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;">${chips}</div>` : ''}
           </div>
           <span style="color:#CBD5E1;font-size:20px;align-self:center;">›</span>
         </div>`;
