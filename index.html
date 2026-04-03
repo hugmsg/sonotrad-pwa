@@ -834,8 +834,8 @@ const App = {
     if (!S.deps.length) { list.innerHTML = ''; none.style.display = 'block'; return; }
     none.style.display = 'none';
     list.innerHTML = S.deps.map((d, i) => {
-      const code  = d.codeplanning || d.code || '------';
-      const titre = d.titrePrincipal || d.titre || code;
+      const code  = d.code || '------';
+      const titre = d.module || code;           // col F : CONTAINER / MODULOX / …
       const chip  = d.status?.enCours ? '<span class="chip chip-blue">En cours</span>'
                   : d.status?.aControler ? '<span class="chip chip-yellow">À contrôler</span>' : '';
       return `
@@ -844,7 +844,7 @@ const App = {
           <div style="flex:1;min-width:0;">
             <div class="code-mono" style="font-size:14px;">${code}</div>
             <div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titre}</div>
-            ${d.sousTitre ? `<div style="font-size:12px;color:#64748B;">${d.sousTitre}</div>` : ''}
+            ${d.chantier ? `<div style="font-size:12px;color:#64748B;">${d.chantier}</div>` : ''}
             ${chip ? `<div style="margin-top:4px;">${chip}</div>` : ''}
           </div>
           <span style="color:#CBD5E1;font-size:20px;align-self:center;">›</span>
@@ -862,13 +862,16 @@ const App = {
   _renderDepDetail() {
     const d = S.selDep;
     if (!d) return;
-    const code  = d.codeplanning || d.code || '------';
-    const titre = d.titrePrincipal || code;
+    const code  = d.code || '------';
+    const titre = d.module || code;
     document.getElementById('dep-detail-body').innerHTML = `
       <div class="card" style="margin-bottom:12px;">
         <div class="code-mono" style="font-size:24px;letter-spacing:4px;margin-bottom:6px;">${code}</div>
         <div style="font-size:16px;font-weight:600;color:#1E293B;">${titre}</div>
-        ${d.sousTitre ? `<div style="font-size:13px;color:#64748B;margin-top:2px;">${d.sousTitre}</div>` : ''}
+        ${d.chantier ? `<div style="font-size:13px;color:#64748B;margin-top:2px;">📍 ${d.chantier}${d.ag ? ' — Ag. ' + d.ag : ''}</div>` : ''}
+        ${d.description ? `<div style="font-size:12px;color:#94A3B8;margin-top:4px;line-height:1.4;">${d.description}</div>` : ''}
+        ${d.debut || d.fin ? `<div style="font-size:12px;color:#64748B;margin-top:6px;">📅 ${d.debut ? 'Début ' + d.debut.slice(0,10) : ''} ${d.fin ? '→ Fin ' + d.fin.slice(0,10) : ''}</div>` : ''}
+        ${d.commande ? `<div style="font-size:12px;color:#64748B;margin-top:2px;">🔖 Commande : ${d.commande}</div>` : ''}
         ${d.lienDrive ? `<a href="${d.lienDrive}" target="_blank" rel="noopener" style="display:inline-block;margin-top:10px;font-size:13px;color:var(--accent);">📁 Ouvrir le dossier Drive</a>` : ''}
       </div>
       <div class="card">
@@ -903,7 +906,7 @@ const App = {
     if (!S.depPhotos.length) { this.toast('Ajoutez au moins une photo'); return; }
     const btn = document.getElementById('btn-dep-submit');
     if (btn) { btn.disabled = true; btn.textContent = 'Envoi...'; }
-    const code = d.codeplanning || d.code;
+    const code = d.code;
     try {
       if (S.apiUrl) {
         await _post(S.apiUrl, { action: 'departure_photo', code, photos: S.depPhotos.map(p => p.dataUrl) });
