@@ -1006,7 +1006,10 @@ const App = {
             ${d.codeModule ? `<div class="code-mono" style="font-size:18px;margin-bottom:2px;">${d.codeModule}</div>` : ''}
             <div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.chantier || '—'}</div>
             <div style="font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${code} · ${titre}</div>
-            ${chips ? `<div style="margin-top:4px;">${chips}</div>` : ''}
+            <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap;">
+              ${chips}
+              ${_duration(d.debut, d.status && d.status.termine ? d.fin : null) ? `<span style="font-size:11px;color:#94A3B8;font-weight:500;">⏱ ${_duration(d.debut, d.status && d.status.termine ? d.fin : null)}</span>` : ''}
+            </div>
           </div>
           <span style="color:#CBD5E1;font-size:20px;align-self:center;">›</span>
         </div>`;
@@ -1041,7 +1044,11 @@ const App = {
         <div style="font-size:12px;color:#94A3B8;">📋 ${code}</div>
         <div style="font-size:13px;color:#64748B;margin-top:2px;">${titre}</div>
         ${d.description ? `<div style="font-size:12px;color:#94A3B8;margin-top:4px;line-height:1.4;">${d.description}</div>` : ''}
-        ${d.debut || d.fin ? `<div style="font-size:12px;color:#64748B;margin-top:6px;">📅 ${d.debut ? 'Début ' + d.debut.slice(0,10) : ''} ${d.fin ? '→ Fin ' + d.fin.slice(0,10) : ''}</div>` : ''}
+        ${d.debut || d.fin ? `<div style="font-size:12px;color:#64748B;margin-top:6px;">
+          📅 ${d.debut ? 'Entrée le ' + _fmtDate(d.debut) : ''}
+          ${d.fin ? ' → ' + _fmtDate(d.fin) : (d.debut ? ' → auj.' : '')}
+          ${_duration(d.debut, d.status && d.status.termine ? d.fin : null) ? `<span style="margin-left:6px;background:#F1F5F9;border-radius:4px;padding:1px 6px;font-weight:600;">⏱ ${_duration(d.debut, d.status && d.status.termine ? d.fin : null)}</span>` : ''}
+        </div>` : ''}
         ${d.commande ? `<div style="font-size:12px;color:#64748B;margin-top:2px;">🔖 Commande : ${d.commande}</div>` : ''}
         ${d.lienDrive ? `
         <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -1186,6 +1193,7 @@ const App = {
             ${d.codeModule ? `<div class="code-mono" style="font-size:18px;margin-bottom:2px;">${d.codeModule}</div>` : ''}
             <div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.chantier || '—'}</div>
             <div style="font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${code} · ${titre}</div>
+            ${_duration(d.debut, d.fin) ? `<div style="font-size:11px;color:#94A3B8;margin-top:2px;">⏱ ${_duration(d.debut, d.fin)}</div>` : ''}
           </div>
           <span style="color:#CBD5E1;font-size:20px;align-self:center;">›</span>
         </div>`;
@@ -1390,6 +1398,29 @@ function _randCode() {
 
 function todayStr() { return new Date().toISOString().split('T')[0]; }
 function _timeStr()  { return new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
+
+// Date au format français court : "2 jan. 2025"
+function _fmtDate(str) {
+  if (!str) return '';
+  const d = new Date(str);
+  if (isNaN(d)) return str;
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// Durée entre debut et (fin ou aujourd'hui), retourne ex: "3j", "2 sem", "1 mois"
+function _duration(debut, fin) {
+  if (!debut) return '';
+  const start = new Date(debut);
+  if (isNaN(start)) return '';
+  const end = (fin && !isNaN(new Date(fin))) ? new Date(fin) : new Date();
+  const days = Math.round((end - start) / 86400000);
+  if (days < 0)  return '';
+  if (days === 0) return 'auj.';
+  if (days === 1) return '1j';
+  if (days < 14)  return days + 'j';
+  if (days < 60)  return Math.round(days / 7) + ' sem';
+  return Math.round(days / 30) + ' mois';
+}
 function _sleep(ms)  { return new Promise(r => setTimeout(r, ms)); }
 
 // Fetch avec timeout (AppScript peut être lent)
