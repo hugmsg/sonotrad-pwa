@@ -997,12 +997,28 @@ const App = {
   _buildModuleFilterBar() {
     const bar = document.getElementById('dep-module-filters');
     if (!bar) return;
+    bar.innerHTML = '';
     // Collecte les types uniques (col F non vides)
     const types = [...new Set(S.deps.map(d => (d.module || '').trim()).filter(Boolean))].sort();
-    if (!types.length) { bar.innerHTML = ''; return; }
-    bar.innerHTML = `
-      <button class="dep-module-btn active" data-mod="all" onclick="App.setDepModuleFilter('all')">Tous types</button>
-      ${types.map(t => `<button class="dep-module-btn" data-mod="${t}" onclick="App.setDepModuleFilter('${t.replace(/'/g,"\\'")}'">${t}</button>`).join('')}`;
+    if (!types.length) return;
+
+    // Bouton "Tous types"
+    const allBtn = document.createElement('button');
+    allBtn.className   = 'dep-module-btn active';
+    allBtn.dataset.mod = 'all';
+    allBtn.textContent = 'Tous types';
+    allBtn.addEventListener('click', () => App.setDepModuleFilter('all'));
+    bar.appendChild(allBtn);
+
+    // Un bouton par type
+    types.forEach(t => {
+      const btn = document.createElement('button');
+      btn.className   = 'dep-module-btn';
+      btn.dataset.mod = t;
+      btn.textContent = t;
+      btn.addEventListener('click', () => App.setDepModuleFilter(t));
+      bar.appendChild(btn);
+    });
   },
 
   _renderDepList() {
