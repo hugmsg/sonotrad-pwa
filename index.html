@@ -304,9 +304,9 @@
 
     <!-- ── VIEW : ARRIVALS ──────────────────────────────────────────────── -->
     <div class="view active" id="view-arrivals">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-        <h2 style="font-size:20px;font-weight:700;color:#1E293B;">Arrivées récentes</h2>
-        <span id="pending-badge" style="display:none;background:#F59E0B;color:white;padding:2px 9px;border-radius:10px;font-size:12px;font-weight:600;"></span>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h2 style="font-size:20px;font-weight:700;color:#1E293B;">Arrivées</h2>
+        <button onclick="App.loadArrivalsData(true)" style="background:#EBF5FB;color:var(--brand);border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻ Actualiser</button>
       </div>
 
       <div id="api-warning" class="warn-box" style="display:none;">
@@ -314,13 +314,33 @@
         L'app fonctionne en mode local uniquement. <a onclick="App.go('settings')" style="color:#2E86C1;cursor:pointer;text-decoration:underline;">Configurer l'URL →</a></p>
       </div>
 
-      <div id="arrival-list"></div>
+      <!-- Filtre présence -->
+      <div id="arr-parti-filters" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
+        <button class="dep-filter-btn active" data-parti="all"     onclick="App.setArrPartiFilter('all')">Tous</button>
+        <button class="dep-filter-btn"        data-parti="present" onclick="App.setArrPartiFilter('present')">En atelier</button>
+        <button class="dep-filter-btn"        data-parti="parti"   onclick="App.setArrPartiFilter('parti')">Partis</button>
+      </div>
+
+      <!-- Filtre type module (dynamique) -->
+      <div id="arr-type-filters" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;-webkit-overflow-scrolling:touch;scrollbar-width:none;"></div>
+
+      <div id="arr-loading" style="text-align:center;padding:40px;display:none;">
+        <div class="spinner"></div>
+        <p style="color:#64748B;">Chargement des arrivées...</p>
+      </div>
+
+      <div id="arr-list"></div>
 
       <div id="no-arrivals" style="text-align:center;padding:48px 0 32px;color:#94A3B8;display:none;">
-        <div style="font-size:52px;margin-bottom:12px;">📦</div>
-        <p style="font-size:16px;font-weight:600;">Aucune arrivée enregistrée</p>
-        <p style="font-size:13px;margin-top:4px;">Appuyez sur + pour commencer</p>
+        <div style="font-size:52px;margin-bottom:12px;">📥</div>
+        <p style="font-size:16px;font-weight:600;">Aucune arrivée</p>
+        <p style="font-size:13px;margin-top:4px;">Appuyez sur + pour enregistrer une arrivée</p>
       </div>
+    </div>
+
+    <!-- ── VIEW : ARRIVAL DETAIL ─────────────────────────────────────────── -->
+    <div class="view" id="view-arr-detail">
+      <div id="arr-detail-body"></div>
     </div>
 
     <!-- ── VIEW : NEW ARRIVAL ────────────────────────────────────────────── -->
@@ -631,6 +651,13 @@ const SK = {
 
 const CODES_TTL = 30 * 60 * 1000; // 30 min
 
+const ARR_SOURCES = {
+  loxam:      { label: 'LOXAM',      icon: '🏗️', bg: '#EBF5FB', color: '#1A5276' },
+  bcb:        { label: 'BCB',        icon: '🚛', bg: '#FEF3E8', color: '#7D2A00' },
+  agorastore: { label: 'Agorastore', icon: '🏷️', bg: '#F5EEF8', color: '#5B2C6F' },
+  rapido:     { label: 'Rapido',     icon: '⚡', bg: '#F0FDF4', color: '#14532D' },
+};
+
 // ── STATE ────────────────────────────────────────────────────────────────────
 
 const S = {
@@ -659,6 +686,13 @@ const S = {
   depFilter:       'all',   // 'all' | 'enCours' | 'aControler' | 'termine' | 'deCote'
   depModuleFilter: 'all',   // 'all' | nom du module (col F)
 
+  // Arrivals (depuis serveur)
+  arrivalsData:    [],
+  arrivalsLoaded:  false,
+  arrTypeFilter:   'all',
+  arrPartiFilter:  'all',
+  selArrival:      null,
+
   // Archive (Partis)
   archive:        [],
   archiveLoaded:  false,
@@ -676,7 +710,7 @@ const App = {
     S.prevView = S.view;
     S.view = view;
     this._render();
-    if (view === 'arrivals')   this._renderArrivalList();
+    if (view === 'arrivals' && !S.arrivalsLoaded) this.loadArrivalsData();
     if (view === 'history')    this._renderHistory();
     if (view === 'departures' && !S.depsLoaded) this.loadDepartures();
     if (view === 'archive'    && !S.archiveLoaded) this.loadArchive();
@@ -690,7 +724,7 @@ const App = {
 
     // Views
     document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
-    const mapId = { 'dep-detail': 'dep-detail' };
+    const mapId = { 'dep-detail': 'dep-detail', 'arr-detail': 'arr-detail' };
     const viewId = 'view-' + (mapId[v] || v);
     const el = document.getElementById(viewId);
     if (el) el.classList.add('active');
@@ -705,10 +739,10 @@ const App = {
     fab.style.display = (v === 'arrivals') ? 'flex' : 'none';
 
     // Header back / logo
-    const inForm = ['new-arrival','settings','dep-detail'].includes(v);
+    const inForm = ['new-arrival','settings','dep-detail','arr-detail'].includes(v);
     document.getElementById('btn-back').classList.toggle('hidden', !inForm);
     document.getElementById('header-logo').style.display = inForm ? 'none' : 'flex';
-    const labels = { 'new-arrival': 'Annuler', 'settings': 'Réglages', 'dep-detail': S.depFromArchive ? 'Partis' : 'Production' };
+    const labels = { 'new-arrival': 'Annuler', 'settings': 'Réglages', 'dep-detail': S.depFromArchive ? 'Partis' : 'Production', 'arr-detail': 'Arrivées' };
     document.getElementById('back-label').textContent = labels[v] || 'Retour';
 
     // API warning
@@ -1261,6 +1295,155 @@ const App = {
           <span style="color:#CBD5E1;font-size:20px;align-self:center;">›</span>
         </div>`;
     }).join('');
+  },
+
+  /* ─ Arrivals (serveur) ─ */
+  async loadArrivalsData(force = false) {
+    if (!force && S.arrivalsLoaded) return;
+    if (force) { S.arrivalsLoaded = false; S.arrTypeFilter = 'all'; S.arrPartiFilter = 'all'; }
+    document.getElementById('arr-loading').style.display = 'block';
+    document.getElementById('no-arrivals').style.display = 'none';
+    document.getElementById('arr-list').innerHTML = '';
+
+    if (!S.apiUrl) {
+      document.getElementById('arr-loading').style.display = 'none';
+      document.getElementById('no-arrivals').style.display = 'block';
+      return;
+    }
+    try {
+      const resp = await _fetchWithTimeout(S.apiUrl + '?action=arrivals', {}, 50000);
+      const data = await resp.json();
+      S.arrivalsData   = Array.isArray(data) ? data : (data.data || []);
+      S.arrivalsLoaded = true;
+      this._buildArrTypeFilters();
+      this._filterAndRenderArrivals();
+    } catch(e) {
+      document.getElementById('arr-list').innerHTML = `
+        <div class="card" style="border-left:4px solid #F87171;">
+          <p style="color:#991B1B;font-weight:600;">Impossible de charger les arrivées</p>
+          <p style="font-size:12px;color:#64748B;margin-top:3px;">${e.message}</p>
+        </div>`;
+    } finally {
+      document.getElementById('arr-loading').style.display = 'none';
+    }
+  },
+
+  _buildArrTypeFilters() {
+    const bar = document.getElementById('arr-type-filters');
+    if (!bar) return;
+    bar.innerHTML = '';
+    const types = [...new Set(S.arrivalsData.map(a => (a.type || '').trim()).filter(Boolean))].sort();
+    if (!types.length) return;
+    const allBtn = document.createElement('button');
+    allBtn.className = 'dep-module-btn active'; allBtn.dataset.type = 'all'; allBtn.textContent = 'Tous types';
+    allBtn.addEventListener('click', () => App.setArrTypeFilter('all'));
+    bar.appendChild(allBtn);
+    types.forEach(t => {
+      const btn = document.createElement('button');
+      btn.className = 'dep-module-btn'; btn.dataset.type = t; btn.textContent = t;
+      btn.addEventListener('click', () => App.setArrTypeFilter(t));
+      bar.appendChild(btn);
+    });
+  },
+
+  setArrTypeFilter(f) {
+    S.arrTypeFilter = f;
+    document.querySelectorAll('#arr-type-filters .dep-module-btn').forEach(b => b.classList.toggle('active', b.dataset.type === f));
+    this._filterAndRenderArrivals();
+  },
+
+  setArrPartiFilter(f) {
+    S.arrPartiFilter = f;
+    document.querySelectorAll('#arr-parti-filters .dep-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.parti === f));
+    this._filterAndRenderArrivals();
+  },
+
+  _filterAndRenderArrivals() {
+    const items = S.arrivalsData.filter(a => {
+      const typeOk  = S.arrTypeFilter  === 'all' || (a.type || '').trim() === S.arrTypeFilter;
+      const partiOk = S.arrPartiFilter === 'all'
+        || (S.arrPartiFilter === 'present' && !a.isParti)
+        || (S.arrPartiFilter === 'parti'   &&  a.isParti);
+      return typeOk && partiOk;
+    });
+    this._renderArrivalCards(items);
+  },
+
+  _renderArrivalCards(items) {
+    const list = document.getElementById('arr-list');
+    const none = document.getElementById('no-arrivals');
+    if (!items.length) { list.innerHTML = ''; none.style.display = 'block'; return; }
+    none.style.display = 'none';
+    list.innerHTML = items.map((a) => {
+      const realIdx = S.arrivalsData.indexOf(a);
+      const primary   = a.numModule || a.code;
+      const secondary = (a.numModule ? a.code + ' · ' : '') + (a.type || '—');
+      const meta      = [a.chauffeur, _fmtDate(a.dateArrivee)].filter(Boolean).join(' · ');
+      return `
+        <div class="dep-card" onclick="App.openArrival(${realIdx})">
+          <div style="width:44px;height:44px;background:#EBF5FB;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">📥</div>
+          <div style="flex:1;min-width:0;">
+            <div class="code-mono" style="font-size:18px;margin-bottom:2px;">${primary}</div>
+            <div style="font-size:12px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${secondary}</div>
+            ${meta ? `<div style="font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${meta}</div>` : ''}
+            <div style="margin-top:3px;">
+              ${a.isParti
+                ? `<span style="background:#DCFCE7;color:#15803D;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;">Parti</span>`
+                : `<span style="background:#EFF6FF;color:#1D4ED8;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;">En atelier</span>`}
+            </div>
+          </div>
+          <span style="color:#CBD5E1;font-size:20px;align-self:center;">›</span>
+        </div>`;
+    }).join('');
+  },
+
+  openArrival(idx) {
+    S.selArrival = S.arrivalsData[idx];
+    this.go('arr-detail');
+    this._renderArrivalDetail();
+  },
+
+  _renderArrivalDetail() {
+    const a = S.selArrival;
+    if (!a) return;
+    const primary = a.numModule || a.code;
+    const rows = [
+      a.numModule   && ['Code interne',  a.code],
+      a.type        && ['Type',          a.type],
+      a.numSerie    && ['N° Série',      a.numSerie],
+      a.plaques     && ['Plaques',       a.plaques],
+      a.lv          && ['LV',            a.lv],
+      a.agence      && ['Agence',        a.agence],
+      a.chauffeur   && ['Chauffeur',     a.chauffeur],
+      a.bt          && ['BT',            a.bt],
+      a.pastille    && ['Pastille',      a.pastille],
+      a.destination && ['Destination',   a.destination],
+      a.commentaire && ['Commentaire',   a.commentaire],
+      a.colN        && ['Note N',        a.colN],
+      a.colO        && ['Note O',        a.colO],
+    ].filter(Boolean);
+    document.getElementById('arr-detail-body').innerHTML = `
+      <div class="card" style="margin-bottom:12px;">
+        <div style="margin-bottom:8px;">
+          ${a.isParti
+            ? `<span style="background:#DCFCE7;color:#15803D;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;">✅ Parti</span>`
+            : `<span style="background:#EFF6FF;color:#1D4ED8;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;">🏭 En atelier</span>`}
+        </div>
+        <div class="code-mono" style="font-size:28px;letter-spacing:3px;margin-bottom:4px;">${primary}</div>
+        ${a.dateArrivee ? `<div style="font-size:12px;color:#64748B;margin-bottom:4px;">📅 Arrivée le ${_fmtDate(a.dateArrivee)}</div>` : ''}
+        ${rows.length ? `
+        <div style="margin-top:10px;border-top:1px solid #F1F5F9;padding-top:10px;display:grid;grid-template-columns:auto 1fr;gap:5px 14px;">
+          ${rows.map(([k,v]) => `
+            <span style="font-size:12px;color:#94A3B8;white-space:nowrap;padding-top:1px;">${k}</span>
+            <span style="font-size:12px;color:#1E293B;font-weight:500;word-break:break-word;">${v}</span>`).join('')}
+        </div>` : ''}
+        ${a.lienDrive ? `
+        <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <a href="${a.lienDrive}" target="_blank" rel="noopener" style="font-size:13px;color:var(--accent);font-weight:600;text-decoration:none;">📁 Ouvrir dans Drive</a>
+          ${/\/folders\//.test(a.lienDrive) ? `<button onclick="App.loadDriveFiles('${(a.lienDrive.match(/\/folders\/([a-zA-Z0-9_-]+)/)||[])[1]}')" id="btn-drive-files" style="background:#EBF5FB;color:var(--brand);border:none;padding:5px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">📂 Voir les fichiers</button>` : ''}
+        </div>
+        <div id="drive-files-panel" style="margin-top:8px;"></div>` : ''}
+      </div>`;
   },
 
   _renderDepPhotoGrid() {
