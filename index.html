@@ -314,6 +314,11 @@
         L'app fonctionne en mode local uniquement. <a onclick="App.go('settings')" style="color:#2E86C1;cursor:pointer;text-decoration:underline;">Configurer l'URL →</a></p>
       </div>
 
+      <!-- Résumé des totaux par type (depuis lignes 4-5 de la feuille) -->
+      <div id="arr-summary" style="display:none;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
+        <div id="arr-summary-inner" style="display:flex;gap:6px;"></div>
+      </div>
+
       <!-- Filtre présence -->
       <div id="arr-parti-filters" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
         <button class="dep-filter-btn active" data-parti="all"     onclick="App.setArrPartiFilter('all')">Tous</button>
@@ -688,6 +693,7 @@ const S = {
 
   // Arrivals (depuis serveur)
   arrivalsData:    [],
+  arrivalsSummary: {},
   arrivalsLoaded:  false,
   arrTypeFilter:   'all',
   arrPartiFilter:  'all',
@@ -1313,8 +1319,10 @@ const App = {
     try {
       const resp = await _fetchWithTimeout(S.apiUrl + '?action=arrivals', {}, 50000);
       const data = await resp.json();
-      S.arrivalsData   = Array.isArray(data) ? data : (data.data || []);
-      S.arrivalsLoaded = true;
+      S.arrivalsData    = Array.isArray(data) ? data : (data.data || []);
+      S.arrivalsSummary = data.summary || {};
+      S.arrivalsLoaded  = true;
+      this._renderArrivalsSummary();
       this._buildArrTypeFilters();
       this._filterAndRenderArrivals();
     } catch(e) {
@@ -1326,6 +1334,22 @@ const App = {
     } finally {
       document.getElementById('arr-loading').style.display = 'none';
     }
+  },
+
+  _renderArrivalsSummary() {
+    const wrap  = document.getElementById('arr-summary');
+    const inner = document.getElementById('arr-summary-inner');
+    if (!wrap || !inner) return;
+    const s = S.arrivalsSummary;
+    const entries = Object.entries(s).filter(([,n]) => n > 0);
+    if (!entries.length) { wrap.style.display = 'none'; return; }
+    const total = entries.reduce((acc, [,n]) => acc + n, 0);
+    inner.innerHTML =
+      `<span style="background:#F1F5F9;color:#475569;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0;">En atelier : ${total}</span>` +
+      entries.map(([type, n]) =>
+        `<span style="background:#EBF5FB;color:#1A5276;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0;">${type} <strong>${n}</strong></span>`
+      ).join('');
+    wrap.style.display = 'block';
   },
 
   _buildArrTypeFilters() {
