@@ -234,6 +234,24 @@
       border-color: var(--brand);
       color: white;
     }
+    .dep-module-btn {
+      flex-shrink: 0;
+      padding: 4px 12px;
+      border-radius: 20px;
+      border: 1.5px solid #E2E8F0;
+      background: #F8FAFC;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .dep-module-btn.active {
+      background: #1E293B;
+      border-color: #1E293B;
+      color: white;
+    }
 
     .dep-card {
       display: flex; align-items: flex-start; gap: 12px;
@@ -463,13 +481,16 @@
       </div>
 
       <!-- Filtres par statut -->
-      <div id="dep-filters" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
+      <div id="dep-filters" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
         <button class="dep-filter-btn active" data-filter="all"        onclick="App.setDepFilter('all')">Tous</button>
         <button class="dep-filter-btn"        data-filter="enCours"    onclick="App.setDepFilter('enCours')">En cours</button>
         <button class="dep-filter-btn"        data-filter="aControler" onclick="App.setDepFilter('aControler')">À contrôler</button>
         <button class="dep-filter-btn"        data-filter="termine"    onclick="App.setDepFilter('termine')">Terminé</button>
         <button class="dep-filter-btn"        data-filter="deCote"     onclick="App.setDepFilter('deCote')">De côté</button>
       </div>
+
+      <!-- Filtres par type de module (générés dynamiquement) -->
+      <div id="dep-module-filters" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;-webkit-overflow-scrolling:touch;scrollbar-width:none;"></div>
 
       <div id="dep-loading" style="text-align:center;padding:40px;display:none;">
         <div class="spinner"></div>
@@ -635,7 +656,8 @@ const S = {
   depsLoaded: false,
   selDep:     null,
   depPhotos:  [],      // [{dataUrl}]
-  depFilter:  'all',   // 'all' | 'enCours' | 'aControler' | 'termine' | 'deCote'
+  depFilter:       'all',   // 'all' | 'enCours' | 'aControler' | 'termine' | 'deCote'
+  depModuleFilter: 'all',   // 'all' | nom du module (col F)
 
   // Archive (Partis)
   archive:        [],
@@ -915,6 +937,7 @@ const App = {
   /* ─ Departures ─ */
   async loadDepartures(force = false) {
     if (!force && S.depsLoaded) return;
+    if (force) { S.depsLoaded = false; S.depModuleFilter = 'all'; }
     document.getElementById('dep-loading').style.display   = 'block';
     document.getElementById('no-departures').style.display = 'none';
     document.getElementById('dep-list').innerHTML          = '';
@@ -931,6 +954,7 @@ const App = {
       const data = await resp.json();
       S.deps       = Array.isArray(data) ? data : (data.data || []);
       S.depsLoaded = true;
+      this._buildModuleFilterBar();
       this._renderDepList();
     } catch(e) {
       document.getElementById('dep-list').innerHTML = `
@@ -962,24 +986,47 @@ const App = {
     this._renderDepList();
   },
 
+  setDepModuleFilter(mod) {
+    S.depModuleFilter = mod;
+    document.querySelectorAll('.dep-module-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mod === mod);
+    });
+    this._renderDepList();
+  },
+
+  _buildModuleFilterBar() {
+    const bar = document.getElementById('dep-module-filters');
+    if (!bar) return;
+    // Collecte les types uniques (col F non vides)
+    const types = [...new Set(S.deps.map(d => (d.module || '').trim()).filter(Boolean))].sort();
+    if (!types.length) { bar.innerHTML = ''; return; }
+    bar.innerHTML = `
+      <button class="dep-module-btn active" data-mod="all" onclick="App.setDepModuleFilter('all')">Tous types</button>
+      ${types.map(t => `<button class="dep-module-btn" data-mod="${t}" onclick="App.setDepModuleFilter('${t.replace(/'/g,"\\'")}'">${t}</button>`).join('')}`;
+  },
+
   _renderDepList() {
     const list = document.getElementById('dep-list');
     const none = document.getElementById('no-departures');
 
-    // Filtre basé sur le statut courant uniquement (pas les cases précédentes)
-    const filtered = S.depFilter === 'all'
-      ? S.deps
-      : S.deps.filter(d => this._depCurrentStatus(d) === S.depFilter);
+    // Double filtre : statut ET type de module
+    const filtered = S.deps.filter(d => {
+      const statusOk = S.depFilter === 'all' || this._depCurrentStatus(d) === S.depFilter;
+      const moduleOk = S.depModuleFilter === 'all' || (d.module || '').trim() === S.depModuleFilter;
+      return statusOk && moduleOk;
+    });
 
-    // Compte par statut courant pour les badges
-    const counts = { all: S.deps.length, enCours: 0, aControler: 0, termine: 0, deCote: 0 };
-    S.deps.forEach(d => {
+    // Badges statut (sur l'ensemble, pas le sous-filtre module)
+    const baseByStatus = S.depModuleFilter === 'all' ? S.deps
+      : S.deps.filter(d => (d.module || '').trim() === S.depModuleFilter);
+    const counts = { all: baseByStatus.length, enCours: 0, aControler: 0, termine: 0, deCote: 0 };
+    baseByStatus.forEach(d => {
       const cur = this._depCurrentStatus(d);
       if (cur && counts[cur] !== undefined) counts[cur]++;
     });
     document.querySelectorAll('.dep-filter-btn').forEach(btn => {
       const f   = btn.dataset.filter;
-      const cnt = counts[f] || 0;
+      const cnt = counts[f] ?? 0;
       const label = { all: 'Tous', enCours: 'En cours', aControler: 'À contrôler', termine: 'Terminé', deCote: 'De côté' }[f];
       btn.textContent = cnt > 0 ? `${label} (${cnt})` : label;
     });
@@ -1047,7 +1094,7 @@ const App = {
         ${d.debut || d.fin ? `<div style="font-size:12px;color:#64748B;margin-top:6px;">
           📅 ${d.debut ? 'Entrée le ' + _fmtDate(d.debut) : ''}
           ${d.fin ? ' → ' + _fmtDate(d.fin) : (d.debut ? ' → auj.' : '')}
-          ${_duration(d.debut, d.status && d.status.termine ? d.fin : null) ? `<span style="margin-left:6px;background:#F1F5F9;border-radius:4px;padding:1px 6px;font-weight:600;">⏱ ${_duration(d.debut, d.status && d.status.termine ? d.fin : null)}</span>` : ''}
+          ${(() => { const finCalc = S.depFromArchive ? d.fin : (d.status && d.status.termine ? d.fin : null); const dur = _duration(d.debut, finCalc); return dur ? `<span style="margin-left:6px;background:#F1F5F9;border-radius:4px;padding:1px 6px;font-weight:600;">⏱ ${dur}</span>` : ''; })()}
         </div>` : ''}
         ${d.commande ? `<div style="font-size:12px;color:#64748B;margin-top:2px;">🔖 Commande : ${d.commande}</div>` : ''}
         ${d.lienDrive ? `
