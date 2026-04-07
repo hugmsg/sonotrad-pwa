@@ -389,6 +389,45 @@
           </div>
         </div>
 
+        <!-- Champs spécifiques LOXAM (masqués pour les autres modules) -->
+        <div id="loxam-fields" style="display:none;">
+          <div style="margin-bottom:12px;">
+            <label class="label-sm" for="inp-module-type">Type <span style="color:#EF4444;">*</span></label>
+            <select id="inp-module-type" class="input-field">
+              <option value="">— Sélectionner —</option>
+              <option>MODULOX</option>
+              <option>CONTAINER</option>
+              <option>LC8</option>
+              <option>LC10</option>
+              <option>LC20</option>
+              <option>LC20M</option>
+              <option>BATIX</option>
+              <option>GRAND BATIX</option>
+              <option>ISOLOX</option>
+              <option>SOLFAB PH</option>
+              <option>SOLFAB GH</option>
+              <option>ECOLOX</option>
+              <option>6020</option>
+              <option>6021</option>
+              <option>AUTRE</option>
+            </select>
+          </div>
+          <div style="margin-bottom:12px;">
+            <label class="label-sm" for="inp-num-module">Num module <span style="color:#EF4444;">*</span></label>
+            <input type="text" id="inp-num-module" class="input-field" placeholder="ex: 60154532">
+          </div>
+          <div style="display:flex;gap:10px;margin-bottom:12px;">
+            <div style="flex:1;">
+              <label class="label-sm" for="inp-lv">LV <span style="color:#EF4444;">*</span></label>
+              <input type="text" id="inp-lv" class="input-field" placeholder="ex: 101901">
+            </div>
+            <div style="flex:1;">
+              <label class="label-sm" for="inp-agence">Agence <span style="color:#EF4444;">*</span></label>
+              <input type="text" id="inp-agence" class="input-field" placeholder="ex: ST QUENTIN...">
+            </div>
+          </div>
+        </div>
+
         <div style="margin-bottom:12px;">
           <label class="label-sm" for="inp-chauffeur">Chauffeur</label>
           <input type="text" id="inp-chauffeur" class="input-field" placeholder="Nom du chauffeur...">
@@ -562,6 +601,8 @@ const S = {
     step: 1, module: null, code: '',
     photos: [],          // [{dataUrl, name}]
     chauffeur: '', date: '', etat: '',
+    // Champs LOXAM spécifiques
+    moduleType: '', numModule: '', lv: '', agence: '',
   },
 
   // Departure
@@ -675,6 +716,8 @@ const App = {
     S.arr.module = mod;
     const m = MODULES[mod];
     document.getElementById('step2-title').textContent = `${m.icon}  ${m.label}`;
+    // Affiche les champs spécifiques LOXAM uniquement pour ce module
+    document.getElementById('loxam-fields').style.display = mod === 'loxam' ? 'block' : 'none';
     this.showStep(2);
     this._genCode();
     this._renderPhotoGrid('photo-grid-2', S.arr.photos, 'arrival');
@@ -772,10 +815,22 @@ const App = {
     S.arr.chauffeur = document.getElementById('inp-chauffeur').value.trim();
     S.arr.date      = document.getElementById('inp-date').value || todayStr();
     S.arr.etat      = document.getElementById('inp-etat').value.trim();
-    S.submitting    = true;
 
+    // Champs LOXAM
+    if (S.arr.module === 'loxam') {
+      S.arr.moduleType = document.getElementById('inp-module-type').value.trim();
+      S.arr.numModule  = document.getElementById('inp-num-module').value.trim();
+      S.arr.lv         = document.getElementById('inp-lv').value.trim();
+      S.arr.agence     = document.getElementById('inp-agence').value.trim();
+      // Validation champs obligatoires LOXAM
+      if (!S.arr.moduleType || !S.arr.numModule || !S.arr.lv || !S.arr.agence) {
+        this.toast('Remplissez Type, Num module, LV et Agence'); return;
+      }
+    }
+
+    S.submitting = true;
     this.showStep(4);
-    const { code, module, chauffeur, date, etat, photos } = S.arr;
+    const { code, module, moduleType, numModule, lv, agence, chauffeur, date, etat, photos } = S.arr;
     const setMsg = (m, d='') => {
       document.getElementById('send-msg').textContent    = m;
       document.getElementById('send-detail').textContent = d;
@@ -791,7 +846,7 @@ const App = {
       }
 
       setMsg('Envoi en cours...', `Code ${code} · ${photos.length} photo(s)`);
-      const payload = { action: 'arrival', code, module, chauffeur, date, etat, photos: photos.map(p => p.dataUrl) };
+      const payload = { action: 'arrival', code, module, moduleType, numModule, lv, agence, chauffeur, date, etat, photos: photos.map(p => p.dataUrl) };
       const res = await _post(S.apiUrl, payload);
       if (res.status !== 'ok' && res.status !== 'success') throw new Error(res.error || 'Réponse inattendue');
 
@@ -919,6 +974,7 @@ const App = {
           <div style="flex:1;min-width:0;">
             <div class="code-mono" style="font-size:14px;">${code}</div>
             <div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.chantier || '—'}</div>
+            ${d.codeModule ? `<div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.codeModule}</div>` : ''}
             <div style="font-size:12px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titre}</div>
             ${chips ? `<div style="margin-top:4px;">${chips}</div>` : ''}
           </div>
@@ -943,6 +999,7 @@ const App = {
       <div class="card" style="margin-bottom:12px;">
         <div class="code-mono" style="font-size:24px;letter-spacing:4px;margin-bottom:6px;">${code}</div>
         <div style="font-size:16px;font-weight:600;color:#1E293B;">📍 ${d.chantier || '—'}${d.ag ? ' — Ag. ' + d.ag : ''}</div>
+        ${d.codeModule ? `<div style="font-size:16px;font-weight:600;color:#1E293B;margin-top:2px;">🔢 ${d.codeModule}</div>` : ''}
         <div style="font-size:13px;color:#64748B;margin-top:2px;">${titre}</div>
         ${d.description ? `<div style="font-size:12px;color:#94A3B8;margin-top:4px;line-height:1.4;">${d.description}</div>` : ''}
         ${d.debut || d.fin ? `<div style="font-size:12px;color:#64748B;margin-top:6px;">📅 ${d.debut ? 'Début ' + d.debut.slice(0,10) : ''} ${d.fin ? '→ Fin ' + d.fin.slice(0,10) : ''}</div>` : ''}
