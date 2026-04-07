@@ -565,10 +565,10 @@
        BOTTOM NAV
        ══════════════════════════════════════════════════════════════════════ -->
   <nav class="bottom-nav">
-    <button class="nav-tab" data-tab="departures" onclick="App.go('departures')">
+    <button class="nav-tab active" data-tab="departures" onclick="App.go('departures')">
       <span class="icon">🏭</span><span>Production</span>
     </button>
-    <button class="nav-tab active" data-tab="arrivals" onclick="App.go('arrivals')">
+    <button class="nav-tab" data-tab="arrivals" onclick="App.go('arrivals')">
       <span class="icon">📥</span><span>Arrivées</span>
     </button>
     <button class="nav-tab" data-tab="archive" onclick="App.go('archive')">
@@ -613,8 +613,8 @@ const CODES_TTL = 30 * 60 * 1000; // 30 min
 // ── STATE ────────────────────────────────────────────────────────────────────
 
 const S = {
-  view:        'arrivals',
-  prevView:    'arrivals',
+  view:        'departures',
+  prevView:    'departures',
   apiUrl:      localStorage.getItem(SK.API) || '',
   codes:       new Set(JSON.parse(localStorage.getItem(SK.CODES) || '[]')),
   codesTs:     +(localStorage.getItem(SK.CODES_TS) || 0),
@@ -638,8 +638,9 @@ const S = {
   depFilter:  'all',   // 'all' | 'enCours' | 'aControler' | 'termine' | 'deCote'
 
   // Archive (Partis)
-  archive:       [],
-  archiveLoaded: false,
+  archive:        [],
+  archiveLoaded:  false,
+  depFromArchive: false,
 
   submitting: false,
 };
@@ -685,7 +686,7 @@ const App = {
     const inForm = ['new-arrival','settings','dep-detail'].includes(v);
     document.getElementById('btn-back').classList.toggle('hidden', !inForm);
     document.getElementById('header-logo').style.display = inForm ? 'none' : 'flex';
-    const labels = { 'new-arrival': 'Annuler', 'settings': 'Réglages', 'dep-detail': 'Production' };
+    const labels = { 'new-arrival': 'Annuler', 'settings': 'Réglages', 'dep-detail': S.depFromArchive ? 'Partis' : 'Production' };
     document.getElementById('back-label').textContent = labels[v] || 'Retour';
 
     // API warning
@@ -1013,8 +1014,17 @@ const App = {
   },
 
   openDep(idx) {
-    S.selDep    = S.deps[idx];
-    S.depPhotos = [];
+    S.selDep        = S.deps[idx];
+    S.depFromArchive = false;
+    S.depPhotos     = [];
+    this.go('dep-detail');
+    this._renderDepDetail();
+  },
+
+  openArchiveDep(idx) {
+    S.selDep        = S.archive[idx];
+    S.depFromArchive = true;
+    S.depPhotos     = [];
     this.go('dep-detail');
     this._renderDepDetail();
   },
@@ -1048,6 +1058,7 @@ const App = {
         <div id="drive-files-panel" style="margin-top:8px;"></div>
         ` : ''}
       </div>
+      ${!S.depFromArchive ? `
       <div class="card">
         <p style="font-size:14px;font-weight:600;color:#1E293B;margin-bottom:10px;">Photos du départ</p>
         <div class="photo-grid" id="dep-photo-grid" style="margin-bottom:10px;"></div>
@@ -1057,8 +1068,12 @@ const App = {
       </div>
       <div style="margin-top:14px;">
         <button class="btn btn-primary" id="btn-dep-submit" onclick="App.submitDep()">📤 Enregistrer les photos de départ</button>
-      </div>`;
-    this._renderDepPhotoGrid();
+      </div>` : `
+      <div class="card" style="background:#F0FDF4;border:1px solid #BBF7D0;">
+        <p style="font-size:14px;font-weight:600;color:#15803D;">✅ Article parti</p>
+        <p style="font-size:12px;color:#64748B;margin-top:4px;">Cet article a quitté l'atelier.</p>
+      </div>`}`;
+    if (!S.depFromArchive) this._renderDepPhotoGrid();
   },
 
   async loadDriveFiles(folderId) {
@@ -1160,18 +1175,19 @@ const App = {
     const none = document.getElementById('no-archive');
     if (!items.length) { list.innerHTML = ''; none.style.display = 'block'; return; }
     none.style.display = 'none';
-    list.innerHTML = items.map(d => {
+    list.innerHTML = items.map((d, i) => {
+      const realIdx = S.archive.indexOf(d);
       const code  = d.code || '------';
       const titre = d.module || code;
       return `
-        <div class="dep-card" style="opacity:0.82;">
+        <div class="dep-card" style="opacity:0.85;" onclick="App.openArchiveDep(${realIdx})">
           <div style="width:44px;height:44px;background:#F1F5F9;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">📦</div>
           <div style="flex:1;min-width:0;">
             ${d.codeModule ? `<div class="code-mono" style="font-size:18px;margin-bottom:2px;">${d.codeModule}</div>` : ''}
             <div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.chantier || '—'}</div>
             <div style="font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${code} · ${titre}</div>
           </div>
-          <span style="background:#DCFCE7;color:#15803D;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap;align-self:center;">Parti</span>
+          <span style="color:#CBD5E1;font-size:20px;align-self:center;">›</span>
         </div>`;
     }).join('');
   },
@@ -1436,7 +1452,7 @@ if ('serviceWorker' in navigator) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  App.go('arrivals');
+  App.go('departures');
   _updateOnline();
   // Load codes in background if cache is stale
   if (S.apiUrl && Date.now() - S.codesTs > CODES_TTL) {
