@@ -458,7 +458,7 @@
     <!-- ── VIEW : DEPARTURES ─────────────────────────────────────────────── -->
     <div class="view" id="view-departures">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-        <h2 style="font-size:20px;font-weight:700;color:#1E293B;">Départs en cours</h2>
+        <h2 style="font-size:20px;font-weight:700;color:#1E293B;">Production</h2>
         <button onclick="App.loadDepartures(true)" style="background:#EBF5FB;color:var(--brand);border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻ Actualiser</button>
       </div>
 
@@ -488,6 +488,28 @@
     <!-- ── VIEW : DEPARTURE DETAIL ──────────────────────────────────────── -->
     <div class="view" id="view-dep-detail">
       <div id="dep-detail-body"></div>
+    </div>
+
+    <!-- ── VIEW : ARCHIVE (Partis) ─────────────────────────────────────── -->
+    <div class="view" id="view-archive">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <h2 style="font-size:20px;font-weight:700;color:#1E293B;">Partis</h2>
+        <button onclick="App.loadArchive(true)" style="background:#EBF5FB;color:var(--brand);border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻ Actualiser</button>
+      </div>
+      <p style="font-size:12px;color:#94A3B8;margin-bottom:12px;">Articles marqués comme partis dans le Planning</p>
+      <div id="archive-loading" style="text-align:center;padding:40px;display:none;">
+        <div class="spinner"></div>
+        <p style="color:#64748B;">Chargement des archives...</p>
+      </div>
+      <div id="archive-search" style="margin-bottom:12px;display:none;">
+        <input type="search" id="archive-query" class="input-field" placeholder="🔍 Rechercher un code ou chantier…" oninput="App._filterArchive()" style="font-size:14px;">
+      </div>
+      <div id="archive-list"></div>
+      <div id="no-archive" style="text-align:center;padding:48px 0 32px;color:#94A3B8;display:none;">
+        <div style="font-size:52px;margin-bottom:12px;">📦</div>
+        <p style="font-size:16px;font-weight:600;">Aucun article parti</p>
+        <p style="font-size:13px;margin-top:4px;">Les articles partis du Planning apparaîtront ici</p>
+      </div>
     </div>
 
     <!-- ── VIEW : HISTORY ───────────────────────────────────────────────── -->
@@ -543,11 +565,14 @@
        BOTTOM NAV
        ══════════════════════════════════════════════════════════════════════ -->
   <nav class="bottom-nav">
+    <button class="nav-tab" data-tab="departures" onclick="App.go('departures')">
+      <span class="icon">🏭</span><span>Production</span>
+    </button>
     <button class="nav-tab active" data-tab="arrivals" onclick="App.go('arrivals')">
       <span class="icon">📥</span><span>Arrivées</span>
     </button>
-    <button class="nav-tab" data-tab="departures" onclick="App.go('departures')">
-      <span class="icon">📤</span><span>Départs</span>
+    <button class="nav-tab" data-tab="archive" onclick="App.go('archive')">
+      <span class="icon">📦</span><span>Partis</span>
     </button>
     <button class="nav-tab" data-tab="history" onclick="App.go('history')">
       <span class="icon">🕐</span><span>Historique</span>
@@ -605,12 +630,16 @@ const S = {
     moduleType: '', numModule: '', lv: '', agence: '',
   },
 
-  // Departure
+  // Departure / Production
   deps:       [],
   depsLoaded: false,
   selDep:     null,
   depPhotos:  [],      // [{dataUrl}]
   depFilter:  'all',   // 'all' | 'enCours' | 'aControler' | 'termine' | 'deCote'
+
+  // Archive (Partis)
+  archive:       [],
+  archiveLoaded: false,
 
   submitting: false,
 };
@@ -627,6 +656,7 @@ const App = {
     if (view === 'arrivals')   this._renderArrivalList();
     if (view === 'history')    this._renderHistory();
     if (view === 'departures' && !S.depsLoaded) this.loadDepartures();
+    if (view === 'archive'    && !S.archiveLoaded) this.loadArchive();
     if (view === 'settings')   this._fillSettings();
   },
 
@@ -655,7 +685,7 @@ const App = {
     const inForm = ['new-arrival','settings','dep-detail'].includes(v);
     document.getElementById('btn-back').classList.toggle('hidden', !inForm);
     document.getElementById('header-logo').style.display = inForm ? 'none' : 'flex';
-    const labels = { 'new-arrival': 'Annuler', 'settings': 'Réglages', 'dep-detail': 'Départs' };
+    const labels = { 'new-arrival': 'Annuler', 'settings': 'Réglages', 'dep-detail': 'Production' };
     document.getElementById('back-label').textContent = labels[v] || 'Retour';
 
     // API warning
@@ -972,9 +1002,11 @@ const App = {
         <div class="dep-card" onclick="App.openDep(${realIdx})">
           <div style="width:44px;height:44px;background:#EBF5FB;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">📤</div>
           <div style="flex:1;min-width:0;">
-            <div class="code-mono" style="font-size:14px;">${code}</div>
+            <div style="display:inline-block;background:#EBF5FB;border-radius:6px;padding:2px 8px;margin-bottom:4px;">
+              <span class="code-mono" style="font-size:16px;">${code}</span>
+            </div>
             <div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.chantier || '—'}</div>
-            ${d.codeModule ? `<div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.codeModule}</div>` : ''}
+            ${d.codeModule ? `<div style="font-size:13px;font-weight:600;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🔢 ${d.codeModule}</div>` : ''}
             <div style="font-size:12px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titre}</div>
             ${chips ? `<div style="margin-top:4px;">${chips}</div>` : ''}
           </div>
@@ -1080,6 +1112,74 @@ const App = {
       panel.innerHTML = `<p style="font-size:12px;color:#EF4444;">Erreur : ${e.message}</p>`;
       if (btn) { btn.disabled = false; btn.textContent = '📂 Réessayer'; }
     }
+  },
+
+  /* ─ Archive (Partis) ─ */
+  async loadArchive(force = false) {
+    if (!force && S.archiveLoaded) return;
+    document.getElementById('archive-loading').style.display = 'block';
+    document.getElementById('no-archive').style.display      = 'none';
+    document.getElementById('archive-search').style.display  = 'none';
+    document.getElementById('archive-list').innerHTML        = '';
+
+    if (!S.apiUrl) {
+      document.getElementById('archive-loading').style.display = 'none';
+      document.getElementById('no-archive').style.display      = 'block';
+      return;
+    }
+
+    try {
+      const url  = S.apiUrl + '?action=archive';
+      const resp = await _fetchWithTimeout(url, {}, 40000);
+      const data = await resp.json();
+      S.archive       = Array.isArray(data) ? data : (data.data || []);
+      S.archiveLoaded = true;
+      this._renderArchiveList(S.archive);
+      document.getElementById('archive-search').style.display = S.archive.length ? 'block' : 'none';
+    } catch(e) {
+      document.getElementById('archive-list').innerHTML = `
+        <div class="card" style="border-left:4px solid #F87171;">
+          <p style="color:#991B1B;font-weight:600;">Impossible de charger les archives</p>
+          <p style="font-size:12px;color:#64748B;margin-top:3px;">${e.message}</p>
+        </div>`;
+    } finally {
+      document.getElementById('archive-loading').style.display = 'none';
+    }
+  },
+
+  _filterArchive() {
+    const q = (document.getElementById('archive-query')?.value || '').trim().toLowerCase();
+    if (!q) { this._renderArchiveList(S.archive); return; }
+    const filtered = S.archive.filter(d =>
+      (d.code    || '').toLowerCase().includes(q) ||
+      (d.chantier|| '').toLowerCase().includes(q) ||
+      (d.codeModule||'').toLowerCase().includes(q)
+    );
+    this._renderArchiveList(filtered);
+  },
+
+  _renderArchiveList(items) {
+    const list = document.getElementById('archive-list');
+    const none = document.getElementById('no-archive');
+    if (!items.length) { list.innerHTML = ''; none.style.display = 'block'; return; }
+    none.style.display = 'none';
+    list.innerHTML = items.map(d => {
+      const code  = d.code || '------';
+      const titre = d.module || code;
+      return `
+        <div class="dep-card" style="opacity:0.82;">
+          <div style="width:44px;height:44px;background:#F1F5F9;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">📦</div>
+          <div style="flex:1;min-width:0;">
+            <div style="display:inline-block;background:#F1F5F9;border-radius:6px;padding:2px 8px;margin-bottom:4px;">
+              <span class="code-mono" style="font-size:16px;">${code}</span>
+            </div>
+            <div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.chantier || '—'}</div>
+            ${d.codeModule ? `<div style="font-size:13px;font-weight:600;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🔢 ${d.codeModule}</div>` : ''}
+            <div style="font-size:12px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titre}</div>
+          </div>
+          <span style="background:#DCFCE7;color:#15803D;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap;align-self:center;">Parti</span>
+        </div>`;
+    }).join('');
   },
 
   _renderDepPhotoGrid() {
