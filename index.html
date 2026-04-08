@@ -1149,7 +1149,7 @@ const App = {
           <div style="flex:1;min-width:0;">
             ${d.codeModule ? `<div class="code-mono" style="font-size:18px;margin-bottom:2px;">${d.codeModule}</div>` : ''}
             <div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.chantier || '—'}</div>
-            <div style="font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${code} · ${titre}</div>
+            <div style="font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${code}${titre !== code ? ' · ' + titre : ''}</div>
             <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap;">
               ${chips}
               ${_duration(d.debut, d.status && d.status.termine ? d.fin : null) ? `<span style="font-size:11px;color:#94A3B8;font-weight:500;">⏱ ${_duration(d.debut, d.status && d.status.termine ? d.fin : null)}</span>` : ''}
@@ -1336,7 +1336,7 @@ const App = {
           <div style="flex:1;min-width:0;">
             ${d.codeModule ? `<div class="code-mono" style="font-size:18px;margin-bottom:2px;">${d.codeModule}</div>` : ''}
             <div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.chantier || '—'}</div>
-            <div style="font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${code} · ${titre}</div>
+            <div style="font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${code}${titre !== code ? ' · ' + titre : ''}</div>
             ${_duration(d.debut, d.fin) ? `<div style="font-size:11px;color:#94A3B8;margin-top:2px;">⏱ ${_duration(d.debut, d.fin)}</div>` : ''}
           </div>
           <span style="color:#CBD5E1;font-size:20px;align-self:center;">›</span>
@@ -1467,20 +1467,16 @@ const App = {
     list.innerHTML = items.map((a) => {
       const realIdx = S.arrivalsData.indexOf(a);
       const primary   = a.numModule || a.code;
-      const meta = [a.chauffeur, _fmtDate(a.dateArrivee)].filter(Boolean).join(' · ');
+      const codeType = [a.code, a.type].filter(Boolean).join(' · ');
+      const meta     = [a.chauffeur, _fmtDate(a.dateArrivee)].filter(Boolean).join(' · ');
       return `
         <div class="dep-card" onclick="App.openArrival(${realIdx})">
-          <!-- Icône + code planning (6 car.) -->
-          <div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;width:48px;">
-            <div style="width:44px;height:44px;background:#EBF5FB;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;">📥</div>
-            ${a.code ? `<div class="code-mono" style="font-size:10px;color:#94A3B8;letter-spacing:.5px;text-align:center;">${a.code}</div>` : ''}
-          </div>
-          <!-- Contenu principal -->
+          <div style="width:44px;height:44px;background:#EBF5FB;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">📥</div>
           <div style="flex:1;min-width:0;">
-            <div class="code-mono" style="font-size:18px;margin-bottom:1px;">${primary}</div>
-            ${a.type        ? `<div style="font-size:12px;color:#64748B;">${a.type}</div>` : ''}
-            ${a.destination ? `<div style="font-size:12px;color:#475569;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.destination}</div>` : ''}
-            ${meta ? `<div style="font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;">${meta}</div>` : ''}
+            ${primary    ? `<div class="code-mono" style="font-size:18px;margin-bottom:2px;">${primary}</div>` : ''}
+            ${a.destination ? `<div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.destination}</div>` : ''}
+            ${codeType   ? `<div style="font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${codeType}</div>` : ''}
+            ${meta       ? `<div style="font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${meta}</div>` : ''}
             <div style="margin-top:3px;">
               ${a.isParti
                 ? `<span style="background:#DCFCE7;color:#15803D;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;">Parti</span>`
