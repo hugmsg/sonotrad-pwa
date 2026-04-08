@@ -320,14 +320,25 @@
       </div>
 
       <!-- Filtre présence -->
-      <div id="arr-parti-filters" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
-        <button class="dep-filter-btn active" data-parti="all"     onclick="App.setArrPartiFilter('all')">Tous</button>
-        <button class="dep-filter-btn"        data-parti="present" onclick="App.setArrPartiFilter('present')">En atelier</button>
-        <button class="dep-filter-btn"        data-parti="parti"   onclick="App.setArrPartiFilter('parti')">Partis</button>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <span style="font-size:11px;color:#94A3B8;font-weight:600;white-space:nowrap;">Présence :</span>
+        <div id="arr-parti-filters" style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
+          <button class="dep-filter-btn active" data-parti="all"     onclick="App.setArrPartiFilter('all')">Tous</button>
+          <button class="dep-filter-btn"        data-parti="present" onclick="App.setArrPartiFilter('present')">🅿️ Sur parc</button>
+          <button class="dep-filter-btn"        data-parti="parti"   onclick="App.setArrPartiFilter('parti')">📦 Partis</button>
+        </div>
       </div>
 
       <!-- Filtre type module (dynamique) -->
-      <div id="arr-type-filters" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;-webkit-overflow-scrolling:touch;scrollbar-width:none;"></div>
+      <div id="arr-type-filters" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch;scrollbar-width:none;"></div>
+
+      <!-- Barre de recherche -->
+      <div style="margin-bottom:12px;">
+        <input type="search" id="arr-search" class="input-field"
+          placeholder="🔍 Rechercher : code, type, chauffeur, agence…"
+          oninput="App._filterAndRenderArrivals()"
+          style="font-size:14px;">
+      </div>
 
       <div id="arr-loading" style="text-align:center;padding:40px;display:none;">
         <div class="spinner"></div>
@@ -1181,7 +1192,7 @@ const App = {
       </div>` : `
       <div class="card" style="background:#F0FDF4;border:1px solid #BBF7D0;">
         <p style="font-size:14px;font-weight:600;color:#15803D;">✅ Article parti</p>
-        <p style="font-size:12px;color:#64748B;margin-top:4px;">Cet article a quitté l'atelier.</p>
+        <p style="font-size:12px;color:#64748B;margin-top:4px;">Cet article a quitté le parc.</p>
       </div>`}`;
     if (!S.depFromArchive) this._renderDepPhotoGrid();
   },
@@ -1306,7 +1317,10 @@ const App = {
   /* ─ Arrivals (serveur) ─ */
   async loadArrivalsData(force = false) {
     if (!force && S.arrivalsLoaded) return;
-    if (force) { S.arrivalsLoaded = false; S.arrTypeFilter = 'all'; S.arrPartiFilter = 'all'; }
+    if (force) {
+      S.arrivalsLoaded = false; S.arrTypeFilter = 'all'; S.arrPartiFilter = 'all';
+      const s = document.getElementById('arr-search'); if (s) s.value = '';
+    }
     document.getElementById('arr-loading').style.display = 'block';
     document.getElementById('no-arrivals').style.display = 'none';
     document.getElementById('arr-list').innerHTML = '';
@@ -1345,9 +1359,9 @@ const App = {
     if (!entries.length) { wrap.style.display = 'none'; return; }
     const total = entries.reduce((acc, [,n]) => acc + n, 0);
     inner.innerHTML =
-      `<span style="background:#F1F5F9;color:#475569;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0;">En atelier : ${total}</span>` +
+      `<span style="background:#1E293B;color:white;font-size:11px;font-weight:700;padding:4px 11px;border-radius:20px;white-space:nowrap;flex-shrink:0;">🅿️ ${total} sur parc</span>` +
       entries.map(([type, n]) =>
-        `<span style="background:#EBF5FB;color:#1A5276;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0;">${type} <strong>${n}</strong></span>`
+        `<span style="background:#EBF5FB;border:1px solid #BFDBFE;color:#1A5276;font-size:11px;font-weight:600;padding:4px 11px;border-radius:20px;white-space:nowrap;flex-shrink:0;">${type} : <strong>${n}</strong></span>`
       ).join('');
     wrap.style.display = 'block';
   },
@@ -1383,12 +1397,22 @@ const App = {
   },
 
   _filterAndRenderArrivals() {
+    const q = (document.getElementById('arr-search')?.value || '').trim().toLowerCase();
     const items = S.arrivalsData.filter(a => {
       const typeOk  = S.arrTypeFilter  === 'all' || (a.type || '').trim() === S.arrTypeFilter;
       const partiOk = S.arrPartiFilter === 'all'
         || (S.arrPartiFilter === 'present' && !a.isParti)
         || (S.arrPartiFilter === 'parti'   &&  a.isParti);
-      return typeOk && partiOk;
+      if (!typeOk || !partiOk) return false;
+      if (!q) return true;
+      return (a.numModule  || '').toLowerCase().includes(q)
+          || (a.code       || '').toLowerCase().includes(q)
+          || (a.type       || '').toLowerCase().includes(q)
+          || (a.chauffeur  || '').toLowerCase().includes(q)
+          || (a.agence     || '').toLowerCase().includes(q)
+          || (a.lv         || '').toLowerCase().includes(q)
+          || (a.numSerie   || '').toLowerCase().includes(q)
+          || (a.destination|| '').toLowerCase().includes(q);
     });
     this._renderArrivalCards(items);
   },
@@ -1413,7 +1437,7 @@ const App = {
             <div style="margin-top:3px;">
               ${a.isParti
                 ? `<span style="background:#DCFCE7;color:#15803D;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;">Parti</span>`
-                : `<span style="background:#EFF6FF;color:#1D4ED8;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;">En atelier</span>`}
+                : `<span style="background:#EFF6FF;color:#1D4ED8;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;">Sur parc</span>`}
             </div>
           </div>
           <span style="color:#CBD5E1;font-size:20px;align-self:center;">›</span>
@@ -1451,7 +1475,7 @@ const App = {
         <div style="margin-bottom:8px;">
           ${a.isParti
             ? `<span style="background:#DCFCE7;color:#15803D;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;">✅ Parti</span>`
-            : `<span style="background:#EFF6FF;color:#1D4ED8;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;">🏭 En atelier</span>`}
+            : `<span style="background:#EFF6FF;color:#1D4ED8;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;">🅿️ Sur parc</span>`}
         </div>
         <div class="code-mono" style="font-size:28px;letter-spacing:3px;margin-bottom:4px;">${primary}</div>
         ${a.dateArrivee ? `<div style="font-size:12px;color:#64748B;margin-bottom:4px;">📅 Arrivée le ${_fmtDate(a.dateArrivee)}</div>` : ''}
