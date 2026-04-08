@@ -1483,8 +1483,8 @@ const App = {
           </div>
           <div style="flex:1;min-width:0;">
             ${primary       ? `<div class="code-mono" style="font-size:18px;margin-bottom:2px;">${primary}</div>` : ''}
-            ${a.destination ? `<div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.destination}</div>` : ''}
-            ${a.type        ? `<div style="font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.type}</div>` : ''}
+            ${a.type        ? `<div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.type}</div>` : ''}
+            ${a.destination ? `<div style="font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.destination}</div>` : ''}
             ${meta          ? `<div style="font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${meta}</div>` : ''}
             <div style="margin-top:3px;">
               ${a.isParti
@@ -1519,8 +1519,8 @@ const App = {
       a.bt          && ['BT',            a.bt],
       a.pastille    && ['Pastille',      a.pastille],
       a.commentaire && ['Commentaire',   a.commentaire],
-      a.colN        && ['Note N',        a.colN],
-      a.colO        && ['Note O',        a.colO],
+      a.colN        && ['Longueur',      a.colN],
+      // colO = isParti (vrai/faux) → affiché via le badge, pas en ligne de détail
     ].filter(Boolean);
     document.getElementById('arr-detail-body').innerHTML = `
       <div class="card" style="margin-bottom:12px;">
