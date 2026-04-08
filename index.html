@@ -314,30 +314,37 @@
         L'app fonctionne en mode local uniquement. <a onclick="App.go('settings')" style="color:#2E86C1;cursor:pointer;text-decoration:underline;">Configurer l'URL →</a></p>
       </div>
 
-      <!-- Résumé des totaux par type (depuis lignes 4-5 de la feuille) -->
-      <div id="arr-summary" style="display:none;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
-        <div id="arr-summary-inner" style="display:flex;gap:6px;"></div>
+      <!-- Résumé inventaire (lecture seule) -->
+      <div id="arr-summary" style="display:none;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:11px 14px;margin-bottom:12px;">
+        <div style="font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Inventaire total</div>
+        <div id="arr-summary-total" style="font-size:16px;font-weight:700;color:#1E293B;margin-bottom:6px;"></div>
+        <div id="arr-summary-inner" style="display:flex;flex-wrap:wrap;gap:4px 0;"></div>
       </div>
 
-      <!-- Filtre présence -->
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-        <span style="font-size:11px;color:#94A3B8;font-weight:600;white-space:nowrap;">Présence :</span>
-        <div id="arr-parti-filters" style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
-          <button class="dep-filter-btn active" data-parti="all"     onclick="App.setArrPartiFilter('all')">Tous</button>
-          <button class="dep-filter-btn"        data-parti="present" onclick="App.setArrPartiFilter('present')">🅿️ Sur parc</button>
-          <button class="dep-filter-btn"        data-parti="parti"   onclick="App.setArrPartiFilter('parti')">📦 Partis</button>
+      <!-- Filtres -->
+      <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:10px 14px;margin-bottom:10px;display:flex;flex-direction:column;gap:10px;">
+
+        <!-- Filtre statut -->
+        <div>
+          <div style="font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Statut</div>
+          <div id="arr-parti-filters" style="display:flex;gap:6px;">
+            <button class="dep-filter-btn active" data-parti="all"     onclick="App.setArrPartiFilter('all')">Tous</button>
+            <button class="dep-filter-btn"        data-parti="present" onclick="App.setArrPartiFilter('present')">🅿️ Sur parc</button>
+            <button class="dep-filter-btn"        data-parti="parti"   onclick="App.setArrPartiFilter('parti')">📦 Partis</button>
+          </div>
         </div>
-      </div>
 
-      <!-- Filtre type module (dynamique) -->
-      <div id="arr-type-filters" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch;scrollbar-width:none;"></div>
+        <!-- Filtre type module (dynamique) -->
+        <div>
+          <div style="font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Type de module</div>
+          <div id="arr-type-filters" style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;"></div>
+        </div>
 
-      <!-- Barre de recherche -->
-      <div style="margin-bottom:12px;">
+        <!-- Barre de recherche -->
         <input type="search" id="arr-search" class="input-field"
-          placeholder="🔍 Rechercher : code, type, chauffeur, agence…"
+          placeholder="🔍 Code, type, chauffeur, agence…"
           oninput="App._filterAndRenderArrivals()"
-          style="font-size:14px;">
+          style="font-size:14px;margin:0;">
       </div>
 
       <div id="arr-loading" style="text-align:center;padding:40px;display:none;">
@@ -1351,18 +1358,19 @@ const App = {
   },
 
   _renderArrivalsSummary() {
-    const wrap  = document.getElementById('arr-summary');
-    const inner = document.getElementById('arr-summary-inner');
-    if (!wrap || !inner) return;
+    const wrap     = document.getElementById('arr-summary');
+    const inner    = document.getElementById('arr-summary-inner');
+    const totalEl  = document.getElementById('arr-summary-total');
+    if (!wrap || !inner || !totalEl) return;
     const s = S.arrivalsSummary;
     const entries = Object.entries(s).filter(([,n]) => n > 0);
     if (!entries.length) { wrap.style.display = 'none'; return; }
     const total = entries.reduce((acc, [,n]) => acc + n, 0);
-    inner.innerHTML =
-      `<span style="background:#1E293B;color:white;font-size:11px;font-weight:700;padding:4px 11px;border-radius:20px;white-space:nowrap;flex-shrink:0;">🅿️ ${total} sur parc</span>` +
-      entries.map(([type, n]) =>
-        `<span style="background:#EBF5FB;border:1px solid #BFDBFE;color:#1A5276;font-size:11px;font-weight:600;padding:4px 11px;border-radius:20px;white-space:nowrap;flex-shrink:0;">${type} : <strong>${n}</strong></span>`
-      ).join('');
+    totalEl.textContent = `🅿️ ${total} modules sur parc`;
+    // types séparés par un point médian
+    inner.innerHTML = entries.map(([type, n], i) =>
+      `<span style="font-size:12px;color:#64748B;">${i > 0 ? '<span style="color:#CBD5E1;margin:0 6px;">·</span>' : ''}${type} <strong style="color:#1D4ED8;">${n}</strong></span>`
+    ).join('');
     wrap.style.display = 'block';
   },
 
