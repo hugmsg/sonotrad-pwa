@@ -234,6 +234,26 @@
       border-color: var(--brand);
       color: white;
     }
+    /* Segmented control (filtre statut arrivées) */
+    .arr-seg-btn {
+      flex: 1;
+      padding: 7px 8px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      color: #475569;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+      text-align: center;
+    }
+    .arr-seg-btn.active {
+      background: white;
+      color: #1E293B;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    }
     .dep-module-btn {
       flex-shrink: 0;
       padding: 4px 12px;
@@ -324,13 +344,13 @@
       <!-- Filtres -->
       <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:10px 14px;margin-bottom:10px;display:flex;flex-direction:column;gap:10px;">
 
-        <!-- Filtre statut -->
+        <!-- Filtre statut : segmented control -->
         <div>
           <div style="font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Statut</div>
-          <div id="arr-parti-filters" style="display:flex;gap:6px;">
-            <button class="dep-filter-btn active" data-parti="all"     onclick="App.setArrPartiFilter('all')">Tous</button>
-            <button class="dep-filter-btn"        data-parti="present" onclick="App.setArrPartiFilter('present')">🅿️ Sur parc</button>
-            <button class="dep-filter-btn"        data-parti="parti"   onclick="App.setArrPartiFilter('parti')">📦 Partis</button>
+          <div id="arr-parti-filters" style="display:flex;background:#E2E8F0;border-radius:10px;padding:3px;gap:2px;">
+            <button class="arr-seg-btn active" data-parti="all"     onclick="App.setArrPartiFilter('all')">Tous</button>
+            <button class="arr-seg-btn"        data-parti="present" onclick="App.setArrPartiFilter('present')">🅿️ Sur parc</button>
+            <button class="arr-seg-btn"        data-parti="parti"   onclick="App.setArrPartiFilter('parti')">📦 Partis</button>
           </div>
         </div>
 
@@ -346,6 +366,9 @@
           oninput="App._filterAndRenderArrivals()"
           style="font-size:14px;margin:0;">
       </div>
+
+      <!-- Compteur résultats -->
+      <div id="arr-result-count" style="display:none;font-size:12px;color:#94A3B8;text-align:right;margin:-4px 0 8px;padding-right:2px;"></div>
 
       <div id="arr-loading" style="text-align:center;padding:40px;display:none;">
         <div class="spinner"></div>
@@ -1400,7 +1423,7 @@ const App = {
 
   setArrPartiFilter(f) {
     S.arrPartiFilter = f;
-    document.querySelectorAll('#arr-parti-filters .dep-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.parti === f));
+    document.querySelectorAll('#arr-parti-filters .arr-seg-btn').forEach(b => b.classList.toggle('active', b.dataset.parti === f));
     this._filterAndRenderArrivals();
   },
 
@@ -1422,6 +1445,17 @@ const App = {
           || (a.numSerie   || '').toLowerCase().includes(q)
           || (a.destination|| '').toLowerCase().includes(q);
     });
+    // Compteur discret
+    const countEl = document.getElementById('arr-result-count');
+    if (countEl) {
+      const total = S.arrivalsData.length;
+      if (items.length < total) {
+        countEl.textContent = `${items.length} résultat${items.length > 1 ? 's' : ''} sur ${total}`;
+        countEl.style.display = 'block';
+      } else {
+        countEl.style.display = 'none';
+      }
+    }
     this._renderArrivalCards(items);
   },
 
