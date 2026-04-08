@@ -1031,7 +1031,7 @@ const App = {
 
     try {
       const url  = S.apiUrl + '?action=production';
-      const resp = await _fetchWithTimeout(url, {}, 40000);
+      const resp = await _fetchWithTimeout(url, {}, 90000);
       const data = await resp.json();
       S.deps       = Array.isArray(data) ? data : (data.data || []);
       S.depsLoaded = true;
@@ -1042,6 +1042,7 @@ const App = {
         <div class="card" style="border-left:4px solid #F87171;">
           <p style="color:#991B1B;font-weight:600;">Impossible de charger les départs</p>
           <p style="font-size:12px;color:#64748B;margin-top:3px;">${e.message}</p>
+          <button onclick="App.loadDepsFromServer(true)" style="margin-top:10px;background:#FEE2E2;color:#991B1B;border:none;padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻ Réessayer</button>
         </div>`;
     } finally {
       document.getElementById('dep-loading').style.display = 'none';
