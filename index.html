@@ -1482,11 +1482,9 @@ const App = {
             ${a.code ? `<div class="code-mono" style="font-size:10px;color:#94A3B8;letter-spacing:.5px;text-align:center;">${a.code}</div>` : ''}
           </div>
           <div style="flex:1;min-width:0;">
-            <div style="display:flex;align-items:baseline;gap:7px;margin-bottom:2px;flex-wrap:wrap;">
-              ${primary  ? `<span class="code-mono" style="font-size:18px;">${primary}</span>` : ''}
-              ${a.type   ? `<span style="font-size:11px;color:#94A3B8;white-space:nowrap;">${a.type}</span>` : ''}
-            </div>
-            ${a.destination ? `<div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.destination}</div>` : ''}
+            ${primary       ? `<div class="code-mono" style="font-size:18px;margin-bottom:1px;">${primary}</div>` : ''}
+            <div style="font-size:11px;color:#94A3B8;white-space:nowrap;margin-bottom:1px;">${a.type || '\u00A0'}</div>
+            <div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.destination || '\u00A0'}</div>
             ${meta          ? `<div style="font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${meta}</div>` : ''}
             <div style="margin-top:3px;">
               ${a.isParti
