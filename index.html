@@ -1467,15 +1467,20 @@ const App = {
     list.innerHTML = items.map((a) => {
       const realIdx = S.arrivalsData.indexOf(a);
       const primary   = a.numModule || a.code;
-      const secondary = (a.numModule ? a.code + ' · ' : '') + (a.type || '—');
-      const meta      = [a.chauffeur, _fmtDate(a.dateArrivee)].filter(Boolean).join(' · ');
+      const meta = [a.chauffeur, _fmtDate(a.dateArrivee)].filter(Boolean).join(' · ');
       return `
         <div class="dep-card" onclick="App.openArrival(${realIdx})">
-          <div style="width:44px;height:44px;background:#EBF5FB;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">📥</div>
+          <!-- Icône + code planning (6 car.) -->
+          <div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;width:48px;">
+            <div style="width:44px;height:44px;background:#EBF5FB;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;">📥</div>
+            ${a.code ? `<div class="code-mono" style="font-size:10px;color:#94A3B8;letter-spacing:.5px;text-align:center;">${a.code}</div>` : ''}
+          </div>
+          <!-- Contenu principal -->
           <div style="flex:1;min-width:0;">
-            <div class="code-mono" style="font-size:18px;margin-bottom:2px;">${primary}</div>
-            <div style="font-size:12px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${secondary}</div>
-            ${meta ? `<div style="font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${meta}</div>` : ''}
+            <div class="code-mono" style="font-size:18px;margin-bottom:1px;">${primary}</div>
+            ${a.type        ? `<div style="font-size:12px;color:#64748B;">${a.type}</div>` : ''}
+            ${a.destination ? `<div style="font-size:12px;color:#475569;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.destination}</div>` : ''}
+            ${meta ? `<div style="font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;">${meta}</div>` : ''}
             <div style="margin-top:3px;">
               ${a.isParti
                 ? `<span style="background:#DCFCE7;color:#15803D;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;">Parti</span>`
@@ -1499,6 +1504,7 @@ const App = {
     const primary = a.numModule || a.code;
     const rows = [
       a.numModule   && ['Code interne',  a.code],
+      a.destination && ['Chantier',      a.destination],
       a.type        && ['Type',          a.type],
       a.numSerie    && ['N° Série',      a.numSerie],
       a.plaques     && ['Plaques',       a.plaques],
@@ -1507,7 +1513,6 @@ const App = {
       a.chauffeur   && ['Chauffeur',     a.chauffeur],
       a.bt          && ['BT',            a.bt],
       a.pastille    && ['Pastille',      a.pastille],
-      a.destination && ['Destination',   a.destination],
       a.commentaire && ['Commentaire',   a.commentaire],
       a.colN        && ['Note N',        a.colN],
       a.colO        && ['Note O',        a.colO],
