@@ -1227,10 +1227,10 @@ const App = {
     if (!S.depFromArchive) this._renderDepPhotoGrid();
   },
 
-  async loadDriveFiles(folderId) {
+  async loadDriveFiles(folderId, panelId = 'drive-files-panel', btnId = 'btn-drive-files') {
     if (!folderId) return;
-    const panel = document.getElementById('drive-files-panel');
-    const btn   = document.getElementById('btn-drive-files');
+    const panel = document.getElementById(panelId);
+    const btn   = document.getElementById(btnId);
     if (!panel) return;
 
     // Spinner pendant le chargement
@@ -1530,9 +1530,9 @@ const App = {
         ${a.lienDrive ? `
         <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
           <a href="${a.lienDrive}" target="_blank" rel="noopener" style="font-size:13px;color:var(--accent);font-weight:600;text-decoration:none;">📁 Ouvrir dans Drive</a>
-          ${/\/folders\//.test(a.lienDrive) ? `<button onclick="App.loadDriveFiles('${(a.lienDrive.match(/\/folders\/([a-zA-Z0-9_-]+)/)||[])[1]}')" id="btn-drive-files" style="background:#EBF5FB;color:var(--brand);border:none;padding:5px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">📂 Voir les fichiers</button>` : ''}
+          ${/\/folders\//.test(a.lienDrive) ? `<button onclick="App.loadDriveFiles('${(a.lienDrive.match(/\/folders\/([a-zA-Z0-9_-]+)/)||[])[1]}','arr-drive-files-panel','arr-btn-drive-files')" id="arr-btn-drive-files" style="background:#EBF5FB;color:var(--brand);border:none;padding:5px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">📂 Voir les fichiers</button>` : ''}
         </div>
-        <div id="drive-files-panel" style="margin-top:8px;"></div>` : ''}
+        <div id="arr-drive-files-panel" style="margin-top:8px;"></div>` : ''}
       </div>`;
   },
 
