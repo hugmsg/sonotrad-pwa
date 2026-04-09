@@ -1218,7 +1218,7 @@ const App = {
         <p style="font-size:12px;color:#64748B;margin-top:4px;">Cet article a quitté le parc.</p>
       </div>`}`;
     if (!S.depFromArchive) this._renderDepPhotoGrid();
-    this._loadDriveLinkForDetail(d.codeModule || d.code, S.depFromArchive ? 'archive' : 'production', 'dep-drive-section', 'drive-files-panel', 'btn-drive-files');
+    this._loadDriveLinkForDetail(d.code, S.depFromArchive ? 'archive' : 'production', 'dep-drive-section', 'drive-files-panel', 'btn-drive-files');
   },
 
   async loadDriveFiles(folderId, panelId = 'drive-files-panel', btnId = 'btn-drive-files') {
