@@ -1151,9 +1151,9 @@ const App = {
             ${code ? `<div class="code-mono" style="font-size:10px;color:#94A3B8;letter-spacing:.5px;text-align:center;">${code}</div>` : ''}
           </div>
           <div style="flex:1;min-width:0;">
-            ${d.codeModule ? `<div class="code-mono" style="font-size:18px;margin-bottom:2px;">${d.codeModule}</div>` : ''}
-            <div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.chantier || '—'}</div>
-            ${titre !== code ? `<div style="font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titre}</div>` : ''}
+            ${d.codeModule ? `<div class="code-mono" style="font-size:18px;margin-bottom:1px;">${d.codeModule}</div>` : ''}
+            <div style="font-size:11px;color:#94A3B8;white-space:nowrap;margin-bottom:1px;">${titre !== code ? titre : '\u00A0'}</div>
+            <div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.chantier || '\u00A0'}</div>
             <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap;">
               ${chips}
               ${_duration(d.debut, d.status && d.status.termine ? d.fin : null) ? `<span style="font-size:11px;color:#94A3B8;font-weight:500;">⏱ ${_duration(d.debut, d.status && d.status.termine ? d.fin : null)}</span>` : ''}
@@ -1341,9 +1341,9 @@ const App = {
             ${code ? `<div class="code-mono" style="font-size:10px;color:#94A3B8;letter-spacing:.5px;text-align:center;">${code}</div>` : ''}
           </div>
           <div style="flex:1;min-width:0;">
-            ${d.codeModule ? `<div class="code-mono" style="font-size:18px;margin-bottom:2px;">${d.codeModule}</div>` : ''}
-            <div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.chantier || '—'}</div>
-            ${titre !== code ? `<div style="font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titre}</div>` : ''}
+            ${d.codeModule ? `<div class="code-mono" style="font-size:18px;margin-bottom:1px;">${d.codeModule}</div>` : ''}
+            <div style="font-size:11px;color:#94A3B8;white-space:nowrap;margin-bottom:1px;">${titre !== code ? titre : '\u00A0'}</div>
+            <div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.chantier || '\u00A0'}</div>
             ${_duration(d.debut, d.fin) ? `<div style="font-size:11px;color:#94A3B8;margin-top:2px;">⏱ ${_duration(d.debut, d.fin)}</div>` : ''}
           </div>
           <span style="color:#CBD5E1;font-size:20px;align-self:center;">›</span>
