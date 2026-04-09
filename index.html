@@ -274,13 +274,15 @@
     }
 
     .dep-card {
-      display: flex; align-items: flex-start; gap: 12px;
-      padding: 13px 14px; background: white; border-radius: 12px;
-      margin-bottom: 10px; cursor: pointer;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px; background: white; border-radius: 10px;
+      margin-bottom: 7px; cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.07);
       transition: transform 0.12s;
     }
     .dep-card:active { transform: scale(0.98); }
+    .dep-card-left  { flex: 0 0 86px; min-width:0; overflow:hidden; padding-right:8px; border-right:1px solid #F1F5F9; }
+    .dep-card-right { flex: 1; min-width:0; padding-left:8px; }
 
     .chip { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
     .chip-blue   { background: #DBEAFE; color: #1D4ED8; }
@@ -555,6 +557,14 @@
         <button class="dep-filter-btn"        data-filter="deCote"     onclick="App.setDepFilter('deCote')">De côté</button>
       </div>
 
+      <!-- Bouton de tri -->
+      <div style="display:flex;justify-content:flex-end;margin-top:4px;margin-bottom:2px;">
+        <button id="dep-sort-btn" onclick="App.toggleDepSort()"
+          style="background:none;border:1px solid #E2E8F0;border-radius:16px;padding:4px 10px;font-size:11px;color:#64748B;cursor:pointer;display:flex;align-items:center;gap:4px;">
+          <span id="dep-sort-icon">↑</span><span id="dep-sort-label">En cours → Terminé</span>
+        </button>
+      </div>
+
       <!-- Filtres par type de module (générés dynamiquement) -->
       <div id="dep-module-filters" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;-webkit-overflow-scrolling:touch;scrollbar-width:none;"></div>
 
@@ -617,11 +627,16 @@
       <h2 style="font-size:20px;font-weight:700;color:#1E293B;margin-bottom:18px;">Réglages</h2>
 
       <div class="card" style="margin-bottom:12px;">
-        <p style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:14px;">🔗 API AppScript</p>
+        <p style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:14px;">🔗 URL de l'API</p>
         <div style="margin-bottom:10px;">
-          <label class="label-sm" for="set-url">URL du Planning Script (Web App)</label>
-          <input type="url" id="set-url" class="input-field" placeholder="https://script.google.com/macros/s/..." style="font-size:12px;">
-          <p style="font-size:11px;color:#94A3B8;margin-top:5px;">AppScript → Déployer → Gérer les déploiements → URL d'application web</p>
+          <label class="label-sm" for="set-url">URL du proxy Vercel (recommandé) ou AppScript direct</label>
+          <input type="url" id="set-url" class="input-field" placeholder="https://sonotrad.vercel.app/api/proxy" style="font-size:12px;">
+          <div style="margin-top:8px;background:#F0F9FF;border:1px solid #BAE6FD;border-radius:8px;padding:8px 10px;">
+            <p style="font-size:11px;color:#0369A1;font-weight:600;margin-bottom:4px;">Via proxy Vercel (recommandé sur WiFi atelier)</p>
+            <p style="font-size:11px;color:#0369A1;margin:0;">→ <code style="font-size:10px;background:#E0F2FE;padding:1px 4px;border-radius:3px;">https://votre-app.vercel.app/api/proxy</code></p>
+            <p style="font-size:11px;color:#64748B;margin-top:6px;font-weight:600;">URL AppScript directe (sur mobile/4G)</p>
+            <p style="font-size:11px;color:#64748B;margin:0;">→ AppScript → Déployer → Gérer les déploiements → URL /exec</p>
+          </div>
         </div>
         <button class="btn btn-primary" onclick="App.saveSettings()">Enregistrer</button>
       </div>
@@ -731,6 +746,7 @@ const S = {
   depPhotos:  [],      // [{dataUrl}]
   depFilter:       'all',   // 'all' | 'enCours' | 'aControler' | 'termine' | 'deCote'
   depModuleFilter: 'all',   // 'all' | nom du module (col F)
+  depSortAsc:      true,    // true = En cours→Terminé ; false = Terminé→En cours
 
   // Arrivals (depuis serveur)
   arrivalsData:    [],
@@ -1076,6 +1092,15 @@ const App = {
     this._renderDepList();
   },
 
+  toggleDepSort() {
+    S.depSortAsc = !S.depSortAsc;
+    const icon  = document.getElementById('dep-sort-icon');
+    const label = document.getElementById('dep-sort-label');
+    if (icon)  icon.textContent  = S.depSortAsc ? '↑' : '↓';
+    if (label) label.textContent = S.depSortAsc ? 'En cours → Terminé' : 'Terminé → En cours';
+    this._renderDepList();
+  },
+
   _buildModuleFilterBar() {
     const bar = document.getElementById('dep-module-filters');
     if (!bar) return;
@@ -1131,11 +1156,19 @@ const App = {
 
     if (!filtered.length) { list.innerHTML = ''; none.style.display = 'block'; return; }
     none.style.display = 'none';
+
+    // Tri par statut
+    const _statusRank = { enCours: 0, aControler: 1, termine: 2, deCote: 3 };
+    filtered.sort((a, b) => {
+      const ra = _statusRank[this._depCurrentStatus(a)] ?? 4;
+      const rb = _statusRank[this._depCurrentStatus(b)] ?? 4;
+      return S.depSortAsc ? ra - rb : rb - ra;
+    });
+
     list.innerHTML = filtered.map((d, i) => {
       const realIdx = S.deps.indexOf(d);
       const code  = d.code || '------';
       const titre = d.module || code;
-      // Chip unique = statut courant uniquement
       const cur   = this._depCurrentStatus(d);
       const chipMap = {
         enCours:    '<span class="chip chip-blue">En cours</span>',
@@ -1144,22 +1177,25 @@ const App = {
         deCote:     '<span class="chip" style="background:#F3E8FF;color:#6B21A8;">De côté</span>',
       };
       const chips = cur ? chipMap[cur] : '';
+      const dur   = _duration(d.debut, d.status && d.status.termine ? d.fin : null);
       return `
         <div class="dep-card" onclick="App.openDep(${realIdx})">
-          <div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;width:48px;">
-            <div style="width:44px;height:44px;background:#EBF5FB;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;">📤</div>
-            ${code ? `<div style="font-family:'Courier New',monospace;font-size:10px;color:#94A3B8;text-align:center;">${code}</div>` : ''}
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;width:38px;">
+            <div style="width:34px;height:34px;background:#EBF5FB;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;">📤</div>
+            <div style="font-family:'Courier New',monospace;font-size:9px;color:#94A3B8;text-align:center;line-height:1.1;max-width:38px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${code}</div>
           </div>
-          <div style="flex:1;min-width:0;">
-            ${d.codeModule ? `<div class="code-mono" style="font-size:18px;margin-bottom:1px;">${d.codeModule}</div>` : ''}
-            <div style="font-size:11px;color:#94A3B8;white-space:nowrap;margin-bottom:1px;">${titre !== code ? titre : '\u00A0'}</div>
-            <div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.chantier || '\u00A0'}</div>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap;">
+          <div class="dep-card-left">
+            <div class="code-mono" style="font-size:14px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.codeModule || '\u00A0'}</div>
+            <div style="font-size:10px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titre !== code ? titre : '\u00A0'}</div>
+          </div>
+          <div class="dep-card-right">
+            <div style="font-size:13px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${d.chantier || '\u00A0'}</div>
+            <div style="display:flex;align-items:center;gap:4px;overflow:hidden;">
               ${chips}
-              ${_duration(d.debut, d.status && d.status.termine ? d.fin : null) ? `<span style="font-size:11px;color:#94A3B8;font-weight:500;">⏱ ${_duration(d.debut, d.status && d.status.termine ? d.fin : null)}</span>` : ''}
+              ${dur ? `<span style="font-size:10px;color:#94A3B8;white-space:nowrap;flex-shrink:0;">⏱ ${dur}</span>` : ''}
             </div>
           </div>
-          <span style="color:#CBD5E1;font-size:20px;align-self:center;">›</span>
+          <span style="color:#CBD5E1;font-size:16px;flex-shrink:0;">›</span>
         </div>`;
     }).join('');
   },
@@ -1264,7 +1300,7 @@ const App = {
               <span style="color:#CBD5E1;font-size:14px;">›</span>
             </a>`).join('')}
         </div>`;
-      if (btn) btn.style.display = 'none'; // masque le bouton une fois chargé
+      if (btn) { btn.disabled = false; btn.textContent = '↺ Actualiser'; }
     } catch(e) {
       panel.innerHTML = `<p style="font-size:12px;color:#EF4444;">Erreur : ${e.message}</p>`;
       if (btn) { btn.disabled = false; btn.textContent = '📂 Réessayer'; }
@@ -1288,11 +1324,11 @@ const App = {
       if (!sec) return;
 
       if (data.status === 'ok' && data.lienDrive) {
-        const lien       = data.lienDrive;
-        const isFolder   = /\/folders\//.test(lien);
+        const lien        = data.lienDrive;
+        const isFolder    = /\/folders\//.test(lien);
         const folderMatch = isFolder ? (lien.match(/\/folders\/([a-zA-Z0-9_-]+)/) || [])[1] : null;
         sec.innerHTML = `
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:6px;">
             <a href="${lien}" target="_blank" rel="noopener"
                style="font-size:13px;color:var(--accent);font-weight:600;text-decoration:none;">
               📁 Ouvrir dans Drive
@@ -1300,11 +1336,13 @@ const App = {
             ${folderMatch ? `<button
               id="${btnId}"
               onclick="App.loadDriveFiles('${folderMatch}','${panelId}','${btnId}')"
-              style="background:#EBF5FB;color:var(--brand);border:none;padding:5px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
-              📂 Voir les fichiers
+              style="background:none;border:none;color:#94A3B8;font-size:12px;cursor:pointer;padding:0;">
+              ↺ Actualiser
             </button>` : ''}
           </div>
-          <div id="${panelId}" style="margin-top:8px;"></div>`;
+          <div id="${panelId}" style="margin-top:0;"></div>`;
+        // Chargement automatique des fichiers si c'est un dossier
+        if (folderMatch) this.loadDriveFiles(folderMatch, panelId, btnId);
       } else {
         sec.innerHTML = `
           <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:8px 12px;">
@@ -1370,19 +1408,22 @@ const App = {
       const realIdx = S.archive.indexOf(d);
       const code  = d.code || '------';
       const titre = d.module || code;
+      const dur   = _duration(d.debut, d.fin);
       return `
         <div class="dep-card" style="opacity:0.85;" onclick="App.openArchiveDep(${realIdx})">
-          <div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;width:48px;">
-            <div style="width:44px;height:44px;background:#F1F5F9;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;">📦</div>
-            ${code ? `<div style="font-family:'Courier New',monospace;font-size:10px;color:#94A3B8;text-align:center;">${code}</div>` : ''}
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;width:38px;">
+            <div style="width:34px;height:34px;background:#F1F5F9;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;">📦</div>
+            <div style="font-family:'Courier New',monospace;font-size:9px;color:#94A3B8;text-align:center;line-height:1.1;max-width:38px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${code}</div>
           </div>
-          <div style="flex:1;min-width:0;">
-            ${d.codeModule ? `<div class="code-mono" style="font-size:18px;margin-bottom:1px;">${d.codeModule}</div>` : ''}
-            <div style="font-size:11px;color:#94A3B8;white-space:nowrap;margin-bottom:1px;">${titre !== code ? titre : '\u00A0'}</div>
-            <div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.chantier || '\u00A0'}</div>
-            ${_duration(d.debut, d.fin) ? `<div style="font-size:11px;color:#94A3B8;margin-top:2px;">⏱ ${_duration(d.debut, d.fin)}</div>` : ''}
+          <div class="dep-card-left">
+            <div class="code-mono" style="font-size:14px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.codeModule || '\u00A0'}</div>
+            <div style="font-size:10px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titre !== code ? titre : '\u00A0'}</div>
           </div>
-          <span style="color:#CBD5E1;font-size:20px;align-self:center;">›</span>
+          <div class="dep-card-right">
+            <div style="font-size:13px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${d.chantier || '\u00A0'}</div>
+            ${dur ? `<span style="font-size:10px;color:#94A3B8;">⏱ ${dur}</span>` : ''}
+          </div>
+          <span style="color:#CBD5E1;font-size:16px;flex-shrink:0;">›</span>
         </div>`;
     }).join('');
   },
@@ -1509,26 +1550,28 @@ const App = {
     none.style.display = 'none';
     list.innerHTML = items.map((a) => {
       const realIdx = S.arrivalsData.indexOf(a);
-      const primary   = a.numModule || a.code;
-      const meta = [a.chauffeur, _fmtDate(a.dateArrivee)].filter(Boolean).join(' · ');
+      const primary = a.numModule || a.code;
+      const meta    = [a.chauffeur, _fmtDate(a.dateArrivee)].filter(Boolean).join(' · ');
       return `
         <div class="dep-card" onclick="App.openArrival(${realIdx})">
-          <div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;width:48px;">
-            <div style="width:44px;height:44px;background:#EBF5FB;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;">📥</div>
-            ${a.code ? `<div class="code-mono" style="font-size:10px;color:#94A3B8;letter-spacing:.5px;text-align:center;">${a.code}</div>` : ''}
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;width:38px;">
+            <div style="width:34px;height:34px;background:#EBF5FB;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;">📥</div>
+            <div style="font-family:'Courier New',monospace;font-size:9px;color:#94A3B8;text-align:center;line-height:1.1;max-width:38px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.code || ''}</div>
           </div>
-          <div style="flex:1;min-width:0;">
-            ${primary       ? `<div class="code-mono" style="font-size:18px;margin-bottom:1px;">${primary}</div>` : ''}
-            <div style="font-size:11px;color:#94A3B8;white-space:nowrap;margin-bottom:1px;">${a.type || '\u00A0'}</div>
-            <div style="font-size:14px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.destination || '\u00A0'}</div>
-            ${meta          ? `<div style="font-size:11px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${meta}</div>` : ''}
-            <div style="margin-top:3px;">
+          <div class="dep-card-left">
+            <div class="code-mono" style="font-size:14px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${primary || '\u00A0'}</div>
+            <div style="font-size:10px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.type || '\u00A0'}</div>
+          </div>
+          <div class="dep-card-right">
+            <div style="font-size:13px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${a.destination || '\u00A0'}</div>
+            <div style="display:flex;align-items:center;gap:4px;overflow:hidden;">
               ${a.isParti
-                ? `<span style="background:#DCFCE7;color:#15803D;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;">Parti</span>`
-                : `<span style="background:#EFF6FF;color:#1D4ED8;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;">Sur parc</span>`}
+                ? `<span style="background:#DCFCE7;color:#15803D;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;flex-shrink:0;">Parti</span>`
+                : `<span style="background:#EFF6FF;color:#1D4ED8;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;flex-shrink:0;">Sur parc</span>`}
+              ${meta ? `<span style="font-size:10px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${meta}</span>` : ''}
             </div>
           </div>
-          <span style="color:#CBD5E1;font-size:20px;align-self:center;">›</span>
+          <span style="color:#CBD5E1;font-size:16px;flex-shrink:0;">›</span>
         </div>`;
     }).join('');
   },
