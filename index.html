@@ -1198,20 +1198,9 @@ const App = {
           ${(() => { const finCalc = S.depFromArchive ? d.fin : (d.status && d.status.termine ? d.fin : null); const dur = _duration(d.debut, finCalc); return dur ? `<span style="margin-left:6px;background:#F1F5F9;border-radius:4px;padding:1px 6px;font-weight:600;">⏱ ${dur}</span>` : ''; })()}
         </div>` : ''}
         ${d.commande ? `<div style="font-size:12px;color:#64748B;margin-top:2px;">🔖 Commande : ${d.commande}</div>` : ''}
-        ${d.lienDrive ? `
-        <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <a href="${d.lienDrive}" target="_blank" rel="noopener"
-             style="font-size:13px;color:var(--accent);font-weight:600;text-decoration:none;">
-            📁 Ouvrir dans Drive
-          </a>
-          ${/\/folders\//.test(d.lienDrive) ? `<button onclick="App.loadDriveFiles('${(d.lienDrive.match(/\/folders\/([a-zA-Z0-9_-]+)/)||[])[1]}')"
-            id="btn-drive-files"
-            style="background:#EBF5FB;color:var(--brand);border:none;padding:5px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
-            📂 Voir les fichiers
-          </button>` : ''}
+        <div id="dep-drive-section" style="margin-top:12px;">
+          <p style="font-size:12px;color:#94A3B8;">🔄 Vérification du dossier Drive…</p>
         </div>
-        <div id="drive-files-panel" style="margin-top:8px;"></div>
-        ` : ''}
       </div>
       ${!S.depFromArchive ? `
       <div class="card">
@@ -1229,6 +1218,7 @@ const App = {
         <p style="font-size:12px;color:#64748B;margin-top:4px;">Cet article a quitté le parc.</p>
       </div>`}`;
     if (!S.depFromArchive) this._renderDepPhotoGrid();
+    this._loadDriveLinkForDetail(d.codeModule || d.code, S.depFromArchive ? 'archive' : 'production', 'dep-drive-section', 'drive-files-panel', 'btn-drive-files');
   },
 
   async loadDriveFiles(folderId, panelId = 'drive-files-panel', btnId = 'btn-drive-files') {
@@ -1278,6 +1268,52 @@ const App = {
     } catch(e) {
       panel.innerHTML = `<p style="font-size:12px;color:#EF4444;">Erreur : ${e.message}</p>`;
       if (btn) { btn.disabled = false; btn.textContent = '📂 Réessayer'; }
+    }
+  },
+
+  /* ─ Lazy-load Drive link for a detail card ─ */
+  async _loadDriveLinkForDetail(code, source, sectionId, panelId, btnId) {
+    const section = document.getElementById(sectionId);
+    if (!section || !code || code === '------') {
+      if (section) section.innerHTML = '';
+      return;
+    }
+    try {
+      const url  = `${S.apiUrl}?action=drive_link&code=${encodeURIComponent(code)}&source=${encodeURIComponent(source)}`;
+      const resp = await _fetchWithTimeout(url, {}, 20000);
+      const data = await resp.json();
+
+      // Section could have been replaced if user navigated away
+      const sec = document.getElementById(sectionId);
+      if (!sec) return;
+
+      if (data.status === 'ok' && data.lienDrive) {
+        const lien       = data.lienDrive;
+        const isFolder   = /\/folders\//.test(lien);
+        const folderMatch = isFolder ? (lien.match(/\/folders\/([a-zA-Z0-9_-]+)/) || [])[1] : null;
+        sec.innerHTML = `
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <a href="${lien}" target="_blank" rel="noopener"
+               style="font-size:13px;color:var(--accent);font-weight:600;text-decoration:none;">
+              📁 Ouvrir dans Drive
+            </a>
+            ${folderMatch ? `<button
+              id="${btnId}"
+              onclick="App.loadDriveFiles('${folderMatch}','${panelId}','${btnId}')"
+              style="background:#EBF5FB;color:var(--brand);border:none;padding:5px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+              📂 Voir les fichiers
+            </button>` : ''}
+          </div>
+          <div id="${panelId}" style="margin-top:8px;"></div>`;
+      } else {
+        sec.innerHTML = `
+          <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:8px 12px;">
+            <p style="font-size:12px;color:#92400E;margin:0;">⚠️ Aucun dossier Drive trouvé pour ce module</p>
+          </div>`;
+      }
+    } catch(e) {
+      const sec = document.getElementById(sectionId);
+      if (sec) sec.innerHTML = `<p style="font-size:12px;color:#EF4444;">Erreur Drive : ${e.message}</p>`;
     }
   },
 
@@ -1537,13 +1573,11 @@ const App = {
             <span style="font-size:12px;color:#94A3B8;white-space:nowrap;padding-top:1px;">${k}</span>
             <span style="font-size:12px;color:#1E293B;font-weight:500;word-break:break-word;">${v}</span>`).join('')}
         </div>` : ''}
-        ${a.lienDrive ? `
-        <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <a href="${a.lienDrive}" target="_blank" rel="noopener" style="font-size:13px;color:var(--accent);font-weight:600;text-decoration:none;">📁 Ouvrir dans Drive</a>
-          ${/\/folders\//.test(a.lienDrive) ? `<button onclick="App.loadDriveFiles('${(a.lienDrive.match(/\/folders\/([a-zA-Z0-9_-]+)/)||[])[1]}','arr-drive-files-panel','arr-btn-drive-files')" id="arr-btn-drive-files" style="background:#EBF5FB;color:var(--brand);border:none;padding:5px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">📂 Voir les fichiers</button>` : ''}
+        <div id="arr-drive-section" style="margin-top:12px;">
+          <p style="font-size:12px;color:#94A3B8;">🔄 Vérification du dossier Drive…</p>
         </div>
-        <div id="arr-drive-files-panel" style="margin-top:8px;"></div>` : ''}
       </div>`;
+    this._loadDriveLinkForDetail(a.code, 'arrivals', 'arr-drive-section', 'arr-drive-files-panel', 'arr-btn-drive-files');
   },
 
   _renderDepPhotoGrid() {
