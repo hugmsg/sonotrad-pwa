@@ -284,6 +284,26 @@
     .dep-card-left  { flex: 0 0 86px; min-width:0; overflow:hidden; padding-right:8px; border-right:1px solid #F1F5F9; }
     .dep-card-right { flex: 1; min-width:0; padding-left:8px; }
 
+    /* ── Scope segmented control (Production: Actifs / Avec partis) ── */
+    .scope-seg { display:flex; background:#E2E8F0; border-radius:10px; padding:3px; gap:2px; }
+    .scope-btn {
+      flex:1; padding:6px 8px; border-radius:8px; border:none;
+      background:transparent; color:#475569; font-size:13px;
+      font-weight:600; cursor:pointer; white-space:nowrap;
+      transition:all 0.15s; text-align:center;
+    }
+    .scope-btn.active { background:white; color:#1E293B; box-shadow:0 1px 3px rgba(0,0,0,0.12); }
+
+    /* ── Séparateur partis dans la liste ── */
+    .partis-separator {
+      display:flex; align-items:center; gap:8px;
+      padding:10px 0 6px; color:#94A3B8; font-size:11px; font-weight:600;
+      text-transform:uppercase; letter-spacing:.5px;
+    }
+    .partis-separator::before, .partis-separator::after {
+      content:''; flex:1; height:1px; background:#E2E8F0;
+    }
+
     .chip { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
     .chip-blue   { background: #DBEAFE; color: #1D4ED8; }
     .chip-yellow { background: #FEF3C7; color: #92400E; }
@@ -543,12 +563,24 @@
 
     <!-- ── VIEW : DEPARTURES ─────────────────────────────────────────────── -->
     <div class="view" id="view-departures">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
         <h2 style="font-size:20px;font-weight:700;color:#1E293B;">Production</h2>
         <button onclick="App.loadDepartures(true)" style="background:#EBF5FB;color:var(--brand);border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻ Actualiser</button>
       </div>
 
-      <!-- Filtres par statut -->
+      <!-- Sélecteur de portée : Actifs / Avec partis -->
+      <div class="scope-seg" style="margin-bottom:10px;">
+        <button class="scope-btn active" data-scope="actifs"     onclick="App.setDepScope('actifs')">Actifs</button>
+        <button class="scope-btn"        data-scope="avecPartis" onclick="App.setDepScope('avecPartis')">Avec partis</button>
+      </div>
+
+      <!-- Recherche texte (visible en permanence) -->
+      <input type="search" id="dep-search" class="input-field"
+        placeholder="🔍 Code, chantier, module…"
+        oninput="App._onDepSearch(event)"
+        style="font-size:13px;margin-bottom:8px;">
+
+      <!-- Filtres par statut (actifs seulement) -->
       <div id="dep-filters" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
         <button class="dep-filter-btn active" data-filter="all"        onclick="App.setDepFilter('all')">Tous</button>
         <button class="dep-filter-btn"        data-filter="enCours"    onclick="App.setDepFilter('enCours')">En cours</button>
@@ -557,16 +589,14 @@
         <button class="dep-filter-btn"        data-filter="deCote"     onclick="App.setDepFilter('deCote')">De côté</button>
       </div>
 
-      <!-- Bouton de tri -->
-      <div style="display:flex;justify-content:flex-end;margin-top:4px;margin-bottom:2px;">
+      <!-- Bouton de tri + filtres modules -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;margin-bottom:2px;">
+        <div id="dep-module-filters" style="display:flex;gap:6px;overflow-x:auto;flex:1;-webkit-overflow-scrolling:touch;scrollbar-width:none;"></div>
         <button id="dep-sort-btn" onclick="App.toggleDepSort()"
-          style="background:none;border:1px solid #E2E8F0;border-radius:16px;padding:4px 10px;font-size:11px;color:#64748B;cursor:pointer;display:flex;align-items:center;gap:4px;">
+          style="flex-shrink:0;margin-left:8px;background:none;border:1px solid #E2E8F0;border-radius:16px;padding:4px 10px;font-size:11px;color:#64748B;cursor:pointer;display:flex;align-items:center;gap:4px;">
           <span id="dep-sort-icon">↑</span><span id="dep-sort-label">En cours → Terminé</span>
         </button>
       </div>
-
-      <!-- Filtres par type de module (générés dynamiquement) -->
-      <div id="dep-module-filters" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;-webkit-overflow-scrolling:touch;scrollbar-width:none;"></div>
 
       <div id="dep-loading" style="text-align:center;padding:40px;display:none;">
         <div class="spinner"></div>
@@ -673,9 +703,6 @@
     <button class="nav-tab" data-tab="arrivals" onclick="App.go('arrivals')">
       <span class="icon">📥</span><span>Arrivées</span>
     </button>
-    <button class="nav-tab" data-tab="archive" onclick="App.go('archive')">
-      <span class="icon">📦</span><span>Partis</span>
-    </button>
     <button class="nav-tab" data-tab="history" onclick="App.go('history')">
       <span class="icon">🕐</span><span>Historique</span>
     </button>
@@ -747,6 +774,8 @@ const S = {
   depFilter:       'all',   // 'all' | 'enCours' | 'aControler' | 'termine' | 'deCote'
   depModuleFilter: 'all',   // 'all' | nom du module (col F)
   depSortAsc:      true,    // true = En cours→Terminé ; false = Terminé→En cours
+  depScope:        'actifs',// 'actifs' | 'avecPartis'
+  depSearch:       '',      // recherche texte libre
 
   // Arrivals (depuis serveur)
   arrivalsData:    [],
@@ -1101,6 +1130,19 @@ const App = {
     this._renderDepList();
   },
 
+  _onDepSearch(e) {
+    S.depSearch = (e.target.value || '').trim().toLowerCase();
+    this._renderDepList();
+  },
+
+  setDepScope(scope) {
+    S.depScope = scope;
+    document.querySelectorAll('.scope-btn').forEach(b => b.classList.toggle('active', b.dataset.scope === scope));
+    // Charger les archives si pas encore fait
+    if (scope === 'avecPartis' && !S.archiveLoaded) this.loadArchive();
+    else this._renderDepList();
+  },
+
   _buildModuleFilterBar() {
     const bar = document.getElementById('dep-module-filters');
     if (!bar) return;
@@ -1131,12 +1173,18 @@ const App = {
   _renderDepList() {
     const list = document.getElementById('dep-list');
     const none = document.getElementById('no-departures');
+    const q    = S.depSearch;
 
-    // Double filtre : statut ET type de module
+    // ── Filtre actifs : statut + module + recherche texte ─────────────────
     const filtered = S.deps.filter(d => {
       const statusOk = S.depFilter === 'all' || this._depCurrentStatus(d) === S.depFilter;
       const moduleOk = S.depModuleFilter === 'all' || (d.module || '').trim() === S.depModuleFilter;
-      return statusOk && moduleOk;
+      const searchOk = !q ||
+        (d.code       || '').toLowerCase().includes(q) ||
+        (d.codeModule || '').toLowerCase().includes(q) ||
+        (d.chantier   || '').toLowerCase().includes(q) ||
+        (d.module     || '').toLowerCase().includes(q);
+      return statusOk && moduleOk && searchOk;
     });
 
     // Badges statut (sur l'ensemble, pas le sous-filtre module)
@@ -1154,10 +1202,21 @@ const App = {
       btn.textContent = cnt > 0 ? `${label} (${cnt})` : label;
     });
 
-    if (!filtered.length) { list.innerHTML = ''; none.style.display = 'block'; return; }
+    // ── Partis filtrés par recherche texte ────────────────────────────────
+    const filteredPartis = S.depScope === 'avecPartis' ? S.archive.filter(d => {
+      if (!q) return true;
+      return (d.code       || '').toLowerCase().includes(q) ||
+             (d.codeModule || '').toLowerCase().includes(q) ||
+             (d.chantier   || '').toLowerCase().includes(q) ||
+             (d.module     || '').toLowerCase().includes(q);
+    }) : [];
+
+    if (!filtered.length && !filteredPartis.length) {
+      list.innerHTML = ''; none.style.display = 'block'; return;
+    }
     none.style.display = 'none';
 
-    // Tri par statut
+    // Tri par statut (actifs seulement)
     const _statusRank = { enCours: 0, aControler: 1, termine: 2, deCote: 3 };
     filtered.sort((a, b) => {
       const ra = _statusRank[this._depCurrentStatus(a)] ?? 4;
@@ -1198,6 +1257,41 @@ const App = {
           <span style="color:#CBD5E1;font-size:16px;flex-shrink:0;">›</span>
         </div>`;
     }).join('');
+
+    // ── Section Partis ────────────────────────────────────────────────────
+    if (S.depScope === 'avecPartis') {
+      if (!S.archiveLoaded) {
+        list.innerHTML += `<div class="partis-separator">Partis</div>
+          <div style="text-align:center;padding:20px 0;"><div class="spinner"></div></div>`;
+      } else if (filteredPartis.length) {
+        list.innerHTML += `<div class="partis-separator">Partis · ${filteredPartis.length}</div>`;
+        list.innerHTML += filteredPartis.map((d) => {
+          const realIdx = S.archive.indexOf(d);
+          const code  = d.code || '------';
+          const titre = d.module || code;
+          const dur   = _duration(d.debut, d.fin);
+          return `
+            <div class="dep-card" style="opacity:0.75;" onclick="App.openArchiveDep(${realIdx})">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;width:38px;">
+                <div style="width:34px;height:34px;background:#F1F5F9;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;">📦</div>
+                <div style="font-family:'Courier New',monospace;font-size:9px;color:#94A3B8;text-align:center;line-height:1.1;max-width:38px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${code}</div>
+              </div>
+              <div class="dep-card-left">
+                <div class="code-mono" style="font-size:14px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.codeModule || '\u00A0'}</div>
+                <div style="font-size:10px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titre !== code ? titre : '\u00A0'}</div>
+              </div>
+              <div class="dep-card-right">
+                <div style="font-size:13px;font-weight:600;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${d.chantier || '\u00A0'}</div>
+                ${dur ? `<span style="font-size:10px;color:#94A3B8;">⏱ ${dur}</span>` : ''}
+              </div>
+              <span style="color:#CBD5E1;font-size:16px;flex-shrink:0;">›</span>
+            </div>`;
+        }).join('');
+      } else if (q) {
+        list.innerHTML += `<div class="partis-separator">Partis</div>
+          <p style="font-size:12px;color:#94A3B8;text-align:center;padding:12px 0;">Aucun parti correspondant</p>`;
+      }
+    }
   },
 
   openDep(idx) {
@@ -1375,6 +1469,8 @@ const App = {
       const data = await resp.json();
       S.archive       = Array.isArray(data) ? data : (data.data || []);
       S.archiveLoaded = true;
+      // Si on est en mode "Avec partis", on rafraîchit la liste de production
+      if (S.depScope === 'avecPartis') { this._renderDepList(); return; }
       this._renderArchiveList(S.archive);
       document.getElementById('archive-search').style.display = S.archive.length ? 'block' : 'none';
     } catch(e) {
