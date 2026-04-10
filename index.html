@@ -1187,9 +1187,16 @@ const App = {
       return statusOk && moduleOk && searchOk;
     });
 
-    // Badges statut (sur l'ensemble, pas le sous-filtre module)
-    const baseByStatus = S.depModuleFilter === 'all' ? S.deps
-      : S.deps.filter(d => (d.module || '').trim() === S.depModuleFilter);
+    // Badges statut — tiennent compte du filtre module ET de la recherche texte
+    const baseByStatus = S.deps.filter(d => {
+      const moduleOk = S.depModuleFilter === 'all' || (d.module || '').trim() === S.depModuleFilter;
+      const searchOk = !q ||
+        (d.code       || '').toLowerCase().includes(q) ||
+        (d.codeModule || '').toLowerCase().includes(q) ||
+        (d.chantier   || '').toLowerCase().includes(q) ||
+        (d.module     || '').toLowerCase().includes(q);
+      return moduleOk && searchOk;
+    });
     const counts = { all: baseByStatus.length, enCours: 0, aControler: 0, termine: 0, deCote: 0 };
     baseByStatus.forEach(d => {
       const cur = this._depCurrentStatus(d);
