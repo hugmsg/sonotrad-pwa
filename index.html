@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#1A5276">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -16,6 +16,8 @@
 
     * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
 
+    html, body { height: 100%; }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       background: #F0F4F8;
@@ -23,7 +25,17 @@
       overscroll-behavior: none;
     }
 
-    .app { max-width: 480px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; }
+    /* Flex column de hauteur fixe — le scroll se fait dans .main-content,
+       pas dans la page entière → la nav ne saute plus sur iOS Safari */
+    .app {
+      max-width: 480px;
+      margin: 0 auto;
+      height: 100dvh;
+      height: -webkit-fill-available; /* fallback iOS < 15.4 */
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
 
     /* ── Header ── */
     .header {
@@ -33,32 +45,29 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      position: sticky;
-      top: 0;
+      flex-shrink: 0;   /* ne se compresse pas */
       z-index: 100;
       min-height: 52px;
+      /* plus besoin de sticky : le header est hors du scroll */
     }
 
     /* ── Main ── */
     .main-content {
       flex: 1;
       overflow-y: auto;
-      padding: 16px 16px 80px;
+      padding: 16px 16px 16px; /* plus besoin du 80px de compensation nav */
       -webkit-overflow-scrolling: touch;
     }
 
     /* ── Bottom nav ── */
     .bottom-nav {
-      position: fixed;
-      bottom: 0;
-      left: 50%;
-      transform: translateX(-50%);
+      flex-shrink: 0;   /* dans le flux flex, toujours en bas */
       width: 100%;
-      max-width: 480px;
       background: white;
       border-top: 1px solid #E2E8F0;
       display: flex;
       z-index: 100;
+      /* viewport-fit=cover + env() = respecte le Home Indicator iPhone */
       padding-bottom: env(safe-area-inset-bottom);
     }
     .nav-tab {
