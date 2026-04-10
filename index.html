@@ -244,24 +244,10 @@
       border-color: var(--brand);
       color: white;
     }
-    /* Filtre date Production */
-    .dep-date-btn {
-      flex-shrink: 0;
-      padding: 4px 12px;
-      border-radius: 20px;
-      border: 1.5px solid #CBD5E1;
-      background: white;
-      color: #64748B;
-      font-size: 12px;
-      font-weight: 500;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: all 0.15s;
-    }
-    .dep-date-btn.active {
-      background: #0F172A;
-      border-color: #0F172A;
-      color: white;
+    /* Toggle filtres actif */
+    #dep-filter-toggle.filters-active {
+      border-color: var(--brand);
+      color: var(--brand);
     }
     /* Segmented control (filtre statut arrivées) */
     .arr-seg-btn {
@@ -619,14 +605,6 @@
         oninput="App._onDepSearch(event)"
         style="font-size:13px;margin-bottom:8px;">
 
-      <!-- Filtre par période (date de début) -->
-      <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-bottom:2px;">
-        <button class="dep-date-btn active" data-dfilter="all"   onclick="App.setDepDateFilter('all')">Tout</button>
-        <button class="dep-date-btn"        data-dfilter="week"  onclick="App.setDepDateFilter('week')">Cette semaine</button>
-        <button class="dep-date-btn"        data-dfilter="month" onclick="App.setDepDateFilter('month')">Ce mois</button>
-        <button class="dep-date-btn"        data-dfilter="year"  onclick="App.setDepDateFilter('year')">Cette année</button>
-      </div>
-
       <!-- Filtres par statut (actifs seulement) -->
       <div id="dep-filters" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
         <button class="dep-filter-btn active" data-filter="all"        onclick="App.setDepFilter('all')">Tous</button>
@@ -636,8 +614,38 @@
         <button class="dep-filter-btn"        data-filter="deCote"     onclick="App.setDepFilter('deCote')">De côté</button>
       </div>
 
-      <!-- Filtres par type de module (générés dynamiquement) -->
-      <div id="dep-module-filters" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch;scrollbar-width:none;"></div>
+      <!-- Toggle filtres détaillés -->
+      <button id="dep-filter-toggle" onclick="App.toggleDepFilters()" style="display:flex;align-items:center;gap:6px;background:none;border:1.5px solid #CBD5E1;border-radius:10px;padding:5px 12px;font-size:12px;font-weight:600;color:#64748B;cursor:pointer;margin-bottom:6px;width:100%;">
+        <span style="flex:1;text-align:left;">⚙ Filtres détaillés</span>
+        <span id="dep-filter-badge" style="display:none;background:var(--brand);color:white;border-radius:20px;padding:1px 7px;font-size:11px;font-weight:700;"></span>
+        <span id="dep-filter-chevron" style="font-size:10px;transition:transform 0.2s;">▾</span>
+      </button>
+
+      <!-- Panneau filtres détaillés (collapsible) -->
+      <div id="dep-filters-panel" style="display:none;background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:10px;padding:12px;margin-bottom:8px;">
+
+        <!-- Plage de dates -->
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;font-weight:700;color:#94A3B8;letter-spacing:.04em;margin-bottom:6px;">PÉRIODE (date de début)</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <button id="dep-date-all-btn" onclick="App.resetDepDates()" style="padding:4px 12px;border-radius:16px;border:1.5px solid var(--brand);background:var(--brand);color:white;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">Tout</button>
+            <div style="display:flex;align-items:center;gap:4px;font-size:12px;color:#475569;">
+              <span style="font-weight:600;">Du</span>
+              <input type="date" id="dep-date-from" class="input-field" onchange="App.onDepDateChange()" style="font-size:12px;padding:4px 8px;width:130px;">
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;font-size:12px;color:#475569;">
+              <span style="font-weight:600;">Au</span>
+              <input type="date" id="dep-date-to" class="input-field" onchange="App.onDepDateChange()" style="font-size:12px;padding:4px 8px;width:130px;">
+            </div>
+          </div>
+        </div>
+
+        <!-- Filtre par type de module (généré dynamiquement) -->
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#94A3B8;letter-spacing:.04em;margin-bottom:6px;">TYPE DE MODULE</div>
+          <div id="dep-module-filters" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+        </div>
+      </div>
 
       <div id="dep-loading" style="text-align:center;padding:40px;display:none;">
         <div class="spinner"></div>
@@ -818,7 +826,9 @@ const S = {
   depSortAsc:      true,    // true = En cours→Terminé ; false = Terminé→En cours
   depScope:        'actifs',// 'actifs' | 'avecPartis'
   depSearch:       '',      // recherche texte libre
-  depDateFilter:   'all',   // 'all' | 'week' | 'month' | 'year'
+  depDateFrom:     '',      // 'YYYY-MM-DD' ou vide
+  depDateTo:       '',      // 'YYYY-MM-DD' ou vide
+  depFiltersOpen:  false,   // panneau filtres détaillés ouvert/fermé
 
   // Arrivals (depuis serveur)
   arrivalsData:    [],
@@ -1110,7 +1120,7 @@ const App = {
   /* ─ Departures ─ */
   async loadDepartures(force = false) {
     if (!force && S.depsLoaded) return;
-    if (force) { S.depsLoaded = false; S.depModuleFilter = 'all'; }
+    if (force) { S.depsLoaded = false; S.depModuleFilter = 'all'; S.depDateFrom = ''; S.depDateTo = ''; }
     document.getElementById('dep-loading').style.display   = 'block';
     document.getElementById('no-departures').style.display = 'none';
     document.getElementById('dep-list').innerHTML          = '';
@@ -1165,6 +1175,7 @@ const App = {
     document.querySelectorAll('.dep-module-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.mod === mod);
     });
+    this._updateDepFilterBadge();
     this._renderDepList();
   },
 
@@ -1177,28 +1188,58 @@ const App = {
     this._renderDepList();
   },
 
-  setDepDateFilter(period) {
-    S.depDateFilter = period;
-    document.querySelectorAll('.dep-date-btn').forEach(b => b.classList.toggle('active', b.dataset.dfilter === period));
+  toggleDepFilters() {
+    S.depFiltersOpen = !S.depFiltersOpen;
+    const panel   = document.getElementById('dep-filters-panel');
+    const chevron = document.getElementById('dep-filter-chevron');
+    if (panel)   panel.style.display   = S.depFiltersOpen ? 'block' : 'none';
+    if (chevron) chevron.style.transform = S.depFiltersOpen ? 'rotate(180deg)' : '';
+  },
+
+  onDepDateChange() {
+    S.depDateFrom = (document.getElementById('dep-date-from').value || '').trim();
+    S.depDateTo   = (document.getElementById('dep-date-to').value   || '').trim();
+    // Bouton "Tout" actif seulement si aucune date saisie
+    const allBtn = document.getElementById('dep-date-all-btn');
+    const hasDate = S.depDateFrom || S.depDateTo;
+    if (allBtn) {
+      allBtn.style.background   = hasDate ? 'white'          : 'var(--brand)';
+      allBtn.style.color        = hasDate ? 'var(--brand)'   : 'white';
+      allBtn.style.borderColor  = 'var(--brand)';
+    }
+    this._updateDepFilterBadge();
     this._renderDepList();
   },
 
+  resetDepDates() {
+    S.depDateFrom = ''; S.depDateTo = '';
+    const from = document.getElementById('dep-date-from');
+    const to   = document.getElementById('dep-date-to');
+    if (from) from.value = '';
+    if (to)   to.value   = '';
+    const allBtn = document.getElementById('dep-date-all-btn');
+    if (allBtn) { allBtn.style.background = 'var(--brand)'; allBtn.style.color = 'white'; }
+    this._updateDepFilterBadge();
+    this._renderDepList();
+  },
+
+  _updateDepFilterBadge() {
+    const toggle  = document.getElementById('dep-filter-toggle');
+    const badge   = document.getElementById('dep-filter-badge');
+    const hasDate = S.depDateFrom || S.depDateTo;
+    const hasMod  = S.depModuleFilter !== 'all';
+    const count   = (hasDate ? 1 : 0) + (hasMod ? 1 : 0);
+    if (badge)  { badge.textContent = count; badge.style.display = count ? 'inline' : 'none'; }
+    if (toggle) { toggle.classList.toggle('filters-active', count > 0); }
+  },
+
   _depDateOk(d) {
-    if (S.depDateFilter === 'all') return true;
+    if (!S.depDateFrom && !S.depDateTo) return true;
     const ref = d.debut || d.fin;
     if (!ref) return false;
-    const dt    = new Date(ref);
-    const now   = new Date();
-    if (S.depDateFilter === 'week') {
-      const mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay() + 6) % 7)); mon.setHours(0,0,0,0);
-      return dt >= mon;
-    }
-    if (S.depDateFilter === 'month') {
-      return dt.getFullYear() === now.getFullYear() && dt.getMonth() === now.getMonth();
-    }
-    if (S.depDateFilter === 'year') {
-      return dt.getFullYear() === now.getFullYear();
-    }
+    const dt = new Date(ref); dt.setHours(0,0,0,0);
+    if (S.depDateFrom && dt < new Date(S.depDateFrom)) return false;
+    if (S.depDateTo   && dt > new Date(S.depDateTo))   return false;
     return true;
   },
 
