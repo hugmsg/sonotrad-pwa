@@ -244,6 +244,25 @@
       border-color: var(--brand);
       color: white;
     }
+    /* Filtre date Production */
+    .dep-date-btn {
+      flex-shrink: 0;
+      padding: 4px 12px;
+      border-radius: 20px;
+      border: 1.5px solid #CBD5E1;
+      background: white;
+      color: #64748B;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .dep-date-btn.active {
+      background: #0F172A;
+      border-color: #0F172A;
+      color: white;
+    }
     /* Segmented control (filtre statut arrivées) */
     .arr-seg-btn {
       flex: 1;
@@ -542,6 +561,10 @@
               <input type="text" id="inp-agence" class="input-field" placeholder="ex: ST QUENTIN...">
             </div>
           </div>
+          <div style="margin-bottom:12px;">
+            <label class="label-sm" for="inp-longueur">Longueur (ml) <span style="color:#EF4444;">*</span></label>
+            <input type="number" id="inp-longueur" class="input-field" placeholder="ex: 12.5" step="0.1" min="0">
+          </div>
         </div>
 
         <div style="margin-bottom:12px;">
@@ -595,6 +618,14 @@
         placeholder="🔍 Code, chantier, module…"
         oninput="App._onDepSearch(event)"
         style="font-size:13px;margin-bottom:8px;">
+
+      <!-- Filtre par période (date de début) -->
+      <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-bottom:2px;">
+        <button class="dep-date-btn active" data-dfilter="all"   onclick="App.setDepDateFilter('all')">Tout</button>
+        <button class="dep-date-btn"        data-dfilter="week"  onclick="App.setDepDateFilter('week')">Cette semaine</button>
+        <button class="dep-date-btn"        data-dfilter="month" onclick="App.setDepDateFilter('month')">Ce mois</button>
+        <button class="dep-date-btn"        data-dfilter="year"  onclick="App.setDepDateFilter('year')">Cette année</button>
+      </div>
 
       <!-- Filtres par statut (actifs seulement) -->
       <div id="dep-filters" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
@@ -774,6 +805,7 @@ const S = {
     chauffeur: '', date: '', etat: '',
     // Champs LOXAM spécifiques
     moduleType: '', numModule: '', lv: '', agence: '',
+    longueur: '',
   },
 
   // Departure / Production
@@ -786,6 +818,7 @@ const S = {
   depSortAsc:      true,    // true = En cours→Terminé ; false = Terminé→En cours
   depScope:        'actifs',// 'actifs' | 'avecPartis'
   depSearch:       '',      // recherche texte libre
+  depDateFilter:   'all',   // 'all' | 'week' | 'month' | 'year'
 
   // Arrivals (depuis serveur)
   arrivalsData:    [],
@@ -1011,15 +1044,19 @@ const App = {
       S.arr.numModule  = document.getElementById('inp-num-module').value.trim();
       S.arr.lv         = document.getElementById('inp-lv').value.trim();
       S.arr.agence     = document.getElementById('inp-agence').value.trim();
+      S.arr.longueur   = document.getElementById('inp-longueur').value.trim();
       // Validation champs obligatoires LOXAM
       if (!S.arr.moduleType || !S.arr.numModule || !S.arr.lv || !S.arr.agence) {
         this.toast('Remplissez Type, Num module, LV et Agence'); return;
+      }
+      if (!S.arr.longueur) {
+        this.toast('La longueur (ml) est obligatoire'); return;
       }
     }
 
     S.submitting = true;
     this.showStep(4);
-    const { code, module, moduleType, numModule, lv, agence, chauffeur, date, etat, photos } = S.arr;
+    const { code, module, moduleType, numModule, lv, agence, chauffeur, date, etat, longueur, photos } = S.arr;
     const setMsg = (m, d='') => {
       document.getElementById('send-msg').textContent    = m;
       document.getElementById('send-detail').textContent = d;
@@ -1035,7 +1072,7 @@ const App = {
       }
 
       setMsg('Envoi en cours...', `Code ${code} · ${photos.length} photo(s)`);
-      const payload = { action: 'arrival', code, module, moduleType, numModule, lv, agence, chauffeur, date, etat, photos: photos.map(p => p.dataUrl) };
+      const payload = { action: 'arrival', code, module, moduleType, numModule, lv, agence, chauffeur, date, etat, longueur, photos: photos.map(p => p.dataUrl) };
       const res = await _post(S.apiUrl, payload);
       if (res.status !== 'ok' && res.status !== 'success') throw new Error(res.error || 'Réponse inattendue');
 
@@ -1140,6 +1177,31 @@ const App = {
     this._renderDepList();
   },
 
+  setDepDateFilter(period) {
+    S.depDateFilter = period;
+    document.querySelectorAll('.dep-date-btn').forEach(b => b.classList.toggle('active', b.dataset.dfilter === period));
+    this._renderDepList();
+  },
+
+  _depDateOk(d) {
+    if (S.depDateFilter === 'all') return true;
+    const ref = d.debut || d.fin;
+    if (!ref) return false;
+    const dt    = new Date(ref);
+    const now   = new Date();
+    if (S.depDateFilter === 'week') {
+      const mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay() + 6) % 7)); mon.setHours(0,0,0,0);
+      return dt >= mon;
+    }
+    if (S.depDateFilter === 'month') {
+      return dt.getFullYear() === now.getFullYear() && dt.getMonth() === now.getMonth();
+    }
+    if (S.depDateFilter === 'year') {
+      return dt.getFullYear() === now.getFullYear();
+    }
+    return true;
+  },
+
   _onDepSearch(e) {
     S.depSearch = (e.target.value || '').trim().toLowerCase();
     this._renderDepList();
@@ -1189,12 +1251,13 @@ const App = {
     const filtered = S.deps.filter(d => {
       const statusOk = S.depFilter === 'all' || this._depCurrentStatus(d) === S.depFilter;
       const moduleOk = S.depModuleFilter === 'all' || (d.module || '').trim() === S.depModuleFilter;
+      const dateOk   = this._depDateOk(d);
       const searchOk = !q ||
         (d.code       || '').toLowerCase().includes(q) ||
         (d.codeModule || '').toLowerCase().includes(q) ||
         (d.chantier   || '').toLowerCase().includes(q) ||
         (d.module     || '').toLowerCase().includes(q);
-      return statusOk && moduleOk && searchOk;
+      return statusOk && moduleOk && dateOk && searchOk;
     });
 
     // Badges statut — tiennent compte du filtre module ET de la recherche texte
