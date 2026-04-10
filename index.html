@@ -565,7 +565,13 @@
     <div class="view" id="view-departures">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
         <h2 style="font-size:20px;font-weight:700;color:#1E293B;">Production</h2>
-        <button onclick="App.loadDepartures(true)" style="background:#EBF5FB;color:var(--brand);border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻ Actualiser</button>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button id="dep-sort-btn" onclick="App.toggleDepSort()"
+            style="background:none;border:1px solid #E2E8F0;border-radius:16px;padding:4px 10px;font-size:11px;color:#64748B;cursor:pointer;display:flex;align-items:center;gap:3px;">
+            <span id="dep-sort-icon">↑</span><span id="dep-sort-label">En cours → Terminé</span>
+          </button>
+          <button onclick="App.loadDepartures(true)" style="background:#EBF5FB;color:var(--brand);border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻</button>
+        </div>
       </div>
 
       <!-- Sélecteur de portée : Actifs / Avec partis -->
@@ -589,14 +595,8 @@
         <button class="dep-filter-btn"        data-filter="deCote"     onclick="App.setDepFilter('deCote')">De côté</button>
       </div>
 
-      <!-- Bouton de tri + filtres modules -->
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;margin-bottom:2px;">
-        <div id="dep-module-filters" style="display:flex;gap:6px;overflow-x:auto;flex:1;-webkit-overflow-scrolling:touch;scrollbar-width:none;"></div>
-        <button id="dep-sort-btn" onclick="App.toggleDepSort()"
-          style="flex-shrink:0;margin-left:8px;background:none;border:1px solid #E2E8F0;border-radius:16px;padding:4px 10px;font-size:11px;color:#64748B;cursor:pointer;display:flex;align-items:center;gap:4px;">
-          <span id="dep-sort-icon">↑</span><span id="dep-sort-label">En cours → Terminé</span>
-        </button>
-      </div>
+      <!-- Filtres par type de module (générés dynamiquement) -->
+      <div id="dep-module-filters" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch;scrollbar-width:none;"></div>
 
       <div id="dep-loading" style="text-align:center;padding:40px;display:none;">
         <div class="spinner"></div>
@@ -1202,8 +1202,10 @@ const App = {
       btn.textContent = cnt > 0 ? `${label} (${cnt})` : label;
     });
 
-    // ── Partis filtrés par recherche texte ────────────────────────────────
+    // ── Partis filtrés par type de module + recherche texte ──────────────
     const filteredPartis = S.depScope === 'avecPartis' ? S.archive.filter(d => {
+      const moduleOk = S.depModuleFilter === 'all' || (d.module || '').trim() === S.depModuleFilter;
+      if (!moduleOk) return false;
       if (!q) return true;
       return (d.code       || '').toLowerCase().includes(q) ||
              (d.codeModule || '').toLowerCase().includes(q) ||
