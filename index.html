@@ -593,12 +593,6 @@
         </div>
       </div>
 
-      <!-- Sélecteur de portée : Actifs / Avec partis -->
-      <div class="scope-seg" style="margin-bottom:10px;">
-        <button class="scope-btn active" data-scope="actifs"     onclick="App.setDepScope('actifs')">Actifs</button>
-        <button class="scope-btn"        data-scope="avecPartis" onclick="App.setDepScope('avecPartis')">Avec partis</button>
-      </div>
-
       <!-- Recherche texte (visible en permanence) -->
       <input type="search" id="dep-search" class="input-field"
         placeholder="🔍 Code, chantier, module…"
@@ -623,6 +617,15 @@
 
       <!-- Panneau filtres détaillés (collapsible) -->
       <div id="dep-filters-panel" style="display:none;background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:10px;padding:12px;margin-bottom:8px;">
+
+        <!-- Portée : Actifs / Avec partis -->
+        <div style="margin-bottom:12px;">
+          <div style="font-size:11px;font-weight:700;color:#94A3B8;letter-spacing:.04em;margin-bottom:6px;">PORTÉE</div>
+          <div class="scope-seg">
+            <button class="scope-btn active" data-scope="actifs"     onclick="App.setDepScope('actifs')">Actifs</button>
+            <button class="scope-btn"        data-scope="avecPartis" onclick="App.setDepScope('avecPartis')">Avec partis</button>
+          </div>
+        </div>
 
         <!-- Plage de dates -->
         <div style="margin-bottom:10px;">
@@ -1224,18 +1227,20 @@ const App = {
   },
 
   _updateDepFilterBadge() {
-    const toggle  = document.getElementById('dep-filter-toggle');
-    const badge   = document.getElementById('dep-filter-badge');
-    const hasDate = S.depDateFrom || S.depDateTo;
-    const hasMod  = S.depModuleFilter !== 'all';
-    const count   = (hasDate ? 1 : 0) + (hasMod ? 1 : 0);
+    const toggle   = document.getElementById('dep-filter-toggle');
+    const badge    = document.getElementById('dep-filter-badge');
+    const hasDate  = S.depDateFrom || S.depDateTo;
+    const hasMod   = S.depModuleFilter !== 'all';
+    const hasScope = S.depScope === 'avecPartis';
+    const count    = (hasDate ? 1 : 0) + (hasMod ? 1 : 0) + (hasScope ? 1 : 0);
     if (badge)  { badge.textContent = count; badge.style.display = count ? 'inline' : 'none'; }
     if (toggle) { toggle.classList.toggle('filters-active', count > 0); }
   },
 
-  _depDateOk(d) {
+  _depDateOk(d, preferFin = false) {
     if (!S.depDateFrom && !S.depDateTo) return true;
-    const ref = d.debut || d.fin;
+    // Pour les Partis on filtre sur la date de départ (fin), pour les actifs sur debut
+    const ref = preferFin ? (d.fin || d.debut) : (d.debut || d.fin);
     if (!ref) return false;
     const dt = new Date(ref); dt.setHours(0,0,0,0);
     if (S.depDateFrom && dt < new Date(S.depDateFrom)) return false;
@@ -1251,6 +1256,7 @@ const App = {
   setDepScope(scope) {
     S.depScope = scope;
     document.querySelectorAll('.scope-btn').forEach(b => b.classList.toggle('active', b.dataset.scope === scope));
+    this._updateDepFilterBadge();
     // Charger les archives si pas encore fait
     if (scope === 'avecPartis' && !S.archiveLoaded) this.loadArchive();
     else this._renderDepList();
@@ -1323,10 +1329,11 @@ const App = {
       btn.textContent = cnt > 0 ? `${label} (${cnt})` : label;
     });
 
-    // ── Partis filtrés par type de module + recherche texte ──────────────
+    // ── Partis filtrés par type de module + date (fin) + recherche texte ──
     const filteredPartis = S.depScope === 'avecPartis' ? S.archive.filter(d => {
       const moduleOk = S.depModuleFilter === 'all' || (d.module || '').trim() === S.depModuleFilter;
       if (!moduleOk) return false;
+      if (!this._depDateOk(d, true)) return false;  // filtre par date de départ (fin)
       if (!q) return true;
       return (d.code       || '').toLowerCase().includes(q) ||
              (d.codeModule || '').toLowerCase().includes(q) ||
