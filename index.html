@@ -16,7 +16,7 @@
 
     * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
 
-    html, body { height: 100%; }
+    html, body { height: 100%; background: white; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -30,8 +30,8 @@
     .app {
       max-width: 480px;
       margin: 0 auto;
-      height: 100dvh;
       height: -webkit-fill-available; /* fallback iOS < 15.4 */
+      height: 100dvh;                 /* iOS 15.4+ : inclut les safe areas */
       display: flex;
       flex-direction: column;
       overflow: hidden;
