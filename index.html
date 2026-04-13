@@ -1890,16 +1890,18 @@ const App = {
     if (btn) { btn.disabled = true; btn.textContent = 'Envoi...'; }
     const code = d.code;
     try {
+      let res = null;
       if (S.apiUrl) {
-        const res = await _post(S.apiUrl, { action: 'departure_photo', code, photos: S.depPhotos.map(p => p.dataUrl) });
+        res = await _post(S.apiUrl, { action: 'departure_photo', code, photos: S.depPhotos.map(p => p.dataUrl) });
       }
       this._saveHistory({ code, type: 'departure', photos: S.depPhotos.length, module: 'planning', date: todayStr() });
       // Mise à jour locale immédiate depuis la réponse serveur (logEntry) ou par calcul
       const entry = res && res.logEntry ? res.logEntry : { count: (S.depPhotosLog[code]?.count || 0) + S.depPhotos.length, date: todayStr() };
       S.depPhotosLog[code] = entry;
+      S.depPhotos = []; // vider la grille
       this.toast('✓ Photos enregistrées !');
       await _sleep(1100);
-      S.depsLoaded = false; // Force refresh next time
+      S.depsLoaded = false;
       this.go('departures');
     } catch(e) {
       this.toast('Erreur : ' + e.message);
