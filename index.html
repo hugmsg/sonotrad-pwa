@@ -783,10 +783,11 @@ const MODULES = {
 };
 
 const SK = {
-  API:      'snt_api_url',
-  CODES:    'snt_codes',
-  CODES_TS: 'snt_codes_ts',
-  HISTORY:  'snt_history',
+  API:       'snt_api_url',
+  CODES:     'snt_codes',
+  CODES_TS:  'snt_codes_ts',
+  HISTORY:   'snt_history',
+  DEP_PHOTOS:'snt_dep_photos', // { code: { count, date } }
 };
 
 const CODES_TTL = 30 * 60 * 1000; // 30 min
@@ -806,7 +807,8 @@ const S = {
   apiUrl:      localStorage.getItem(SK.API) || '',
   codes:       new Set(JSON.parse(localStorage.getItem(SK.CODES) || '[]')),
   codesTs:     +(localStorage.getItem(SK.CODES_TS) || 0),
-  history:     JSON.parse(localStorage.getItem(SK.HISTORY) || '[]'),
+  history:     JSON.parse(localStorage.getItem(SK.HISTORY)    || '[]'),
+  depPhotosLog:JSON.parse(localStorage.getItem(SK.DEP_PHOTOS) || '{}'),
   online:      navigator.onLine,
 
   // Arrival form
@@ -1382,6 +1384,7 @@ const App = {
             <div style="display:flex;align-items:center;gap:4px;overflow:hidden;">
               ${chips}
               ${dur ? `<span style="font-size:10px;color:#94A3B8;white-space:nowrap;flex-shrink:0;">⏱ ${dur}</span>` : ''}
+              ${S.depPhotosLog[code] ? `<span style="font-size:10px;background:#F0FDF4;color:#166534;border-radius:6px;padding:1px 5px;white-space:nowrap;flex-shrink:0;">📷 ${S.depPhotosLog[code].count}</span>` : ''}
             </div>
           </div>
           <span style="color:#CBD5E1;font-size:16px;flex-shrink:0;">›</span>
@@ -1464,7 +1467,10 @@ const App = {
       </div>
       ${!S.depFromArchive ? `
       <div class="card">
-        <p style="font-size:14px;font-weight:600;color:#1E293B;margin-bottom:10px;">Photos du départ</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <p style="font-size:14px;font-weight:600;color:#1E293B;margin:0;">Photos du départ</p>
+          ${S.depPhotosLog[d.code] ? `<span style="font-size:11px;background:#F0FDF4;color:#166534;border-radius:6px;padding:2px 8px;font-weight:600;">📷 ${S.depPhotosLog[d.code].count} photo${S.depPhotosLog[d.code].count > 1 ? 's' : ''} · ${_fmtDate(S.depPhotosLog[d.code].date)}</span>` : ''}
+        </div>
         <div class="photo-grid" id="dep-photo-grid" style="margin-bottom:10px;"></div>
         <input type="file" id="dep-photo-input" accept="image/*" multiple style="display:none;" onchange="App.handlePhotos(event,'dep')">
         <p id="dep-photo-count" style="font-size:12px;color:#64748B;margin-bottom:10px;">0 photo ajoutée</p>
@@ -1874,6 +1880,10 @@ const App = {
         await _post(S.apiUrl, { action: 'departure_photo', code, photos: S.depPhotos.map(p => p.dataUrl) });
       }
       this._saveHistory({ code, type: 'departure', photos: S.depPhotos.length, module: 'planning', date: todayStr() });
+      // Mémoriser localement : nb photos + date pour badge sur la carte
+      const prev = S.depPhotosLog[code] || { count: 0 };
+      S.depPhotosLog[code] = { count: prev.count + S.depPhotos.length, date: todayStr() };
+      localStorage.setItem(SK.DEP_PHOTOS, JSON.stringify(S.depPhotosLog));
       this.toast('✓ Photos enregistrées !');
       await _sleep(1100);
       S.depsLoaded = false; // Force refresh next time
