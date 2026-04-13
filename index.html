@@ -783,11 +783,10 @@ const MODULES = {
 };
 
 const SK = {
-  API:       'snt_api_url',
-  CODES:     'snt_codes',
-  CODES_TS:  'snt_codes_ts',
-  HISTORY:   'snt_history',
-  DEP_PHOTOS:'snt_dep_photos', // { code: { count, date } }
+  API:      'snt_api_url',
+  CODES:    'snt_codes',
+  CODES_TS: 'snt_codes_ts',
+  HISTORY:  'snt_history',
 };
 
 const CODES_TTL = 30 * 60 * 1000; // 30 min
@@ -807,8 +806,8 @@ const S = {
   apiUrl:      localStorage.getItem(SK.API) || '',
   codes:       new Set(JSON.parse(localStorage.getItem(SK.CODES) || '[]')),
   codesTs:     +(localStorage.getItem(SK.CODES_TS) || 0),
-  history:     JSON.parse(localStorage.getItem(SK.HISTORY)    || '[]'),
-  depPhotosLog:JSON.parse(localStorage.getItem(SK.DEP_PHOTOS) || '{}'),
+  history:      JSON.parse(localStorage.getItem(SK.HISTORY) || '[]'),
+  depPhotosLog: {},   // chargé depuis Drive au démarrage (dep_photos_log.json)
   online:      navigator.onLine,
 
   // Arrival form
@@ -1136,6 +1135,9 @@ const App = {
       return;
     }
 
+    // Chargement en parallèle : données production + log photos départ
+    this._loadDepPhotosLog();
+
     try {
       const url  = S.apiUrl + '?action=production';
       const resp = await _fetchWithTimeout(url, {}, 90000);
@@ -1191,6 +1193,18 @@ const App = {
     if (icon)  icon.textContent  = S.depSortAsc ? '↑' : '↓';
     if (label) label.textContent = S.depSortAsc ? 'En cours → Terminé' : 'Terminé → En cours';
     this._renderDepList();
+  },
+
+  async _loadDepPhotosLog() {
+    if (!S.apiUrl) return;
+    try {
+      const resp = await _fetchWithTimeout(S.apiUrl + '?action=dep_photos_log', {}, 10000);
+      const data = await resp.json();
+      if (data.status === 'ok' && data.log) {
+        S.depPhotosLog = data.log;
+        if (S.depsLoaded) this._renderDepList(); // rafraîchit les badges si liste déjà affichée
+      }
+    } catch(e) { /* silencieux : les badges resteront vides */ }
   },
 
   toggleDepFilters() {
@@ -1877,13 +1891,12 @@ const App = {
     const code = d.code;
     try {
       if (S.apiUrl) {
-        await _post(S.apiUrl, { action: 'departure_photo', code, photos: S.depPhotos.map(p => p.dataUrl) });
+        const res = await _post(S.apiUrl, { action: 'departure_photo', code, photos: S.depPhotos.map(p => p.dataUrl) });
       }
       this._saveHistory({ code, type: 'departure', photos: S.depPhotos.length, module: 'planning', date: todayStr() });
-      // Mémoriser localement : nb photos + date pour badge sur la carte
-      const prev = S.depPhotosLog[code] || { count: 0 };
-      S.depPhotosLog[code] = { count: prev.count + S.depPhotos.length, date: todayStr() };
-      localStorage.setItem(SK.DEP_PHOTOS, JSON.stringify(S.depPhotosLog));
+      // Mise à jour locale immédiate depuis la réponse serveur (logEntry) ou par calcul
+      const entry = res && res.logEntry ? res.logEntry : { count: (S.depPhotosLog[code]?.count || 0) + S.depPhotos.length, date: todayStr() };
+      S.depPhotosLog[code] = entry;
       this.toast('✓ Photos enregistrées !');
       await _sleep(1100);
       S.depsLoaded = false; // Force refresh next time
