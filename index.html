@@ -514,8 +514,113 @@
     .badge-soon   { background: #F1F5F9; color: #94A3B8; }
     #activity-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
   </style>
+  <style>
+    /* ═══════════════════════════════════════════
+       ÉCRAN DE CONNEXION — OVERLAY PIN
+       ═══════════════════════════════════════════ */
+    #login-overlay {
+      position: fixed; inset: 0; z-index: 9999;
+      background: linear-gradient(160deg, #1A5276 0%, #154360 100%);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 24px;
+      padding-bottom: calc(24px + env(safe-area-inset-bottom));
+    }
+    .pin-dot {
+      width: 15px; height: 15px; border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.45);
+      background: transparent;
+      transition: background .12s, border-color .12s, transform .12s;
+    }
+    .pin-dot.filled {
+      background: white; border-color: white;
+      transform: scale(1.1);
+    }
+    @keyframes pin-shake {
+      0%,100% { transform: translateX(0); }
+      20%,60% { transform: translateX(-8px); }
+      40%,80% { transform: translateX(8px); }
+    }
+    .pin-dots-row.shake { animation: pin-shake .38s ease; }
+    .pin-key {
+      height: 66px; border-radius: 14px; border: none;
+      background: rgba(255,255,255,0.13);
+      color: white; font-size: 22px; font-weight: 600;
+      cursor: pointer; transition: background .1s;
+      -webkit-tap-highlight-color: transparent;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .pin-key:active, .pin-key:focus { background: rgba(255,255,255,0.28); outline: none; }
+    .pin-key-del { font-size: 20px; }
+    .pin-key-empty { visibility: hidden; }
+    /* Panneau URL (config première utilisation) */
+    #login-setup-panel {
+      width: 100%; max-width: 340px; margin-top: 20px;
+      background: rgba(255,255,255,0.08); border-radius: 14px;
+      padding: 14px 16px; display: none;
+    }
+  </style>
 </head>
 <body>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     OVERLAY CONNEXION — affiché avant toute vue, masqué après auth
+     ════════════════════════════════════════════════════════════════════════ -->
+<div id="login-overlay">
+
+  <!-- Logo -->
+  <div style="text-align:center;margin-bottom:32px;">
+    <div style="font-size:52px;line-height:1;margin-bottom:14px;">🏢</div>
+    <h1 style="color:white;font-size:24px;font-weight:800;margin:0 0 8px;letter-spacing:-.3px;">SONOTRAD</h1>
+    <p id="pin-prompt" style="color:rgba(255,255,255,0.65);font-size:14px;margin:0;">Entrez votre code PIN</p>
+  </div>
+
+  <!-- Indicateurs de saisie (4 points) -->
+  <div class="pin-dots-row" id="pin-dots-row" style="display:flex;gap:18px;margin-bottom:14px;">
+    <div class="pin-dot" id="pdot-0"></div>
+    <div class="pin-dot" id="pdot-1"></div>
+    <div class="pin-dot" id="pdot-2"></div>
+    <div class="pin-dot" id="pdot-3"></div>
+  </div>
+
+  <!-- Message d'erreur -->
+  <div id="pin-error-msg" style="color:#FCA5A5;font-size:13px;min-height:22px;margin-bottom:18px;text-align:center;font-weight:500;"></div>
+
+  <!-- Clavier numérique -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;max-width:300px;">
+    <button class="pin-key" onclick="App._pinPress('1')">1</button>
+    <button class="pin-key" onclick="App._pinPress('2')">2</button>
+    <button class="pin-key" onclick="App._pinPress('3')">3</button>
+    <button class="pin-key" onclick="App._pinPress('4')">4</button>
+    <button class="pin-key" onclick="App._pinPress('5')">5</button>
+    <button class="pin-key" onclick="App._pinPress('6')">6</button>
+    <button class="pin-key" onclick="App._pinPress('7')">7</button>
+    <button class="pin-key" onclick="App._pinPress('8')">8</button>
+    <button class="pin-key" onclick="App._pinPress('9')">9</button>
+    <button class="pin-key pin-key-empty" disabled aria-hidden="true"></button>
+    <button class="pin-key" onclick="App._pinPress('0')">0</button>
+    <button class="pin-key pin-key-del" onclick="App._pinDel()">⌫</button>
+  </div>
+
+  <!-- Config URL (première utilisation) -->
+  <button onclick="App._toggleLoginSetup()" style="margin-top:22px;background:none;border:none;color:rgba(255,255,255,0.4);font-size:12px;cursor:pointer;padding:4px 8px;">
+    ⚙ Configurer l'URL API
+  </button>
+  <div id="login-setup-panel">
+    <p style="color:rgba(255,255,255,0.7);font-size:12px;font-weight:600;margin:0 0 8px;">URL du proxy Vercel ou AppScript</p>
+    <input type="url" id="login-url-input" class="input-field"
+      placeholder="https://…vercel.app/api/proxy"
+      style="font-size:12px;margin-bottom:8px;background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.2);color:white;"
+      onfocus="this.style.borderColor='rgba(255,255,255,0.6)'"
+      onblur="this.style.borderColor='rgba(255,255,255,0.2)'">
+    <button onclick="App._saveLoginUrl()"
+      style="width:100%;background:rgba(255,255,255,0.2);border:none;color:white;padding:10px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;">
+      Enregistrer
+    </button>
+  </div>
+
+</div>
+
 <div class="app" id="app">
   <!-- ══════════════════════════════════════════════════════════════════════
        SIDEBAR / BOTTOM NAV
@@ -928,6 +1033,26 @@
     <div class="view" id="view-settings">
       <h2 style="font-size:20px;font-weight:700;color:#1E293B;margin-bottom:18px;">Réglages</h2>
       <div class="settings-grid">
+
+      <!-- Carte utilisateur connecté -->
+      <div class="card" style="margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+          <div style="width:44px;height:44px;border-radius:50%;background:var(--brand);display:flex;align-items:center;justify-content:center;font-size:20px;color:white;flex-shrink:0;">👤</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:15px;font-weight:700;color:#1E293B;" id="settings-user-name">—</div>
+            <div style="font-size:12px;color:#64748B;margin-top:2px;" id="settings-user-role">—</div>
+          </div>
+        </div>
+        <button onclick="App._showChangePin()"
+          style="width:100%;background:#F8FAFC;border:1.5px solid #E2E8F0;color:#475569;padding:10px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:8px;">
+          🔑 Changer mon code PIN
+        </button>
+        <button onclick="App.logout()"
+          style="width:100%;background:#FEF2F2;border:1.5px solid #FECACA;color:#991B1B;padding:10px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;">
+          ↪ Se déconnecter
+        </button>
+      </div>
+
       <div class="card" style="margin-bottom:12px;">
         <p style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:14px;">🔗 URL de l'API</p>
         <div style="margin-bottom:10px;">
@@ -993,6 +1118,13 @@ const ARR_SOURCES = {
 };
 // ── STATE ────────────────────────────────────────────────────────────────────
 const S = {
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  currentUser:  null,      // { prenom, nom, role, activites } — stocké en localStorage
+  pinBuffer:    '',        // digits saisis (jamais envoyés en clair)
+  pinMode:      'login',   // 'login' | 'change_old' | 'change_new' | 'change_confirm'
+  _pinNewHash:  null,      // hash intermédiaire lors du changement de PIN
+  _pinOldHash:  null,
+  // ── Navigation ────────────────────────────────────────────────────────────
   view:        'home',
   prevView:    'home',
   activity:    null,   // null = accueil | 'loxam' | 'bcb' | 'agora' | 'stockage'
@@ -1134,6 +1266,179 @@ const App = {
     const w = document.getElementById('api-warning');
     if (w) w.style.display = (!S.apiUrl && v === 'arrivals') ? 'block' : 'none';
   },
+  /* ─ Auth / PIN ─ */
+
+  /** Vérifie localStorage au démarrage — affiche ou masque l'overlay. */
+  _initAuth() {
+    const stored = localStorage.getItem('snt_user');
+    if (stored) {
+      try {
+        S.currentUser = JSON.parse(stored);
+        document.getElementById('login-overlay').style.display = 'none';
+        this._render();
+        return;
+      } catch(e) { localStorage.removeItem('snt_user'); }
+    }
+    // Pré-remplir l'URL si déjà connue
+    if (S.apiUrl) document.getElementById('login-url-input').value = S.apiUrl;
+    document.getElementById('login-overlay').style.display = 'flex';
+  },
+
+  /** Hash SHA-256 côté client via Web Crypto API. */
+  async _hashPin(pin) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+  },
+
+  /** Ajoute un chiffre au buffer et soumet automatiquement à 4 chiffres. */
+  _pinPress(d) {
+    if (S.pinBuffer.length >= 4) return;
+    S.pinBuffer += d;
+    this._updatePinDots();
+    if (S.pinBuffer.length === 4) setTimeout(() => this._submitPin(), 80);
+  },
+
+  /** Supprime le dernier chiffre. */
+  _pinDel() {
+    if (!S.pinBuffer.length) return;
+    S.pinBuffer = S.pinBuffer.slice(0, -1);
+    this._updatePinDots();
+  },
+
+  /** Met à jour l'affichage des 4 points. */
+  _updatePinDots() {
+    [0,1,2,3].forEach(i => {
+      const d = document.getElementById('pdot-' + i);
+      if (d) d.classList.toggle('filled', i < S.pinBuffer.length);
+    });
+  },
+
+  /** Affiche un message d'erreur + animation shake + vide le buffer. */
+  _pinError(msg) {
+    document.getElementById('pin-error-msg').textContent = msg;
+    S.pinBuffer = '';
+    this._updatePinDots();
+    const row = document.getElementById('pin-dots-row');
+    if (row) {
+      row.classList.add('shake');
+      setTimeout(() => row.classList.remove('shake'), 400);
+    }
+  },
+
+  /** Soumet le PIN selon le mode courant (login / change). */
+  async _submitPin() {
+    if (!S.apiUrl) {
+      this._pinError('URL API non configurée — cliquez sur ⚙ ci-dessous');
+      return;
+    }
+    const hash = await this._hashPin(S.pinBuffer);
+    S.pinBuffer = '';
+    this._updatePinDots();
+    document.getElementById('pin-error-msg').textContent = '';
+
+    if (S.pinMode === 'login') {
+      // ── Authentification ──────────────────────────────────────────────
+      try {
+        const fd = new FormData();
+        fd.append('payload', JSON.stringify({ action:'auth', pinHash: hash }));
+        const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+        const data = await resp.json();
+        if (data.status === 'ok') {
+          S.currentUser = data.user;
+          localStorage.setItem('snt_user', JSON.stringify(data.user));
+          document.getElementById('login-overlay').style.display = 'none';
+          this._render();
+        } else {
+          this._pinError(data.error || 'Code PIN incorrect');
+        }
+      } catch(e) { this._pinError('Erreur de connexion — réessayez'); }
+
+    } else if (S.pinMode === 'change_old') {
+      // ── Vérification ancien PIN avant changement ───────────────────────
+      try {
+        const fd = new FormData();
+        fd.append('payload', JSON.stringify({ action:'auth', pinHash: hash }));
+        const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+        const data = await resp.json();
+        if (data.status === 'ok') {
+          S._pinOldHash = hash;
+          S.pinMode = 'change_new';
+          document.getElementById('pin-prompt').textContent = 'Nouveau code PIN (4 chiffres)';
+        } else {
+          this._pinError('Code PIN actuel incorrect');
+        }
+      } catch(e) { this._pinError('Erreur réseau — réessayez'); }
+
+    } else if (S.pinMode === 'change_new') {
+      // ── Saisie du nouveau PIN ─────────────────────────────────────────
+      S._pinNewHash = hash;
+      S.pinMode = 'change_confirm';
+      document.getElementById('pin-prompt').textContent = 'Confirmez le nouveau PIN';
+
+    } else if (S.pinMode === 'change_confirm') {
+      // ── Confirmation + envoi ──────────────────────────────────────────
+      if (hash !== S._pinNewHash) {
+        this._pinError('Les codes ne correspondent pas');
+        S.pinMode = 'change_new';
+        document.getElementById('pin-prompt').textContent = 'Nouveau code PIN (4 chiffres)';
+        return;
+      }
+      try {
+        const fd = new FormData();
+        fd.append('payload', JSON.stringify({ action:'change_pin', oldPinHash: S._pinOldHash, newPinHash: S._pinNewHash }));
+        const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+        const data = await resp.json();
+        if (data.status === 'ok') {
+          S.pinMode = 'login'; S._pinOldHash = null; S._pinNewHash = null;
+          document.getElementById('pin-prompt').textContent = 'Entrez votre code PIN';
+          document.getElementById('login-overlay').style.display = 'none';
+          this.toast('✓ Code PIN modifié avec succès !');
+        } else {
+          this._pinError(data.error || 'Erreur lors du changement');
+          S.pinMode = 'login';
+          document.getElementById('pin-prompt').textContent = 'Entrez votre code PIN';
+        }
+      } catch(e) { this._pinError('Erreur réseau — réessayez'); }
+    }
+  },
+
+  /** Lance le flux de changement de PIN depuis les réglages. */
+  _showChangePin() {
+    S.pinMode = 'change_old'; S.pinBuffer = ''; S._pinOldHash = null; S._pinNewHash = null;
+    document.getElementById('pin-prompt').textContent = 'Entrez votre PIN actuel';
+    document.getElementById('pin-error-msg').textContent = '';
+    this._updatePinDots();
+    document.getElementById('login-overlay').style.display = 'flex';
+  },
+
+  /** Déconnexion : vide la session locale et réaffiche l'overlay. */
+  logout() {
+    localStorage.removeItem('snt_user');
+    S.currentUser = null; S.pinBuffer = ''; S.pinMode = 'login';
+    document.getElementById('pin-prompt').textContent = 'Entrez votre code PIN';
+    document.getElementById('pin-error-msg').textContent = '';
+    this._updatePinDots();
+    document.getElementById('login-overlay').style.display = 'flex';
+  },
+
+  /** Affiche/masque le panneau de config URL depuis l'overlay. */
+  _toggleLoginSetup() {
+    const p = document.getElementById('login-setup-panel');
+    p.style.display = p.style.display === 'block' ? 'none' : 'block';
+    if (p.style.display === 'block') document.getElementById('login-url-input').focus();
+  },
+
+  /** Sauvegarde l'URL depuis l'overlay de connexion. */
+  _saveLoginUrl() {
+    const val = document.getElementById('login-url-input').value.trim();
+    if (!val) return;
+    S.apiUrl = val;
+    localStorage.setItem(SK.API, val);
+    document.getElementById('login-setup-panel').style.display = 'none';
+    document.getElementById('pin-error-msg').textContent = '';
+    this.toast('✓ URL enregistrée');
+  },
+
   /* ─ Arrivals list ─ */
   _renderArrivalList() {
     const list = document.getElementById('arrival-list');
@@ -1304,7 +1609,8 @@ const App = {
         return;
       }
       setMsg('Envoi en cours...', `Code ${code} · ${photos.length} photo(s)`);
-      const payload = { action: 'arrival', code, module, moduleType, numModule, lv, agence, chauffeur, date, etat, longueur, photos: photos.map(p => p.dataUrl) };
+      const user = S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}`.trim() : '';
+      const payload = { action: 'arrival', code, module, moduleType, numModule, lv, agence, chauffeur, date, etat, longueur, photos: photos.map(p => p.dataUrl), saisie_par: user };
       const res = await _post(S.apiUrl, payload);
       if (res.status !== 'ok' && res.status !== 'success') throw new Error(res.error || 'Réponse inattendue');
       setMsg('✓ Enregistré !', `Code ${code}`);
@@ -2110,7 +2416,7 @@ const App = {
     try {
       let res = null;
       if (S.apiUrl) {
-        res = await _post(S.apiUrl, { action: 'departure_photo', code, photos: S.depPhotos.map(p => p.dataUrl) });
+        res = await _post(S.apiUrl, { action: 'departure_photo', code, photos: S.depPhotos.map(p => p.dataUrl), saisie_par: S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}`.trim() : '' });
       }
       this._saveHistory({ code, type: 'departure', photos: S.depPhotos.length, module: 'planning', date: todayStr() });
       // Mise à jour locale immédiate depuis la réponse serveur (logEntry) ou par calcul
@@ -2152,7 +2458,7 @@ const App = {
     try {
       let res = null;
       if (S.apiUrl) {
-        res = await _post(S.apiUrl, { action: 'arrival_photo', code, photos: S.arrPhotos.map(p => p.dataUrl) });
+        res = await _post(S.apiUrl, { action: 'arrival_photo', code, photos: S.arrPhotos.map(p => p.dataUrl), saisie_par: S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}`.trim() : '' });
       }
       this._saveHistory({ code, type: 'arrival_extra', photos: S.arrPhotos.length, module: a.source || 'loxam', date: todayStr() });
       // Mise à jour locale immédiate
@@ -2241,9 +2547,16 @@ const App = {
   },
   /* ─ Settings ─ */
   _fillSettings() {
-    document.getElementById('set-url').value        = S.apiUrl;
+    document.getElementById('set-url').value          = S.apiUrl;
     document.getElementById('info-codes').textContent = `Codes en cache : ${S.codes.size}`;
     document.getElementById('info-hist').textContent  = `Entrées historique : ${S.history.length}`;
+    // Infos utilisateur
+    const u = S.currentUser;
+    if (u) {
+      const roleLabels = { admin:'Administrateur', gestionnaire:'Gestionnaire', chauffeur:'Chauffeur' };
+      document.getElementById('settings-user-name').textContent = `${u.prenom} ${u.nom}`;
+      document.getElementById('settings-user-role').textContent = roleLabels[u.role] || u.role;
+    }
   },
   saveSettings() {
     const url = document.getElementById('set-url').value.trim();
@@ -2401,8 +2714,8 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW:', e));
 }
 document.addEventListener('DOMContentLoaded', () => {
-  // Démarre sur l'écran d'accueil
-  App._render();
+  // Vérifie la session → affiche login ou accueil
+  App._initAuth();
   _updateOnline();
   // Pré-chargement des codes en arrière-plan si le cache est périmé
   if (S.apiUrl && Date.now() - S.codesTs > CODES_TTL) {
