@@ -465,7 +465,54 @@
 
       /* ── Filtres production : meilleur affichage large ── */
       #dep-filters { flex-wrap: wrap; }
+
+      /* ── Home : grille 4 colonnes desktop ── */
+      #activity-grid { grid-template-columns: repeat(4, minmax(160px, 1fr)); }
+      .home-hero { padding: 32px 0 36px; }
     }
+  </style>
+  <style>
+    /* ═══════════════════════════════════════════
+       ÉCRAN D'ACCUEIL — CARTES D'ACTIVITÉ
+       ═══════════════════════════════════════════ */
+    .activity-card {
+      background: white;
+      border-radius: 16px;
+      padding: 20px 16px 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      border: 2px solid transparent;
+      transition: border-color .15s, transform .12s, box-shadow .15s;
+    }
+    .activity-card[data-ready="true"] {
+      cursor: pointer;
+    }
+    .activity-card[data-ready="true"]:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(46,134,193,0.14);
+    }
+    .activity-card[data-ready="true"]:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    }
+    .activity-card[data-ready="false"] {
+      opacity: 0.55;
+      cursor: default;
+    }
+    .activity-icon { font-size: 38px; line-height: 1; margin-bottom: 8px; }
+    .activity-name { font-size: 15px; font-weight: 700; color: #1E293B; }
+    .activity-desc { font-size: 12px; color: #64748B; margin-bottom: 8px; flex: 1; }
+    .activity-badge {
+      font-size: 11px; font-weight: 600;
+      padding: 3px 9px; border-radius: 20px;
+      align-self: flex-start;
+    }
+    .badge-active { background: #D1FAE5; color: #065F46; }
+    .badge-soon   { background: #F1F5F9; color: #94A3B8; }
+    #activity-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
   </style>
 </head>
 <body>
@@ -474,13 +521,14 @@
        SIDEBAR / BOTTOM NAV
        (avant main-wrapper dans le DOM pour flex-row desktop)
        ══════════════════════════════════════════════════════════════════════ -->
-  <nav class="bottom-nav">
-    <!-- Logo sidebar (visible desktop uniquement, masqué mobile via CSS) -->
-    <div class="sidebar-brand">
+  <nav class="bottom-nav" id="main-nav">
+    <!-- Logo sidebar (desktop uniquement) — cliquer revient à l'accueil -->
+    <div class="sidebar-brand" onclick="App.goHome()" style="cursor:pointer;" title="Retour à l'accueil">
       <strong>SONOTRAD</strong>
-      <span>Arrivées &amp; Départs</span>
+      <span id="sidebar-activity-label">Arrivées &amp; Départs</span>
+      <span style="font-size:10px;color:#94A3B8;margin-top:2px;">← Changer d'activité</span>
     </div>
-    <button class="nav-tab active" data-tab="departures" onclick="App.go('departures')">
+    <button class="nav-tab" data-tab="departures" onclick="App.go('departures')">
       <span class="icon">🏭</span><span>Production</span>
     </button>
     <button class="nav-tab" data-tab="arrivals" onclick="App.go('arrivals')">
@@ -488,6 +536,10 @@
     </button>
     <button class="nav-tab" data-tab="history" onclick="App.go('history')">
       <span class="icon">🕐</span><span>Historique</span>
+    </button>
+    <!-- Bouton retour accueil (mobile uniquement) -->
+    <button class="nav-tab" id="nav-home-btn" onclick="App.goHome()" style="color:#94A3B8;">
+      <span class="icon">⊞</span><span>Activités</span>
     </button>
   </nav>
   <!-- ══════════════════════════════════════════════════════════════════════
@@ -503,9 +555,9 @@
         <span style="font-size:20px;">‹</span>
         <span id="back-label">Retour</span>
       </button>
-      <div id="header-logo" style="display:flex;align-items:center;gap:8px;">
-        <strong style="font-size:18px;">SONOTRAD</strong>
-        <span style="font-size:11px;opacity:0.6;font-weight:400;">Arrivées & Départs</span>
+      <div id="header-logo" style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="App.goHome()" title="Accueil">
+        <span id="header-title" style="font-size:18px;font-weight:700;">SONOTRAD</span>
+        <span id="header-subtitle" style="font-size:11px;opacity:0.6;font-weight:400;">Multi-activités</span>
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
@@ -520,8 +572,57 @@
        MAIN CONTENT
        ══════════════════════════════════════════════════════════════════════ -->
   <main class="main-content">
+    <!-- ── VIEW : HOME ───────────────────────────────────────────────────── -->
+    <div class="view active" id="view-home">
+      <div class="home-hero" style="text-align:center;padding:28px 0 32px;">
+        <div style="font-size:52px;margin-bottom:14px;line-height:1;">🏢</div>
+        <h1 style="font-size:22px;font-weight:800;color:#1E293B;margin:0 0 6px;">SONOTRAD</h1>
+        <p style="font-size:13px;color:#64748B;margin:0;">Sélectionnez une activité</p>
+      </div>
+
+      <div id="activity-grid">
+
+        <!-- LOXAM — actif -->
+        <div class="activity-card" data-ready="true" onclick="App.selectActivity('loxam')">
+          <div class="activity-icon">🏗️</div>
+          <div class="activity-name">LOXAM</div>
+          <div class="activity-desc">Arrivées &amp; Départs de modules</div>
+          <span class="activity-badge badge-active">● Actif</span>
+        </div>
+
+        <!-- BCB — bientôt -->
+        <div class="activity-card" data-ready="false">
+          <div class="activity-icon">🚛</div>
+          <div class="activity-name">BCB</div>
+          <div class="activity-desc">Vente &amp; Logistique</div>
+          <span class="activity-badge badge-soon">Bientôt</span>
+        </div>
+
+        <!-- Agorastore — bientôt -->
+        <div class="activity-card" data-ready="false">
+          <div class="activity-icon">🏷️</div>
+          <div class="activity-name">Agorastore</div>
+          <div class="activity-desc">Ventes en ligne</div>
+          <span class="activity-badge badge-soon">Bientôt</span>
+        </div>
+
+        <!-- Stockage — bientôt -->
+        <div class="activity-card" data-ready="false">
+          <div class="activity-icon">📦</div>
+          <div class="activity-name">Stockage</div>
+          <div class="activity-desc">Fournitures &amp; Matériel</div>
+          <span class="activity-badge badge-soon">Bientôt</span>
+        </div>
+
+      </div>
+
+      <p style="text-align:center;font-size:11px;color:#CBD5E1;margin-top:28px;">
+        SONOTRAD · Gestion multi-activités
+      </p>
+    </div>
+
     <!-- ── VIEW : ARRIVALS ──────────────────────────────────────────────── -->
-    <div class="view active" id="view-arrivals">
+    <div class="view" id="view-arrivals">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
         <h2 style="font-size:20px;font-weight:700;color:#1E293B;">Arrivées</h2>
         <button onclick="App.loadArrivalsData(true)" style="background:#EBF5FB;color:var(--brand);border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻ Actualiser</button>
@@ -542,8 +643,8 @@
         <div>
           <div style="font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Statut</div>
           <div id="arr-parti-filters" style="display:flex;background:#E2E8F0;border-radius:10px;padding:3px;gap:2px;">
-            <button class="arr-seg-btn active" data-parti="all"     onclick="App.setArrPartiFilter('all')">Tous</button>
-            <button class="arr-seg-btn"        data-parti="present" onclick="App.setArrPartiFilter('present')">🅿️ Sur parc</button>
+            <button class="arr-seg-btn"        data-parti="all"     onclick="App.setArrPartiFilter('all')">Tous</button>
+            <button class="arr-seg-btn active" data-parti="present" onclick="App.setArrPartiFilter('present')">🅿️ Sur parc</button>
             <button class="arr-seg-btn"        data-parti="parti"   onclick="App.setArrPartiFilter('parti')">📦 Partis</button>
           </div>
         </div>
@@ -892,8 +993,9 @@ const ARR_SOURCES = {
 };
 // ── STATE ────────────────────────────────────────────────────────────────────
 const S = {
-  view:        'departures',
-  prevView:    'departures',
+  view:        'home',
+  prevView:    'home',
+  activity:    null,   // null = accueil | 'loxam' | 'bcb' | 'agora' | 'stockage'
   apiUrl:      localStorage.getItem(SK.API) || '',
   codes:       new Set(JSON.parse(localStorage.getItem(SK.CODES) || '[]')),
   codesTs:     +(localStorage.getItem(SK.CODES_TS) || 0),
@@ -929,7 +1031,8 @@ const S = {
   arrivalsSummary: {},
   arrivalsLoaded:  false,
   arrTypeFilter:   'all',
-  arrPartiFilter:  'all',
+  arrPartiFilter:  'present',  // 'present' par défaut → chargement initial léger
+  arrFullLoaded:   false,      // true une fois les partis aussi chargés
   selArrival:      null,
   // Archive (Partis)
   archive:        [],
@@ -951,28 +1054,83 @@ const App = {
     if (view === 'settings')   this._fillSettings();
   },
   goBack() { this.go(S.prevView); },
+
+  /* ─ Accueil multi-activité ─ */
+  goHome() {
+    S.activity = null;
+    S.prevView  = S.view;
+    S.view      = 'home';
+    this._render();
+  },
+  selectActivity(name) {
+    const ready = { loxam: true }; // mettre à true au fur et à mesure
+    if (!ready[name]) {
+      this.toast('Cette activité est en cours de développement 🚧');
+      return;
+    }
+    S.activity = name;
+    // Navigation vers la vue par défaut de l'activité
+    if (name === 'loxam') this.go('departures');
+  },
   _render() {
-    const v = S.view;
-    // Views
+    const v      = S.view;
+    const onHome = v === 'home';
+
+    // ── Nav : cachée sur l'écran d'accueil ───────────────────────────────
+    const nav = document.getElementById('main-nav');
+    if (nav) nav.style.display = onHome ? 'none' : '';
+
+    // ── Views : affiche la vue active ────────────────────────────────────
     document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
-    const mapId = { 'dep-detail': 'dep-detail', 'arr-detail': 'arr-detail' };
+    const mapId  = { 'dep-detail': 'dep-detail', 'arr-detail': 'arr-detail' };
     const viewId = 'view-' + (mapId[v] || v);
-    const el = document.getElementById(viewId);
+    const el     = document.getElementById(viewId);
     if (el) el.classList.add('active');
-    // Nav tabs
+
+    // ── Nav tabs : onglet actif ──────────────────────────────────────────
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
     const tab = document.querySelector(`[data-tab="${v}"]`);
     if (tab) tab.classList.add('active');
-    // FAB
+
+    // ── FAB : visible uniquement sur la liste des arrivées ───────────────
     const fab = document.getElementById('fab');
-    fab.style.display = (v === 'arrivals') ? 'flex' : 'none';
-    // Header back / logo
+    if (fab) fab.style.display = (v === 'arrivals') ? 'flex' : 'none';
+
+    // ── Header : back button / logo / titre ──────────────────────────────
     const inForm = ['new-arrival','settings','dep-detail','arr-detail'].includes(v);
     document.getElementById('btn-back').classList.toggle('hidden', !inForm);
     document.getElementById('header-logo').style.display = inForm ? 'none' : 'flex';
-    const labels = { 'new-arrival': 'Annuler', 'settings': 'Réglages', 'dep-detail': S.depFromArchive ? 'Partis' : 'Production', 'arr-detail': 'Arrivées' };
-    document.getElementById('back-label').textContent = labels[v] || 'Retour';
-    // API warning
+
+    // Labels du bouton retour
+    const backLabels = {
+      'new-arrival': 'Annuler',
+      'settings':    'Réglages',
+      'dep-detail':  S.depFromArchive ? 'Partis' : 'Production',
+      'arr-detail':  'Arrivées',
+    };
+    document.getElementById('back-label').textContent = backLabels[v] || 'Retour';
+
+    // Titre + sous-titre du header selon l'activité
+    const activityMeta = {
+      loxam:    { icon: '🏗️', title: 'LOXAM',      sub: 'Arrivées & Départs' },
+      bcb:      { icon: '🚛', title: 'BCB',         sub: 'Vente & Logistique' },
+      agora:    { icon: '🏷️', title: 'Agorastore',  sub: 'Ventes en ligne'    },
+      stockage: { icon: '📦', title: 'Stockage',    sub: 'Fournitures'        },
+    };
+    const titleEl    = document.getElementById('header-title');
+    const subtitleEl = document.getElementById('header-subtitle');
+    if (titleEl && subtitleEl) {
+      if (onHome) {
+        titleEl.textContent    = 'SONOTRAD';
+        subtitleEl.textContent = 'Multi-activités';
+      } else {
+        const meta = S.activity ? activityMeta[S.activity] : null;
+        titleEl.textContent    = meta ? `${meta.icon} ${meta.title}` : 'SONOTRAD';
+        subtitleEl.textContent = meta ? meta.sub : '';
+      }
+    }
+
+    // ── API warning ───────────────────────────────────────────────────────
     const w = document.getElementById('api-warning');
     if (w) w.style.display = (!S.apiUrl && v === 'arrivals') ? 'block' : 'none';
   },
@@ -1690,7 +1848,8 @@ const App = {
   async loadArrivalsData(force = false) {
     if (!force && S.arrivalsLoaded) return;
     if (force) {
-      S.arrivalsLoaded = false; S.arrTypeFilter = 'all'; S.arrPartiFilter = 'all';
+      S.arrivalsLoaded = false; S.arrFullLoaded = false;
+      S.arrTypeFilter = 'all'; S.arrPartiFilter = 'present';
       const s = document.getElementById('arr-search'); if (s) s.value = '';
     }
     document.getElementById('arr-loading').style.display = 'block';
@@ -1704,11 +1863,13 @@ const App = {
     // Chargement en parallèle : données + log photos arrivée
     this._loadArrPhotosLog();
     try {
-      const resp = await _fetchWithTimeout(S.apiUrl + '?action=arrivals', {}, 50000);
+      // Premier chargement : scope=active → seulement les articles sur parc
+      const resp = await _fetchWithTimeout(S.apiUrl + '?action=arrivals&scope=active', {}, 50000);
       const data = await resp.json();
       S.arrivalsData    = Array.isArray(data) ? data : (data.data || []);
       S.arrivalsSummary = data.summary || {};
       S.arrivalsLoaded  = true;
+      S.arrFullLoaded   = false;  // les partis ne sont pas encore chargés
       this._renderArrivalsSummary();
       this._buildArrTypeFilters();
       this._filterAndRenderArrivals();
@@ -1720,6 +1881,38 @@ const App = {
         </div>`;
     } finally {
       document.getElementById('arr-loading').style.display = 'none';
+    }
+  },
+  // Chargement complet des arrivées (déclenché à la demande quand l'utilisateur
+  // bascule sur "Partis" ou "Tous" alors que seules les données actives sont en mémoire).
+  async _loadFullArrivals() {
+    const list = document.getElementById('arr-list');
+    if (list) list.innerHTML = `
+      <div style="text-align:center;padding:30px;">
+        <div class="spinner"></div>
+        <p style="color:#64748B;font-size:13px;margin-top:10px;">Chargement de l'historique…</p>
+      </div>`;
+    // Atténuer les boutons Partis/Tous pendant le chargement
+    const btns = document.querySelectorAll('#arr-parti-filters .arr-seg-btn');
+    btns.forEach(b => { if (b.dataset.parti !== 'present') b.style.opacity = '0.5'; });
+    try {
+      const resp = await _fetchWithTimeout(S.apiUrl + '?action=arrivals', {}, 50000);
+      const data = await resp.json();
+      S.arrivalsData    = Array.isArray(data) ? data : (data.data || []);
+      S.arrivalsSummary = data.summary || {};
+      S.arrFullLoaded   = true;
+      this._renderArrivalsSummary();
+      this._buildArrTypeFilters();
+      this._filterAndRenderArrivals();
+    } catch(e) {
+      if (list) list.innerHTML = `
+        <div class="card" style="border-left:4px solid #F87171;">
+          <p style="color:#991B1B;font-weight:600;">Impossible de charger les données complètes</p>
+          <p style="font-size:12px;color:#64748B;margin-top:3px;">${e.message}</p>
+          <button onclick="App._loadFullArrivals()" style="margin-top:10px;background:#FEE2E2;color:#991B1B;border:none;padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻ Réessayer</button>
+        </div>`;
+    } finally {
+      btns.forEach(b => { b.style.opacity = ''; });
     }
   },
   _renderArrivalsSummary() {
@@ -1763,6 +1956,12 @@ const App = {
   setArrPartiFilter(f) {
     S.arrPartiFilter = f;
     document.querySelectorAll('#arr-parti-filters .arr-seg-btn').forEach(b => b.classList.toggle('active', b.dataset.parti === f));
+    // Si l'utilisateur veut voir les partis ou tout, et que les données
+    // complètes ne sont pas encore chargées → chargement lazy
+    if ((f === 'all' || f === 'parti') && !S.arrFullLoaded) {
+      this._loadFullArrivals();
+      return;
+    }
     this._filterAndRenderArrivals();
   },
   _filterAndRenderArrivals() {
@@ -1964,7 +2163,7 @@ const App = {
       S.arrPhotos = [];
       this.toast('✓ Photos d\'arrivée enregistrées !');
       await _sleep(1100);
-      S.arrivalsLoaded = false;
+      S.arrivalsLoaded = false; S.arrFullLoaded = false;
       this.go('arrivals');
     } catch(e) {
       this.toast('Erreur : ' + e.message);
@@ -2202,9 +2401,10 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW:', e));
 }
 document.addEventListener('DOMContentLoaded', () => {
-  App.go('departures');
+  // Démarre sur l'écran d'accueil
+  App._render();
   _updateOnline();
-  // Load codes in background if cache is stale
+  // Pré-chargement des codes en arrière-plan si le cache est périmé
   if (S.apiUrl && Date.now() - S.codesTs > CODES_TTL) {
     App._fetchCodes();
   }
