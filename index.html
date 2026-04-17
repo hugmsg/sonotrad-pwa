@@ -1133,10 +1133,13 @@
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <!-- Toggle Mes refs -->
           <button id="stock-myrefs-btn" onclick="App.toggleStockMyRefs()"
-            style="background:#F1F5F9;border:1.5px solid #CBD5E1;color:#64748B;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
-            ☆ Mes références
+            style="background:var(--accent);border:1.5px solid var(--accent);color:white;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+            ★ Mes références
           </button>
-          <!-- Filtres famille (injectés dynamiquement) -->
+          <!-- Filtres famille -->
+          <button id="stock-famille-all" onclick="App.setStockFamille('')"
+            class="stock-famille-btn active"
+            style="white-space:nowrap;">Toutes</button>
           <div id="stock-famille-filters" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
         </div>
         <div style="margin-top:6px;font-size:11px;color:#94A3B8;" id="stock-count-label"></div>
@@ -1300,7 +1303,7 @@ const S = {
   stockLoaded:   false,
   stockPrefs:    new Set(),// refs marquées "mes références"
   stockFamilles: [],       // valeurs uniques pour le filtre
-  stockFilter: { search: '', famille: '', myRefs: false },
+  stockFilter: { search: '', famille: '', myRefs: true },
 };
 // ── APP ──────────────────────────────────────────────────────────────────────
 const App = {
@@ -1884,7 +1887,7 @@ const App = {
   },
 
   setStockFamille(val) {
-    S.stockFilter.famille = (S.stockFilter.famille === val) ? '' : val;
+    S.stockFilter.famille = (val === '' || S.stockFilter.famille === val) ? '' : val;
     this._renderStockFamilleFilters();
     this._renderStockList();
   },
@@ -1917,6 +1920,10 @@ const App = {
     const wrap = document.getElementById('stock-famille-filters');
     if (!wrap) return;
     const cur = S.stockFilter.famille;
+    // Bouton "Toutes"
+    const allBtn = document.getElementById('stock-famille-all');
+    if (allBtn) allBtn.className = 'stock-famille-btn' + (cur === '' ? ' active' : '');
+    // Boutons par famille
     wrap.innerHTML = S.stockFamilles
       .filter(Boolean)
       .map(f => `<button class="stock-famille-btn${f===cur?' active':''}" onclick="App.setStockFamille('${f.replace(/'/g,"\\'")}')">${f}</button>`)
