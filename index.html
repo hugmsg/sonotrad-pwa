@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Sonotrad">
   <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.svg">
   <title>Sonotrad</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -301,6 +301,21 @@
     .sc-rfourn   { font-size:10px; color:#94A3B8; }
     .stock-famille-btn { background:#F1F5F9; border:1.5px solid #CBD5E1; color:#64748B; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap; }
     .stock-famille-btn.active { background:var(--brand); border-color:var(--brand); color:white; }
+    /* ── Saisie groupée ── */
+    .batch-card { background:white; border-radius:8px; padding:8px 10px; margin-bottom:5px;
+                  box-shadow:0 1px 2px rgba(0,0,0,0.06); border-left:3px solid #E2E8F0; transition:border-color .12s, background .12s; }
+    .batch-card.in-entree     { border-left-color:#15803D; background:#F0FDF4; }
+    .batch-card.in-sortie     { border-left-color:#DC2626; background:#FEF2F2; }
+    .batch-card.in-inventaire { border-left-color:#2563EB; background:#EFF6FF; }
+    .batch-row { display:flex; align-items:center; gap:8px; }
+    .batch-info { flex:1; min-width:0; }
+    .batch-ref  { font-family:'Courier New',monospace; font-size:12px; font-weight:700; color:var(--brand); }
+    .batch-desc { font-size:11px; color:#475569; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .batch-stepper { display:flex; align-items:center; flex-shrink:0; border-radius:7px; overflow:hidden; border:1.5px solid #E2E8F0; }
+    .batch-minus,.batch-plus { width:30px; height:30px; border:none; background:#F1F5F9; cursor:pointer; font-size:17px; font-weight:700; color:#475569; display:flex; align-items:center; justify-content:center; line-height:1; }
+    .batch-minus:active,.batch-plus:active { background:#E2E8F0; }
+    .batch-qty-input { width:40px; height:30px; border:none; border-left:1.5px solid #E2E8F0; border-right:1.5px solid #E2E8F0; text-align:center; font-size:14px; font-weight:700; color:#1E293B; background:white; padding:0; }
+    .batch-qty-input:focus { outline:none; background:#F8FAFC; }
     .dep-card:active { transform: scale(0.98); }
     .dep-card-left  { flex: 0 0 86px; min-width:0; overflow:hidden; padding-right:8px; border-right:1px solid #F1F5F9; }
     .dep-card-right { flex: 1; min-width:0; padding-left:8px; }
@@ -692,8 +707,13 @@
         <span id="back-label">Retour</span>
       </button>
       <div id="header-logo" style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="App.goHome()" title="Accueil">
-        <span id="header-title" style="font-size:18px;font-weight:700;">SONOTRAD</span>
-        <span id="header-subtitle" style="font-size:11px;opacity:0.6;font-weight:400;">Multi-activités</span>
+        <img src="logo.png" alt="Sonotrad" id="header-logo-img"
+          style="height:28px;width:auto;object-fit:contain;filter:brightness(0) invert(1);"
+          onerror="this.style.display='none'">
+        <div>
+          <div id="header-title" style="font-size:17px;font-weight:700;line-height:1.1;">SONOTRAD</div>
+          <div id="header-subtitle" style="font-size:10px;opacity:0.6;font-weight:400;line-height:1;"></div>
+        </div>
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
@@ -714,9 +734,14 @@
   <main class="main-content">
     <!-- ── VIEW : HOME ───────────────────────────────────────────────────── -->
     <div class="view active" id="view-home">
-      <div class="home-hero" style="text-align:center;padding:28px 0 32px;">
-        <div style="font-size:52px;margin-bottom:14px;line-height:1;">🏢</div>
-        <h1 style="font-size:22px;font-weight:800;color:#1E293B;margin:0 0 6px;">SONOTRAD</h1>
+      <div class="home-hero" style="text-align:center;padding:24px 0 28px;">
+        <!-- Logo ou icône fallback -->
+        <div style="margin-bottom:12px;line-height:1;">
+          <img src="logo.png" alt="Sonotrad" id="home-logo-img"
+            style="height:56px;width:auto;object-fit:contain;"
+            onerror="this.replaceWith(Object.assign(document.createElement('div'),{textContent:'🏢',style:'font-size:52px;line-height:1;'}))">
+        </div>
+        <h1 id="home-greeting" style="font-size:21px;font-weight:800;color:#1E293B;margin:0 0 4px;">Bonjour !</h1>
         <p style="font-size:13px;color:#64748B;margin:0;">Sélectionnez une activité</p>
       </div>
 
@@ -1150,6 +1175,11 @@
             style="background:#F1F5F9;border:1.5px solid #CBD5E1;color:#64748B;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
             🖼 Photos
           </button>
+          <!-- Saisie groupée -->
+          <button onclick="App.openBatchMv()"
+            style="background:#1A5276;border:1.5px solid #1A5276;color:white;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;margin-left:auto;">
+            📋 Saisie groupée
+          </button>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
           <!-- Filtres famille -->
@@ -1174,6 +1204,56 @@
     <!-- ── VIEW : STOCK DETAIL ──────────────────────────────────────────── -->
     <div class="view" id="view-stock-detail">
       <div id="stock-detail-body"></div>
+    </div>
+    <!-- ── VIEW : SAISIE GROUPÉE ─────────────────────────────────────────── -->
+    <div class="view" id="view-stock-batch">
+
+      <!-- En-tête sticky -->
+      <div style="position:sticky;top:0;z-index:10;background:#F0F4F8;padding:10px 0 8px;margin:-16px -16px 10px;padding-left:16px;padding-right:16px;">
+
+        <!-- Bouton retour + titre -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <button onclick="App.go('stock')" style="background:none;border:none;color:var(--brand);font-size:14px;font-weight:600;cursor:pointer;padding:0;display:flex;align-items:center;gap:4px;">
+            ← Retour
+          </button>
+          <span style="font-size:14px;font-weight:700;color:#1E293B;flex:1;">Saisie groupée</span>
+          <button id="batch-submit-btn" onclick="App.submitBatchMv()"
+            style="display:none;background:var(--brand);color:white;border:none;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
+            ✓ Valider <span id="batch-count-chip">0</span>
+          </button>
+        </div>
+
+        <!-- Sélecteur de type -->
+        <div style="display:flex;gap:6px;margin-bottom:8px;">
+          <button id="batch-btn-entrée" onclick="App.setBatchType('entrée')"
+            style="flex:1;padding:8px 4px;border-radius:8px;border:1.5px solid #E2E8F0;background:#F8FAFC;font-size:11px;font-weight:700;cursor:pointer;color:#64748B;">
+            ➕ Entrée
+          </button>
+          <button id="batch-btn-sortie" onclick="App.setBatchType('sortie')"
+            style="flex:1;padding:8px 4px;border-radius:8px;border:1.5px solid #E2E8F0;background:#F8FAFC;font-size:11px;font-weight:700;cursor:pointer;color:#64748B;">
+            ➖ Sortie
+          </button>
+          <button id="batch-btn-inventaire" onclick="App.setBatchType('inventaire')"
+            style="flex:1;padding:8px 4px;border-radius:8px;border:1.5px solid #E2E8F0;background:#F8FAFC;font-size:11px;font-weight:700;cursor:pointer;color:#64748B;">
+            📋 Inventaire
+          </button>
+        </div>
+
+        <!-- Recherche -->
+        <input id="batch-search-input" type="search" class="input-field" placeholder="🔍 Rechercher une référence…"
+          oninput="App.setBatchSearch(this.value)" style="font-size:14px;">
+
+        <!-- Note globale + compteur -->
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+          <input type="text" id="batch-note-input" placeholder="Note (fournisseur, commande, chantier…)"
+            style="flex:1;padding:7px 10px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:12px;background:white;">
+          <span id="batch-count-label" style="font-size:11px;color:#94A3B8;white-space:nowrap;">0 réf.</span>
+        </div>
+      </div>
+
+      <!-- Liste des références avec steppers -->
+      <div id="batch-list"></div>
+
     </div>
 
     <!-- ── VIEW : SETTINGS ──────────────────────────────────────────────── -->
@@ -1329,6 +1409,10 @@ const S = {
   selStockRef:    null,    // référence ouverte dans la vue détail
   stockDeltas:    {},      // { ref: { delta, invQty, lastDate } } — mouvements cumulés
   selMvType:      null,    // type de mouvement en cours de saisie
+  // ── Saisie groupée ────────────────────────────────────────────────────
+  batchMvType:    null,    // type actif du batch
+  batchItems:     {},      // { ref: qty } — quantités saisies
+  batchSearch:    '',      // filtre de recherche dans la vue batch
 };
 // ── APP ──────────────────────────────────────────────────────────────────────
 const App = {
@@ -1344,6 +1428,7 @@ const App = {
     if (view === 'settings')   this._fillSettings();
     if (view === 'stock'        && !S.stockLoaded) this.loadStockCatalog();
     if (view === 'stock-detail') this._renderStockDetail();
+    if (view === 'stock-batch')  this._renderBatchList();
   },
   goBack() {
     if (S.view === 'admin') { this.goHome(); return; }
@@ -1432,6 +1517,14 @@ const App = {
         titleEl.textContent    = meta ? `${meta.icon} ${meta.title}` : 'SONOTRAD';
         subtitleEl.textContent = meta ? meta.sub : '';
       }
+    }
+
+    // ── Bonjour [Prénom] sur l'écran d'accueil ────────────────────────────
+    const greetEl = document.getElementById('home-greeting');
+    if (greetEl && S.currentUser?.prenom) {
+      const h = new Date().getHours();
+      const salut = h < 12 ? 'Bonjour' : h < 18 ? 'Bon après-midi' : 'Bonsoir';
+      greetEl.textContent = `${salut} ${S.currentUser.prenom} 👋`;
     }
 
     // ── Carte admin (accueil) : visible uniquement pour les admins ───────
@@ -2034,6 +2127,190 @@ const App = {
   },
 
   /* ─ Stock photos & detail ─ */
+
+  /* ─ Saisie groupée ─ */
+
+  // Ouvre la vue saisie groupée (reset du batch si on repart de zéro)
+  openBatchMv() {
+    // On conserve le batch en cours si on y retourne, sinon reset
+    this.go('stock-batch');
+  },
+
+  // Définit le type de mouvement du batch
+  setBatchType(type) {
+    S.batchMvType = type;
+    const colors  = { entrée:'#15803D', sortie:'#DC2626', inventaire:'#2563EB' };
+    ['entrée','sortie','inventaire'].forEach(t => {
+      const btn = document.getElementById('batch-btn-' + t);
+      if (!btn) return;
+      const active = t === type;
+      btn.style.background  = active ? colors[t] : '#F8FAFC';
+      btn.style.borderColor = active ? colors[t] : '#E2E8F0';
+      btn.style.color       = active ? 'white'   : '#64748B';
+    });
+    this._renderBatchList();
+  },
+
+  // Filtre de recherche dans le batch
+  setBatchSearch(val) {
+    S.batchSearch = val.toLowerCase();
+    this._renderBatchList();
+  },
+
+  // Incrément / décrément du stepper
+  stepBatchQty(ref, delta) {
+    const cur = S.batchItems[ref] || 0;
+    const next = Math.max(0, cur + delta);
+    if (next === 0) delete S.batchItems[ref];
+    else S.batchItems[ref] = next;
+    // MAJ visuelle du stepper sans re-rendre toute la liste
+    const input = document.getElementById('bqi-' + CSS.escape(ref));
+    if (input) input.value = next || '';
+    const card = document.getElementById('bcard-' + CSS.escape(ref));
+    if (card) {
+      const cls = S.batchMvType ? 'in-' + S.batchMvType : '';
+      card.className = 'batch-card' + (next > 0 && cls ? ' ' + cls : '');
+    }
+    this._updateBatchHeader();
+  },
+
+  // Saisie directe dans l'input quantité
+  setBatchQtyInput(ref, val) {
+    const qty = parseFloat(val);
+    if (!isNaN(qty) && qty > 0) S.batchItems[ref] = qty;
+    else delete S.batchItems[ref];
+    const card = document.getElementById('bcard-' + CSS.escape(ref));
+    if (card) {
+      const cls = S.batchMvType ? 'in-' + S.batchMvType : '';
+      card.className = 'batch-card' + (S.batchItems[ref] ? ' ' + cls : '');
+    }
+    this._updateBatchHeader();
+  },
+
+  // Met à jour le compteur et le bouton valider
+  _updateBatchHeader() {
+    const n   = Object.keys(S.batchItems).length;
+    const lbl = document.getElementById('batch-count-label');
+    const btn = document.getElementById('batch-submit-btn');
+    const chip = document.getElementById('batch-count-chip');
+    if (lbl)  lbl.textContent  = n ? `${n} réf. saisie${n>1?'s':''}` : '0 réf.';
+    if (chip) chip.textContent = n;
+    if (btn)  btn.style.display = (n > 0 && S.batchMvType) ? 'inline-flex' : 'none';
+  },
+
+  // Rendu de la liste catalogue avec steppers
+  _renderBatchList() {
+    const list = document.getElementById('batch-list');
+    if (!list) return;
+
+    const search = S.batchSearch;
+    let items = S.stockData;
+    if (search) items = items.filter(d =>
+      d.ref.toLowerCase().includes(search) ||
+      d.description.toLowerCase().includes(search) ||
+      d.fournisseur.toLowerCase().includes(search)
+    );
+
+    // Refs dans le batch en premier
+    items = [...items].sort((a, b) => {
+      const aIn = S.batchItems[a.ref] != null ? 1 : 0;
+      const bIn = S.batchItems[b.ref] != null ? 1 : 0;
+      return bIn - aIn;
+    });
+
+    const typeClass = S.batchMvType ? 'in-' + S.batchMvType : '';
+    const calcStockTxt = (d) => {
+      const q = this._calcStockActuel(d.ref, d.qte);
+      return q !== null ? `Stock : ${q}` : '';
+    };
+
+    if (!items.length) {
+      list.innerHTML = '<div style="text-align:center;padding:40px;color:#94A3B8;font-size:13px;">Aucune référence trouvée</div>';
+      return;
+    }
+
+    list.innerHTML = items.map(d => {
+      const qty     = S.batchItems[d.ref] || 0;
+      const inBatch = qty > 0;
+      const refEsc  = CSS.escape(d.ref);
+      const refSafe = d.ref.replace(/'/g, "\\'");
+      const desc    = d.description.length > 70 ? d.description.substring(0,68)+'…' : d.description;
+      const stk     = calcStockTxt(d);
+      return `<div class="batch-card${inBatch && typeClass ? ' '+typeClass : ''}" id="bcard-${refEsc}">
+        <div class="batch-row">
+          <div class="batch-info">
+            <div class="batch-ref">${d.ref}${d.famille ? ` <span style="font-size:9px;font-weight:600;padding:1px 4px;border-radius:8px;background:#EDE9FE;color:#5B21B6;">${d.famille}</span>` : ''}</div>
+            <div class="batch-desc">${desc}</div>
+            ${stk ? `<div style="font-size:10px;color:#94A3B8;margin-top:1px;">${stk}</div>` : ''}
+          </div>
+          <div class="batch-stepper">
+            <button class="batch-minus" onclick="App.stepBatchQty('${refSafe}',-1)">−</button>
+            <input class="batch-qty-input" type="number" id="bqi-${refEsc}" min="0"
+              value="${qty || ''}" placeholder="0"
+              oninput="App.setBatchQtyInput('${refSafe}',this.value)"
+              onclick="this.select()">
+            <button class="batch-plus" onclick="App.stepBatchQty('${refSafe}',1)">+</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+    this._updateBatchHeader();
+  },
+
+  // Soumet tout le batch
+  async submitBatchMv() {
+    const type  = S.batchMvType;
+    const items = Object.entries(S.batchItems);
+    const note  = document.getElementById('batch-note-input')?.value?.trim() || '';
+    const u     = S.currentUser;
+    const user  = u ? `${u.prenom} ${u.nom}` : 'inconnu';
+
+    if (!type)           { this.toast('Sélectionne un type de mouvement'); return; }
+    if (!items.length)   { this.toast('Aucune quantité saisie'); return; }
+
+    const btn = document.getElementById('batch-submit-btn');
+    if (btn) btn.disabled = true;
+    this.toast(`⏳ Enregistrement de ${items.length} référence${items.length>1?'s':''}…`);
+
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({
+        action: 'add_mouvements_batch',
+        type,
+        user,
+        note,
+        items: items.map(([ref, qty]) => ({ ref, qty })),
+      }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 30000);
+      const data = await resp.json();
+
+      if (data.status === 'ok') {
+        this.toast(`✓ ${data.count} mouvement${data.count>1?'s':''} enregistré${data.count>1?'s':''}`);
+        // Mise à jour locale des deltas
+        items.forEach(([ref, qty]) => {
+          const cur = S.stockDeltas[ref] || { delta:0, invQty:null, lastDate:null };
+          if      (type === 'inventaire') S.stockDeltas[ref] = { delta:0, invQty:qty, lastDate:new Date().toISOString() };
+          else if (type === 'entrée')     S.stockDeltas[ref] = { ...cur, delta: cur.delta + qty, lastDate:new Date().toISOString() };
+          else if (type === 'sortie')     S.stockDeltas[ref] = { ...cur, delta: cur.delta - qty, lastDate:new Date().toISOString() };
+        });
+        // Reset batch
+        S.batchItems  = {};
+        S.batchMvType = null;
+        S.batchSearch = '';
+        // Retour au catalogue
+        this.go('stock');
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+        console.error('[submitBatchMv]', data);
+      }
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+      console.error('[submitBatchMv]', e);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  },
 
   // Charge l'index des photos (ref → thumbId) en arrière-plan
   async loadStockPhotos() {
