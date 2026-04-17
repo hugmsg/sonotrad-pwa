@@ -2176,30 +2176,43 @@ const App = {
   async uploadStockPhoto(input, ref) {
     const file = input.files[0];
     if (!file || !S.apiUrl) return;
+    this.toast('⏳ Redimensionnement…');
+    let fullB64, thumbB64;
+    try {
+      // Redimensionner séquentiellement pour éviter les problèmes mémoire
+      fullB64  = await _resizeImage(file, 1200, 0.82);
+      thumbB64 = await _resizeImage(file, 200,  0.75);
+    } catch(e) {
+      this.toast('Erreur redimensionnement : ' + e.message);
+      console.error('[uploadStockPhoto] resize error:', e);
+      return;
+    }
     this.toast('⏳ Envoi de la photo…');
     try {
-      const [fullB64, thumbB64] = await Promise.all([
-        _resizeImage(file, 1200, 0.82),
-        _resizeImage(file, 200, 0.75),
-      ]);
-      const fd = new FormData();
-      fd.append('payload', JSON.stringify({
+      const payload = JSON.stringify({
         action:    'save_stock_photo',
         ref:       ref,
         imageData: fullB64.split(',')[1],
         thumbData: thumbB64.split(',')[1],
         mime:      'image/jpeg',
-      }));
-      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 30000);
+      });
+      const fd = new FormData();
+      fd.append('payload', payload);
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 60000);
       const data = await resp.json();
       if (data.status === 'ok') {
         this.toast('✓ Photo enregistrée');
         S.stockPhotos[ref] = data.thumbId || data.fileId;
         this._renderStockDetail();
       } else {
-        this.toast('Erreur : ' + (data.error || 'inconnue'));
+        const msg = data.error || 'inconnue';
+        this.toast('Erreur AppScript : ' + msg);
+        console.error('[uploadStockPhoto] AppScript error:', data);
       }
-    } catch(e) { this.toast('Erreur envoi photo'); }
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+      console.error('[uploadStockPhoto] network error:', e);
+    }
   },
 
   /* ─ Arrivals list ─ */
