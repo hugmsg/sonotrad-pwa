@@ -761,9 +761,8 @@
           <input type="text" id="nu-nom" class="input-field" placeholder="Nom" style="margin:0;">
         </div>
         <select id="nu-role" class="input-field" style="margin-bottom:8px;">
-          <option value="chauffeur">Chauffeur</option>
-          <option value="gestionnaire">Gestionnaire</option>
-          <option value="admin">Administrateur</option>
+          <option value="utilisateur">👤 Utilisateur</option>
+          <option value="admin">⚙️ Administrateur</option>
         </select>
         <div style="margin-bottom:8px;">
           <label class="label-sm" style="display:block;margin-bottom:6px;">Activités</label>
@@ -1274,8 +1273,13 @@ const App = {
       this.toast('Cette activité est en cours de développement 🚧');
       return;
     }
+    // Contrôle d'accès : vérifier que l'utilisateur a bien cette activité
+    const userActs = S.currentUser?.activites || [];
+    if (!userActs.includes(name)) {
+      this.toast('⛔ Vous n\'avez pas accès à cette activité');
+      return;
+    }
     S.activity = name;
-    // Navigation vers la vue par défaut de l'activité
     if (name === 'loxam') this.go('departures');
   },
   _render() {
@@ -1561,7 +1565,7 @@ const App = {
       list.innerHTML = '<div class="card" style="text-align:center;color:#94A3B8;padding:32px 0;">Aucun utilisateur</div>';
       return;
     }
-    const roleLabel = { admin:'Administrateur', gestionnaire:'Gestionnaire', chauffeur:'Chauffeur' };
+    const roleLabel = { admin:'Administrateur', utilisateur:'Utilisateur', gestionnaire:'Utilisateur', chauffeur:'Utilisateur' };
     list.innerHTML = users.map(u => {
       const badgeBg  = u.actif ? '#D1FAE5' : '#FEE2E2';
       const badgeCol = u.actif ? '#065F46'  : '#991B1B';
@@ -1581,13 +1585,26 @@ const App = {
             <span style="background:${badgeBg};color:${badgeCol};font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;flex-shrink:0;">${badgeTxt}</span>
           </div>
           <!-- Rôle modifiable -->
+          <!-- Rôle -->
           <div style="margin-bottom:8px;">
             <select onchange="App._updateUserRole('${u.prenom}','${u.nom}',this.value)"
               style="width:100%;padding:7px 10px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:12px;font-weight:600;color:#475569;background:#F8FAFC;cursor:pointer;">
-              <option value="chauffeur"    ${u.role==='chauffeur'    ?'selected':''}>🚛 Chauffeur</option>
-              <option value="gestionnaire" ${u.role==='gestionnaire' ?'selected':''}>📋 Gestionnaire</option>
-              <option value="admin"        ${u.role==='admin'        ?'selected':''}>⚙️ Administrateur</option>
+              <option value="utilisateur" ${u.role!=='admin' ?'selected':''}>👤 Utilisateur</option>
+              <option value="admin"       ${u.role==='admin' ?'selected':''}>⚙️ Administrateur</option>
             </select>
+          </div>
+          <!-- Activités éditables -->
+          <div style="margin-bottom:8px;padding:8px 10px;background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:8px;">
+            <div style="font-size:11px;font-weight:600;color:#94A3B8;margin-bottom:6px;">ACTIVITÉS</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;">
+              ${['loxam','bcb','agorastore','stockage'].map(a => `
+                <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">
+                  <input type="checkbox" id="uact-${u.prenom}-${u.nom}-${a}" value="${a}"
+                    ${u.activites.includes(a)?'checked':''}
+                    onchange="App._updateUserActivites('${u.prenom}','${u.nom}')">
+                  ${a.charAt(0).toUpperCase()+a.slice(1)}
+                </label>`).join('')}
+            </div>
           </div>
           <div style="display:flex;gap:8px;">
             <button onclick="App._showResetPin('${u.prenom}','${u.nom}')"
@@ -1712,6 +1729,27 @@ const App = {
         this.toast('Erreur : ' + (data.error || 'inconnue'));
       }
     } catch(e) { this.toast('Erreur réseau'); }
+  },
+
+  async _updateUserActivites(prenom, nom) {
+    const activites = ['loxam','bcb','agorastore','stockage'].filter(a => {
+      const el = document.getElementById(`uact-${prenom}-${nom}-${a}`);
+      return el && el.checked;
+    });
+    if (!activites.length) { this.toast('Au moins une activité requise'); this.loadAdminUsers(); return; }
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action:'update_user_activites', prenom, nom, activites }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast(`✓ Activités de ${prenom} mises à jour`);
+        this.loadAdminUsers();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+        this.loadAdminUsers();
+      }
+    } catch(e) { this.toast('Erreur réseau'); this.loadAdminUsers(); }
   },
 
   async _updateUserRole(prenom, nom, newRole) {
@@ -2856,7 +2894,7 @@ const App = {
     // Infos utilisateur
     const u = S.currentUser;
     if (u) {
-      const roleLabels = { admin:'Administrateur', gestionnaire:'Gestionnaire', chauffeur:'Chauffeur' };
+      const roleLabels = { admin:'Administrateur', utilisateur:'Utilisateur', gestionnaire:'Utilisateur', chauffeur:'Utilisateur' };
       document.getElementById('settings-user-name').textContent = `${u.prenom} ${u.nom}`;
       document.getElementById('settings-user-role').textContent = roleLabels[u.role] || u.role;
     }
