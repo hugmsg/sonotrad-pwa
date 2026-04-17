@@ -270,6 +270,28 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.07);
       transition: transform 0.12s;
     }
+    /* ── Cartes stock ── */
+    .stock-card {
+      background: white; border-radius: 10px; padding: 10px 12px;
+      margin-bottom: 7px; box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+      border-left: 3px solid #E2E8F0; transition: border-color .15s;
+    }
+    .stock-card.relevant  { border-left-color: var(--accent); }
+    .stock-card.stock-low { border-left-color: #F59E0B; }
+    .stock-row1 { display:flex; align-items:flex-start; gap:8px; }
+    .stock-star { font-size:18px; cursor:pointer; flex-shrink:0; line-height:1; padding-top:1px; user-select:none; }
+    .stock-ref  { font-family:'Courier New',monospace; font-size:13px; font-weight:700; color:var(--brand); flex-shrink:0; min-width:36px; }
+    .stock-desc { font-size:12px; color:#1E293B; line-height:1.4; flex:1; }
+    .stock-row2 { display:flex; align-items:center; gap:6px; margin-top:5px; flex-wrap:wrap; }
+    .stock-badge { font-size:10px; font-weight:600; padding:2px 7px; border-radius:20px; white-space:nowrap; }
+    .badge-famille  { background:#EDE9FE; color:#5B21B6; }
+    .badge-fourn    { background:#E0F2FE; color:#0369A1; }
+    .stock-qty { font-size:11px; font-weight:600; margin-left:auto; white-space:nowrap; }
+    .stock-qty.ok      { color:#15803D; }
+    .stock-qty.low     { color:#D97706; }
+    .stock-qty.unknown { color:#94A3B8; }
+    .stock-famille-btn { background:#F1F5F9; border:1.5px solid #CBD5E1; color:#64748B; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap; }
+    .stock-famille-btn.active { background:var(--brand); border-color:var(--brand); color:white; }
     .dep-card:active { transform: scale(0.98); }
     .dep-card-left  { flex: 0 0 86px; min-width:0; overflow:hidden; padding-right:8px; border-right:1px solid #F1F5F9; }
     .dep-card-right { flex: 1; min-width:0; padding-left:8px; }
@@ -715,12 +737,12 @@
           <span class="activity-badge badge-soon">Bientôt</span>
         </div>
 
-        <!-- Stockage — bientôt -->
-        <div class="activity-card" data-ready="false">
+        <!-- Stockage — actif -->
+        <div class="activity-card" data-ready="true" onclick="App.selectActivity('stockage')">
           <div class="activity-icon">📦</div>
           <div class="activity-name">Stockage</div>
-          <div class="activity-desc">Fournitures &amp; Matériel</div>
-          <span class="activity-badge badge-soon">Bientôt</span>
+          <div class="activity-desc">Catalogue &amp; Inventaire PIDEM</div>
+          <span class="activity-badge badge-active">● Actif</span>
         </div>
 
         <!-- Admin — visible uniquement pour role=admin -->
@@ -1100,6 +1122,37 @@
         <p style="font-size:16px;font-weight:600;">Aucun historique</p>
       </div>
     </div>
+    <!-- ── VIEW : STOCK ─────────────────────────────────────────────────── -->
+    <div class="view" id="view-stock">
+
+      <!-- Barre de filtres sticky -->
+      <div style="position:sticky;top:0;z-index:10;background:#F0F4F8;padding:10px 0 8px;margin:-16px -16px 12px;padding-left:16px;padding-right:16px;">
+        <input id="stock-search" type="search" class="input-field" placeholder="🔍 Rechercher une référence ou description…"
+          oninput="App.setStockSearch(this.value)"
+          style="margin-bottom:8px;font-size:14px;">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <!-- Toggle Mes refs -->
+          <button id="stock-myrefs-btn" onclick="App.toggleStockMyRefs()"
+            style="background:#F1F5F9;border:1.5px solid #CBD5E1;color:#64748B;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+            ☆ Mes références
+          </button>
+          <!-- Filtres famille (injectés dynamiquement) -->
+          <div id="stock-famille-filters" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+        </div>
+        <div style="margin-top:6px;font-size:11px;color:#94A3B8;" id="stock-count-label"></div>
+      </div>
+
+      <!-- Loading -->
+      <div id="stock-loading" style="text-align:center;padding:40px 0;display:none;">
+        <div class="spinner"></div>
+        <p style="color:#94A3B8;font-size:13px;margin-top:10px;">Chargement du catalogue…</p>
+      </div>
+
+      <!-- Liste des pièces -->
+      <div id="stock-list"></div>
+
+    </div>
+
     <!-- ── VIEW : SETTINGS ──────────────────────────────────────────────── -->
     <div class="view" id="view-settings">
       <h2 style="font-size:20px;font-weight:700;color:#1E293B;margin-bottom:18px;">Réglages</h2>
@@ -1242,6 +1295,12 @@ const S = {
   archiveLoaded:  false,
   depFromArchive: false,
   submitting: false,
+  // ── Stockage ─────────────────────────────────────────────────────────────
+  stockData:     [],       // catalogue complet
+  stockLoaded:   false,
+  stockPrefs:    new Set(),// refs marquées "mes références"
+  stockFamilles: [],       // valeurs uniques pour le filtre
+  stockFilter: { search: '', famille: '', myRefs: false },
 };
 // ── APP ──────────────────────────────────────────────────────────────────────
 const App = {
@@ -1255,6 +1314,7 @@ const App = {
     if (view === 'departures' && !S.depsLoaded) this.loadDepartures();
     if (view === 'archive'    && !S.archiveLoaded) this.loadArchive();
     if (view === 'settings')   this._fillSettings();
+    if (view === 'stock' && !S.stockLoaded) this.loadStockCatalog();
   },
   goBack() {
     if (S.view === 'admin') { this.goHome(); return; }
@@ -1269,7 +1329,7 @@ const App = {
     this._render();
   },
   selectActivity(name) {
-    const ready = { loxam: true }; // mettre à true au fur et à mesure
+    const ready = { loxam: true, stockage: true };
     if (!ready[name]) {
       this.toast('Cette activité est en cours de développement 🚧');
       return;
@@ -1281,15 +1341,19 @@ const App = {
       return;
     }
     S.activity = name;
-    if (name === 'loxam') this.go('departures');
+    if (name === 'loxam')    this.go('departures');
+    if (name === 'stockage') this.go('stock');
   },
   _render() {
     const v      = S.view;
     const onHome = v === 'home';
 
-    // ── Nav : cachée sur l'écran d'accueil ───────────────────────────────
+    // ── Nav : cachée sur l'accueil, tabs LOXAM masqués hors activité loxam ──
     const nav = document.getElementById('main-nav');
     if (nav) nav.style.display = onHome ? 'none' : '';
+    document.querySelectorAll('#main-nav .nav-tab[data-tab]').forEach(el => {
+      el.style.display = (S.activity === 'loxam') ? '' : 'none';
+    });
 
     // ── Views : affiche la vue active ────────────────────────────────────
     document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
@@ -1326,7 +1390,7 @@ const App = {
       loxam:    { icon: '🏗️', title: 'LOXAM',      sub: 'Arrivées & Départs' },
       bcb:      { icon: '🚛', title: 'BCB',         sub: 'Vente & Logistique' },
       agora:    { icon: '🏷️', title: 'Agorastore',  sub: 'Ventes en ligne'    },
-      stockage: { icon: '📦', title: 'Stockage',    sub: 'Fournitures'        },
+      stockage: { icon: '📦', title: 'Stockage',    sub: 'Catalogue PIDEM'    },
     };
     const titleEl    = document.getElementById('header-title');
     const subtitleEl = document.getElementById('header-subtitle');
@@ -1783,6 +1847,130 @@ const App = {
         this.toast('Erreur : ' + (data.error || 'inconnue'));
       }
     } catch(e) { this.toast('Erreur réseau'); }
+  },
+
+  /* ─ Stockage ─ */
+  async loadStockCatalog() {
+    if (!S.apiUrl) return;
+    document.getElementById('stock-loading').style.display = 'block';
+    document.getElementById('stock-list').innerHTML = '';
+    try {
+      // Catalogue + préférences en parallèle
+      const [catResp, prefsResp] = await Promise.all([
+        _fetchWithTimeout(S.apiUrl + '?action=stock_catalog',  {}, 40000),
+        _fetchWithTimeout(S.apiUrl + '?action=stock_prefs',    {}, 10000),
+      ]);
+      const cat   = await catResp.json();
+      const prefs = await prefsResp.json();
+
+      if (cat.status === 'ok') {
+        S.stockData     = cat.data || [];
+        S.stockFamilles = cat.familles || [];
+        S.stockLoaded   = true;
+      }
+      if (prefs.status === 'ok') {
+        S.stockPrefs = new Set(prefs.prefs?.relevant || []);
+      }
+    } catch(e) { this.toast('Erreur chargement catalogue'); }
+    finally { document.getElementById('stock-loading').style.display = 'none'; }
+
+    this._renderStockFamilleFilters();
+    this._renderStockList();
+  },
+
+  setStockSearch(val) {
+    S.stockFilter.search = val.toLowerCase();
+    this._renderStockList();
+  },
+
+  setStockFamille(val) {
+    S.stockFilter.famille = (S.stockFilter.famille === val) ? '' : val;
+    this._renderStockFamilleFilters();
+    this._renderStockList();
+  },
+
+  toggleStockMyRefs() {
+    S.stockFilter.myRefs = !S.stockFilter.myRefs;
+    const btn = document.getElementById('stock-myrefs-btn');
+    if (btn) {
+      btn.style.background    = S.stockFilter.myRefs ? 'var(--accent)' : '#F1F5F9';
+      btn.style.borderColor   = S.stockFilter.myRefs ? 'var(--accent)' : '#CBD5E1';
+      btn.style.color         = S.stockFilter.myRefs ? 'white' : '#64748B';
+      btn.textContent         = S.stockFilter.myRefs ? '★ Mes références' : '☆ Mes références';
+    }
+    this._renderStockList();
+  },
+
+  async toggleStockPref(ref) {
+    if (S.stockPrefs.has(ref)) { S.stockPrefs.delete(ref); }
+    else                        { S.stockPrefs.add(ref);    }
+    this._renderStockList(); // re-render immédiat
+    // Sauvegarde en fond
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action:'save_stock_prefs', relevant: [...S.stockPrefs] }));
+      await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+    } catch(e) { /* silencieux — sauvegardé localement de toute façon */ }
+  },
+
+  _renderStockFamilleFilters() {
+    const wrap = document.getElementById('stock-famille-filters');
+    if (!wrap) return;
+    const cur = S.stockFilter.famille;
+    wrap.innerHTML = S.stockFamilles
+      .filter(Boolean)
+      .map(f => `<button class="stock-famille-btn${f===cur?' active':''}" onclick="App.setStockFamille('${f.replace(/'/g,"\\'")}')">${f}</button>`)
+      .join('');
+  },
+
+  _renderStockList() {
+    const list = document.getElementById('stock-list');
+    if (!list) return;
+
+    const { search, famille, myRefs } = S.stockFilter;
+    let items = S.stockData;
+
+    if (myRefs)   items = items.filter(d => S.stockPrefs.has(d.ref));
+    if (famille)  items = items.filter(d => d.famille === famille);
+    if (search)   items = items.filter(d =>
+      d.ref.toLowerCase().includes(search) ||
+      d.description.toLowerCase().includes(search) ||
+      d.fournisseur.toLowerCase().includes(search)
+    );
+
+    const lbl = document.getElementById('stock-count-label');
+    if (lbl) lbl.textContent = `${items.length} référence${items.length!==1?'s':''} affichée${items.length!==1?'s':''}${S.stockData.length ? ' sur ' + S.stockData.length : ''}`;
+
+    if (!items.length) {
+      list.innerHTML = `<div style="text-align:center;padding:40px 0;color:#94A3B8;">
+        <div style="font-size:36px;margin-bottom:10px;">📭</div>
+        <p style="font-size:14px;">${S.stockData.length ? 'Aucune référence ne correspond aux filtres' : 'Catalogue non chargé'}</p>
+      </div>`;
+      return;
+    }
+
+    list.innerHTML = items.map(d => {
+      const isRel = S.stockPrefs.has(d.ref);
+      const qtyTxt = d.qte !== null
+        ? `📦 ${d.qte}${d.seuil !== null ? ' / min ' + d.seuil : ''}`
+        : '📦 —';
+      const qtyClass = d.stockStatus === 'low' ? 'low' : d.stockStatus === 'ok' ? 'ok' : 'unknown';
+      const cardClass = `stock-card${isRel?' relevant':''}${d.stockStatus==='low'?' stock-low':''}`;
+      const desc = d.description.length > 120 ? d.description.substring(0,118)+'…' : d.description;
+      const refFourn = d.refFourn ? ` · <span style="font-size:10px;color:#94A3B8;">${d.refFourn}</span>` : '';
+      return `<div class="${cardClass}">
+        <div class="stock-row1">
+          <span class="stock-star" onclick="App.toggleStockPref('${d.ref}')" title="${isRel?'Retirer de mes refs':'Ajouter à mes refs'}">${isRel?'★':'☆'}</span>
+          <span class="stock-ref">${d.ref}</span>
+          <span class="stock-desc">${desc}</span>
+        </div>
+        <div class="stock-row2">
+          ${d.famille    ? `<span class="stock-badge badge-famille">${d.famille}</span>` : ''}
+          ${d.fournisseur? `<span class="stock-badge badge-fourn">${d.fournisseur}${refFourn}</span>` : ''}
+          <span class="stock-qty ${qtyClass}" style="margin-left:auto;">${qtyTxt}</span>
+        </div>
+      </div>`;
+    }).join('');
   },
 
   /* ─ Arrivals list ─ */
