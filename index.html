@@ -670,7 +670,10 @@
         <span class="status-dot online" id="status-dot"></span>
         <span id="status-text">En ligne</span>
       </div>
-      <button onclick="App.go('settings')" style="background:rgba(255,255,255,0.15);border:none;color:white;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;">⚙</button>
+      <div style="display:flex;gap:5px;">
+        <button onclick="App.go('settings')" style="background:rgba(255,255,255,0.15);border:none;color:white;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;" title="Réglages">⚙</button>
+        <button onclick="App.logout()" style="background:rgba(255,255,255,0.15);border:none;color:white;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;" title="Se déconnecter">↪</button>
+      </div>
     </div>
   </header>
   <!-- ══════════════════════════════════════════════════════════════════════
@@ -1430,6 +1433,7 @@ const App = {
         if (data.status === 'ok') {
           S.currentUser = data.user;
           localStorage.setItem('snt_user', JSON.stringify(data.user));
+          S.view = 'home'; S.activity = null; // ← toujours démarrer à l'accueil
           document.getElementById('login-overlay').style.display = 'none';
           this._render();
         } else {
@@ -1499,6 +1503,7 @@ const App = {
   logout() {
     localStorage.removeItem('snt_user');
     S.currentUser = null; S.pinBuffer = ''; S.pinMode = 'login';
+    S.view = 'home'; S.activity = null; // ← retour accueil à la prochaine connexion
     document.getElementById('pin-prompt').textContent = 'Entrez votre code PIN';
     document.getElementById('pin-error-msg').textContent = '';
     this._updatePinDots();
@@ -1575,6 +1580,15 @@ const App = {
             </div>
             <span style="background:${badgeBg};color:${badgeCol};font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;flex-shrink:0;">${badgeTxt}</span>
           </div>
+          <!-- Rôle modifiable -->
+          <div style="margin-bottom:8px;">
+            <select onchange="App._updateUserRole('${u.prenom}','${u.nom}',this.value)"
+              style="width:100%;padding:7px 10px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:12px;font-weight:600;color:#475569;background:#F8FAFC;cursor:pointer;">
+              <option value="chauffeur"    ${u.role==='chauffeur'    ?'selected':''}>🚛 Chauffeur</option>
+              <option value="gestionnaire" ${u.role==='gestionnaire' ?'selected':''}>📋 Gestionnaire</option>
+              <option value="admin"        ${u.role==='admin'        ?'selected':''}>⚙️ Administrateur</option>
+            </select>
+          </div>
           <div style="display:flex;gap:8px;">
             <button onclick="App._showResetPin('${u.prenom}','${u.nom}')"
               style="flex:1;background:#F8FAFC;border:1.5px solid #E2E8F0;color:#475569;padding:8px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
@@ -1583,6 +1597,10 @@ const App = {
             <button onclick="App._toggleUser('${u.prenom}','${u.nom}',${!u.actif})"
               style="background:${u.actif ? '#FEF2F2' : '#F0FDF4'};border:1.5px solid ${u.actif ? '#FECACA' : '#86EFAC'};color:${u.actif ? '#991B1B' : '#14532D'};padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
               ${u.actif ? 'Désactiver' : 'Réactiver'}
+            </button>
+            <button onclick="App._deleteUser('${u.prenom}','${u.nom}')"
+              style="background:#FEF2F2;border:1.5px solid #FECACA;color:#991B1B;padding:8px 10px;border-radius:8px;font-size:14px;cursor:pointer;" title="Supprimer ce compte">
+              🗑
             </button>
           </div>
           <!-- Zone reset PIN inline (masquée par défaut) -->
@@ -1616,6 +1634,9 @@ const App = {
   },
 
   async _createUser() {
+    const btn = document.querySelector('#admin-create-form .btn-primary');
+    if (btn && btn.disabled) return; // protection double-clic
+    if (btn) { btn.disabled = true; btn.textContent = 'Création...'; }
     const prenom = document.getElementById('nu-prenom').value.trim();
     const nom    = document.getElementById('nu-nom').value.trim();
     const role   = document.getElementById('nu-role').value;
@@ -1640,8 +1661,12 @@ const App = {
         this.loadAdminUsers();
       } else {
         this.toast('Erreur : ' + (data.error || 'inconnue'));
+        if (btn) { btn.disabled = false; btn.textContent = 'Créer le compte'; }
       }
-    } catch(e) { this.toast('Erreur réseau'); }
+    } catch(e) {
+      this.toast('Erreur réseau');
+      if (btn) { btn.disabled = false; btn.textContent = 'Créer le compte'; }
+    }
   },
 
   _showResetPin(prenom, nom) {
@@ -1682,6 +1707,38 @@ const App = {
       const data = await resp.json();
       if (data.status === 'ok') {
         this.toast(actif ? `✓ ${prenom} réactivé` : `${prenom} désactivé`);
+        this.loadAdminUsers();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+      }
+    } catch(e) { this.toast('Erreur réseau'); }
+  },
+
+  async _updateUserRole(prenom, nom, newRole) {
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action:'update_user_role', prenom, nom, role: newRole }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast(`✓ Rôle de ${prenom} mis à jour`);
+        this.loadAdminUsers();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+        this.loadAdminUsers(); // recharge pour réafficher l'ancien rôle
+      }
+    } catch(e) { this.toast('Erreur réseau'); this.loadAdminUsers(); }
+  },
+
+  async _deleteUser(prenom, nom) {
+    if (!window.confirm(`Supprimer définitivement ${prenom} ${nom} ?\nCette action est irréversible.`)) return;
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action:'delete_user', prenom, nom }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast(`✓ ${prenom} ${nom} supprimé`);
         this.loadAdminUsers();
       } else {
         this.toast('Erreur : ' + (data.error || 'inconnue'));
