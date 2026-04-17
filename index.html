@@ -270,26 +270,35 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.07);
       transition: transform 0.12s;
     }
-    /* ── Cartes stock ── */
+    /* ── Cartes stock — mise en page logistique compacte ── */
     .stock-card {
-      background: white; border-radius: 10px; padding: 10px 12px;
-      margin-bottom: 7px; box-shadow: 0 1px 3px rgba(0,0,0,0.07);
-      border-left: 3px solid #E2E8F0; transition: border-color .15s;
+      background: white; border-radius: 8px; padding: 8px 10px;
+      margin-bottom: 5px; box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+      border-left: 3px solid #E2E8F0; cursor: pointer;
+      transition: border-color .15s, transform .08s;
     }
+    .stock-card:active  { transform: scale(0.99); }
     .stock-card.relevant  { border-left-color: var(--accent); }
     .stock-card.stock-low { border-left-color: #F59E0B; }
-    .stock-row1 { display:flex; align-items:flex-start; gap:8px; }
-    .stock-star { font-size:18px; cursor:pointer; flex-shrink:0; line-height:1; padding-top:1px; user-select:none; }
-    .stock-ref  { font-family:'Courier New',monospace; font-size:13px; font-weight:700; color:var(--brand); flex-shrink:0; min-width:36px; }
-    .stock-desc { font-size:12px; color:#1E293B; line-height:1.4; flex:1; }
-    .stock-row2 { display:flex; align-items:center; gap:6px; margin-top:5px; flex-wrap:wrap; }
-    .stock-badge { font-size:10px; font-weight:600; padding:2px 7px; border-radius:20px; white-space:nowrap; }
-    .badge-famille  { background:#EDE9FE; color:#5B21B6; }
-    .badge-fourn    { background:#E0F2FE; color:#0369A1; }
-    .stock-qty { font-size:11px; font-weight:600; margin-left:auto; white-space:nowrap; }
-    .stock-qty.ok      { color:#15803D; }
-    .stock-qty.low     { color:#D97706; }
-    .stock-qty.unknown { color:#94A3B8; }
+    .sc-main  { display:flex; gap:8px; align-items:flex-start; }
+    .sc-thumb { width:52px; height:52px; border-radius:7px; object-fit:cover; flex-shrink:0; background:#F1F5F9; }
+    .sc-thumb-ph { width:52px; height:52px; border-radius:7px; flex-shrink:0; background:#F1F5F9;
+                   display:flex; align-items:center; justify-content:center; color:#CBD5E1; font-size:20px; }
+    .sc-body  { flex:1; min-width:0; }
+    .sc-head  { display:flex; align-items:center; gap:5px; }
+    .sc-ref   { font-family:'Courier New',monospace; font-size:13px; font-weight:700; color:var(--brand); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .sc-qty   { font-size:10px; font-weight:700; padding:2px 6px; border-radius:10px; white-space:nowrap; flex-shrink:0; }
+    .sc-qty.ok      { background:#DCFCE7; color:#15803D; }
+    .sc-qty.low     { background:#FEF3C7; color:#D97706; }
+    .sc-qty.unknown { background:#F1F5F9; color:#94A3B8; }
+    .sc-star  { font-size:15px; cursor:pointer; user-select:none; flex-shrink:0; line-height:1; color:#CBD5E1; }
+    .sc-star.on { color:#F59E0B; }
+    .sc-desc  { font-size:11.5px; color:#334155; line-height:1.35; margin-top:3px; }
+    .sc-foot  { display:flex; gap:4px; margin-top:3px; flex-wrap:wrap; align-items:center; }
+    .sc-bdg   { font-size:10px; font-weight:600; padding:1px 5px; border-radius:10px; white-space:nowrap; }
+    .sc-bdg.fam  { background:#EDE9FE; color:#5B21B6; }
+    .sc-bdg.fou  { background:#E0F2FE; color:#0369A1; }
+    .sc-rfourn   { font-size:10px; color:#94A3B8; }
     .stock-famille-btn { background:#F1F5F9; border:1.5px solid #CBD5E1; color:#64748B; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap; }
     .stock-famille-btn.active { background:var(--brand); border-color:var(--brand); color:white; }
     .dep-card:active { transform: scale(0.98); }
@@ -1130,17 +1139,24 @@
         <input id="stock-search" type="search" class="input-field" placeholder="🔍 Rechercher une référence ou description…"
           oninput="App.setStockSearch(this.value)"
           style="margin-bottom:8px;font-size:14px;">
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
           <!-- Toggle Mes refs -->
           <button id="stock-myrefs-btn" onclick="App.toggleStockMyRefs()"
-            style="background:var(--accent);border:1.5px solid var(--accent);color:white;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+            style="background:var(--accent);border:1.5px solid var(--accent);color:white;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
             ★ Mes références
           </button>
+          <!-- Toggle miniatures -->
+          <button id="stock-thumbs-btn" onclick="App.toggleStockThumbs()"
+            style="background:#F1F5F9;border:1.5px solid #CBD5E1;color:#64748B;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+            🖼 Photos
+          </button>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
           <!-- Filtres famille -->
           <button id="stock-famille-all" onclick="App.setStockFamille('')"
             class="stock-famille-btn active"
             style="white-space:nowrap;">Toutes</button>
-          <div id="stock-famille-filters" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+          <div id="stock-famille-filters" style="display:flex;gap:5px;flex-wrap:wrap;"></div>
         </div>
         <div style="margin-top:6px;font-size:11px;color:#94A3B8;" id="stock-count-label"></div>
       </div>
@@ -1154,6 +1170,10 @@
       <!-- Liste des pièces -->
       <div id="stock-list"></div>
 
+    </div>
+    <!-- ── VIEW : STOCK DETAIL ──────────────────────────────────────────── -->
+    <div class="view" id="view-stock-detail">
+      <div id="stock-detail-body"></div>
     </div>
 
     <!-- ── VIEW : SETTINGS ──────────────────────────────────────────────── -->
@@ -1304,6 +1324,9 @@ const S = {
   stockPrefs:    new Set(),// refs marquées "mes références"
   stockFamilles: [],       // valeurs uniques pour le filtre
   stockFilter: { search: '', famille: '', myRefs: true },
+  stockPhotos:    {},      // { ref: thumbFileId } — chargé à la demande
+  stockShowThumbs: false,  // toggle miniatures
+  selStockRef:    null,    // référence ouverte dans la vue détail
 };
 // ── APP ──────────────────────────────────────────────────────────────────────
 const App = {
@@ -1317,7 +1340,8 @@ const App = {
     if (view === 'departures' && !S.depsLoaded) this.loadDepartures();
     if (view === 'archive'    && !S.archiveLoaded) this.loadArchive();
     if (view === 'settings')   this._fillSettings();
-    if (view === 'stock' && !S.stockLoaded) this.loadStockCatalog();
+    if (view === 'stock'        && !S.stockLoaded) this.loadStockCatalog();
+    if (view === 'stock-detail') this._renderStockDetail();
   },
   goBack() {
     if (S.view === 'admin') { this.goHome(); return; }
@@ -1957,27 +1981,225 @@ const App = {
     }
 
     list.innerHTML = items.map(d => {
-      const isRel = S.stockPrefs.has(d.ref);
-      const qtyTxt = d.qte !== null
-        ? `📦 ${d.qte}${d.seuil !== null ? ' / min ' + d.seuil : ''}`
-        : '📦 —';
+      const isRel    = S.stockPrefs.has(d.ref);
+      const qtyTxt   = d.qte !== null ? `📦 ${d.qte}${d.seuil !== null ? '/' + d.seuil : ''}` : '📦 —';
       const qtyClass = d.stockStatus === 'low' ? 'low' : d.stockStatus === 'ok' ? 'ok' : 'unknown';
-      const cardClass = `stock-card${isRel?' relevant':''}${d.stockStatus==='low'?' stock-low':''}`;
-      const desc = d.description.length > 120 ? d.description.substring(0,118)+'…' : d.description;
-      const refFourn = d.refFourn ? ` · <span style="font-size:10px;color:#94A3B8;">${d.refFourn}</span>` : '';
-      return `<div class="${cardClass}">
-        <div class="stock-row1">
-          <span class="stock-star" onclick="App.toggleStockPref('${d.ref}')" title="${isRel?'Retirer de mes refs':'Ajouter à mes refs'}">${isRel?'★':'☆'}</span>
-          <span class="stock-ref">${d.ref}</span>
-          <span class="stock-desc">${desc}</span>
-        </div>
-        <div class="stock-row2">
-          ${d.famille    ? `<span class="stock-badge badge-famille">${d.famille}</span>` : ''}
-          ${d.fournisseur? `<span class="stock-badge badge-fourn">${d.fournisseur}${refFourn}</span>` : ''}
-          <span class="stock-qty ${qtyClass}" style="margin-left:auto;">${qtyTxt}</span>
+      const cardCls  = `stock-card${isRel?' relevant':''}${d.stockStatus==='low'?' stock-low':''}`;
+      const desc     = d.description.length > 90 ? d.description.substring(0,88)+'…' : d.description;
+      const refSafe  = d.ref.replace(/'/g, "\\'");
+
+      let thumbHtml = '';
+      if (S.stockShowThumbs) {
+        if (S.stockPhotos[d.ref]) {
+          thumbHtml = `<img class="sc-thumb" data-ref="${d.ref.replace(/"/g,'&quot;')}" src="" alt="📷">`;
+        } else {
+          thumbHtml = `<div class="sc-thumb-ph" title="Aucune photo">📷</div>`;
+        }
+      }
+
+      return `<div class="${cardCls}" onclick="App.openStockDetail('${refSafe}')">
+        <div class="sc-main">
+          ${S.stockShowThumbs ? `<div style="flex-shrink:0;">${thumbHtml}</div>` : ''}
+          <div class="sc-body">
+            <div class="sc-head">
+              <span class="sc-ref">${d.ref}</span>
+              <span class="sc-qty ${qtyClass}">${qtyTxt}</span>
+              <span class="sc-star${isRel?' on':''}" onclick="event.stopPropagation();App.toggleStockPref('${refSafe}')">${isRel?'★':'☆'}</span>
+            </div>
+            <div class="sc-desc">${desc}</div>
+            <div class="sc-foot">
+              ${d.famille     ? `<span class="sc-bdg fam">${d.famille}</span>` : ''}
+              ${d.fournisseur ? `<span class="sc-bdg fou">${d.fournisseur}</span>` : ''}
+              ${d.refFourn    ? `<span class="sc-rfourn">${d.refFourn}</span>` : ''}
+            </div>
+          </div>
         </div>
       </div>`;
     }).join('');
+
+    if (S.stockShowThumbs) this._loadVisibleThumbnails();
+  },
+
+  /* ─ Stock photos & detail ─ */
+
+  // Charge l'index des photos (ref → thumbId) en arrière-plan
+  async loadStockPhotos() {
+    if (!S.apiUrl) return;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=stock_photos_index', {}, 10000);
+      const data = await r.json();
+      if (data.status === 'ok') S.stockPhotos = data.photos || {};
+    } catch(e) { /* silencieux */ }
+  },
+
+  // Toggle bouton "🖼 Photos"
+  toggleStockThumbs() {
+    S.stockShowThumbs = !S.stockShowThumbs;
+    const btn = document.getElementById('stock-thumbs-btn');
+    if (btn) {
+      btn.style.background  = S.stockShowThumbs ? 'var(--accent)' : '#F1F5F9';
+      btn.style.borderColor = S.stockShowThumbs ? 'var(--accent)' : '#CBD5E1';
+      btn.style.color       = S.stockShowThumbs ? 'white' : '#64748B';
+    }
+    // Premier chargement : récupérer l'index photos avant de re-rendre
+    if (S.stockShowThumbs && Object.keys(S.stockPhotos).length === 0) {
+      this.loadStockPhotos().then(() => this._renderStockList());
+    } else {
+      this._renderStockList();
+    }
+  },
+
+  // Charge les miniatures des cartes visibles après rendu
+  async _loadVisibleThumbnails() {
+    if (!S.apiUrl) return;
+    const imgs = document.querySelectorAll('.sc-thumb[data-ref][src=""]');
+    for (const img of imgs) {
+      if (img.dataset.loaded) continue;
+      const ref = img.getAttribute('data-ref');
+      if (!ref || !S.stockPhotos[ref]) continue;
+      img.dataset.loaded = '1';
+      this._loadStockPhotoImg(img, ref);
+    }
+  },
+
+  // Récupère une photo (pleine ou thumb) via l'AppScript et l'injecte dans <img>
+  async _loadStockPhotoImg(img, ref) {
+    if (!S.apiUrl || !ref) return;
+    try {
+      const r = await _fetchWithTimeout(
+        `${S.apiUrl}?action=get_stock_thumbnail&ref=${encodeURIComponent(ref)}`, {}, 12000
+      );
+      const data = await r.json();
+      if (data.status === 'ok' && data.data) {
+        img.src = `data:${data.mime || 'image/jpeg'};base64,${data.data}`;
+      }
+    } catch(e) { /* silencieux */ }
+  },
+
+  // Ouvre la vue détail d'une référence
+  async openStockDetail(ref) {
+    S.selStockRef = ref;
+    this.go('stock-detail'); // rendu immédiat (sans photo si index pas chargé)
+    // Charger l'index photos si besoin, puis rafraîchir
+    if (Object.keys(S.stockPhotos).length === 0) {
+      await this.loadStockPhotos();
+      if (S.view === 'stock-detail' && S.selStockRef === ref) this._renderStockDetail();
+    }
+  },
+
+  // Rendu de la vue détail stock
+  _renderStockDetail() {
+    const ref  = S.selStockRef;
+    const body = document.getElementById('stock-detail-body');
+    if (!body || !ref) return;
+
+    const d = S.stockData.find(x => x.ref === ref);
+    if (!d) {
+      body.innerHTML = '<p style="color:#94A3B8;text-align:center;padding:40px;">Référence introuvable</p>';
+      return;
+    }
+
+    const isRel    = S.stockPrefs.has(ref);
+    const qtyVal   = d.qte !== null ? String(d.qte) : '—';
+    const seuilTxt = d.seuil !== null ? ` (min ${d.seuil})` : '';
+    const qtyClass = d.stockStatus === 'low' ? 'low' : d.stockStatus === 'ok' ? 'ok' : 'unknown';
+    const hasPhoto = !!S.stockPhotos[ref];
+    const refSafe  = ref.replace(/'/g, "\\'");
+
+    body.innerHTML = `
+      <button onclick="App.go('stock')"
+        style="background:none;border:none;color:var(--brand);font-size:14px;font-weight:600;cursor:pointer;padding:0 0 14px;display:flex;align-items:center;gap:5px;">
+        ← Retour catalogue
+      </button>
+
+      <div class="card">
+        <!-- Ref + star -->
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;">
+          <div>
+            <div style="font-family:'Courier New',monospace;font-size:18px;font-weight:700;color:var(--brand);">${d.ref}</div>
+            ${d.refFourn ? `<div style="font-size:11px;color:#94A3B8;margin-top:2px;">Réf. fournisseur : ${d.refFourn}</div>` : ''}
+          </div>
+          <button onclick="App.toggleStockPref('${refSafe}');App._renderStockDetail();"
+            style="background:none;border:none;font-size:28px;cursor:pointer;line-height:1;color:${isRel ? '#F59E0B' : '#CBD5E1'};">
+            ${isRel ? '★' : '☆'}
+          </button>
+        </div>
+
+        <!-- Description -->
+        <p style="font-size:14px;color:#1E293B;line-height:1.55;margin-bottom:14px;">${d.description || '—'}</p>
+
+        <!-- Badges -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">
+          ${d.famille     ? `<span class="sc-bdg fam" style="font-size:12px;padding:3px 9px;">${d.famille}</span>` : ''}
+          ${d.fournisseur ? `<span class="sc-bdg fou" style="font-size:12px;padding:3px 9px;">${d.fournisseur}</span>` : ''}
+        </div>
+
+        <!-- Stock -->
+        <div style="display:flex;align-items:center;gap:12px;padding:12px;background:#F8FAFC;border-radius:10px;margin-bottom:18px;">
+          <div style="font-size:28px;">📦</div>
+          <div>
+            <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Stock actuel</div>
+            <div style="margin-top:4px;">
+              <span class="sc-qty ${qtyClass}" style="font-size:14px;padding:4px 12px;">${qtyVal}${seuilTxt}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Photo -->
+        <div>
+          <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Photo de référence</div>
+          <div id="stock-detail-photo" style="width:100%;min-height:160px;background:#F1F5F9;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
+            ${hasPhoto
+              ? `<img id="stock-detail-img" src="" style="width:100%;max-height:280px;object-fit:contain;" alt="Photo de ${d.ref}">`
+              : `<div style="text-align:center;color:#94A3B8;padding:40px 20px;">
+                   <div style="font-size:44px;margin-bottom:10px;">📷</div>
+                   <div style="font-size:13px;">Aucune photo pour cette référence</div>
+                 </div>`
+            }
+          </div>
+          <label style="display:flex;align-items:center;justify-content:center;gap:8px;background:#EBF5FB;color:var(--brand);border:2px dashed var(--accent);padding:13px;border-radius:10px;cursor:pointer;font-weight:600;font-size:14px;">
+            📷 ${hasPhoto ? 'Changer la photo' : 'Ajouter une photo'}
+            <input type="file" accept="image/*" capture="environment"
+              onchange="App.uploadStockPhoto(this,'${refSafe}')" style="display:none;">
+          </label>
+        </div>
+      </div>`;
+
+    // Charger la photo si disponible
+    if (hasPhoto) {
+      const img = document.getElementById('stock-detail-img');
+      if (img) this._loadStockPhotoImg(img, ref);
+    }
+  },
+
+  // Gère l'upload d'une photo pour une référence stock
+  async uploadStockPhoto(input, ref) {
+    const file = input.files[0];
+    if (!file || !S.apiUrl) return;
+    this.toast('⏳ Envoi de la photo…');
+    try {
+      const [fullB64, thumbB64] = await Promise.all([
+        _resizeImage(file, 1200, 0.82),
+        _resizeImage(file, 200, 0.75),
+      ]);
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({
+        action:    'save_stock_photo',
+        ref:       ref,
+        imageData: fullB64.split(',')[1],
+        thumbData: thumbB64.split(',')[1],
+        mime:      'image/jpeg',
+      }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 30000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast('✓ Photo enregistrée');
+        S.stockPhotos[ref] = data.thumbId || data.fileId;
+        this._renderStockDetail();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+      }
+    } catch(e) { this.toast('Erreur envoi photo'); }
   },
 
   /* ─ Arrivals list ─ */
