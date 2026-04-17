@@ -719,11 +719,71 @@
           <span class="activity-badge badge-soon">Bientôt</span>
         </div>
 
+        <!-- Admin — visible uniquement pour role=admin -->
+        <div class="activity-card" id="admin-home-card" data-ready="true"
+          onclick="App.goAdmin()"
+          style="display:none;border:2px dashed #CBD5E1;grid-column:1/-1;">
+          <div style="display:flex;align-items:center;gap:14px;">
+            <div class="activity-icon" style="margin-bottom:0;">👥</div>
+            <div>
+              <div class="activity-name">Administration</div>
+              <div class="activity-desc" style="margin-bottom:0;">Gérer les utilisateurs, PINs, accès</div>
+            </div>
+            <span class="activity-badge" style="background:#FEF3C7;color:#92400E;margin-left:auto;flex-shrink:0;">Admin</span>
+          </div>
+        </div>
+
       </div>
 
       <p style="text-align:center;font-size:11px;color:#CBD5E1;margin-top:28px;">
         SONOTRAD · Gestion multi-activités
       </p>
+    </div>
+
+    <!-- ── VIEW : ADMIN ─────────────────────────────────────────────────── -->
+    <div class="view" id="view-admin">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h2 style="font-size:20px;font-weight:700;color:#1E293B;">👥 Utilisateurs</h2>
+        <button onclick="App._showCreateUserForm()"
+          style="background:var(--brand);color:white;border:none;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;">
+          + Nouveau
+        </button>
+      </div>
+
+      <!-- Formulaire création (masqué par défaut) -->
+      <div id="admin-create-form" class="card" style="display:none;margin-bottom:12px;border:2px solid var(--brand);">
+        <p style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:12px;">Nouvel utilisateur</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <input type="text" id="nu-prenom" class="input-field" placeholder="Prénom" style="margin:0;">
+          <input type="text" id="nu-nom" class="input-field" placeholder="Nom" style="margin:0;">
+        </div>
+        <select id="nu-role" class="input-field" style="margin-bottom:8px;">
+          <option value="chauffeur">Chauffeur</option>
+          <option value="gestionnaire">Gestionnaire</option>
+          <option value="admin">Administrateur</option>
+        </select>
+        <input type="text" id="nu-activites" class="input-field" placeholder="Activités (ex: loxam,bcb)" value="loxam" style="margin-bottom:8px;">
+        <div style="margin-bottom:12px;">
+          <label class="label-sm">PIN initial (4 chiffres) — à communiquer verbalement</label>
+          <input type="number" id="nu-pin" class="input-field" placeholder="ex : 4821" min="1000" max="9999" style="margin:0;letter-spacing:4px;font-size:18px;font-weight:600;">
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="App._createUser()" class="btn btn-primary" style="flex:1;">Créer le compte</button>
+          <button onclick="App._hideCreateUserForm()"
+            style="background:#F1F5F9;color:#64748B;border:none;padding:10px 16px;border-radius:10px;font-size:14px;cursor:pointer;">
+            Annuler
+          </button>
+        </div>
+      </div>
+
+      <!-- Chargement -->
+      <div id="admin-loading" style="text-align:center;padding:40px;display:none;">
+        <div class="spinner"></div>
+        <p style="color:#64748B;margin-top:10px;">Chargement...</p>
+      </div>
+
+      <!-- Liste des utilisateurs -->
+      <div id="admin-user-list"></div>
     </div>
 
     <!-- ── VIEW : ARRIVALS ──────────────────────────────────────────────── -->
@@ -1185,7 +1245,10 @@ const App = {
     if (view === 'archive'    && !S.archiveLoaded) this.loadArchive();
     if (view === 'settings')   this._fillSettings();
   },
-  goBack() { this.go(S.prevView); },
+  goBack() {
+    if (S.view === 'admin') { this.goHome(); return; }
+    this.go(S.prevView);
+  },
 
   /* ─ Accueil multi-activité ─ */
   goHome() {
@@ -1260,6 +1323,19 @@ const App = {
         titleEl.textContent    = meta ? `${meta.icon} ${meta.title}` : 'SONOTRAD';
         subtitleEl.textContent = meta ? meta.sub : '';
       }
+    }
+
+    // ── Carte admin (accueil) : visible uniquement pour les admins ───────
+    const adminCard = document.getElementById('admin-home-card');
+    if (adminCard) adminCard.style.display = (S.currentUser?.role === 'admin') ? '' : 'none';
+
+    // ── Back button : admin revient à l'accueil ───────────────────────────
+    if (v === 'admin') {
+      document.getElementById('btn-back').classList.remove('hidden');
+      document.getElementById('header-logo').style.display = 'none';
+      document.getElementById('back-label').textContent = 'Accueil';
+      if (titleEl) titleEl.textContent = '👥 Utilisateurs';
+      if (subtitleEl) subtitleEl.textContent = 'Administration';
     }
 
     // ── API warning ───────────────────────────────────────────────────────
@@ -1437,6 +1513,166 @@ const App = {
     document.getElementById('login-setup-panel').style.display = 'none';
     document.getElementById('pin-error-msg').textContent = '';
     this.toast('✓ URL enregistrée');
+  },
+
+  /* ─ Admin ─ */
+
+  goAdmin() {
+    S.view = 'admin'; S.activity = 'admin'; S.prevView = 'home';
+    this._render();
+    this.loadAdminUsers();
+  },
+
+  async loadAdminUsers() {
+    if (!S.apiUrl) return;
+    const loading = document.getElementById('admin-loading');
+    const list    = document.getElementById('admin-user-list');
+    if (loading) loading.style.display = 'block';
+    if (list)    list.innerHTML = '';
+    try {
+      const resp = await _fetchWithTimeout(S.apiUrl + '?action=users_list', {}, 15000);
+      const data = await resp.json();
+      if (data.status === 'ok') this._renderAdminUsers(data.users || []);
+      else if (list) list.innerHTML = `<div class="card" style="border-left:4px solid #F87171;"><p style="color:#991B1B;">${data.error || 'Erreur'}</p></div>`;
+    } catch(e) {
+      if (list) list.innerHTML = `<div class="card" style="border-left:4px solid #F87171;"><p style="color:#991B1B;">Erreur réseau : ${e.message}</p></div>`;
+    } finally {
+      if (loading) loading.style.display = 'none';
+    }
+  },
+
+  _renderAdminUsers(users) {
+    const list = document.getElementById('admin-user-list');
+    if (!list) return;
+    if (!users.length) {
+      list.innerHTML = '<div class="card" style="text-align:center;color:#94A3B8;padding:32px 0;">Aucun utilisateur</div>';
+      return;
+    }
+    const roleLabel = { admin:'Administrateur', gestionnaire:'Gestionnaire', chauffeur:'Chauffeur' };
+    list.innerHTML = users.map(u => {
+      const badgeBg  = u.actif ? '#D1FAE5' : '#FEE2E2';
+      const badgeCol = u.actif ? '#065F46'  : '#991B1B';
+      const badgeTxt = u.actif ? 'Actif'    : 'Inactif';
+      const pinBadge = u.hasPIN
+        ? '<span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;padding:2px 6px;border-radius:10px;font-weight:600;">🔑 PIN défini</span>'
+        : '<span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:2px 6px;border-radius:10px;font-weight:600;">⚠ Pas de PIN</span>';
+      return `
+        <div class="card" style="margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+            <div style="width:40px;height:40px;border-radius:50%;background:${u.actif ? 'var(--brand)' : '#94A3B8'};display:flex;align-items:center;justify-content:center;color:white;font-size:18px;flex-shrink:0;">👤</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:700;color:#1E293B;">${u.prenom} ${u.nom}</div>
+              <div style="font-size:12px;color:#64748B;margin-top:1px;">${roleLabel[u.role] || u.role} · ${u.activites.join(', ')}</div>
+              <div style="margin-top:4px;">${pinBadge}</div>
+            </div>
+            <span style="background:${badgeBg};color:${badgeCol};font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;flex-shrink:0;">${badgeTxt}</span>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button onclick="App._showResetPin('${u.prenom}','${u.nom}')"
+              style="flex:1;background:#F8FAFC;border:1.5px solid #E2E8F0;color:#475569;padding:8px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
+              🔑 ${u.hasPIN ? 'Reset PIN' : 'Définir PIN'}
+            </button>
+            <button onclick="App._toggleUser('${u.prenom}','${u.nom}',${!u.actif})"
+              style="background:${u.actif ? '#FEF2F2' : '#F0FDF4'};border:1.5px solid ${u.actif ? '#FECACA' : '#86EFAC'};color:${u.actif ? '#991B1B' : '#14532D'};padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
+              ${u.actif ? 'Désactiver' : 'Réactiver'}
+            </button>
+          </div>
+          <!-- Zone reset PIN inline (masquée par défaut) -->
+          <div id="reset-pin-${u.prenom}-${u.nom}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid #F1F5F9;">
+            <label class="label-sm">Nouveau PIN (4 chiffres)</label>
+            <div style="display:flex;gap:8px;margin-top:4px;">
+              <input type="number" id="rpin-${u.prenom}-${u.nom}" class="input-field"
+                placeholder="ex : 3947" min="1000" max="9999"
+                style="margin:0;flex:1;letter-spacing:4px;font-size:18px;font-weight:600;">
+              <button onclick="App._applyResetPin('${u.prenom}','${u.nom}')"
+                style="background:var(--brand);color:white;border:none;padding:0 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;">
+                OK
+              </button>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  },
+
+  _showCreateUserForm() {
+    document.getElementById('admin-create-form').style.display = 'block';
+    document.getElementById('nu-prenom').focus();
+  },
+  _hideCreateUserForm() {
+    document.getElementById('admin-create-form').style.display = 'none';
+    ['nu-prenom','nu-nom','nu-pin'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  },
+
+  async _createUser() {
+    const prenom = document.getElementById('nu-prenom').value.trim();
+    const nom    = document.getElementById('nu-nom').value.trim();
+    const role   = document.getElementById('nu-role').value;
+    const acts   = document.getElementById('nu-activites').value.trim() || 'loxam';
+    const pin    = document.getElementById('nu-pin').value.trim();
+
+    if (!prenom || !nom)              { this.toast('Prénom et nom requis'); return; }
+    if (!pin || pin.length < 4)       { this.toast('PIN invalide — 4 chiffres requis'); return; }
+
+    const pinHash  = await this._hashPin(pin);
+    const activites = acts.split(',').map(s => s.trim()).filter(Boolean);
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action:'create_user', prenom, nom, role, activites, pinHash }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast(`✓ ${prenom} ${nom} créé !`);
+        this._hideCreateUserForm();
+        this.loadAdminUsers();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+      }
+    } catch(e) { this.toast('Erreur réseau'); }
+  },
+
+  _showResetPin(prenom, nom) {
+    const zone = document.getElementById(`reset-pin-${prenom}-${nom}`);
+    if (!zone) return;
+    const isVisible = zone.style.display === 'block';
+    // Fermer toutes les autres zones ouvertes
+    document.querySelectorAll('[id^="reset-pin-"]').forEach(z => z.style.display = 'none');
+    zone.style.display = isVisible ? 'none' : 'block';
+    if (!isVisible) document.getElementById(`rpin-${prenom}-${nom}`)?.focus();
+  },
+
+  async _applyResetPin(prenom, nom) {
+    const input = document.getElementById(`rpin-${prenom}-${nom}`);
+    const pin   = (input?.value || '').trim();
+    if (!pin || pin.length < 4) { this.toast('PIN invalide — 4 chiffres requis'); return; }
+    const newPinHash = await this._hashPin(pin);
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action:'admin_reset_pin', prenom, nom, newPinHash }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast(`✓ PIN de ${prenom} réinitialisé`);
+        document.getElementById(`reset-pin-${prenom}-${nom}`).style.display = 'none';
+        this.loadAdminUsers();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+      }
+    } catch(e) { this.toast('Erreur réseau'); }
+  },
+
+  async _toggleUser(prenom, nom, actif) {
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action:'toggle_user', prenom, nom, actif }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast(actif ? `✓ ${prenom} réactivé` : `${prenom} désactivé`);
+        this.loadAdminUsers();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+      }
+    } catch(e) { this.toast('Erreur réseau'); }
   },
 
   /* ─ Arrivals list ─ */
@@ -2424,9 +2660,7 @@ const App = {
       S.depPhotosLog[code] = entry;
       S.depPhotos = []; // vider la grille
       this.toast('✓ Photos enregistrées !');
-      await _sleep(1100);
-      S.depsLoaded = false;
-      this.go('departures');
+      this._renderDepDetail(); // rester sur la carte, rafraîchir le compteur
     } catch(e) {
       this.toast('Erreur : ' + e.message);
       if (btn) { btn.disabled = false; btn.textContent = '📤 Enregistrer les photos de départ'; }
@@ -2468,9 +2702,7 @@ const App = {
       S.arrPhotosLog[code] = entry;
       S.arrPhotos = [];
       this.toast('✓ Photos d\'arrivée enregistrées !');
-      await _sleep(1100);
-      S.arrivalsLoaded = false; S.arrFullLoaded = false;
-      this.go('arrivals');
+      this._renderArrivalDetail(); // rester sur la carte, rafraîchir le compteur
     } catch(e) {
       this.toast('Erreur : ' + e.message);
       if (btn) { btn.disabled = false; btn.textContent = '📥 Enregistrer les photos d\'arrivée'; }
