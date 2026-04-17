@@ -1327,6 +1327,8 @@ const S = {
   stockPhotos:    {},      // { ref: thumbFileId } — chargé à la demande
   stockShowThumbs: false,  // toggle miniatures
   selStockRef:    null,    // référence ouverte dans la vue détail
+  stockDeltas:    {},      // { ref: { delta, invQty, lastDate } } — mouvements cumulés
+  selMvType:      null,    // type de mouvement en cours de saisie
 };
 // ── APP ──────────────────────────────────────────────────────────────────────
 const App = {
@@ -1882,13 +1884,15 @@ const App = {
     document.getElementById('stock-loading').style.display = 'block';
     document.getElementById('stock-list').innerHTML = '';
     try {
-      // Catalogue + préférences en parallèle
-      const [catResp, prefsResp] = await Promise.all([
-        _fetchWithTimeout(S.apiUrl + '?action=stock_catalog',  {}, 40000),
-        _fetchWithTimeout(S.apiUrl + '?action=stock_prefs',    {}, 10000),
+      // Catalogue + préférences + mouvements en parallèle
+      const [catResp, prefsResp, deltaResp] = await Promise.all([
+        _fetchWithTimeout(S.apiUrl + '?action=stock_catalog',            {}, 40000),
+        _fetchWithTimeout(S.apiUrl + '?action=stock_prefs',              {}, 10000),
+        _fetchWithTimeout(S.apiUrl + '?action=stock_mouvements_summary', {}, 15000),
       ]);
       const cat   = await catResp.json();
       const prefs = await prefsResp.json();
+      const deltas = await deltaResp.json();
 
       if (cat.status === 'ok') {
         S.stockData     = cat.data || [];
@@ -1897,6 +1901,9 @@ const App = {
       }
       if (prefs.status === 'ok') {
         S.stockPrefs = new Set(prefs.prefs?.relevant || []);
+      }
+      if (deltas.status === 'ok') {
+        S.stockDeltas = deltas.summary || {};
       }
     } catch(e) { this.toast('Erreur chargement catalogue'); }
     finally { document.getElementById('stock-loading').style.display = 'none'; }
@@ -1981,10 +1988,16 @@ const App = {
     }
 
     list.innerHTML = items.map(d => {
-      const isRel    = S.stockPrefs.has(d.ref);
-      const qtyTxt   = d.qte !== null ? `📦 ${d.qte}${d.seuil !== null ? '/' + d.seuil : ''}` : '📦 —';
-      const qtyClass = d.stockStatus === 'low' ? 'low' : d.stockStatus === 'ok' ? 'ok' : 'unknown';
-      const cardCls  = `stock-card${isRel?' relevant':''}${d.stockStatus==='low'?' stock-low':''}`;
+      const isRel      = S.stockPrefs.has(d.ref);
+      const calcQty    = this._calcStockActuel(d.ref, d.qte);
+      const qtyTxt     = calcQty !== null ? `📦 ${calcQty}${d.seuil !== null ? '/' + d.seuil : ''}` : '📦 —';
+      const hasDelta   = !!S.stockDeltas[d.ref];
+      const calcStatus = d.seuil !== null && calcQty !== null
+        ? (calcQty >= d.seuil ? 'ok' : 'low')
+        : (calcQty !== null ? 'ok' : 'unknown');
+      const qtyClass = calcStatus;
+      const cardCls  = `stock-card${isRel?' relevant':''}${calcStatus==='low'?' stock-low':''}${hasDelta?' has-delta':''}`;
+
       const desc     = d.description.length > 90 ? d.description.substring(0,88)+'…' : d.description;
       const refSafe  = d.ref.replace(/'/g, "\\'");
 
@@ -2099,12 +2112,39 @@ const App = {
       return;
     }
 
-    const isRel    = S.stockPrefs.has(ref);
-    const qtyVal   = d.qte !== null ? String(d.qte) : '—';
-    const seuilTxt = d.seuil !== null ? ` (min ${d.seuil})` : '';
-    const qtyClass = d.stockStatus === 'low' ? 'low' : d.stockStatus === 'ok' ? 'ok' : 'unknown';
-    const hasPhoto = !!S.stockPhotos[ref];
-    const refSafe  = ref.replace(/'/g, "\\'");
+    const isRel      = S.stockPrefs.has(ref);
+    const calcQty    = this._calcStockActuel(ref, d.qte);
+    const pidemQty   = d.qte !== null ? String(d.qte) : '—';
+    const hasDelta   = !!S.stockDeltas[ref];
+    const deltaInfo  = S.stockDeltas[ref];
+    const calcStatus = d.seuil !== null && calcQty !== null
+      ? (calcQty >= d.seuil ? 'ok' : 'low') : (calcQty !== null ? 'ok' : 'unknown');
+    const qtyClass   = calcStatus;
+    const hasPhoto   = !!S.stockPhotos[ref];
+    const refSafe    = ref.replace(/'/g, "\\'");
+
+    // Indicateur delta
+    let deltaLabel = '';
+    if (hasDelta && deltaInfo) {
+      if (deltaInfo.invQty !== null) {
+        deltaLabel = `<span style="font-size:10px;color:#64748B;margin-left:6px;">inventaire</span>`;
+      } else {
+        const sign = deltaInfo.delta >= 0 ? '+' : '';
+        deltaLabel = `<span style="font-size:10px;color:${deltaInfo.delta>=0?'#15803D':'#DC2626'};margin-left:6px;">${sign}${deltaInfo.delta} vs PIDEM</span>`;
+      }
+    }
+
+    // Boutons type de mouvement (état conservé via S.selMvType)
+    const mvColors  = { entrée:'#15803D', sortie:'#DC2626', inventaire:'#2563EB' };
+    const mvIcons   = { entrée:'➕', sortie:'➖', inventaire:'📋' };
+    const mvLabels  = { entrée:'Entrée', sortie:'Sortie', inventaire:'Inventaire' };
+    const mvBtnStyle = (type) => {
+      const active = S.selMvType === type;
+      const c = mvColors[type];
+      return active
+        ? `background:${c};border-color:${c};color:white;`
+        : `background:#F8FAFC;border-color:#E2E8F0;color:#64748B;`;
+    };
 
     body.innerHTML = `
       <button onclick="App.go('stock')"
@@ -2112,63 +2152,212 @@ const App = {
         ← Retour catalogue
       </button>
 
+      <!-- ── Fiche référence ── -->
       <div class="card">
-        <!-- Ref + star -->
         <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;">
           <div>
             <div style="font-family:'Courier New',monospace;font-size:18px;font-weight:700;color:var(--brand);">${d.ref}</div>
             ${d.refFourn ? `<div style="font-size:11px;color:#94A3B8;margin-top:2px;">Réf. fournisseur : ${d.refFourn}</div>` : ''}
           </div>
           <button onclick="App.toggleStockPref('${refSafe}');App._renderStockDetail();"
-            style="background:none;border:none;font-size:28px;cursor:pointer;line-height:1;color:${isRel ? '#F59E0B' : '#CBD5E1'};">
-            ${isRel ? '★' : '☆'}
+            style="background:none;border:none;font-size:28px;cursor:pointer;line-height:1;color:${isRel?'#F59E0B':'#CBD5E1'};">
+            ${isRel?'★':'☆'}
           </button>
         </div>
-
-        <!-- Description -->
-        <p style="font-size:14px;color:#1E293B;line-height:1.55;margin-bottom:14px;">${d.description || '—'}</p>
-
-        <!-- Badges -->
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">
+        <p style="font-size:14px;color:#1E293B;line-height:1.55;margin-bottom:14px;">${d.description||'—'}</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
           ${d.famille     ? `<span class="sc-bdg fam" style="font-size:12px;padding:3px 9px;">${d.famille}</span>` : ''}
           ${d.fournisseur ? `<span class="sc-bdg fou" style="font-size:12px;padding:3px 9px;">${d.fournisseur}</span>` : ''}
         </div>
 
-        <!-- Stock -->
-        <div style="display:flex;align-items:center;gap:12px;padding:12px;background:#F8FAFC;border-radius:10px;margin-bottom:18px;">
-          <div style="font-size:28px;">📦</div>
-          <div>
-            <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Stock actuel</div>
-            <div style="margin-top:4px;">
-              <span class="sc-qty ${qtyClass}" style="font-size:14px;padding:4px 12px;">${qtyVal}${seuilTxt}</span>
+        <!-- Stock calculé -->
+        <div style="display:flex;align-items:center;gap:12px;padding:12px;background:#F8FAFC;border-radius:10px;margin-bottom:16px;">
+          <div style="font-size:26px;">📦</div>
+          <div style="flex:1;">
+            <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Stock calculé</div>
+            <div style="display:flex;align-items:center;margin-top:4px;flex-wrap:wrap;gap:6px;">
+              <span class="sc-qty ${qtyClass}" style="font-size:14px;padding:4px 12px;">${calcQty !== null ? calcQty : '—'}${d.seuil !== null ? ' / min ' + d.seuil : ''}</span>
+              ${deltaLabel}
             </div>
+            ${hasDelta && d.qte !== null ? `<div style="font-size:10px;color:#94A3B8;margin-top:4px;">PIDEM : ${pidemQty}</div>` : ''}
           </div>
         </div>
 
         <!-- Photo -->
         <div>
           <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Photo de référence</div>
-          <div id="stock-detail-photo" style="width:100%;min-height:160px;background:#F1F5F9;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
+          <div id="stock-detail-photo" style="width:100%;min-height:140px;background:#F1F5F9;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
             ${hasPhoto
-              ? `<img id="stock-detail-img" src="" style="width:100%;max-height:280px;object-fit:contain;" alt="Photo de ${d.ref}">`
-              : `<div style="text-align:center;color:#94A3B8;padding:40px 20px;">
-                   <div style="font-size:44px;margin-bottom:10px;">📷</div>
-                   <div style="font-size:13px;">Aucune photo pour cette référence</div>
+              ? `<img id="stock-detail-img" src="" style="width:100%;max-height:260px;object-fit:contain;" alt="Photo">`
+              : `<div style="text-align:center;color:#CBD5E1;padding:30px 20px;">
+                   <div style="font-size:40px;margin-bottom:8px;">📷</div>
+                   <div style="font-size:12px;">Aucune photo</div>
                  </div>`
             }
           </div>
-          <label style="display:flex;align-items:center;justify-content:center;gap:8px;background:#EBF5FB;color:var(--brand);border:2px dashed var(--accent);padding:13px;border-radius:10px;cursor:pointer;font-weight:600;font-size:14px;">
-            📷 ${hasPhoto ? 'Changer la photo' : 'Ajouter une photo'}
+          <label style="display:flex;align-items:center;justify-content:center;gap:8px;background:#EBF5FB;color:var(--brand);border:2px dashed var(--accent);padding:11px;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px;">
+            📷 ${hasPhoto?'Changer la photo':'Ajouter une photo'}
             <input type="file" accept="image/*" capture="environment"
               onchange="App.uploadStockPhoto(this,'${refSafe}')" style="display:none;">
           </label>
         </div>
+      </div>
+
+      <!-- ── Enregistrer un mouvement ── -->
+      <div class="card" style="margin-top:10px;">
+        <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">Enregistrer un mouvement</div>
+        <div style="display:flex;gap:6px;margin-bottom:10px;">
+          ${['entrée','sortie','inventaire'].map(t => `
+            <button id="mv-btn-${t}" onclick="App.selectMvType('${t}')"
+              style="flex:1;padding:9px 4px;border-radius:8px;border:1.5px solid;font-size:11px;font-weight:700;cursor:pointer;${mvBtnStyle(t)}">
+              ${mvIcons[t]} ${mvLabels[t]}
+            </button>`).join('')}
+        </div>
+        <div id="mv-form" style="display:${S.selMvType ? 'block' : 'none'};">
+          <div style="display:flex;gap:8px;margin-bottom:8px;align-items:stretch;">
+            <input type="number" id="mv-qty" min="1" placeholder="Quantité"
+              style="flex:1;padding:10px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:16px;text-align:center;">
+            <button onclick="App.submitMouvement()" id="mv-submit-btn"
+              style="padding:10px 18px;background:${mvColors[S.selMvType]||'var(--brand)'};color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px;">
+              ✓ OK
+            </button>
+          </div>
+          <input type="text" id="mv-note" placeholder="Note optionnelle (commande, chantier…)"
+            style="width:100%;padding:9px 10px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;">
+        </div>
+      </div>
+
+      <!-- ── Historique des mouvements ── -->
+      <div class="card" style="margin-top:10px;margin-bottom:20px;">
+        <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">Historique</div>
+        <div id="mv-history-loading" style="text-align:center;padding:16px;display:none;"><div class="spinner"></div></div>
+        <div id="mv-history-list"><div style="text-align:center;color:#CBD5E1;padding:16px;font-size:13px;">Chargement…</div></div>
       </div>`;
 
-    // Charger la photo si disponible
+    // Charger la photo
     if (hasPhoto) {
       const img = document.getElementById('stock-detail-img');
       if (img) this._loadStockPhotoImg(img, ref);
+    }
+    // Charger l'historique des mouvements
+    this.loadStockMouvements(ref);
+  },
+
+  // Calcule le stock réel = PIDEM qty + mouvements cumulés
+  _calcStockActuel(ref, pidemQty) {
+    const d = S.stockDeltas[ref];
+    if (!d) return pidemQty;
+    if (d.invQty !== null) return d.invQty + d.delta; // inventaire comme base
+    return pidemQty !== null ? pidemQty + d.delta : null;
+  },
+
+  // Sélectionne le type de mouvement (met à jour les boutons)
+  selectMvType(type) {
+    S.selMvType = type;
+    const colors = { entrée:'#15803D', sortie:'#DC2626', inventaire:'#2563EB' };
+    ['entrée','sortie','inventaire'].forEach(t => {
+      const btn = document.getElementById('mv-btn-' + t);
+      if (!btn) return;
+      const active = t === type;
+      btn.style.background  = active ? colors[t] : '#F8FAFC';
+      btn.style.borderColor = active ? colors[t] : '#E2E8F0';
+      btn.style.color       = active ? 'white'   : '#64748B';
+    });
+    const form = document.getElementById('mv-form');
+    if (form) form.style.display = 'block';
+    const submitBtn = document.getElementById('mv-submit-btn');
+    if (submitBtn) submitBtn.style.background = colors[type];
+    setTimeout(() => document.getElementById('mv-qty')?.focus(), 50);
+  },
+
+  // Soumet un mouvement de stock
+  async submitMouvement() {
+    const ref  = S.selStockRef;
+    const type = S.selMvType;
+    const qty  = parseFloat(document.getElementById('mv-qty')?.value);
+    const note = document.getElementById('mv-note')?.value?.trim() || '';
+    const u    = S.currentUser;
+    const user = u ? `${u.prenom} ${u.nom}` : 'inconnu';
+
+    if (!type) { this.toast('Sélectionne un type de mouvement'); return; }
+    if (!qty || qty <= 0 || isNaN(qty)) { this.toast('Quantité invalide'); return; }
+
+    const btn = document.getElementById('mv-submit-btn');
+    if (btn) btn.disabled = true;
+    this.toast('⏳ Enregistrement…');
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action:'add_mouvement', ref, type, qty, note, user }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast('✓ Mouvement enregistré');
+        // Mise à jour locale du delta
+        const cur = S.stockDeltas[ref] || { delta:0, invQty:null, lastDate:null };
+        if      (type === 'inventaire') S.stockDeltas[ref] = { delta:0, invQty:qty,           lastDate: new Date().toISOString() };
+        else if (type === 'entrée')     S.stockDeltas[ref] = { ...cur, delta: cur.delta + qty, lastDate: new Date().toISOString() };
+        else if (type === 'sortie')     S.stockDeltas[ref] = { ...cur, delta: cur.delta - qty, lastDate: new Date().toISOString() };
+        // Réinitialiser le formulaire
+        S.selMvType = null;
+        if (document.getElementById('mv-qty'))  document.getElementById('mv-qty').value  = '';
+        if (document.getElementById('mv-note')) document.getElementById('mv-note').value = '';
+        // Re-rendre le détail (stock calculé mis à jour) et recharger l'historique
+        this._renderStockDetail();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+        console.error('[submitMouvement]', data);
+      }
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+      console.error('[submitMouvement]', e);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  },
+
+  // Charge et affiche l'historique des mouvements pour une référence
+  async loadStockMouvements(ref) {
+    const el      = document.getElementById('mv-history-list');
+    const loading = document.getElementById('mv-history-loading');
+    if (!el || !S.apiUrl) return;
+    if (loading) loading.style.display = 'block';
+    el.innerHTML = '';
+    try {
+      const r    = await _fetchWithTimeout(
+        `${S.apiUrl}?action=stock_mouvements&ref=${encodeURIComponent(ref)}`, {}, 15000
+      );
+      const data = await r.json();
+      if (data.status === 'ok') {
+        const movs = (data.mouvements || []).slice().reverse(); // plus récent en premier
+        if (!movs.length) {
+          el.innerHTML = '<div style="text-align:center;color:#CBD5E1;padding:16px;font-size:13px;">Aucun mouvement enregistré</div>';
+          return;
+        }
+        const clrMap  = { entrée:'#15803D', sortie:'#DC2626', inventaire:'#2563EB' };
+        const iconMap = { entrée:'➕', sortie:'➖', inventaire:'📋' };
+        const signMap = { entrée:'+', sortie:'-', inventaire:'=' };
+        el.innerHTML = movs.map((m, i) => {
+          const c    = clrMap[m.type]  || '#64748B';
+          const ico  = iconMap[m.type] || '·';
+          const sign = signMap[m.type] || '';
+          const dt   = m.date ? new Date(m.date).toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+          const last = i === movs.length - 1;
+          return `<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;${last?'':'border-bottom:1px solid #F1F5F9;'}">
+            <div style="width:28px;height:28px;border-radius:50%;background:${c}18;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;">${ico}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;">
+                <span style="font-size:14px;font-weight:700;color:${c};">${sign}${m.qty}</span>
+                <span style="font-size:10px;color:#94A3B8;white-space:nowrap;">${dt}</span>
+              </div>
+              <div style="font-size:11px;color:#64748B;margin-top:1px;">${m.user||''}${m.note?' · <em>'+m.note+'</em>':''}</div>
+            </div>
+          </div>`;
+        }).join('');
+      }
+    } catch(e) {
+      el.innerHTML = '<div style="color:#94A3B8;font-size:12px;padding:12px;">Erreur chargement historique</div>';
+    } finally {
+      if (loading) loading.style.display = 'none';
     }
   },
 
