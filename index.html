@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Sonotrad">
   <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="icon-192.svg">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <title>Sonotrad</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -270,6 +270,37 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.07);
       transition: transform 0.12s;
     }
+    /* ── Cartes stock — mise en page logistique compacte ── */
+    .stock-card {
+      background: white; border-radius: 8px; padding: 8px 10px;
+      margin-bottom: 5px; box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+      border-left: 3px solid #E2E8F0; cursor: pointer;
+      transition: border-color .15s, transform .08s;
+    }
+    .stock-card:active  { transform: scale(0.99); }
+    .stock-card.relevant  { border-left-color: var(--accent); }
+    .stock-card.stock-low { border-left-color: #F59E0B; }
+    .sc-main  { display:flex; gap:8px; align-items:flex-start; }
+    .sc-thumb { width:52px; height:52px; border-radius:7px; object-fit:cover; flex-shrink:0; background:#F1F5F9; }
+    .sc-thumb-ph { width:52px; height:52px; border-radius:7px; flex-shrink:0; background:#F1F5F9;
+                   display:flex; align-items:center; justify-content:center; color:#CBD5E1; font-size:20px; }
+    .sc-body  { flex:1; min-width:0; }
+    .sc-head  { display:flex; align-items:center; gap:5px; }
+    .sc-ref   { font-family:'Courier New',monospace; font-size:13px; font-weight:700; color:var(--brand); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .sc-qty   { font-size:10px; font-weight:700; padding:2px 6px; border-radius:10px; white-space:nowrap; flex-shrink:0; }
+    .sc-qty.ok      { background:#DCFCE7; color:#15803D; }
+    .sc-qty.low     { background:#FEF3C7; color:#D97706; }
+    .sc-qty.unknown { background:#F1F5F9; color:#94A3B8; }
+    .sc-star  { font-size:15px; cursor:pointer; user-select:none; flex-shrink:0; line-height:1; color:#CBD5E1; }
+    .sc-star.on { color:#F59E0B; }
+    .sc-desc  { font-size:11.5px; color:#334155; line-height:1.35; margin-top:3px; }
+    .sc-foot  { display:flex; gap:4px; margin-top:3px; flex-wrap:wrap; align-items:center; }
+    .sc-bdg   { font-size:10px; font-weight:600; padding:1px 5px; border-radius:10px; white-space:nowrap; }
+    .sc-bdg.fam  { background:#EDE9FE; color:#5B21B6; }
+    .sc-bdg.fou  { background:#E0F2FE; color:#0369A1; }
+    .sc-rfourn   { font-size:10px; color:#94A3B8; }
+    .stock-famille-btn { background:#F1F5F9; border:1.5px solid #CBD5E1; color:#64748B; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap; }
+    .stock-famille-btn.active { background:var(--brand); border-color:var(--brand); color:white; }
     .dep-card:active { transform: scale(0.98); }
     .dep-card-left  { flex: 0 0 86px; min-width:0; overflow:hidden; padding-right:8px; border-right:1px solid #F1F5F9; }
     .dep-card-right { flex: 1; min-width:0; padding-left:8px; }
@@ -465,22 +496,175 @@
 
       /* ── Filtres production : meilleur affichage large ── */
       #dep-filters { flex-wrap: wrap; }
+
+      /* ── Home : grille 4 colonnes desktop ── */
+      #activity-grid { grid-template-columns: repeat(4, minmax(160px, 1fr)); }
+      .home-hero { padding: 32px 0 36px; }
+    }
+  </style>
+  <style>
+    /* ═══════════════════════════════════════════
+       ÉCRAN D'ACCUEIL — CARTES D'ACTIVITÉ
+       ═══════════════════════════════════════════ */
+    .activity-card {
+      background: white;
+      border-radius: 16px;
+      padding: 20px 16px 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      border: 2px solid transparent;
+      transition: border-color .15s, transform .12s, box-shadow .15s;
+    }
+    .activity-card[data-ready="true"] {
+      cursor: pointer;
+    }
+    .activity-card[data-ready="true"]:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(46,134,193,0.14);
+    }
+    .activity-card[data-ready="true"]:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    }
+    .activity-card[data-ready="false"] {
+      opacity: 0.55;
+      cursor: default;
+    }
+    .activity-icon { font-size: 38px; line-height: 1; margin-bottom: 8px; }
+    .activity-name { font-size: 15px; font-weight: 700; color: #1E293B; }
+    .activity-desc { font-size: 12px; color: #64748B; margin-bottom: 8px; flex: 1; }
+    .activity-badge {
+      font-size: 11px; font-weight: 600;
+      padding: 3px 9px; border-radius: 20px;
+      align-self: flex-start;
+    }
+    .badge-active { background: #D1FAE5; color: #065F46; }
+    .badge-soon   { background: #F1F5F9; color: #94A3B8; }
+    #activity-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  </style>
+  <style>
+    /* ═══════════════════════════════════════════
+       ÉCRAN DE CONNEXION — OVERLAY PIN
+       ═══════════════════════════════════════════ */
+    #login-overlay {
+      position: fixed; inset: 0; z-index: 9999;
+      background: linear-gradient(160deg, #1A5276 0%, #154360 100%);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 24px;
+      padding-bottom: calc(24px + env(safe-area-inset-bottom));
+    }
+    .pin-dot {
+      width: 15px; height: 15px; border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.45);
+      background: transparent;
+      transition: background .12s, border-color .12s, transform .12s;
+    }
+    .pin-dot.filled {
+      background: white; border-color: white;
+      transform: scale(1.1);
+    }
+    @keyframes pin-shake {
+      0%,100% { transform: translateX(0); }
+      20%,60% { transform: translateX(-8px); }
+      40%,80% { transform: translateX(8px); }
+    }
+    .pin-dots-row.shake { animation: pin-shake .38s ease; }
+    .pin-key {
+      height: 66px; border-radius: 14px; border: none;
+      background: rgba(255,255,255,0.13);
+      color: white; font-size: 22px; font-weight: 600;
+      cursor: pointer; transition: background .1s;
+      -webkit-tap-highlight-color: transparent;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .pin-key:active, .pin-key:focus { background: rgba(255,255,255,0.28); outline: none; }
+    .pin-key-del { font-size: 20px; }
+    .pin-key-empty { visibility: hidden; }
+    /* Panneau URL (config première utilisation) */
+    #login-setup-panel {
+      width: 100%; max-width: 340px; margin-top: 20px;
+      background: rgba(255,255,255,0.08); border-radius: 14px;
+      padding: 14px 16px; display: none;
     }
   </style>
 </head>
 <body>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     OVERLAY CONNEXION — affiché avant toute vue, masqué après auth
+     ════════════════════════════════════════════════════════════════════════ -->
+<div id="login-overlay">
+
+  <!-- Logo -->
+  <div style="text-align:center;margin-bottom:32px;">
+    <div style="font-size:52px;line-height:1;margin-bottom:14px;">🏢</div>
+    <h1 style="color:white;font-size:24px;font-weight:800;margin:0 0 8px;letter-spacing:-.3px;">SONOTRAD</h1>
+    <p id="pin-prompt" style="color:rgba(255,255,255,0.65);font-size:14px;margin:0;">Entrez votre code PIN</p>
+  </div>
+
+  <!-- Indicateurs de saisie (4 points) -->
+  <div class="pin-dots-row" id="pin-dots-row" style="display:flex;gap:18px;margin-bottom:14px;">
+    <div class="pin-dot" id="pdot-0"></div>
+    <div class="pin-dot" id="pdot-1"></div>
+    <div class="pin-dot" id="pdot-2"></div>
+    <div class="pin-dot" id="pdot-3"></div>
+  </div>
+
+  <!-- Message d'erreur -->
+  <div id="pin-error-msg" style="color:#FCA5A5;font-size:13px;min-height:22px;margin-bottom:18px;text-align:center;font-weight:500;"></div>
+
+  <!-- Clavier numérique -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;max-width:300px;">
+    <button class="pin-key" onclick="App._pinPress('1')">1</button>
+    <button class="pin-key" onclick="App._pinPress('2')">2</button>
+    <button class="pin-key" onclick="App._pinPress('3')">3</button>
+    <button class="pin-key" onclick="App._pinPress('4')">4</button>
+    <button class="pin-key" onclick="App._pinPress('5')">5</button>
+    <button class="pin-key" onclick="App._pinPress('6')">6</button>
+    <button class="pin-key" onclick="App._pinPress('7')">7</button>
+    <button class="pin-key" onclick="App._pinPress('8')">8</button>
+    <button class="pin-key" onclick="App._pinPress('9')">9</button>
+    <button class="pin-key pin-key-empty" disabled aria-hidden="true"></button>
+    <button class="pin-key" onclick="App._pinPress('0')">0</button>
+    <button class="pin-key pin-key-del" onclick="App._pinDel()">⌫</button>
+  </div>
+
+  <!-- Config URL (première utilisation) -->
+  <button onclick="App._toggleLoginSetup()" style="margin-top:22px;background:none;border:none;color:rgba(255,255,255,0.4);font-size:12px;cursor:pointer;padding:4px 8px;">
+    ⚙ Configurer l'URL API
+  </button>
+  <div id="login-setup-panel">
+    <p style="color:rgba(255,255,255,0.7);font-size:12px;font-weight:600;margin:0 0 8px;">URL du proxy Vercel ou AppScript</p>
+    <input type="url" id="login-url-input" class="input-field"
+      placeholder="https://…vercel.app/api/proxy"
+      style="font-size:12px;margin-bottom:8px;background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.2);color:white;"
+      onfocus="this.style.borderColor='rgba(255,255,255,0.6)'"
+      onblur="this.style.borderColor='rgba(255,255,255,0.2)'">
+    <button onclick="App._saveLoginUrl()"
+      style="width:100%;background:rgba(255,255,255,0.2);border:none;color:white;padding:10px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;">
+      Enregistrer
+    </button>
+  </div>
+
+</div>
+
 <div class="app" id="app">
   <!-- ══════════════════════════════════════════════════════════════════════
        SIDEBAR / BOTTOM NAV
        (avant main-wrapper dans le DOM pour flex-row desktop)
        ══════════════════════════════════════════════════════════════════════ -->
-  <nav class="bottom-nav">
-    <!-- Logo sidebar (visible desktop uniquement, masqué mobile via CSS) -->
-    <div class="sidebar-brand">
+  <nav class="bottom-nav" id="main-nav">
+    <!-- Logo sidebar (desktop uniquement) — cliquer revient à l'accueil -->
+    <div class="sidebar-brand" onclick="App.goHome()" style="cursor:pointer;" title="Retour à l'accueil">
       <strong>SONOTRAD</strong>
-      <span>Arrivées &amp; Départs</span>
+      <span id="sidebar-activity-label">Arrivées &amp; Départs</span>
+      <span style="font-size:10px;color:#94A3B8;margin-top:2px;">← Changer d'activité</span>
     </div>
-    <button class="nav-tab active" data-tab="departures" onclick="App.go('departures')">
+    <button class="nav-tab" data-tab="departures" onclick="App.go('departures')">
       <span class="icon">🏭</span><span>Production</span>
     </button>
     <button class="nav-tab" data-tab="arrivals" onclick="App.go('arrivals')">
@@ -488,6 +672,10 @@
     </button>
     <button class="nav-tab" data-tab="history" onclick="App.go('history')">
       <span class="icon">🕐</span><span>Historique</span>
+    </button>
+    <!-- Bouton retour accueil (mobile uniquement) -->
+    <button class="nav-tab" id="nav-home-btn" onclick="App.goHome()" style="color:#94A3B8;">
+      <span class="icon">⊞</span><span>Activités</span>
     </button>
   </nav>
   <!-- ══════════════════════════════════════════════════════════════════════
@@ -503,9 +691,9 @@
         <span style="font-size:20px;">‹</span>
         <span id="back-label">Retour</span>
       </button>
-      <div id="header-logo" style="display:flex;align-items:center;gap:8px;">
-        <strong style="font-size:18px;">SONOTRAD</strong>
-        <span style="font-size:11px;opacity:0.6;font-weight:400;">Arrivées & Départs</span>
+      <div id="header-logo" style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="App.goHome()" title="Accueil">
+        <span id="header-title" style="font-size:18px;font-weight:700;">SONOTRAD</span>
+        <span id="header-subtitle" style="font-size:11px;opacity:0.6;font-weight:400;">Multi-activités</span>
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
@@ -513,15 +701,135 @@
         <span class="status-dot online" id="status-dot"></span>
         <span id="status-text">En ligne</span>
       </div>
-      <button onclick="App.go('settings')" style="background:rgba(255,255,255,0.15);border:none;color:white;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;">⚙</button>
+      <div style="display:flex;gap:5px;">
+        <button onclick="App.goHome()" style="background:rgba(255,255,255,0.15);border:none;color:white;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" title="Menu principal">⌂</button>
+        <button onclick="App.go('settings')" style="background:rgba(255,255,255,0.15);border:none;color:white;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;" title="Réglages">⚙</button>
+        <button onclick="App.logout()" style="background:rgba(255,255,255,0.15);border:none;color:white;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" title="Se déconnecter">⏻</button>
+      </div>
     </div>
   </header>
   <!-- ══════════════════════════════════════════════════════════════════════
        MAIN CONTENT
        ══════════════════════════════════════════════════════════════════════ -->
   <main class="main-content">
+    <!-- ── VIEW : HOME ───────────────────────────────────────────────────── -->
+    <div class="view active" id="view-home">
+      <div class="home-hero" style="text-align:center;padding:28px 0 32px;">
+        <div style="font-size:52px;margin-bottom:14px;line-height:1;">🏢</div>
+        <h1 style="font-size:22px;font-weight:800;color:#1E293B;margin:0 0 6px;">SONOTRAD</h1>
+        <p style="font-size:13px;color:#64748B;margin:0;">Sélectionnez une activité</p>
+      </div>
+
+      <div id="activity-grid">
+
+        <!-- LOXAM — actif -->
+        <div class="activity-card" data-ready="true" onclick="App.selectActivity('loxam')">
+          <div class="activity-icon">🏗️</div>
+          <div class="activity-name">LOXAM</div>
+          <div class="activity-desc">Arrivées &amp; Départs de modules</div>
+          <span class="activity-badge badge-active">● Actif</span>
+        </div>
+
+        <!-- BCB — bientôt -->
+        <div class="activity-card" data-ready="false">
+          <div class="activity-icon">🚛</div>
+          <div class="activity-name">BCB</div>
+          <div class="activity-desc">Vente &amp; Logistique</div>
+          <span class="activity-badge badge-soon">Bientôt</span>
+        </div>
+
+        <!-- Agorastore — bientôt -->
+        <div class="activity-card" data-ready="false">
+          <div class="activity-icon">🏷️</div>
+          <div class="activity-name">Agorastore</div>
+          <div class="activity-desc">Ventes en ligne</div>
+          <span class="activity-badge badge-soon">Bientôt</span>
+        </div>
+
+        <!-- Stockage — actif -->
+        <div class="activity-card" data-ready="true" onclick="App.selectActivity('stockage')">
+          <div class="activity-icon">📦</div>
+          <div class="activity-name">Stockage</div>
+          <div class="activity-desc">Catalogue &amp; Inventaire PIDEM</div>
+          <span class="activity-badge badge-active">● Actif</span>
+        </div>
+
+        <!-- Admin — visible uniquement pour role=admin -->
+        <div class="activity-card" id="admin-home-card" data-ready="true"
+          onclick="App.goAdmin()"
+          style="display:none;border:2px dashed #CBD5E1;grid-column:1/-1;">
+          <div style="display:flex;align-items:center;gap:14px;">
+            <div class="activity-icon" style="margin-bottom:0;">👥</div>
+            <div>
+              <div class="activity-name">Administration</div>
+              <div class="activity-desc" style="margin-bottom:0;">Gérer les utilisateurs, PINs, accès</div>
+            </div>
+            <span class="activity-badge" style="background:#FEF3C7;color:#92400E;margin-left:auto;flex-shrink:0;">Admin</span>
+          </div>
+        </div>
+
+      </div>
+
+      <p style="text-align:center;font-size:11px;color:#CBD5E1;margin-top:28px;">
+        SONOTRAD · Gestion multi-activités
+      </p>
+    </div>
+
+    <!-- ── VIEW : ADMIN ─────────────────────────────────────────────────── -->
+    <div class="view" id="view-admin">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h2 style="font-size:20px;font-weight:700;color:#1E293B;">👥 Utilisateurs</h2>
+        <button onclick="App._showCreateUserForm()"
+          style="background:var(--brand);color:white;border:none;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;">
+          + Nouveau
+        </button>
+      </div>
+
+      <!-- Formulaire création (masqué par défaut) -->
+      <div id="admin-create-form" class="card" style="display:none;margin-bottom:12px;border:2px solid var(--brand);">
+        <p style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:12px;">Nouvel utilisateur</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <input type="text" id="nu-prenom" class="input-field" placeholder="Prénom" style="margin:0;">
+          <input type="text" id="nu-nom" class="input-field" placeholder="Nom" style="margin:0;">
+        </div>
+        <select id="nu-role" class="input-field" style="margin-bottom:8px;">
+          <option value="utilisateur">👤 Utilisateur</option>
+          <option value="admin">⚙️ Administrateur</option>
+        </select>
+        <div style="margin-bottom:8px;">
+          <label class="label-sm" style="display:block;margin-bottom:6px;">Activités</label>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-loxam"      value="loxam"      checked> LOXAM</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-bcb"        value="bcb"              > BCB</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-agorastore" value="agorastore"       > Agorastore</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-stockage"   value="stockage"         > Stockage</label>
+          </div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label class="label-sm">PIN initial (4 chiffres) — à communiquer verbalement</label>
+          <input type="number" id="nu-pin" class="input-field" placeholder="ex : 4821" min="1000" max="9999" style="margin:0;letter-spacing:4px;font-size:18px;font-weight:600;">
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="App._createUser()" class="btn btn-primary" style="flex:1;">Créer le compte</button>
+          <button onclick="App._hideCreateUserForm()"
+            style="background:#F1F5F9;color:#64748B;border:none;padding:10px 16px;border-radius:10px;font-size:14px;cursor:pointer;">
+            Annuler
+          </button>
+        </div>
+      </div>
+
+      <!-- Chargement -->
+      <div id="admin-loading" style="text-align:center;padding:40px;display:none;">
+        <div class="spinner"></div>
+        <p style="color:#64748B;margin-top:10px;">Chargement...</p>
+      </div>
+
+      <!-- Liste des utilisateurs -->
+      <div id="admin-user-list"></div>
+    </div>
+
     <!-- ── VIEW : ARRIVALS ──────────────────────────────────────────────── -->
-    <div class="view active" id="view-arrivals">
+    <div class="view" id="view-arrivals">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
         <h2 style="font-size:20px;font-weight:700;color:#1E293B;">Arrivées</h2>
         <button onclick="App.loadArrivalsData(true)" style="background:#EBF5FB;color:var(--brand);border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻ Actualiser</button>
@@ -823,10 +1131,75 @@
         <p style="font-size:16px;font-weight:600;">Aucun historique</p>
       </div>
     </div>
+    <!-- ── VIEW : STOCK ─────────────────────────────────────────────────── -->
+    <div class="view" id="view-stock">
+
+      <!-- Barre de filtres sticky -->
+      <div style="position:sticky;top:0;z-index:10;background:#F0F4F8;padding:10px 0 8px;margin:-16px -16px 12px;padding-left:16px;padding-right:16px;">
+        <input id="stock-search" type="search" class="input-field" placeholder="🔍 Rechercher une référence ou description…"
+          oninput="App.setStockSearch(this.value)"
+          style="margin-bottom:8px;font-size:14px;">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+          <!-- Toggle Mes refs -->
+          <button id="stock-myrefs-btn" onclick="App.toggleStockMyRefs()"
+            style="background:var(--accent);border:1.5px solid var(--accent);color:white;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+            ★ Mes références
+          </button>
+          <!-- Toggle miniatures -->
+          <button id="stock-thumbs-btn" onclick="App.toggleStockThumbs()"
+            style="background:#F1F5F9;border:1.5px solid #CBD5E1;color:#64748B;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+            🖼 Photos
+          </button>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <!-- Filtres famille -->
+          <button id="stock-famille-all" onclick="App.setStockFamille('')"
+            class="stock-famille-btn active"
+            style="white-space:nowrap;">Toutes</button>
+          <div id="stock-famille-filters" style="display:flex;gap:5px;flex-wrap:wrap;"></div>
+        </div>
+        <div style="margin-top:6px;font-size:11px;color:#94A3B8;" id="stock-count-label"></div>
+      </div>
+
+      <!-- Loading -->
+      <div id="stock-loading" style="text-align:center;padding:40px 0;display:none;">
+        <div class="spinner"></div>
+        <p style="color:#94A3B8;font-size:13px;margin-top:10px;">Chargement du catalogue…</p>
+      </div>
+
+      <!-- Liste des pièces -->
+      <div id="stock-list"></div>
+
+    </div>
+    <!-- ── VIEW : STOCK DETAIL ──────────────────────────────────────────── -->
+    <div class="view" id="view-stock-detail">
+      <div id="stock-detail-body"></div>
+    </div>
+
     <!-- ── VIEW : SETTINGS ──────────────────────────────────────────────── -->
     <div class="view" id="view-settings">
       <h2 style="font-size:20px;font-weight:700;color:#1E293B;margin-bottom:18px;">Réglages</h2>
       <div class="settings-grid">
+
+      <!-- Carte utilisateur connecté -->
+      <div class="card" style="margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+          <div style="width:44px;height:44px;border-radius:50%;background:var(--brand);display:flex;align-items:center;justify-content:center;font-size:20px;color:white;flex-shrink:0;">👤</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:15px;font-weight:700;color:#1E293B;" id="settings-user-name">—</div>
+            <div style="font-size:12px;color:#64748B;margin-top:2px;" id="settings-user-role">—</div>
+          </div>
+        </div>
+        <button onclick="App._showChangePin()"
+          style="width:100%;background:#F8FAFC;border:1.5px solid #E2E8F0;color:#475569;padding:10px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:8px;">
+          🔑 Changer mon code PIN
+        </button>
+        <button onclick="App.logout()"
+          style="width:100%;background:#FEF2F2;border:1.5px solid #FECACA;color:#991B1B;padding:10px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;">
+          ↪ Se déconnecter
+        </button>
+      </div>
+
       <div class="card" style="margin-bottom:12px;">
         <p style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:14px;">🔗 URL de l'API</p>
         <div style="margin-bottom:10px;">
@@ -892,8 +1265,16 @@ const ARR_SOURCES = {
 };
 // ── STATE ────────────────────────────────────────────────────────────────────
 const S = {
-  view:        'departures',
-  prevView:    'departures',
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  currentUser:  null,      // { prenom, nom, role, activites } — stocké en localStorage
+  pinBuffer:    '',        // digits saisis (jamais envoyés en clair)
+  pinMode:      'login',   // 'login' | 'change_old' | 'change_new' | 'change_confirm'
+  _pinNewHash:  null,      // hash intermédiaire lors du changement de PIN
+  _pinOldHash:  null,
+  // ── Navigation ────────────────────────────────────────────────────────────
+  view:        'home',
+  prevView:    'home',
+  activity:    null,   // null = accueil | 'loxam' | 'bcb' | 'agora' | 'stockage'
   apiUrl:      localStorage.getItem(SK.API) || '',
   codes:       new Set(JSON.parse(localStorage.getItem(SK.CODES) || '[]')),
   codesTs:     +(localStorage.getItem(SK.CODES_TS) || 0),
@@ -937,6 +1318,17 @@ const S = {
   archiveLoaded:  false,
   depFromArchive: false,
   submitting: false,
+  // ── Stockage ─────────────────────────────────────────────────────────────
+  stockData:     [],       // catalogue complet
+  stockLoaded:   false,
+  stockPrefs:    new Set(),// refs marquées "mes références"
+  stockFamilles: [],       // valeurs uniques pour le filtre
+  stockFilter: { search: '', famille: '', myRefs: true },
+  stockPhotos:    {},      // { ref: thumbFileId } — chargé à la demande
+  stockShowThumbs: false,  // toggle miniatures
+  selStockRef:    null,    // référence ouverte dans la vue détail
+  stockDeltas:    {},      // { ref: { delta, invQty, lastDate } } — mouvements cumulés
+  selMvType:      null,    // type de mouvement en cours de saisie
 };
 // ── APP ──────────────────────────────────────────────────────────────────────
 const App = {
@@ -950,33 +1342,1068 @@ const App = {
     if (view === 'departures' && !S.depsLoaded) this.loadDepartures();
     if (view === 'archive'    && !S.archiveLoaded) this.loadArchive();
     if (view === 'settings')   this._fillSettings();
+    if (view === 'stock'        && !S.stockLoaded) this.loadStockCatalog();
+    if (view === 'stock-detail') this._renderStockDetail();
   },
-  goBack() { this.go(S.prevView); },
+  goBack() {
+    if (S.view === 'admin') { this.goHome(); return; }
+    this.go(S.prevView);
+  },
+
+  /* ─ Accueil multi-activité ─ */
+  goHome() {
+    S.activity = null;
+    S.prevView  = S.view;
+    S.view      = 'home';
+    this._render();
+  },
+  selectActivity(name) {
+    const ready = { loxam: true, stockage: true };
+    if (!ready[name]) {
+      this.toast('Cette activité est en cours de développement 🚧');
+      return;
+    }
+    // Contrôle d'accès : vérifier que l'utilisateur a bien cette activité
+    const userActs = S.currentUser?.activites || [];
+    if (!userActs.includes(name)) {
+      this.toast('⛔ Vous n\'avez pas accès à cette activité');
+      return;
+    }
+    S.activity = name;
+    if (name === 'loxam')    this.go('departures');
+    if (name === 'stockage') this.go('stock');
+  },
   _render() {
-    const v = S.view;
-    // Views
+    const v      = S.view;
+    const onHome = v === 'home';
+
+    // ── Nav : cachée sur l'accueil, tabs LOXAM masqués hors activité loxam ──
+    const nav = document.getElementById('main-nav');
+    if (nav) nav.style.display = onHome ? 'none' : '';
+    document.querySelectorAll('#main-nav .nav-tab[data-tab]').forEach(el => {
+      el.style.display = (S.activity === 'loxam') ? '' : 'none';
+    });
+
+    // ── Views : affiche la vue active ────────────────────────────────────
     document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
-    const mapId = { 'dep-detail': 'dep-detail', 'arr-detail': 'arr-detail' };
+    const mapId  = { 'dep-detail': 'dep-detail', 'arr-detail': 'arr-detail' };
     const viewId = 'view-' + (mapId[v] || v);
-    const el = document.getElementById(viewId);
+    const el     = document.getElementById(viewId);
     if (el) el.classList.add('active');
-    // Nav tabs
+
+    // ── Nav tabs : onglet actif ──────────────────────────────────────────
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
     const tab = document.querySelector(`[data-tab="${v}"]`);
     if (tab) tab.classList.add('active');
-    // FAB
+
+    // ── FAB : visible uniquement sur la liste des arrivées ───────────────
     const fab = document.getElementById('fab');
-    fab.style.display = (v === 'arrivals') ? 'flex' : 'none';
-    // Header back / logo
+    if (fab) fab.style.display = (v === 'arrivals') ? 'flex' : 'none';
+
+    // ── Header : back button / logo / titre ──────────────────────────────
     const inForm = ['new-arrival','settings','dep-detail','arr-detail'].includes(v);
     document.getElementById('btn-back').classList.toggle('hidden', !inForm);
     document.getElementById('header-logo').style.display = inForm ? 'none' : 'flex';
-    const labels = { 'new-arrival': 'Annuler', 'settings': 'Réglages', 'dep-detail': S.depFromArchive ? 'Partis' : 'Production', 'arr-detail': 'Arrivées' };
-    document.getElementById('back-label').textContent = labels[v] || 'Retour';
-    // API warning
+
+    // Labels du bouton retour
+    const backLabels = {
+      'new-arrival': 'Annuler',
+      'settings':    'Réglages',
+      'dep-detail':  S.depFromArchive ? 'Partis' : 'Production',
+      'arr-detail':  'Arrivées',
+    };
+    document.getElementById('back-label').textContent = backLabels[v] || 'Retour';
+
+    // Titre + sous-titre du header selon l'activité
+    const activityMeta = {
+      loxam:    { icon: '🏗️', title: 'LOXAM',      sub: 'Arrivées & Départs' },
+      bcb:      { icon: '🚛', title: 'BCB',         sub: 'Vente & Logistique' },
+      agora:    { icon: '🏷️', title: 'Agorastore',  sub: 'Ventes en ligne'    },
+      stockage: { icon: '📦', title: 'Stockage',    sub: 'Catalogue PIDEM'    },
+    };
+    const titleEl    = document.getElementById('header-title');
+    const subtitleEl = document.getElementById('header-subtitle');
+    if (titleEl && subtitleEl) {
+      if (onHome) {
+        titleEl.textContent    = 'SONOTRAD';
+        subtitleEl.textContent = 'Multi-activités';
+      } else {
+        const meta = S.activity ? activityMeta[S.activity] : null;
+        titleEl.textContent    = meta ? `${meta.icon} ${meta.title}` : 'SONOTRAD';
+        subtitleEl.textContent = meta ? meta.sub : '';
+      }
+    }
+
+    // ── Carte admin (accueil) : visible uniquement pour les admins ───────
+    const adminCard = document.getElementById('admin-home-card');
+    if (adminCard) adminCard.style.display = (S.currentUser?.role === 'admin') ? '' : 'none';
+
+    // ── Back button : admin revient à l'accueil ───────────────────────────
+    if (v === 'admin') {
+      document.getElementById('btn-back').classList.remove('hidden');
+      document.getElementById('header-logo').style.display = 'none';
+      document.getElementById('back-label').textContent = 'Accueil';
+      if (titleEl) titleEl.textContent = '👥 Utilisateurs';
+      if (subtitleEl) subtitleEl.textContent = 'Administration';
+    }
+
+    // ── API warning ───────────────────────────────────────────────────────
     const w = document.getElementById('api-warning');
     if (w) w.style.display = (!S.apiUrl && v === 'arrivals') ? 'block' : 'none';
   },
+  /* ─ Auth / PIN ─ */
+
+  /** Vérifie localStorage au démarrage — affiche ou masque l'overlay. */
+  _initAuth() {
+    const stored = localStorage.getItem('snt_user');
+    if (stored) {
+      try {
+        S.currentUser = JSON.parse(stored);
+        document.getElementById('login-overlay').style.display = 'none';
+        this._render();
+        return;
+      } catch(e) { localStorage.removeItem('snt_user'); }
+    }
+    // Pré-remplir l'URL si déjà connue
+    if (S.apiUrl) document.getElementById('login-url-input').value = S.apiUrl;
+    document.getElementById('login-overlay').style.display = 'flex';
+  },
+
+  /** Hash SHA-256 côté client via Web Crypto API. */
+  async _hashPin(pin) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+  },
+
+  /** Ajoute un chiffre au buffer et soumet automatiquement à 4 chiffres. */
+  _pinPress(d) {
+    if (S.pinBuffer.length >= 4) return;
+    S.pinBuffer += d;
+    this._updatePinDots();
+    if (S.pinBuffer.length === 4) setTimeout(() => this._submitPin(), 80);
+  },
+
+  /** Supprime le dernier chiffre. */
+  _pinDel() {
+    if (!S.pinBuffer.length) return;
+    S.pinBuffer = S.pinBuffer.slice(0, -1);
+    this._updatePinDots();
+  },
+
+  /** Met à jour l'affichage des 4 points. */
+  _updatePinDots() {
+    [0,1,2,3].forEach(i => {
+      const d = document.getElementById('pdot-' + i);
+      if (d) d.classList.toggle('filled', i < S.pinBuffer.length);
+    });
+  },
+
+  /** Affiche un message d'erreur + animation shake + vide le buffer. */
+  _pinError(msg) {
+    document.getElementById('pin-error-msg').textContent = msg;
+    S.pinBuffer = '';
+    this._updatePinDots();
+    const row = document.getElementById('pin-dots-row');
+    if (row) {
+      row.classList.add('shake');
+      setTimeout(() => row.classList.remove('shake'), 400);
+    }
+  },
+
+  /** Soumet le PIN selon le mode courant (login / change). */
+  async _submitPin() {
+    if (!S.apiUrl) {
+      this._pinError('URL API non configurée — cliquez sur ⚙ ci-dessous');
+      return;
+    }
+    const hash = await this._hashPin(S.pinBuffer);
+    S.pinBuffer = '';
+    this._updatePinDots();
+    document.getElementById('pin-error-msg').textContent = '';
+
+    if (S.pinMode === 'login') {
+      // ── Authentification ──────────────────────────────────────────────
+      try {
+        const fd = new FormData();
+        fd.append('payload', JSON.stringify({ action:'auth', pinHash: hash }));
+        const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+        const data = await resp.json();
+        if (data.status === 'ok') {
+          S.currentUser = data.user;
+          localStorage.setItem('snt_user', JSON.stringify(data.user));
+          S.view = 'home'; S.activity = null; // ← toujours démarrer à l'accueil
+          document.getElementById('login-overlay').style.display = 'none';
+          this._render();
+        } else {
+          this._pinError(data.error || 'Code PIN incorrect');
+        }
+      } catch(e) { this._pinError('Erreur de connexion — réessayez'); }
+
+    } else if (S.pinMode === 'change_old') {
+      // ── Vérification ancien PIN avant changement ───────────────────────
+      try {
+        const fd = new FormData();
+        fd.append('payload', JSON.stringify({ action:'auth', pinHash: hash }));
+        const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+        const data = await resp.json();
+        if (data.status === 'ok') {
+          S._pinOldHash = hash;
+          S.pinMode = 'change_new';
+          document.getElementById('pin-prompt').textContent = 'Nouveau code PIN (4 chiffres)';
+        } else {
+          this._pinError('Code PIN actuel incorrect');
+        }
+      } catch(e) { this._pinError('Erreur réseau — réessayez'); }
+
+    } else if (S.pinMode === 'change_new') {
+      // ── Saisie du nouveau PIN ─────────────────────────────────────────
+      S._pinNewHash = hash;
+      S.pinMode = 'change_confirm';
+      document.getElementById('pin-prompt').textContent = 'Confirmez le nouveau PIN';
+
+    } else if (S.pinMode === 'change_confirm') {
+      // ── Confirmation + envoi ──────────────────────────────────────────
+      if (hash !== S._pinNewHash) {
+        this._pinError('Les codes ne correspondent pas');
+        S.pinMode = 'change_new';
+        document.getElementById('pin-prompt').textContent = 'Nouveau code PIN (4 chiffres)';
+        return;
+      }
+      try {
+        const fd = new FormData();
+        fd.append('payload', JSON.stringify({ action:'change_pin', oldPinHash: S._pinOldHash, newPinHash: S._pinNewHash }));
+        const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+        const data = await resp.json();
+        if (data.status === 'ok') {
+          S.pinMode = 'login'; S._pinOldHash = null; S._pinNewHash = null;
+          document.getElementById('pin-prompt').textContent = 'Entrez votre code PIN';
+          document.getElementById('login-overlay').style.display = 'none';
+          this.toast('✓ Code PIN modifié avec succès !');
+        } else {
+          this._pinError(data.error || 'Erreur lors du changement');
+          S.pinMode = 'login';
+          document.getElementById('pin-prompt').textContent = 'Entrez votre code PIN';
+        }
+      } catch(e) { this._pinError('Erreur réseau — réessayez'); }
+    }
+  },
+
+  /** Lance le flux de changement de PIN depuis les réglages. */
+  _showChangePin() {
+    S.pinMode = 'change_old'; S.pinBuffer = ''; S._pinOldHash = null; S._pinNewHash = null;
+    document.getElementById('pin-prompt').textContent = 'Entrez votre PIN actuel';
+    document.getElementById('pin-error-msg').textContent = '';
+    this._updatePinDots();
+    document.getElementById('login-overlay').style.display = 'flex';
+  },
+
+  /** Déconnexion : vide la session locale et réaffiche l'overlay. */
+  logout() {
+    localStorage.removeItem('snt_user');
+    S.currentUser = null; S.pinBuffer = ''; S.pinMode = 'login';
+    S.view = 'home'; S.activity = null; // ← retour accueil à la prochaine connexion
+    document.getElementById('pin-prompt').textContent = 'Entrez votre code PIN';
+    document.getElementById('pin-error-msg').textContent = '';
+    this._updatePinDots();
+    document.getElementById('login-overlay').style.display = 'flex';
+  },
+
+  /** Affiche/masque le panneau de config URL depuis l'overlay. */
+  _toggleLoginSetup() {
+    const p = document.getElementById('login-setup-panel');
+    p.style.display = p.style.display === 'block' ? 'none' : 'block';
+    if (p.style.display === 'block') document.getElementById('login-url-input').focus();
+  },
+
+  /** Sauvegarde l'URL depuis l'overlay de connexion. */
+  _saveLoginUrl() {
+    const val = document.getElementById('login-url-input').value.trim();
+    if (!val) return;
+    S.apiUrl = val;
+    localStorage.setItem(SK.API, val);
+    document.getElementById('login-setup-panel').style.display = 'none';
+    document.getElementById('pin-error-msg').textContent = '';
+    this.toast('✓ URL enregistrée');
+  },
+
+  /* ─ Admin ─ */
+
+  goAdmin() {
+    S.view = 'admin'; S.activity = 'admin'; S.prevView = 'home';
+    this._render();
+    this.loadAdminUsers();
+  },
+
+  async loadAdminUsers() {
+    if (!S.apiUrl) return;
+    const loading = document.getElementById('admin-loading');
+    const list    = document.getElementById('admin-user-list');
+    if (loading) loading.style.display = 'block';
+    if (list)    list.innerHTML = '';
+    try {
+      const resp = await _fetchWithTimeout(S.apiUrl + '?action=users_list', {}, 15000);
+      const data = await resp.json();
+      if (data.status === 'ok') this._renderAdminUsers(data.users || []);
+      else if (list) list.innerHTML = `<div class="card" style="border-left:4px solid #F87171;"><p style="color:#991B1B;">${data.error || 'Erreur'}</p></div>`;
+    } catch(e) {
+      if (list) list.innerHTML = `<div class="card" style="border-left:4px solid #F87171;"><p style="color:#991B1B;">Erreur réseau : ${e.message}</p></div>`;
+    } finally {
+      if (loading) loading.style.display = 'none';
+    }
+  },
+
+  _renderAdminUsers(users) {
+    const list = document.getElementById('admin-user-list');
+    if (!list) return;
+    if (!users.length) {
+      list.innerHTML = '<div class="card" style="text-align:center;color:#94A3B8;padding:32px 0;">Aucun utilisateur</div>';
+      return;
+    }
+    const roleLabel = { admin:'Administrateur', utilisateur:'Utilisateur', gestionnaire:'Utilisateur', chauffeur:'Utilisateur' };
+    list.innerHTML = users.map(u => {
+      const badgeBg  = u.actif ? '#D1FAE5' : '#FEE2E2';
+      const badgeCol = u.actif ? '#065F46'  : '#991B1B';
+      const badgeTxt = u.actif ? 'Actif'    : 'Inactif';
+      const pinBadge = u.hasPIN
+        ? '<span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;padding:2px 6px;border-radius:10px;font-weight:600;">🔑 PIN défini</span>'
+        : '<span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:2px 6px;border-radius:10px;font-weight:600;">⚠ Pas de PIN</span>';
+      return `
+        <div class="card" style="margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+            <div style="width:40px;height:40px;border-radius:50%;background:${u.actif ? 'var(--brand)' : '#94A3B8'};display:flex;align-items:center;justify-content:center;color:white;font-size:18px;flex-shrink:0;">👤</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:700;color:#1E293B;">${u.prenom} ${u.nom}</div>
+              <div style="font-size:12px;color:#64748B;margin-top:1px;">${roleLabel[u.role] || u.role} · ${u.activites.join(', ')}</div>
+              <div style="margin-top:4px;">${pinBadge}</div>
+            </div>
+            <span style="background:${badgeBg};color:${badgeCol};font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;flex-shrink:0;">${badgeTxt}</span>
+          </div>
+          <!-- Rôle modifiable -->
+          <!-- Rôle -->
+          <div style="margin-bottom:8px;">
+            <select onchange="App._updateUserRole('${u.prenom}','${u.nom}',this.value)"
+              style="width:100%;padding:7px 10px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:12px;font-weight:600;color:#475569;background:#F8FAFC;cursor:pointer;">
+              <option value="utilisateur" ${u.role!=='admin' ?'selected':''}>👤 Utilisateur</option>
+              <option value="admin"       ${u.role==='admin' ?'selected':''}>⚙️ Administrateur</option>
+            </select>
+          </div>
+          <!-- Activités éditables -->
+          <div style="margin-bottom:8px;padding:8px 10px;background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:8px;">
+            <div style="font-size:11px;font-weight:600;color:#94A3B8;margin-bottom:6px;">ACTIVITÉS</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;">
+              ${['loxam','bcb','agorastore','stockage'].map(a => `
+                <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">
+                  <input type="checkbox" id="uact-${u.prenom}-${u.nom}-${a}" value="${a}"
+                    ${u.activites.includes(a)?'checked':''}
+                    onchange="App._updateUserActivites('${u.prenom}','${u.nom}')">
+                  ${a.charAt(0).toUpperCase()+a.slice(1)}
+                </label>`).join('')}
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button onclick="App._showResetPin('${u.prenom}','${u.nom}')"
+              style="flex:1;background:#F8FAFC;border:1.5px solid #E2E8F0;color:#475569;padding:8px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
+              🔑 ${u.hasPIN ? 'Reset PIN' : 'Définir PIN'}
+            </button>
+            <button onclick="App._toggleUser('${u.prenom}','${u.nom}',${!u.actif})"
+              style="background:${u.actif ? '#FEF2F2' : '#F0FDF4'};border:1.5px solid ${u.actif ? '#FECACA' : '#86EFAC'};color:${u.actif ? '#991B1B' : '#14532D'};padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
+              ${u.actif ? 'Désactiver' : 'Réactiver'}
+            </button>
+            <button onclick="App._deleteUser('${u.prenom}','${u.nom}')"
+              style="background:#FEF2F2;border:1.5px solid #FECACA;color:#991B1B;padding:8px 10px;border-radius:8px;font-size:14px;cursor:pointer;" title="Supprimer ce compte">
+              🗑
+            </button>
+          </div>
+          <!-- Zone reset PIN inline (masquée par défaut) -->
+          <div id="reset-pin-${u.prenom}-${u.nom}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid #F1F5F9;">
+            <label class="label-sm">Nouveau PIN (4 chiffres)</label>
+            <div style="display:flex;gap:8px;margin-top:4px;">
+              <input type="number" id="rpin-${u.prenom}-${u.nom}" class="input-field"
+                placeholder="ex : 3947" min="1000" max="9999"
+                style="margin:0;flex:1;letter-spacing:4px;font-size:18px;font-weight:600;">
+              <button onclick="App._applyResetPin('${u.prenom}','${u.nom}')"
+                style="background:var(--brand);color:white;border:none;padding:0 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;">
+                OK
+              </button>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  },
+
+  _showCreateUserForm() {
+    document.getElementById('admin-create-form').style.display = 'block';
+    document.getElementById('nu-prenom').focus();
+  },
+  _hideCreateUserForm() {
+    document.getElementById('admin-create-form').style.display = 'none';
+    ['nu-prenom','nu-nom','nu-pin'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['loxam','bcb','agorastore','stockage'].forEach(a => {
+      const el = document.getElementById('nu-act-' + a);
+      if (el) el.checked = (a === 'loxam'); // reset : loxam coché par défaut
+    });
+  },
+
+  async _createUser() {
+    const btn = document.querySelector('#admin-create-form .btn-primary');
+    if (btn && btn.disabled) return; // protection double-clic
+    if (btn) { btn.disabled = true; btn.textContent = 'Création...'; }
+    const prenom = document.getElementById('nu-prenom').value.trim();
+    const nom    = document.getElementById('nu-nom').value.trim();
+    const role   = document.getElementById('nu-role').value;
+    const pin    = document.getElementById('nu-pin').value.trim();
+    const activites = ['loxam','bcb','agorastore','stockage'].filter(a => {
+      const el = document.getElementById('nu-act-' + a); return el && el.checked;
+    });
+
+    if (!prenom || !nom)              { this.toast('Prénom et nom requis'); return; }
+    if (!pin || pin.length < 4)       { this.toast('PIN invalide — 4 chiffres requis'); return; }
+    if (!activites.length)            { this.toast('Sélectionne au moins une activité'); return; }
+
+    const pinHash = await this._hashPin(pin);
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action:'create_user', prenom, nom, role, activites, pinHash }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast(`✓ ${prenom} ${nom} créé !`);
+        this._hideCreateUserForm();
+        this.loadAdminUsers();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+        if (btn) { btn.disabled = false; btn.textContent = 'Créer le compte'; }
+      }
+    } catch(e) {
+      this.toast('Erreur réseau');
+      if (btn) { btn.disabled = false; btn.textContent = 'Créer le compte'; }
+    }
+  },
+
+  _showResetPin(prenom, nom) {
+    const zone = document.getElementById(`reset-pin-${prenom}-${nom}`);
+    if (!zone) return;
+    const isVisible = zone.style.display === 'block';
+    // Fermer toutes les autres zones ouvertes
+    document.querySelectorAll('[id^="reset-pin-"]').forEach(z => z.style.display = 'none');
+    zone.style.display = isVisible ? 'none' : 'block';
+    if (!isVisible) document.getElementById(`rpin-${prenom}-${nom}`)?.focus();
+  },
+
+  async _applyResetPin(prenom, nom) {
+    const input = document.getElementById(`rpin-${prenom}-${nom}`);
+    const pin   = (input?.value || '').trim();
+    if (!pin || pin.length < 4) { this.toast('PIN invalide — 4 chiffres requis'); return; }
+    const newPinHash = await this._hashPin(pin);
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action:'admin_reset_pin', prenom, nom, newPinHash }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast(`✓ PIN de ${prenom} réinitialisé`);
+        document.getElementById(`reset-pin-${prenom}-${nom}`).style.display = 'none';
+        this.loadAdminUsers();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+      }
+    } catch(e) { this.toast('Erreur réseau'); }
+  },
+
+  async _toggleUser(prenom, nom, actif) {
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action:'toggle_user', prenom, nom, actif }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast(actif ? `✓ ${prenom} réactivé` : `${prenom} désactivé`);
+        this.loadAdminUsers();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+      }
+    } catch(e) { this.toast('Erreur réseau'); }
+  },
+
+  async _updateUserActivites(prenom, nom) {
+    const activites = ['loxam','bcb','agorastore','stockage'].filter(a => {
+      const el = document.getElementById(`uact-${prenom}-${nom}-${a}`);
+      return el && el.checked;
+    });
+    if (!activites.length) { this.toast('Au moins une activité requise'); this.loadAdminUsers(); return; }
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action:'update_user_activites', prenom, nom, activites }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast(`✓ Activités de ${prenom} mises à jour`);
+        this.loadAdminUsers();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+        this.loadAdminUsers();
+      }
+    } catch(e) { this.toast('Erreur réseau'); this.loadAdminUsers(); }
+  },
+
+  async _updateUserRole(prenom, nom, newRole) {
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action:'update_user_role', prenom, nom, role: newRole }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast(`✓ Rôle de ${prenom} mis à jour`);
+        this.loadAdminUsers();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+        this.loadAdminUsers(); // recharge pour réafficher l'ancien rôle
+      }
+    } catch(e) { this.toast('Erreur réseau'); this.loadAdminUsers(); }
+  },
+
+  async _deleteUser(prenom, nom) {
+    if (!window.confirm(`Supprimer définitivement ${prenom} ${nom} ?\nCette action est irréversible.`)) return;
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action:'delete_user', prenom, nom }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast(`✓ ${prenom} ${nom} supprimé`);
+        this.loadAdminUsers();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+      }
+    } catch(e) { this.toast('Erreur réseau'); }
+  },
+
+  /* ─ Stockage ─ */
+  async loadStockCatalog() {
+    if (!S.apiUrl) return;
+    document.getElementById('stock-loading').style.display = 'block';
+    document.getElementById('stock-list').innerHTML = '';
+    try {
+      // Catalogue + préférences + mouvements en parallèle
+      const [catResp, prefsResp, deltaResp] = await Promise.all([
+        _fetchWithTimeout(S.apiUrl + '?action=stock_catalog',            {}, 40000),
+        _fetchWithTimeout(S.apiUrl + '?action=stock_prefs',              {}, 10000),
+        _fetchWithTimeout(S.apiUrl + '?action=stock_mouvements_summary', {}, 15000),
+      ]);
+      const cat   = await catResp.json();
+      const prefs = await prefsResp.json();
+      const deltas = await deltaResp.json();
+
+      if (cat.status === 'ok') {
+        S.stockData     = cat.data || [];
+        S.stockFamilles = cat.familles || [];
+        S.stockLoaded   = true;
+      }
+      if (prefs.status === 'ok') {
+        S.stockPrefs = new Set(prefs.prefs?.relevant || []);
+      }
+      if (deltas.status === 'ok') {
+        S.stockDeltas = deltas.summary || {};
+      }
+    } catch(e) { this.toast('Erreur chargement catalogue'); }
+    finally { document.getElementById('stock-loading').style.display = 'none'; }
+
+    this._renderStockFamilleFilters();
+    this._renderStockList();
+  },
+
+  setStockSearch(val) {
+    S.stockFilter.search = val.toLowerCase();
+    this._renderStockList();
+  },
+
+  setStockFamille(val) {
+    S.stockFilter.famille = (val === '' || S.stockFilter.famille === val) ? '' : val;
+    this._renderStockFamilleFilters();
+    this._renderStockList();
+  },
+
+  toggleStockMyRefs() {
+    S.stockFilter.myRefs = !S.stockFilter.myRefs;
+    const btn = document.getElementById('stock-myrefs-btn');
+    if (btn) {
+      btn.style.background    = S.stockFilter.myRefs ? 'var(--accent)' : '#F1F5F9';
+      btn.style.borderColor   = S.stockFilter.myRefs ? 'var(--accent)' : '#CBD5E1';
+      btn.style.color         = S.stockFilter.myRefs ? 'white' : '#64748B';
+      btn.textContent         = S.stockFilter.myRefs ? '★ Mes références' : '☆ Mes références';
+    }
+    this._renderStockList();
+  },
+
+  async toggleStockPref(ref) {
+    if (S.stockPrefs.has(ref)) { S.stockPrefs.delete(ref); }
+    else                        { S.stockPrefs.add(ref);    }
+    this._renderStockList(); // re-render immédiat
+    // Sauvegarde en fond
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action:'save_stock_prefs', relevant: [...S.stockPrefs] }));
+      await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+    } catch(e) { /* silencieux — sauvegardé localement de toute façon */ }
+  },
+
+  _renderStockFamilleFilters() {
+    const wrap = document.getElementById('stock-famille-filters');
+    if (!wrap) return;
+    const cur = S.stockFilter.famille;
+    // Bouton "Toutes"
+    const allBtn = document.getElementById('stock-famille-all');
+    if (allBtn) allBtn.className = 'stock-famille-btn' + (cur === '' ? ' active' : '');
+    // Boutons par famille
+    wrap.innerHTML = S.stockFamilles
+      .filter(Boolean)
+      .map(f => `<button class="stock-famille-btn${f===cur?' active':''}" onclick="App.setStockFamille('${f.replace(/'/g,"\\'")}')">${f}</button>`)
+      .join('');
+  },
+
+  _renderStockList() {
+    const list = document.getElementById('stock-list');
+    if (!list) return;
+
+    const { search, famille, myRefs } = S.stockFilter;
+    let items = S.stockData;
+
+    if (myRefs)   items = items.filter(d => S.stockPrefs.has(d.ref));
+    if (famille)  items = items.filter(d => d.famille === famille);
+    if (search)   items = items.filter(d =>
+      d.ref.toLowerCase().includes(search) ||
+      d.description.toLowerCase().includes(search) ||
+      d.fournisseur.toLowerCase().includes(search)
+    );
+
+    const lbl = document.getElementById('stock-count-label');
+    if (lbl) lbl.textContent = `${items.length} référence${items.length!==1?'s':''} affichée${items.length!==1?'s':''}${S.stockData.length ? ' sur ' + S.stockData.length : ''}`;
+
+    if (!items.length) {
+      list.innerHTML = `<div style="text-align:center;padding:40px 0;color:#94A3B8;">
+        <div style="font-size:36px;margin-bottom:10px;">📭</div>
+        <p style="font-size:14px;">${S.stockData.length ? 'Aucune référence ne correspond aux filtres' : 'Catalogue non chargé'}</p>
+      </div>`;
+      return;
+    }
+
+    list.innerHTML = items.map(d => {
+      const isRel      = S.stockPrefs.has(d.ref);
+      const calcQty    = this._calcStockActuel(d.ref, d.qte);
+      const qtyTxt     = calcQty !== null ? `📦 ${calcQty}${d.seuil !== null ? '/' + d.seuil : ''}` : '📦 —';
+      const hasDelta   = !!S.stockDeltas[d.ref];
+      const calcStatus = d.seuil !== null && calcQty !== null
+        ? (calcQty >= d.seuil ? 'ok' : 'low')
+        : (calcQty !== null ? 'ok' : 'unknown');
+      const qtyClass = calcStatus;
+      const cardCls  = `stock-card${isRel?' relevant':''}${calcStatus==='low'?' stock-low':''}${hasDelta?' has-delta':''}`;
+
+      const desc     = d.description.length > 90 ? d.description.substring(0,88)+'…' : d.description;
+      const refSafe  = d.ref.replace(/'/g, "\\'");
+
+      let thumbHtml = '';
+      if (S.stockShowThumbs) {
+        if (S.stockPhotos[d.ref]) {
+          thumbHtml = `<img class="sc-thumb" data-ref="${d.ref.replace(/"/g,'&quot;')}" src="" alt="📷">`;
+        } else {
+          thumbHtml = `<div class="sc-thumb-ph" title="Aucune photo">📷</div>`;
+        }
+      }
+
+      return `<div class="${cardCls}" onclick="App.openStockDetail('${refSafe}')">
+        <div class="sc-main">
+          ${S.stockShowThumbs ? `<div style="flex-shrink:0;">${thumbHtml}</div>` : ''}
+          <div class="sc-body">
+            <div class="sc-head">
+              <span class="sc-ref">${d.ref}</span>
+              <span class="sc-qty ${qtyClass}">${qtyTxt}</span>
+              <span class="sc-star${isRel?' on':''}" onclick="event.stopPropagation();App.toggleStockPref('${refSafe}')">${isRel?'★':'☆'}</span>
+            </div>
+            <div class="sc-desc">${desc}</div>
+            <div class="sc-foot">
+              ${d.famille     ? `<span class="sc-bdg fam">${d.famille}</span>` : ''}
+              ${d.fournisseur ? `<span class="sc-bdg fou">${d.fournisseur}</span>` : ''}
+              ${d.refFourn    ? `<span class="sc-rfourn">${d.refFourn}</span>` : ''}
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+    if (S.stockShowThumbs) this._loadVisibleThumbnails();
+  },
+
+  /* ─ Stock photos & detail ─ */
+
+  // Charge l'index des photos (ref → thumbId) en arrière-plan
+  async loadStockPhotos() {
+    if (!S.apiUrl) return;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=stock_photos_index', {}, 10000);
+      const data = await r.json();
+      if (data.status === 'ok') S.stockPhotos = data.photos || {};
+    } catch(e) { /* silencieux */ }
+  },
+
+  // Toggle bouton "🖼 Photos"
+  toggleStockThumbs() {
+    S.stockShowThumbs = !S.stockShowThumbs;
+    const btn = document.getElementById('stock-thumbs-btn');
+    if (btn) {
+      btn.style.background  = S.stockShowThumbs ? 'var(--accent)' : '#F1F5F9';
+      btn.style.borderColor = S.stockShowThumbs ? 'var(--accent)' : '#CBD5E1';
+      btn.style.color       = S.stockShowThumbs ? 'white' : '#64748B';
+    }
+    // Premier chargement : récupérer l'index photos avant de re-rendre
+    if (S.stockShowThumbs && Object.keys(S.stockPhotos).length === 0) {
+      this.loadStockPhotos().then(() => this._renderStockList());
+    } else {
+      this._renderStockList();
+    }
+  },
+
+  // Charge les miniatures des cartes visibles après rendu
+  async _loadVisibleThumbnails() {
+    if (!S.apiUrl) return;
+    const imgs = document.querySelectorAll('.sc-thumb[data-ref][src=""]');
+    for (const img of imgs) {
+      if (img.dataset.loaded) continue;
+      const ref = img.getAttribute('data-ref');
+      if (!ref || !S.stockPhotos[ref]) continue;
+      img.dataset.loaded = '1';
+      this._loadStockPhotoImg(img, ref);
+    }
+  },
+
+  // Récupère une photo (pleine ou thumb) via l'AppScript et l'injecte dans <img>
+  async _loadStockPhotoImg(img, ref) {
+    if (!S.apiUrl || !ref) return;
+    try {
+      const r = await _fetchWithTimeout(
+        `${S.apiUrl}?action=get_stock_thumbnail&ref=${encodeURIComponent(ref)}`, {}, 12000
+      );
+      const data = await r.json();
+      if (data.status === 'ok' && data.data) {
+        img.src = `data:${data.mime || 'image/jpeg'};base64,${data.data}`;
+      }
+    } catch(e) { /* silencieux */ }
+  },
+
+  // Ouvre la vue détail d'une référence
+  async openStockDetail(ref) {
+    S.selStockRef = ref;
+    this.go('stock-detail'); // rendu immédiat (sans photo si index pas chargé)
+    // Charger l'index photos si besoin, puis rafraîchir
+    if (Object.keys(S.stockPhotos).length === 0) {
+      await this.loadStockPhotos();
+      if (S.view === 'stock-detail' && S.selStockRef === ref) this._renderStockDetail();
+    }
+  },
+
+  // Rendu de la vue détail stock
+  _renderStockDetail() {
+    const ref  = S.selStockRef;
+    const body = document.getElementById('stock-detail-body');
+    if (!body || !ref) return;
+
+    const d = S.stockData.find(x => x.ref === ref);
+    if (!d) {
+      body.innerHTML = '<p style="color:#94A3B8;text-align:center;padding:40px;">Référence introuvable</p>';
+      return;
+    }
+
+    const isRel      = S.stockPrefs.has(ref);
+    const calcQty    = this._calcStockActuel(ref, d.qte);
+    const pidemQty   = d.qte !== null ? String(d.qte) : '—';
+    const hasDelta   = !!S.stockDeltas[ref];
+    const deltaInfo  = S.stockDeltas[ref];
+    const calcStatus = d.seuil !== null && calcQty !== null
+      ? (calcQty >= d.seuil ? 'ok' : 'low') : (calcQty !== null ? 'ok' : 'unknown');
+    const qtyClass   = calcStatus;
+    const hasPhoto   = !!S.stockPhotos[ref];
+    const refSafe    = ref.replace(/'/g, "\\'");
+
+    // Indicateur delta
+    let deltaLabel = '';
+    if (hasDelta && deltaInfo) {
+      if (deltaInfo.invQty !== null) {
+        deltaLabel = `<span style="font-size:10px;color:#64748B;margin-left:6px;">inventaire</span>`;
+      } else {
+        const sign = deltaInfo.delta >= 0 ? '+' : '';
+        deltaLabel = `<span style="font-size:10px;color:${deltaInfo.delta>=0?'#15803D':'#DC2626'};margin-left:6px;">${sign}${deltaInfo.delta} vs PIDEM</span>`;
+      }
+    }
+
+    // Boutons type de mouvement (état conservé via S.selMvType)
+    const mvColors  = { entrée:'#15803D', sortie:'#DC2626', inventaire:'#2563EB' };
+    const mvIcons   = { entrée:'➕', sortie:'➖', inventaire:'📋' };
+    const mvLabels  = { entrée:'Entrée', sortie:'Sortie', inventaire:'Inventaire' };
+    const mvBtnStyle = (type) => {
+      const active = S.selMvType === type;
+      const c = mvColors[type];
+      return active
+        ? `background:${c};border-color:${c};color:white;`
+        : `background:#F8FAFC;border-color:#E2E8F0;color:#64748B;`;
+    };
+
+    body.innerHTML = `
+      <button onclick="App.go('stock')"
+        style="background:none;border:none;color:var(--brand);font-size:14px;font-weight:600;cursor:pointer;padding:0 0 14px;display:flex;align-items:center;gap:5px;">
+        ← Retour catalogue
+      </button>
+
+      <!-- ── Fiche référence ── -->
+      <div class="card">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;">
+          <div>
+            <div style="font-family:'Courier New',monospace;font-size:18px;font-weight:700;color:var(--brand);">${d.ref}</div>
+            ${d.refFourn ? `<div style="font-size:11px;color:#94A3B8;margin-top:2px;">Réf. fournisseur : ${d.refFourn}</div>` : ''}
+          </div>
+          <button onclick="App.toggleStockPref('${refSafe}');App._renderStockDetail();"
+            style="background:none;border:none;font-size:28px;cursor:pointer;line-height:1;color:${isRel?'#F59E0B':'#CBD5E1'};">
+            ${isRel?'★':'☆'}
+          </button>
+        </div>
+        <p style="font-size:14px;color:#1E293B;line-height:1.55;margin-bottom:14px;">${d.description||'—'}</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
+          ${d.famille     ? `<span class="sc-bdg fam" style="font-size:12px;padding:3px 9px;">${d.famille}</span>` : ''}
+          ${d.fournisseur ? `<span class="sc-bdg fou" style="font-size:12px;padding:3px 9px;">${d.fournisseur}</span>` : ''}
+        </div>
+
+        <!-- Stock calculé -->
+        <div style="display:flex;align-items:center;gap:12px;padding:12px;background:#F8FAFC;border-radius:10px;margin-bottom:16px;">
+          <div style="font-size:26px;">📦</div>
+          <div style="flex:1;">
+            <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Stock calculé</div>
+            <div style="display:flex;align-items:center;margin-top:4px;flex-wrap:wrap;gap:6px;">
+              <span class="sc-qty ${qtyClass}" style="font-size:14px;padding:4px 12px;">${calcQty !== null ? calcQty : '—'}${d.seuil !== null ? ' / min ' + d.seuil : ''}</span>
+              ${deltaLabel}
+            </div>
+            ${hasDelta && d.qte !== null ? `<div style="font-size:10px;color:#94A3B8;margin-top:4px;">PIDEM : ${pidemQty}</div>` : ''}
+          </div>
+        </div>
+
+        <!-- Photo -->
+        <div>
+          <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Photo de référence</div>
+          <div id="stock-detail-photo" style="width:100%;min-height:140px;background:#F1F5F9;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
+            ${hasPhoto
+              ? `<img id="stock-detail-img" src="" style="width:100%;max-height:260px;object-fit:contain;" alt="Photo">`
+              : `<div style="text-align:center;color:#CBD5E1;padding:30px 20px;">
+                   <div style="font-size:40px;margin-bottom:8px;">📷</div>
+                   <div style="font-size:12px;">Aucune photo</div>
+                 </div>`
+            }
+          </div>
+          <label style="display:flex;align-items:center;justify-content:center;gap:8px;background:#EBF5FB;color:var(--brand);border:2px dashed var(--accent);padding:11px;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px;">
+            📷 ${hasPhoto?'Changer la photo':'Ajouter une photo'}
+            <input type="file" accept="image/*" capture="environment"
+              onchange="App.uploadStockPhoto(this,'${refSafe}')" style="display:none;">
+          </label>
+        </div>
+      </div>
+
+      <!-- ── Enregistrer un mouvement ── -->
+      <div class="card" style="margin-top:10px;">
+        <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">Enregistrer un mouvement</div>
+        <div style="display:flex;gap:6px;margin-bottom:10px;">
+          ${['entrée','sortie','inventaire'].map(t => `
+            <button id="mv-btn-${t}" onclick="App.selectMvType('${t}')"
+              style="flex:1;padding:9px 4px;border-radius:8px;border:1.5px solid;font-size:11px;font-weight:700;cursor:pointer;${mvBtnStyle(t)}">
+              ${mvIcons[t]} ${mvLabels[t]}
+            </button>`).join('')}
+        </div>
+        <div id="mv-form" style="display:${S.selMvType ? 'block' : 'none'};">
+          <div style="display:flex;gap:8px;margin-bottom:8px;align-items:stretch;">
+            <input type="number" id="mv-qty" min="1" placeholder="Quantité"
+              style="flex:1;padding:10px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:16px;text-align:center;">
+            <button onclick="App.submitMouvement()" id="mv-submit-btn"
+              style="padding:10px 18px;background:${mvColors[S.selMvType]||'var(--brand)'};color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px;">
+              ✓ OK
+            </button>
+          </div>
+          <input type="text" id="mv-note" placeholder="Note optionnelle (commande, chantier…)"
+            style="width:100%;padding:9px 10px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;">
+        </div>
+      </div>
+
+      <!-- ── Historique des mouvements ── -->
+      <div class="card" style="margin-top:10px;margin-bottom:20px;">
+        <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">Historique</div>
+        <div id="mv-history-loading" style="text-align:center;padding:16px;display:none;"><div class="spinner"></div></div>
+        <div id="mv-history-list"><div style="text-align:center;color:#CBD5E1;padding:16px;font-size:13px;">Chargement…</div></div>
+      </div>`;
+
+    // Charger la photo
+    if (hasPhoto) {
+      const img = document.getElementById('stock-detail-img');
+      if (img) this._loadStockPhotoImg(img, ref);
+    }
+    // Charger l'historique des mouvements
+    this.loadStockMouvements(ref);
+  },
+
+  // Calcule le stock réel = PIDEM qty + mouvements cumulés
+  _calcStockActuel(ref, pidemQty) {
+    const d = S.stockDeltas[ref];
+    if (!d) return pidemQty;
+    if (d.invQty !== null) return d.invQty + d.delta; // inventaire comme base
+    return pidemQty !== null ? pidemQty + d.delta : null;
+  },
+
+  // Sélectionne le type de mouvement (met à jour les boutons)
+  selectMvType(type) {
+    S.selMvType = type;
+    const colors = { entrée:'#15803D', sortie:'#DC2626', inventaire:'#2563EB' };
+    ['entrée','sortie','inventaire'].forEach(t => {
+      const btn = document.getElementById('mv-btn-' + t);
+      if (!btn) return;
+      const active = t === type;
+      btn.style.background  = active ? colors[t] : '#F8FAFC';
+      btn.style.borderColor = active ? colors[t] : '#E2E8F0';
+      btn.style.color       = active ? 'white'   : '#64748B';
+    });
+    const form = document.getElementById('mv-form');
+    if (form) form.style.display = 'block';
+    const submitBtn = document.getElementById('mv-submit-btn');
+    if (submitBtn) submitBtn.style.background = colors[type];
+    setTimeout(() => document.getElementById('mv-qty')?.focus(), 50);
+  },
+
+  // Soumet un mouvement de stock
+  async submitMouvement() {
+    const ref  = S.selStockRef;
+    const type = S.selMvType;
+    const qty  = parseFloat(document.getElementById('mv-qty')?.value);
+    const note = document.getElementById('mv-note')?.value?.trim() || '';
+    const u    = S.currentUser;
+    const user = u ? `${u.prenom} ${u.nom}` : 'inconnu';
+
+    if (!type) { this.toast('Sélectionne un type de mouvement'); return; }
+    if (!qty || qty <= 0 || isNaN(qty)) { this.toast('Quantité invalide'); return; }
+
+    const btn = document.getElementById('mv-submit-btn');
+    if (btn) btn.disabled = true;
+    this.toast('⏳ Enregistrement…');
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action:'add_mouvement', ref, type, qty, note, user }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast('✓ Mouvement enregistré');
+        // Mise à jour locale du delta
+        const cur = S.stockDeltas[ref] || { delta:0, invQty:null, lastDate:null };
+        if      (type === 'inventaire') S.stockDeltas[ref] = { delta:0, invQty:qty,           lastDate: new Date().toISOString() };
+        else if (type === 'entrée')     S.stockDeltas[ref] = { ...cur, delta: cur.delta + qty, lastDate: new Date().toISOString() };
+        else if (type === 'sortie')     S.stockDeltas[ref] = { ...cur, delta: cur.delta - qty, lastDate: new Date().toISOString() };
+        // Réinitialiser le formulaire
+        S.selMvType = null;
+        if (document.getElementById('mv-qty'))  document.getElementById('mv-qty').value  = '';
+        if (document.getElementById('mv-note')) document.getElementById('mv-note').value = '';
+        // Re-rendre le détail (stock calculé mis à jour) et recharger l'historique
+        this._renderStockDetail();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+        console.error('[submitMouvement]', data);
+      }
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+      console.error('[submitMouvement]', e);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  },
+
+  // Charge et affiche l'historique des mouvements pour une référence
+  async loadStockMouvements(ref) {
+    const el      = document.getElementById('mv-history-list');
+    const loading = document.getElementById('mv-history-loading');
+    if (!el || !S.apiUrl) return;
+    if (loading) loading.style.display = 'block';
+    el.innerHTML = '';
+    try {
+      const r    = await _fetchWithTimeout(
+        `${S.apiUrl}?action=stock_mouvements&ref=${encodeURIComponent(ref)}`, {}, 15000
+      );
+      const data = await r.json();
+      if (data.status === 'ok') {
+        const movs = (data.mouvements || []).slice().reverse(); // plus récent en premier
+        if (!movs.length) {
+          el.innerHTML = '<div style="text-align:center;color:#CBD5E1;padding:16px;font-size:13px;">Aucun mouvement enregistré</div>';
+          return;
+        }
+        const clrMap  = { entrée:'#15803D', sortie:'#DC2626', inventaire:'#2563EB' };
+        const iconMap = { entrée:'➕', sortie:'➖', inventaire:'📋' };
+        const signMap = { entrée:'+', sortie:'-', inventaire:'=' };
+        el.innerHTML = movs.map((m, i) => {
+          const c    = clrMap[m.type]  || '#64748B';
+          const ico  = iconMap[m.type] || '·';
+          const sign = signMap[m.type] || '';
+          const dt   = m.date ? new Date(m.date).toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+          const last = i === movs.length - 1;
+          return `<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;${last?'':'border-bottom:1px solid #F1F5F9;'}">
+            <div style="width:28px;height:28px;border-radius:50%;background:${c}18;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;">${ico}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;">
+                <span style="font-size:14px;font-weight:700;color:${c};">${sign}${m.qty}</span>
+                <span style="font-size:10px;color:#94A3B8;white-space:nowrap;">${dt}</span>
+              </div>
+              <div style="font-size:11px;color:#64748B;margin-top:1px;">${m.user||''}${m.note?' · <em>'+m.note+'</em>':''}</div>
+            </div>
+          </div>`;
+        }).join('');
+      }
+    } catch(e) {
+      el.innerHTML = '<div style="color:#94A3B8;font-size:12px;padding:12px;">Erreur chargement historique</div>';
+    } finally {
+      if (loading) loading.style.display = 'none';
+    }
+  },
+
+  // Gère l'upload d'une photo pour une référence stock
+  async uploadStockPhoto(input, ref) {
+    const file = input.files[0];
+    if (!file || !S.apiUrl) return;
+    this.toast('⏳ Redimensionnement…');
+    let fullB64, thumbB64;
+    try {
+      // Redimensionner séquentiellement pour éviter les problèmes mémoire
+      fullB64  = await _compress(file, 1200, 0.82);
+      thumbB64 = await _compress(file, 200,  0.75);
+    } catch(e) {
+      this.toast('Erreur redimensionnement : ' + e.message);
+      console.error('[uploadStockPhoto] resize error:', e);
+      return;
+    }
+    this.toast('⏳ Envoi de la photo…');
+    try {
+      const payload = JSON.stringify({
+        action:    'save_stock_photo',
+        ref:       ref,
+        imageData: fullB64.split(',')[1],
+        thumbData: thumbB64.split(',')[1],
+        mime:      'image/jpeg',
+      });
+      const fd = new FormData();
+      fd.append('payload', payload);
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 60000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast('✓ Photo enregistrée');
+        S.stockPhotos[ref] = data.thumbId || data.fileId;
+        this._renderStockDetail();
+      } else {
+        const msg = data.error || 'inconnue';
+        this.toast('Erreur AppScript : ' + msg);
+        console.error('[uploadStockPhoto] AppScript error:', data);
+      }
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+      console.error('[uploadStockPhoto] network error:', e);
+    }
+  },
+
   /* ─ Arrivals list ─ */
   _renderArrivalList() {
     const list = document.getElementById('arrival-list');
@@ -1147,7 +2574,8 @@ const App = {
         return;
       }
       setMsg('Envoi en cours...', `Code ${code} · ${photos.length} photo(s)`);
-      const payload = { action: 'arrival', code, module, moduleType, numModule, lv, agence, chauffeur, date, etat, longueur, photos: photos.map(p => p.dataUrl) };
+      const user = S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}`.trim() : '';
+      const payload = { action: 'arrival', code, module, moduleType, numModule, lv, agence, chauffeur, date, etat, longueur, photos: photos.map(p => p.dataUrl), saisie_par: user };
       const res = await _post(S.apiUrl, payload);
       if (res.status !== 'ok' && res.status !== 'success') throw new Error(res.error || 'Réponse inattendue');
       setMsg('✓ Enregistré !', `Code ${code}`);
@@ -1953,7 +3381,7 @@ const App = {
     try {
       let res = null;
       if (S.apiUrl) {
-        res = await _post(S.apiUrl, { action: 'departure_photo', code, photos: S.depPhotos.map(p => p.dataUrl) });
+        res = await _post(S.apiUrl, { action: 'departure_photo', code, photos: S.depPhotos.map(p => p.dataUrl), saisie_par: S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}`.trim() : '' });
       }
       this._saveHistory({ code, type: 'departure', photos: S.depPhotos.length, module: 'planning', date: todayStr() });
       // Mise à jour locale immédiate depuis la réponse serveur (logEntry) ou par calcul
@@ -1961,9 +3389,7 @@ const App = {
       S.depPhotosLog[code] = entry;
       S.depPhotos = []; // vider la grille
       this.toast('✓ Photos enregistrées !');
-      await _sleep(1100);
-      S.depsLoaded = false;
-      this.go('departures');
+      this._renderDepDetail(); // rester sur la carte, rafraîchir le compteur
     } catch(e) {
       this.toast('Erreur : ' + e.message);
       if (btn) { btn.disabled = false; btn.textContent = '📤 Enregistrer les photos de départ'; }
@@ -1995,7 +3421,7 @@ const App = {
     try {
       let res = null;
       if (S.apiUrl) {
-        res = await _post(S.apiUrl, { action: 'arrival_photo', code, photos: S.arrPhotos.map(p => p.dataUrl) });
+        res = await _post(S.apiUrl, { action: 'arrival_photo', code, photos: S.arrPhotos.map(p => p.dataUrl), saisie_par: S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}`.trim() : '' });
       }
       this._saveHistory({ code, type: 'arrival_extra', photos: S.arrPhotos.length, module: a.source || 'loxam', date: todayStr() });
       // Mise à jour locale immédiate
@@ -2005,9 +3431,7 @@ const App = {
       S.arrPhotosLog[code] = entry;
       S.arrPhotos = [];
       this.toast('✓ Photos d\'arrivée enregistrées !');
-      await _sleep(1100);
-      S.arrivalsLoaded = false; S.arrFullLoaded = false;
-      this.go('arrivals');
+      this._renderArrivalDetail(); // rester sur la carte, rafraîchir le compteur
     } catch(e) {
       this.toast('Erreur : ' + e.message);
       if (btn) { btn.disabled = false; btn.textContent = '📥 Enregistrer les photos d\'arrivée'; }
@@ -2084,9 +3508,16 @@ const App = {
   },
   /* ─ Settings ─ */
   _fillSettings() {
-    document.getElementById('set-url').value        = S.apiUrl;
+    document.getElementById('set-url').value          = S.apiUrl;
     document.getElementById('info-codes').textContent = `Codes en cache : ${S.codes.size}`;
     document.getElementById('info-hist').textContent  = `Entrées historique : ${S.history.length}`;
+    // Infos utilisateur
+    const u = S.currentUser;
+    if (u) {
+      const roleLabels = { admin:'Administrateur', utilisateur:'Utilisateur', gestionnaire:'Utilisateur', chauffeur:'Utilisateur' };
+      document.getElementById('settings-user-name').textContent = `${u.prenom} ${u.nom}`;
+      document.getElementById('settings-user-role').textContent = roleLabels[u.role] || u.role;
+    }
   },
   saveSettings() {
     const url = document.getElementById('set-url').value.trim();
@@ -2244,9 +3675,10 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW:', e));
 }
 document.addEventListener('DOMContentLoaded', () => {
-  App.go('departures');
+  // Vérifie la session → affiche login ou accueil
+  App._initAuth();
   _updateOnline();
-  // Load codes in background if cache is stale
+  // Pré-chargement des codes en arrière-plan si le cache est périmé
   if (S.apiUrl && Date.now() - S.codesTs > CODES_TTL) {
     App._fetchCodes();
   }
