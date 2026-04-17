@@ -2180,8 +2180,8 @@ const App = {
     let fullB64, thumbB64;
     try {
       // Redimensionner séquentiellement pour éviter les problèmes mémoire
-      fullB64  = await _resizeImage(file, 1200, 0.82);
-      thumbB64 = await _resizeImage(file, 200,  0.75);
+      fullB64  = await _compress(file, 1200, 0.82);
+      thumbB64 = await _compress(file, 200,  0.75);
     } catch(e) {
       this.toast('Erreur redimensionnement : ' + e.message);
       console.error('[uploadStockPhoto] resize error:', e);
