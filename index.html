@@ -762,7 +762,15 @@
           <option value="gestionnaire">Gestionnaire</option>
           <option value="admin">Administrateur</option>
         </select>
-        <input type="text" id="nu-activites" class="input-field" placeholder="Activités (ex: loxam,bcb)" value="loxam" style="margin-bottom:8px;">
+        <div style="margin-bottom:8px;">
+          <label class="label-sm" style="display:block;margin-bottom:6px;">Activités</label>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-loxam"      value="loxam"      checked> LOXAM</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-bcb"        value="bcb"              > BCB</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-agorastore" value="agorastore"       > Agorastore</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-stockage"   value="stockage"         > Stockage</label>
+          </div>
+        </div>
         <div style="margin-bottom:12px;">
           <label class="label-sm">PIN initial (4 chiffres) — à communiquer verbalement</label>
           <input type="number" id="nu-pin" class="input-field" placeholder="ex : 4821" min="1000" max="9999" style="margin:0;letter-spacing:4px;font-size:18px;font-weight:600;">
@@ -1601,20 +1609,26 @@ const App = {
   _hideCreateUserForm() {
     document.getElementById('admin-create-form').style.display = 'none';
     ['nu-prenom','nu-nom','nu-pin'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['loxam','bcb','agorastore','stockage'].forEach(a => {
+      const el = document.getElementById('nu-act-' + a);
+      if (el) el.checked = (a === 'loxam'); // reset : loxam coché par défaut
+    });
   },
 
   async _createUser() {
     const prenom = document.getElementById('nu-prenom').value.trim();
     const nom    = document.getElementById('nu-nom').value.trim();
     const role   = document.getElementById('nu-role').value;
-    const acts   = document.getElementById('nu-activites').value.trim() || 'loxam';
     const pin    = document.getElementById('nu-pin').value.trim();
+    const activites = ['loxam','bcb','agorastore','stockage'].filter(a => {
+      const el = document.getElementById('nu-act-' + a); return el && el.checked;
+    });
 
     if (!prenom || !nom)              { this.toast('Prénom et nom requis'); return; }
     if (!pin || pin.length < 4)       { this.toast('PIN invalide — 4 chiffres requis'); return; }
+    if (!activites.length)            { this.toast('Sélectionne au moins une activité'); return; }
 
-    const pinHash  = await this._hashPin(pin);
-    const activites = acts.split(',').map(s => s.trim()).filter(Boolean);
+    const pinHash = await this._hashPin(pin);
     try {
       const fd = new FormData();
       fd.append('payload', JSON.stringify({ action:'create_user', prenom, nom, role, activites, pinHash }));
