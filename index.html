@@ -299,6 +299,68 @@
     .sc-bdg.fam  { background:#EDE9FE; color:#5B21B6; }
     .sc-bdg.fou  { background:#E0F2FE; color:#0369A1; }
     .sc-rfourn   { font-size:10px; color:#94A3B8; }
+    /* ── Indicateur tendance & rupture dans les cartes catalogue ── */
+    .sc-trend    { font-size:11px; font-weight:700; flex-shrink:0; line-height:1; }
+    .sc-trend.up   { color:#DC2626; }
+    .sc-trend.down { color:#15803D; }
+    .sc-trend.stable { color:#94A3B8; }
+    .sc-rupture  { font-size:9px; font-weight:600; padding:1px 4px; border-radius:8px;
+                   background:#FEF2F2; color:#DC2626; white-space:nowrap; }
+    .sc-rupture.ok { background:#F0FDF4; color:#15803D; }
+    /* ── Dashboard stockage ── */
+    .dash-kpi-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
+    .dash-kpi { background:white; border-radius:10px; padding:12px 14px;
+                box-shadow:0 1px 3px rgba(0,0,0,0.07); }
+    .dash-kpi-val { font-size:28px; font-weight:800; line-height:1; color:#1E293B; }
+    .dash-kpi-lbl { font-size:11px; color:#64748B; margin-top:3px; }
+    .dash-kpi.alert .dash-kpi-val { color:#DC2626; }
+    .dash-kpi.warn  .dash-kpi-val { color:#D97706; }
+    .dash-kpi.ok    .dash-kpi-val { color:#15803D; }
+    .dash-section  { margin-bottom:14px; }
+    .dash-section-title { font-size:12px; font-weight:700; text-transform:uppercase;
+                          letter-spacing:.5px; color:#64748B; margin-bottom:6px; }
+    .dash-alert-row { background:white; border-radius:8px; padding:8px 10px; margin-bottom:5px;
+                      display:flex; align-items:center; gap:8px;
+                      box-shadow:0 1px 2px rgba(0,0,0,0.05); cursor:pointer; }
+    .dash-alert-row:active { transform:scale(0.99); }
+    .dash-alert-ref { font-family:'Courier New',monospace; font-size:12px; font-weight:700;
+                      color:var(--brand); flex:1; min-width:0; overflow:hidden;
+                      text-overflow:ellipsis; white-space:nowrap; }
+    .dash-alert-badge { font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px; white-space:nowrap; }
+    .dash-alert-badge.rupture { background:#FEF2F2; color:#DC2626; }
+    .dash-alert-badge.low     { background:#FEF3C7; color:#D97706; }
+    .dash-mvt-row { background:white; border-radius:8px; padding:7px 10px; margin-bottom:4px;
+                    display:flex; align-items:center; gap:8px;
+                    box-shadow:0 1px 2px rgba(0,0,0,0.05); }
+    .dash-mvt-type { font-size:10px; font-weight:700; padding:2px 6px; border-radius:8px; white-space:nowrap; flex-shrink:0; }
+    .dash-mvt-type.entrée     { background:#DCFCE7; color:#15803D; }
+    .dash-mvt-type.sortie     { background:#FEE2E2; color:#DC2626; }
+    .dash-mvt-type.inventaire { background:#DBEAFE; color:#1D4ED8; }
+    .dash-mvt-ref  { font-family:'Courier New',monospace; font-size:11px; font-weight:700;
+                     color:var(--brand); flex:1; min-width:0; overflow:hidden;
+                     text-overflow:ellipsis; white-space:nowrap; }
+    .dash-mvt-qty  { font-size:12px; font-weight:700; color:#1E293B; flex-shrink:0; }
+    .dash-mvt-date { font-size:10px; color:#94A3B8; flex-shrink:0; }
+    /* ── Vue Synchro ── */
+    .sync-group  { margin-bottom:12px; }
+    .sync-group-title { font-size:11px; font-weight:700; text-transform:uppercase;
+                        letter-spacing:.5px; padding:4px 0 6px; display:flex;
+                        align-items:center; gap:6px; }
+    .sync-group-title .sync-badge { font-size:10px; font-weight:700; padding:1px 7px;
+                                    border-radius:10px; }
+    .sync-badge.new  { background:#DCFCE7; color:#15803D; }
+    .sync-badge.mod  { background:#FEF3C7; color:#D97706; }
+    .sync-badge.del  { background:#FEE2E2; color:#DC2626; }
+    .sync-ref-row { background:white; border-radius:8px; padding:8px 10px; margin-bottom:4px;
+                    box-shadow:0 1px 2px rgba(0,0,0,0.05); }
+    .sync-ref    { font-family:'Courier New',monospace; font-size:12px; font-weight:700; color:var(--brand); }
+    .sync-desc   { font-size:11px; color:#475569; margin-top:1px; }
+    .sync-old    { font-size:10px; color:#94A3B8; text-decoration:line-through; }
+    /* ── Analytics section dans detail ── */
+    .analytics-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin:10px 0; }
+    .analytics-box  { background:#F8FAFC; border-radius:8px; padding:8px 10px; text-align:center; }
+    .analytics-val  { font-size:18px; font-weight:800; color:#1E293B; line-height:1; }
+    .analytics-lbl  { font-size:9px; color:#64748B; margin-top:2px; text-transform:uppercase; letter-spacing:.3px; }
     .stock-famille-btn { background:#F1F5F9; border:1.5px solid #CBD5E1; color:#64748B; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap; }
     .stock-famille-btn.active { background:var(--brand); border-color:var(--brand); color:white; }
     /* ── Saisie groupée ── */
@@ -687,6 +749,19 @@
     </button>
     <button class="nav-tab" data-tab="history" onclick="App.go('history')">
       <span class="icon">🕐</span><span>Historique</span>
+    </button>
+    <!-- ── Tabs Stockage (masqués hors activité stockage) ─────────────── -->
+    <button class="nav-tab" data-stab="stock-dashboard" onclick="App.go('stock-dashboard')" style="display:none">
+      <span class="icon">📊</span><span>Tableau</span>
+    </button>
+    <button class="nav-tab" data-stab="stock" onclick="App.go('stock')" style="display:none">
+      <span class="icon">📦</span><span>Catalogue</span>
+    </button>
+    <button class="nav-tab" data-stab="stock-batch" onclick="App.go('stock-batch')" style="display:none">
+      <span class="icon">📋</span><span>Saisie</span>
+    </button>
+    <button class="nav-tab" data-stab="stock-sync" onclick="App.go('stock-sync')" style="display:none">
+      <span class="icon">🔄</span><span>Synchro</span>
     </button>
     <!-- Bouton retour accueil (mobile uniquement) -->
     <button class="nav-tab" id="nav-home-btn" onclick="App.goHome()" style="color:#94A3B8;">
@@ -1156,6 +1231,38 @@
         <p style="font-size:16px;font-weight:600;">Aucun historique</p>
       </div>
     </div>
+    <!-- ── VIEW : STOCK DASHBOARD ──────────────────────────────────────── -->
+    <div class="view" id="view-stock-dashboard">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <h2 style="font-size:20px;font-weight:700;color:#1E293B;">Tableau de bord</h2>
+        <button onclick="App.loadStockDashboard(true)"
+          style="background:#EFF6FF;color:#1D4ED8;border:none;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
+          🔄 Actualiser
+        </button>
+      </div>
+      <!-- KPIs -->
+      <div class="dash-kpi-grid" id="dash-kpi-grid">
+        <div style="text-align:center;padding:24px;color:#94A3B8;grid-column:1/-1;font-size:13px;">Chargement…</div>
+      </div>
+      <!-- Alertes -->
+      <div class="dash-section" id="dash-alerts-section" style="display:none">
+        <div class="dash-section-title">⚠️ Alertes stock</div>
+        <div id="dash-alerts-list"></div>
+        <button onclick="App.go('stock')" style="width:100%;margin-top:4px;background:transparent;border:1.5px solid #E2E8F0;color:#475569;padding:7px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
+          Voir tout le catalogue →
+        </button>
+      </div>
+      <!-- Mouvements récents -->
+      <div class="dash-section">
+        <div class="dash-section-title">📋 Mouvements récents</div>
+        <div id="dash-mvt-list">
+          <div style="text-align:center;padding:16px;color:#94A3B8;font-size:13px;">Chargement…</div>
+        </div>
+        <button onclick="App.go('stock-batch')" style="width:100%;margin-top:4px;background:transparent;border:1.5px solid #E2E8F0;color:#475569;padding:7px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
+          Nouvelle saisie groupée →
+        </button>
+      </div>
+    </div>
     <!-- ── VIEW : STOCK ─────────────────────────────────────────────────── -->
     <div class="view" id="view-stock">
 
@@ -1254,6 +1361,20 @@
       <!-- Liste des références avec steppers -->
       <div id="batch-list"></div>
 
+    </div>
+
+    <!-- ── VIEW : STOCK SYNC ────────────────────────────────────────────── -->
+    <div class="view" id="view-stock-sync">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <h2 style="font-size:20px;font-weight:700;color:#1E293B;">Synchro catalogue</h2>
+        <button onclick="App.loadStockSync(true)"
+          style="background:#EFF6FF;color:#1D4ED8;border:none;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
+          🔄 Vérifier
+        </button>
+      </div>
+      <div id="sync-body">
+        <div style="text-align:center;padding:32px;color:#94A3B8;font-size:13px;">Chargement…</div>
+      </div>
     </div>
 
     <!-- ── VIEW : SETTINGS ──────────────────────────────────────────────── -->
@@ -1413,6 +1534,15 @@ const S = {
   batchMvType:    null,    // type actif du batch
   batchItems:     {},      // { ref: qty } — quantités saisies
   batchSearch:    '',      // filtre de recherche dans la vue batch
+  // ── Layer 2 — Intelligence ────────────────────────────────────────────
+  stockAnalytics:  {},     // { ref: { avgPerWeek, trend, exits30d, entries30d, lastDate } }
+  analyticsLoaded: false,
+  // ── Layer 3 — Dashboard ───────────────────────────────────────────────
+  stockRecentMvs:  [],     // derniers N mouvements toutes refs confondues
+  dashboardLoaded: false,
+  // ── Layer 1 — Sync ────────────────────────────────────────────────────
+  stockSyncData:   null,   // { new, modified, deleted, unchangedCount, savedAt, isInitial }
+  syncLoading:     false,
 };
 // ── APP ──────────────────────────────────────────────────────────────────────
 const App = {
@@ -1426,12 +1556,15 @@ const App = {
     if (view === 'departures' && !S.depsLoaded) this.loadDepartures();
     if (view === 'archive'    && !S.archiveLoaded) this.loadArchive();
     if (view === 'settings')   this._fillSettings();
+    if (view === 'stock-dashboard') this.loadStockDashboard();
     if (view === 'stock'        && !S.stockLoaded) this.loadStockCatalog();
     if (view === 'stock-detail') this._renderStockDetail();
     if (view === 'stock-batch')  this._renderBatchList();
+    if (view === 'stock-sync')   this.loadStockSync();
   },
   goBack() {
-    if (S.view === 'admin') { this.goHome(); return; }
+    if (S.view === 'admin')        { this.goHome(); return; }
+    if (S.view === 'stock-detail') { this.go('stock'); return; }
     this.go(S.prevView);
   },
 
@@ -1456,17 +1589,20 @@ const App = {
     }
     S.activity = name;
     if (name === 'loxam')    this.go('departures');
-    if (name === 'stockage') this.go('stock');
+    if (name === 'stockage') this.go('stock-dashboard');
   },
   _render() {
     const v      = S.view;
     const onHome = v === 'home';
 
-    // ── Nav : cachée sur l'accueil, tabs LOXAM masqués hors activité loxam ──
+    // ── Nav : cachée sur l'accueil, tabs selon activité ─────────────────
     const nav = document.getElementById('main-nav');
     if (nav) nav.style.display = onHome ? 'none' : '';
     document.querySelectorAll('#main-nav .nav-tab[data-tab]').forEach(el => {
       el.style.display = (S.activity === 'loxam') ? '' : 'none';
+    });
+    document.querySelectorAll('#main-nav .nav-tab[data-stab]').forEach(el => {
+      el.style.display = (S.activity === 'stockage') ? '' : 'none';
     });
 
     // ── Views : affiche la vue active ────────────────────────────────────
@@ -1476,26 +1612,32 @@ const App = {
     const el     = document.getElementById(viewId);
     if (el) el.classList.add('active');
 
-    // ── Nav tabs : onglet actif ──────────────────────────────────────────
+    // ── Nav tabs : onglet actif (LOXAM + Stockage) ──────────────────────
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-    const tab = document.querySelector(`[data-tab="${v}"]`);
+    const tab = document.querySelector(`[data-tab="${v}"]`) || document.querySelector(`[data-stab="${v}"]`);
     if (tab) tab.classList.add('active');
+    // Tableau de bord stockage = tab "Tableau"
+    if (['stock-dashboard'].includes(v)) {
+      const t2 = document.querySelector('[data-stab="stock-dashboard"]');
+      if (t2) t2.classList.add('active');
+    }
 
     // ── FAB : visible uniquement sur la liste des arrivées ───────────────
     const fab = document.getElementById('fab');
     if (fab) fab.style.display = (v === 'arrivals') ? 'flex' : 'none';
 
     // ── Header : back button / logo / titre ──────────────────────────────
-    const inForm = ['new-arrival','settings','dep-detail','arr-detail'].includes(v);
+    const inForm = ['new-arrival','settings','dep-detail','arr-detail','stock-detail'].includes(v);
     document.getElementById('btn-back').classList.toggle('hidden', !inForm);
     document.getElementById('header-logo').style.display = inForm ? 'none' : 'flex';
 
     // Labels du bouton retour
     const backLabels = {
-      'new-arrival': 'Annuler',
-      'settings':    'Réglages',
-      'dep-detail':  S.depFromArchive ? 'Partis' : 'Production',
-      'arr-detail':  'Arrivées',
+      'new-arrival':  'Annuler',
+      'settings':     'Réglages',
+      'dep-detail':   S.depFromArchive ? 'Partis' : 'Production',
+      'arr-detail':   'Arrivées',
+      'stock-detail': 'Catalogue',
     };
     document.getElementById('back-label').textContent = backLabels[v] || 'Retour';
 
@@ -1504,7 +1646,7 @@ const App = {
       loxam:    { icon: '🏗️', title: 'LOXAM',      sub: 'Arrivées & Départs' },
       bcb:      { icon: '🚛', title: 'BCB',         sub: 'Vente & Logistique' },
       agora:    { icon: '🏷️', title: 'Agorastore',  sub: 'Ventes en ligne'    },
-      stockage: { icon: '📦', title: 'Stockage',    sub: 'Catalogue PIDEM'    },
+      stockage: { icon: '📦', title: 'Stockage',    sub: 'Gestion des pièces'  },
     };
     const titleEl    = document.getElementById('header-title');
     const subtitleEl = document.getElementById('header-subtitle');
@@ -1977,14 +2119,18 @@ const App = {
     document.getElementById('stock-loading').style.display = 'block';
     document.getElementById('stock-list').innerHTML = '';
     try {
-      // Catalogue + préférences + mouvements en parallèle
-      const [catResp, prefsResp, deltaResp] = await Promise.all([
+      // Catalogue + préférences + mouvements + analytics en parallèle
+      const tasks = [
         _fetchWithTimeout(S.apiUrl + '?action=stock_catalog',            {}, 40000),
         _fetchWithTimeout(S.apiUrl + '?action=stock_prefs',              {}, 10000),
         _fetchWithTimeout(S.apiUrl + '?action=stock_mouvements_summary', {}, 15000),
-      ]);
-      const cat   = await catResp.json();
-      const prefs = await prefsResp.json();
+      ];
+      if (!S.analyticsLoaded) {
+        tasks.push(_fetchWithTimeout(S.apiUrl + '?action=stock_analytics', {}, 20000));
+      }
+      const [catResp, prefsResp, deltaResp, anaResp] = await Promise.all(tasks);
+      const cat    = await catResp.json();
+      const prefs  = await prefsResp.json();
       const deltas = await deltaResp.json();
 
       if (cat.status === 'ok') {
@@ -1997,6 +2143,10 @@ const App = {
       }
       if (deltas.status === 'ok') {
         S.stockDeltas = deltas.summary || {};
+      }
+      if (anaResp) {
+        const ana = await anaResp.json();
+        if (ana.status === 'ok') { S.stockAnalytics = ana.analytics || {}; S.analyticsLoaded = true; }
       }
     } catch(e) { this.toast('Erreur chargement catalogue'); }
     finally { document.getElementById('stock-loading').style.display = 'none'; }
@@ -2094,6 +2244,18 @@ const App = {
       const desc     = d.description.length > 90 ? d.description.substring(0,88)+'…' : d.description;
       const refSafe  = d.ref.replace(/'/g, "\\'");
 
+      // Analytics Layer 2
+      const ana      = S.stockAnalytics[d.ref];
+      const days     = this._calcDaysToRupture(d.ref, calcQty);
+      const trendArrow = ana?.trend === 'up'   ? '↑'
+                       : ana?.trend === 'down' ? '↓' : '';
+      const trendCls   = ana?.trend || 'stable';
+      const ruptureHtml = (days !== null && calcQty !== null)
+        ? (days <= 0
+            ? `<span class="sc-rupture">⛔ Rupture</span>`
+            : `<span class="sc-rupture ok">~${days}j</span>`)
+        : '';
+
       let thumbHtml = '';
       if (S.stockShowThumbs) {
         if (S.stockPhotos[d.ref]) {
@@ -2110,6 +2272,7 @@ const App = {
             <div class="sc-head">
               <span class="sc-ref">${d.ref}</span>
               <span class="sc-qty ${qtyClass}">${qtyTxt}</span>
+              ${trendArrow ? `<span class="sc-trend ${trendCls}">${trendArrow}</span>` : ''}
               <span class="sc-star${isRel?' on':''}" onclick="event.stopPropagation();App.toggleStockPref('${refSafe}')">${isRel?'★':'☆'}</span>
             </div>
             <div class="sc-desc">${desc}</div>
@@ -2117,6 +2280,7 @@ const App = {
               ${d.famille     ? `<span class="sc-bdg fam">${d.famille}</span>` : ''}
               ${d.fournisseur ? `<span class="sc-bdg fou">${d.fournisseur}</span>` : ''}
               ${d.refFourn    ? `<span class="sc-rfourn">${d.refFourn}</span>` : ''}
+              ${ruptureHtml}
             </div>
           </div>
         </div>
@@ -2294,12 +2458,15 @@ const App = {
           else if (type === 'entrée')     S.stockDeltas[ref] = { ...cur, delta: cur.delta + qty, lastDate:new Date().toISOString() };
           else if (type === 'sortie')     S.stockDeltas[ref] = { ...cur, delta: cur.delta - qty, lastDate:new Date().toISOString() };
         });
+        // Invalider caches analytics/dashboard côté client
+        S.analyticsLoaded = false;
+        S.dashboardLoaded = false;
         // Reset batch
         S.batchItems  = {};
         S.batchMvType = null;
         S.batchSearch = '';
-        // Retour au catalogue
-        this.go('stock');
+        // Retour au tableau de bord
+        this.go('stock-dashboard');
       } else {
         this.toast('Erreur : ' + (data.error || 'inconnue'));
         console.error('[submitBatchMv]', data);
@@ -2460,6 +2627,33 @@ const App = {
           </div>
         </div>
 
+        <!-- Analytics Layer 2 -->
+        ${(function() {
+          const ana  = S.stockAnalytics[ref];
+          const days = App._calcDaysToRupture(ref, calcQty);
+          if (!ana && days === null) return '';
+          const trendIco = ana?.trend === 'up' ? '↑ Hausse' : ana?.trend === 'down' ? '↓ Baisse' : '→ Stable';
+          const trendColor = ana?.trend === 'up' ? '#DC2626' : ana?.trend === 'down' ? '#15803D' : '#94A3B8';
+          return `<div style="margin-bottom:14px;">
+            <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Consommation (30 j)</div>
+            <div class="analytics-grid">
+              <div class="analytics-box">
+                <div class="analytics-val">${ana?.avgPerWeek ?? '—'}</div>
+                <div class="analytics-lbl">moy. / sem.</div>
+              </div>
+              <div class="analytics-box">
+                <div class="analytics-val" style="color:${trendColor};font-size:14px;">${trendIco}</div>
+                <div class="analytics-lbl">tendance</div>
+              </div>
+              <div class="analytics-box">
+                <div class="analytics-val" style="color:${days !== null ? (days <= 7 ? '#DC2626' : days <= 30 ? '#D97706' : '#15803D') : '#94A3B8'}">${days !== null ? (days <= 0 ? '⛔' : days + 'j') : '—'}</div>
+                <div class="analytics-lbl">avant rupture</div>
+              </div>
+            </div>
+            ${ana?.exits30d ? `<div style="font-size:10px;color:#94A3B8;text-align:right;margin-top:2px;">${ana.exits30d} sorti${ana.exits30d>1?'es':'e'} · ${ana.entries30d} entré${ana.entries30d>1?'es':'e'} ces 30 jours</div>` : ''}
+          </div>`;
+        })()}
+
         <!-- Photo -->
         <div>
           <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Photo de référence</div>
@@ -2574,6 +2768,9 @@ const App = {
         if      (type === 'inventaire') S.stockDeltas[ref] = { delta:0, invQty:qty,           lastDate: new Date().toISOString() };
         else if (type === 'entrée')     S.stockDeltas[ref] = { ...cur, delta: cur.delta + qty, lastDate: new Date().toISOString() };
         else if (type === 'sortie')     S.stockDeltas[ref] = { ...cur, delta: cur.delta - qty, lastDate: new Date().toISOString() };
+        // Invalider caches analytics/dashboard côté client
+        S.analyticsLoaded = false;
+        S.dashboardLoaded = false;
         // Réinitialiser le formulaire
         S.selMvType = null;
         if (document.getElementById('mv-qty'))  document.getElementById('mv-qty').value  = '';
@@ -2678,6 +2875,289 @@ const App = {
     } catch(e) {
       this.toast('Erreur réseau : ' + e.message);
       console.error('[uploadStockPhoto] network error:', e);
+    }
+  },
+
+  /* ─ Couche 2 — Intelligence ─ */
+  // Calcule le nombre de jours avant rupture estimée
+  _calcDaysToRupture(ref, stockActuel) {
+    if (stockActuel === null || stockActuel <= 0) return 0;
+    const a = S.stockAnalytics[ref];
+    if (!a || !a.avgPerWeek || a.avgPerWeek === 0) return null; // pas de conso connue
+    return Math.round(stockActuel / (a.avgPerWeek / 7));
+  },
+
+  // Charge les analytics depuis l'AppScript (avec cache local en session)
+  async loadStockAnalytics() {
+    if (!S.apiUrl || S.analyticsLoaded) return;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=stock_analytics', {}, 20000);
+      const d = await r.json();
+      if (d.status === 'ok') {
+        S.stockAnalytics  = d.analytics || {};
+        S.analyticsLoaded = true;
+      }
+    } catch(e) { console.warn('[analytics]', e); }
+  },
+
+  /* ─ Couche 3 — Dashboard ─ */
+  async loadStockDashboard(force = false) {
+    if (!S.apiUrl) return;
+    if (S.dashboardLoaded && !force) { this._renderDashboard(); return; }
+
+    document.getElementById('dash-kpi-grid').innerHTML =
+      '<div style="text-align:center;padding:24px;color:#94A3B8;grid-column:1/-1;font-size:13px;">Chargement…</div>';
+    document.getElementById('dash-mvt-list').innerHTML =
+      '<div style="text-align:center;padding:16px;color:#94A3B8;font-size:13px;">Chargement…</div>';
+
+    try {
+      // Charger catalogue si nécessaire + analytics + mouvements récents en parallèle
+      const tasks = [
+        _fetchWithTimeout(S.apiUrl + '?action=stock_recent_movements&limit=20', {}, 15000),
+      ];
+      if (!S.analyticsLoaded) {
+        tasks.push(_fetchWithTimeout(S.apiUrl + '?action=stock_analytics', {}, 20000));
+      }
+      if (!S.stockLoaded) {
+        tasks.push(
+          _fetchWithTimeout(S.apiUrl + '?action=stock_catalog',            {}, 40000),
+          _fetchWithTimeout(S.apiUrl + '?action=stock_mouvements_summary', {}, 15000),
+        );
+      }
+      const results = await Promise.all(tasks);
+      const mvtData = await results[0].json();
+      if (mvtData.status === 'ok') S.stockRecentMvs = mvtData.movements || [];
+
+      if (!S.analyticsLoaded && results[1]) {
+        const aData = await results[1].json();
+        if (aData.status === 'ok') { S.stockAnalytics = aData.analytics || {}; S.analyticsLoaded = true; }
+      }
+      if (!S.stockLoaded) {
+        const catIdx  = S.analyticsLoaded ? 2 : 1;
+        const dltIdx  = catIdx + 1;
+        const catData = results[catIdx] ? await results[catIdx].json() : null;
+        const dltData = results[dltIdx] ? await results[dltIdx].json() : null;
+        if (catData?.status === 'ok') {
+          S.stockData = catData.data || []; S.stockFamilles = catData.familles || []; S.stockLoaded = true;
+        }
+        if (dltData?.status === 'ok') S.stockDeltas = dltData.summary || {};
+      }
+      S.dashboardLoaded = true;
+    } catch(e) { this.toast('Erreur chargement tableau de bord'); }
+    this._renderDashboard();
+  },
+
+  _renderDashboard() {
+    const kpiEl   = document.getElementById('dash-kpi-grid');
+    const mvtEl   = document.getElementById('dash-mvt-list');
+    const alertEl = document.getElementById('dash-alerts-section');
+    const alertListEl = document.getElementById('dash-alerts-list');
+    if (!kpiEl || !mvtEl) return;
+
+    const total = S.stockData.length;
+    // Alertes : stock bas ou rupture (avec conso connue)
+    const alerts = [];
+    S.stockData.forEach(d => {
+      const qty = this._calcStockActuel(d.ref, d.qte);
+      const days = this._calcDaysToRupture(d.ref, qty);
+      const seuil = d.seuil || 0;
+      if (qty !== null && qty <= 0)              alerts.push({ ref: d.ref, desc: d.description, type: 'rupture', days: 0 });
+      else if (seuil > 0 && qty !== null && qty <= seuil) alerts.push({ ref: d.ref, desc: d.description, type: 'low', days });
+    });
+    // Trier : rupture d'abord, puis par jours croissants
+    alerts.sort((a,b) => {
+      if (a.type !== b.type) return a.type === 'rupture' ? -1 : 1;
+      if (a.days === null && b.days === null) return 0;
+      if (a.days === null) return 1;
+      if (b.days === null) return -1;
+      return a.days - b.days;
+    });
+    const ruptures  = alerts.filter(a => a.type === 'rupture').length;
+    const lowStock  = alerts.filter(a => a.type === 'low').length;
+    const exits30   = Object.values(S.stockAnalytics).reduce((s, a) => s + (a.exits30d || 0), 0);
+
+    // ── KPIs ──
+    kpiEl.innerHTML = `
+      <div class="dash-kpi">
+        <div class="dash-kpi-val">${total}</div>
+        <div class="dash-kpi-lbl">Références total</div>
+      </div>
+      <div class="dash-kpi ${exits30 > 0 ? 'ok' : ''}">
+        <div class="dash-kpi-val">${exits30}</div>
+        <div class="dash-kpi-lbl">Sorties (30 j)</div>
+      </div>
+      <div class="dash-kpi ${lowStock > 0 ? 'warn' : 'ok'}">
+        <div class="dash-kpi-val">${lowStock}</div>
+        <div class="dash-kpi-lbl">Stock bas</div>
+      </div>
+      <div class="dash-kpi ${ruptures > 0 ? 'alert' : 'ok'}">
+        <div class="dash-kpi-val">${ruptures}</div>
+        <div class="dash-kpi-lbl">Ruptures</div>
+      </div>`;
+
+    // ── Alertes ──
+    if (alerts.length > 0) {
+      alertEl.style.display = '';
+      alertListEl.innerHTML = alerts.slice(0, 8).map(a => {
+        const badgeCls = a.type === 'rupture' ? 'rupture' : 'low';
+        const badgeTxt = a.type === 'rupture' ? '⛔ Rupture'
+          : a.days !== null ? `⚠️ ${a.days}j` : '⚠️ Stock bas';
+        return `<div class="dash-alert-row" onclick="App.openStockDetail('${a.ref.replace(/'/g,"\\'")}')">
+          <div class="dash-alert-ref">${a.ref}</div>
+          <div style="font-size:11px;color:#475569;flex:2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.desc}</div>
+          <span class="dash-alert-badge ${badgeCls}">${badgeTxt}</span>
+        </div>`;
+      }).join('');
+    } else {
+      alertEl.style.display = 'none';
+    }
+
+    // ── Mouvements récents ──
+    if (!S.stockRecentMvs.length) {
+      mvtEl.innerHTML = '<div style="text-align:center;padding:16px;color:#94A3B8;font-size:13px;">Aucun mouvement</div>';
+    } else {
+      mvtEl.innerHTML = S.stockRecentMvs.slice(0, 10).map(m => {
+        const dt = m.date ? new Date(m.date) : null;
+        const dtStr = dt ? dt.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit' }) + ' ' +
+                           dt.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' }) : '';
+        return `<div class="dash-mvt-row" onclick="App.openStockDetail('${m.ref.replace(/'/g,"\\'")}')">
+          <span class="dash-mvt-type ${m.type}">${m.type === 'entrée' ? '↑' : m.type === 'sortie' ? '↓' : '≡'} ${m.type}</span>
+          <span class="dash-mvt-ref">${m.ref}</span>
+          <span class="dash-mvt-qty">${m.type === 'sortie' ? '-' : '+'}${m.qty}</span>
+          <span class="dash-mvt-date">${dtStr}</span>
+        </div>`;
+      }).join('');
+    }
+  },
+
+  /* ─ Couche 1 — Sync catalogue ─ */
+  async loadStockSync(force = false) {
+    if (!S.apiUrl) return;
+    if (S.stockSyncData && !force) { this._renderSyncView(); return; }
+    S.syncLoading = true;
+    document.getElementById('sync-body').innerHTML =
+      '<div style="text-align:center;padding:32px;color:#94A3B8;font-size:13px;"><div class="spinner" style="margin:0 auto 10px"></div>Comparaison avec PIDEM…</div>';
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=catalog_diff', {}, 30000);
+      const d = await r.json();
+      if (d.status === 'ok') {
+        S.stockSyncData = d.diff;
+        this._renderSyncView();
+      } else {
+        document.getElementById('sync-body').innerHTML =
+          `<div style="color:#DC2626;padding:16px;background:#FEF2F2;border-radius:8px;">Erreur : ${d.error || 'inconnue'}</div>`;
+      }
+    } catch(e) {
+      document.getElementById('sync-body').innerHTML =
+        '<div style="color:#DC2626;padding:16px;background:#FEF2F2;border-radius:8px;">Erreur réseau</div>';
+    }
+    S.syncLoading = false;
+  },
+
+  _renderSyncView() {
+    const sd   = S.stockSyncData;
+    const body = document.getElementById('sync-body');
+    if (!body || !sd) return;
+
+    const hasChanges = sd.new.length + sd.modified.length + sd.deleted.length > 0;
+    const savedAt    = sd.savedAt ? new Date(sd.savedAt).toLocaleDateString('fr-FR', {
+      day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : null;
+
+    if (sd.isInitial) {
+      body.innerHTML = `
+        <div style="background:#FEF3C7;border-radius:10px;padding:14px;margin-bottom:14px;">
+          <div style="font-weight:700;color:#92400E;margin-bottom:4px;">📸 Premier snapshot</div>
+          <div style="font-size:12px;color:#78350F;">Aucun snapshot enregistré. Le catalogue PIDEM contient
+            <strong>${sd.new.length} références</strong>. Valider pour enregistrer la photo initiale.</div>
+        </div>
+        <button onclick="App.applySnapshot()" style="width:100%;padding:12px;border:none;background:#1A5276;color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
+          📸 Enregistrer snapshot initial (${sd.new.length} refs)
+        </button>`;
+      return;
+    }
+
+    if (!hasChanges) {
+      body.innerHTML = `
+        <div style="text-align:center;padding:40px 20px;color:#15803D;">
+          <div style="font-size:48px;margin-bottom:10px;">✅</div>
+          <div style="font-size:16px;font-weight:700;">Catalogue à jour</div>
+          <div style="font-size:12px;color:#64748B;margin-top:6px;">${sd.unchangedCount} références — snapshot du ${savedAt || '?'}</div>
+        </div>`;
+      return;
+    }
+
+    let html = `<div style="font-size:11px;color:#64748B;margin-bottom:10px;">
+      Snapshot du ${savedAt || '?'} · ${sd.unchangedCount} ref. inchangées</div>`;
+
+    if (sd.new.length) {
+      html += `<div class="sync-group">
+        <div class="sync-group-title" style="color:#15803D;">
+          Nouvelles références <span class="sync-badge new">${sd.new.length}</span>
+        </div>
+        ${sd.new.map(r => `<div class="sync-ref-row">
+          <div class="sync-ref">${r.ref}</div>
+          <div class="sync-desc">${r.description || '—'}${r.famille ? ` · <em>${r.famille}</em>` : ''}</div>
+        </div>`).join('')}
+      </div>`;
+    }
+
+    if (sd.modified.length) {
+      html += `<div class="sync-group">
+        <div class="sync-group-title" style="color:#D97706;">
+          Références modifiées <span class="sync-badge mod">${sd.modified.length}</span>
+        </div>
+        ${sd.modified.map(r => {
+          const changes = [];
+          if (r.description !== r._old.description) changes.push(`Désig. : <span class="sync-old">${r._old.description}</span> → ${r.description}`);
+          if (r.famille     !== r._old.famille)     changes.push(`Famille : <span class="sync-old">${r._old.famille}</span> → ${r.famille}`);
+          if (r.fournisseur !== r._old.fournisseur) changes.push(`Fourn. : <span class="sync-old">${r._old.fournisseur}</span> → ${r.fournisseur}`);
+          return `<div class="sync-ref-row">
+            <div class="sync-ref">${r.ref}</div>
+            <div class="sync-desc" style="font-size:10.5px;">${changes.join(' &nbsp;|&nbsp; ')}</div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }
+
+    if (sd.deleted.length) {
+      html += `<div class="sync-group">
+        <div class="sync-group-title" style="color:#DC2626;">
+          Références supprimées du PIDEM <span class="sync-badge del">${sd.deleted.length}</span>
+        </div>
+        ${sd.deleted.map(r => `<div class="sync-ref-row" style="opacity:.7;">
+          <div class="sync-ref" style="text-decoration:line-through;">${r.ref}</div>
+          <div class="sync-desc">${r.description || '—'}</div>
+        </div>`).join('')}
+      </div>`;
+    }
+
+    html += `<button onclick="App.applySnapshot()" style="width:100%;padding:12px;border:none;background:#1A5276;color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px;">
+      ✅ Valider et mettre à jour le snapshot
+    </button>`;
+
+    body.innerHTML = html;
+  },
+
+  async applySnapshot() {
+    if (!S.apiUrl) return;
+    const btn = document.querySelector('#view-stock-sync button[onclick="App.applySnapshot()"]');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Enregistrement…'; }
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action: 'apply_catalog_snapshot' }));
+      const r = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 20000);
+      const d = await r.json();
+      if (d.status === 'ok') {
+        this.toast(`✅ Snapshot enregistré — ${d.count} références`);
+        S.stockSyncData = null; // forcer rechargement
+        this.loadStockSync(true);
+      } else {
+        this.toast('Erreur : ' + (d.error || 'inconnue'));
+        if (btn) { btn.disabled = false; btn.textContent = '✅ Valider et mettre à jour le snapshot'; }
+      }
+    } catch(e) {
+      this.toast('Erreur réseau');
+      if (btn) { btn.disabled = false; btn.textContent = '✅ Valider et mettre à jour le snapshot'; }
     }
   },
 
