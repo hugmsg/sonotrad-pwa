@@ -1394,38 +1394,65 @@
           📥 Importer fichier client (.xls / .xlsx)
         </div>
 
-        <!-- Dropzone / bouton fichier -->
-        <label id="xls-dropzone"
-          style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
-                 border:2px dashed #CBD5E1;border-radius:10px;padding:22px 16px;cursor:pointer;
-                 background:#F8FAFC;transition:border-color .15s,background .15s;">
-          <span style="font-size:32px;">📂</span>
-          <span style="font-size:13px;font-weight:600;color:#475569;">Choisir le fichier catalogue client</span>
-          <span style="font-size:11px;color:#94A3B8;">.xls, .xlsx acceptés</span>
-          <input type="file" id="xls-input" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            onchange="App.onXlsSelected(this)" style="display:none;">
-        </label>
+        <!-- Étape 0 : dropzone fichier -->
+        <div id="xls-step-file">
+          <label id="xls-dropzone"
+            style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+                   border:2px dashed #CBD5E1;border-radius:10px;padding:22px 16px;cursor:pointer;
+                   background:#F8FAFC;transition:border-color .15s,background .15s;">
+            <span style="font-size:32px;">📂</span>
+            <span style="font-size:13px;font-weight:600;color:#475569;">Choisir le fichier catalogue client</span>
+            <span style="font-size:11px;color:#94A3B8;">.xls, .xlsx acceptés</span>
+            <input type="file" id="xls-input" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              onchange="App.onXlsSelected(this)" style="display:none;">
+          </label>
+        </div>
 
-        <!-- Aperçu avant import -->
-        <div id="xls-preview" style="display:none;margin-top:12px;">
-          <div style="font-size:12px;font-weight:600;color:#1E293B;margin-bottom:6px;" id="xls-preview-title"></div>
-          <!-- Stats diff -->
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;" id="xls-diff-grid"></div>
-          <!-- Premiers résultats -->
-          <div style="font-size:11px;color:#64748B;margin-bottom:6px;" id="xls-preview-sample-label"></div>
-          <div id="xls-preview-sample" style="max-height:180px;overflow-y:auto;border:1px solid #E2E8F0;border-radius:8px;"></div>
+        <!-- Étape 1+ : assistant de configuration -->
+        <div id="xls-step-config" style="display:none;">
 
-          <!-- Boutons -->
-          <div style="display:flex;gap:8px;margin-top:10px;">
+          <!-- Barre fichier + reset -->
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+            <span style="font-size:18px;">📄</span>
+            <span id="xls-file-name" style="flex:1;font-size:12px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
             <button onclick="App.cancelXlsImport()"
-              style="flex:1;padding:10px;border:1.5px solid #E2E8F0;background:white;color:#64748B;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
-              Annuler
-            </button>
-            <button id="xls-submit-btn" onclick="App.submitXlsImport()"
-              style="flex:2;padding:10px;border:none;background:#1A5276;color:white;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
-              ✅ Importer dans le catalogue
+              style="background:#F1F5F9;border:none;padding:4px 10px;border-radius:6px;font-size:11px;color:#64748B;cursor:pointer;white-space:nowrap;">
+              ✕ Changer
             </button>
           </div>
+
+          <!-- Sélection de l'onglet -->
+          <div style="margin-bottom:10px;">
+            <div style="font-size:10px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;">Onglet :</div>
+            <div id="xls-tab-btns" style="display:flex;gap:5px;flex-wrap:wrap;"></div>
+          </div>
+
+          <!-- Table de données brutes (scrollable) -->
+          <div style="margin-bottom:10px;">
+            <div style="font-size:10px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">
+              Aperçu brut &nbsp;<span style="font-weight:400;font-size:9px;color:#CBD5E1;">— clique sur un № pour définir la ligne d'en-têtes</span>
+            </div>
+            <div id="xls-raw-table" style="overflow-x:auto;border:1px solid #E2E8F0;border-radius:8px;max-height:200px;overflow-y:auto;font-size:10px;"></div>
+          </div>
+
+          <!-- Correspondance des colonnes -->
+          <div style="margin-bottom:10px;">
+            <div style="font-size:10px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">Correspondance des colonnes :</div>
+            <div id="xls-col-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"></div>
+          </div>
+
+          <!-- Aperçu parsé + diff -->
+          <div id="xls-preview-section" style="margin-bottom:10px;display:none;">
+            <div style="font-size:10px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">Aperçu import :</div>
+            <div id="xls-diff-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px;"></div>
+            <div id="xls-preview-sample" style="max-height:160px;overflow-y:auto;border:1px solid #E2E8F0;border-radius:8px;font-size:11px;"></div>
+          </div>
+
+          <!-- Bouton import -->
+          <button id="xls-submit-btn" onclick="App.submitXlsImport()" disabled
+            style="width:100%;padding:11px;border:none;background:#94A3B8;color:white;border-radius:9px;font-size:13px;font-weight:700;cursor:not-allowed;">
+            ✅ Importer dans le catalogue
+          </button>
         </div>
       </div>
 
@@ -1615,6 +1642,9 @@ const S = {
   stockSyncData:   null,   // { new, modified, deleted, unchangedCount, savedAt, isInitial }
   syncLoading:     false,
   // ── Import XLS ───────────────────────────────────────────────────────────
+  _xlsWorkbook:    null,   // workbook SheetJS brut
+  _xlsRawRows:     null,   // lignes de l'onglet sélectionné
+  _xlsConfig:      null,   // { sheetName, headerRowIdx, dataRowIdx, colMap }
   _xlsParsed:      null,   // données parsées prêtes à envoyer
   _xlsFileName:    null,
 };
@@ -3212,191 +3242,390 @@ const App = {
     body.innerHTML = html;
   },
 
-  /* ─ Import XLS client (SheetJS) ─ */
+  /* ─────────────────────────────────────────────────────────────────────────
+     IMPORT XLS CLIENT — assistant en 3 étapes
+     1. Lecture fichier → sélection onglet
+     2. Config : ligne d'en-têtes + correspondance colonnes
+     3. Aperçu diff → import
+  ───────────────────────────────────────────────────────────────────────── */
 
-  // Appelé quand l'utilisateur choisit un fichier
-  onXlsSelected(input) {
-    const file = input.files && input.files[0];
-    if (!file) return;
-    this._parseXlsFile(file);
+  // Champs cibles et leurs labels affichés
+  _XLS_FIELDS: [
+    { key:'ref',         label:'Référence',          required:true  },
+    { key:'description', label:'Description',         required:true  },
+    { key:'famille',     label:'Famille',             required:false },
+    { key:'fournisseur', label:'Fournisseur',         required:false },
+    { key:'refFourn',    label:'Réf. fournisseur',    required:false },
+    { key:'prixHT',      label:'Prix HT',             required:false },
+  ],
+
+  // Mots-clés par champ pour auto-détection (après normalisation)
+  _XLS_KEYWORDS: {
+    ref:         ['refrentalman','pidem','refarticle','ref','reference'],
+    description: ['detailfournitures','detail','description','designation','libelle','fourniture'],
+    famille:     ['famillearticle','famille','categorie','type'],
+    fournisseur: ['fournisseur','fourn','supplier'],
+    refFourn:    ['referencefournisseur','reffournisseur','reffourn','refsupplier'],
+    prixHT:      ['prixht','prix','price','montant','tarif'],
   },
 
-  // Parse le fichier XLS avec SheetJS
-  _parseXlsFile(file) {
+  // ── Étape 0 : lecture du fichier ─────────────────────────────────────────
+  onXlsSelected(input) {
+    const file = input.files?.[0];
+    if (file) this._xlsLoadFile(file);
+  },
+
+  _xlsLoadFile(file) {
     if (typeof XLSX === 'undefined') {
-      this.toast('⚠️ Librairie SheetJS non chargée — vérifie la connexion');
+      this.toast('⚠️ SheetJS non chargé — vérifie la connexion internet');
       return;
     }
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const data = new Uint8Array(e.target.result);
-        const wb   = XLSX.read(data, { type: 'array', cellDates: false });
-        const wsName = wb.SheetNames[0];
-        const ws   = wb.Sheets[wsName];
-
-        // Convertir en tableau 2D (defval='' pour les cellules vides)
-        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-
-        // Structure attendue :
-        // rows[0] = titre fusionné (ignorer)
-        // rows[1] = vide (ignorer)
-        // rows[2] = en-têtes
-        // rows[3+] = données
-        if (rows.length < 4) {
-          this.toast('Fichier trop court — vérifier le format');
-          return;
-        }
-
-        // Mapper les colonnes par nom (robuste si l'ordre change)
-        const headers = rows[2].map(h => String(h || '').trim().toLowerCase()
-          .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // retire accents
-          .replace(/[^a-z0-9]/g, ''));
-        const colIdx = {
-          ref:         this._findCol(headers, ['refrentalmanpidem','ref','reference','refarticle']),
-          description: this._findCol(headers, ['detailfournitures','detail','description','designation','libelle']),
-          famille:     this._findCol(headers, ['famillearticle','famille','categorie','type']),
-          fournisseur: this._findCol(headers, ['fournisseur','fourn','supplier']),
-          refFourn:    this._findCol(headers, ['referencefournisseur','reffournisseur','reffourn','referencesupplier']),
-          prixHT:      this._findCol(headers, ['prixht','prix','price','montant','tarif']),
-        };
-
-        if (colIdx.ref === -1 || colIdx.description === -1) {
-          this.toast('Colonnes Ref ou Description introuvables dans le fichier');
-          return;
-        }
-
-        // Parser les lignes de données
-        const parsed = [];
-        for (let i = 3; i < rows.length; i++) {
-          const row = rows[i];
-          const ref = String(row[colIdx.ref] || '').trim();
-          if (!ref || ref === '') continue; // ligne vide
-          if (/^[0-9a-zA-Z\-\/\.]+$/.test(ref) === false) continue; // ref invalide
-
-          const prixRaw = colIdx.prixHT >= 0 ? String(row[colIdx.prixHT] || '') : '';
-          const prix    = this._cleanPrice(prixRaw);
-
-          parsed.push({
-            ref:         ref,
-            description: String(row[colIdx.description] || '').trim(),
-            famille:     colIdx.famille     >= 0 ? String(row[colIdx.famille]     || '').trim() : '',
-            fournisseur: colIdx.fournisseur  >= 0 ? String(row[colIdx.fournisseur] || '').trim() : '',
-            refFourn:    colIdx.refFourn     >= 0 ? String(row[colIdx.refFourn]    || '').trim() : '',
-            prixHT:      prix,
-          });
-        }
-
-        if (!parsed.length) {
-          this.toast('Aucune référence valide trouvée dans le fichier');
-          return;
-        }
-
-        // Stocker et afficher l'aperçu
-        S._xlsParsed    = parsed;
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type:'array', cellDates:false });
+        S._xlsWorkbook  = wb;
         S._xlsFileName  = file.name;
-        this._showXlsPreview(parsed, file.name);
+        S._xlsConfig    = null;
+        S._xlsParsed    = null;
+
+        // Afficher l'assistant
+        document.getElementById('xls-step-file').style.display   = 'none';
+        document.getElementById('xls-step-config').style.display = 'block';
+        document.getElementById('xls-file-name').textContent     = file.name;
+
+        // Rendre les boutons d'onglets
+        this._xlsRenderTabButtons();
+
+        // Auto-sélectionner le meilleur onglet
+        const bestSheet = this._xlsBestSheet(wb);
+        this._xlsSelectTab(bestSheet);
 
       } catch(err) {
         this.toast('Erreur lecture fichier : ' + err.message);
-        console.error('[parseXls]', err);
+        console.error('[xlsLoad]', err);
       }
     };
     reader.readAsArrayBuffer(file);
   },
 
-  // Trouve l'index d'une colonne par liste de noms candidats
-  _findCol(headers, candidates) {
-    for (const c of candidates) {
-      const idx = headers.findIndex(h => h === c || h.includes(c) || c.includes(h));
-      if (idx >= 0) return idx;
-    }
-    return -1;
+  // Choisit l'onglet qui a le plus de lignes non vides
+  _xlsBestSheet(wb) {
+    let best = wb.SheetNames[0], bestCount = 0;
+    wb.SheetNames.forEach(name => {
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header:1, defval:'' });
+      const nonEmpty = rows.filter(r => r.some(c => String(c).trim() !== '')).length;
+      if (nonEmpty > bestCount) { bestCount = nonEmpty; best = name; }
+    });
+    return best;
   },
 
-  // Nettoie un prix "55,55 €" → 55.55
-  _cleanPrice(raw) {
-    if (!raw) return null;
-    const s = String(raw).replace(/[€$£\s]/g, '').replace(',', '.');
-    const n = parseFloat(s);
-    return isNaN(n) ? null : Math.round(n * 100) / 100;
+  // ── Étape 1 : sélection de l'onglet ─────────────────────────────────────
+  _xlsRenderTabButtons() {
+    const wb  = S._xlsWorkbook;
+    const el  = document.getElementById('xls-tab-btns');
+    if (!el || !wb) return;
+    el.innerHTML = wb.SheetNames.map(name =>
+      `<button onclick="App._xlsSelectTab('${name.replace(/'/g,"\\'")}') "
+        id="xls-tab-${name.replace(/[^a-z0-9]/gi,'_')}"
+        style="padding:5px 10px;border-radius:7px;border:1.5px solid #CBD5E1;background:#F8FAFC;
+               font-size:11px;font-weight:600;color:#475569;cursor:pointer;white-space:nowrap;">
+        ${name}
+      </button>`
+    ).join('');
   },
 
-  // Affiche l'aperçu du diff avant import
-  _showXlsPreview(parsed, fileName) {
-    const preview    = document.getElementById('xls-preview');
-    const titleEl    = document.getElementById('xls-preview-title');
-    const diffGrid   = document.getElementById('xls-diff-grid');
-    const sampleLbl  = document.getElementById('xls-preview-sample-label');
-    const sampleEl   = document.getElementById('xls-preview-sample');
-    if (!preview) return;
+  _xlsSelectTab(sheetName) {
+    const wb = S._xlsWorkbook;
+    if (!wb || !wb.Sheets[sheetName]) return;
 
-    // Calculer le diff local (comparaison avec stockData si chargé)
-    let added = 0, modified = 0, unchanged = 0;
-    const currentRefs = {};
-    S.stockData.forEach(d => { currentRefs[d.ref] = d; });
-
-    const changes = [];
-    parsed.forEach(r => {
-      const cur = currentRefs[r.ref];
-      if (!cur) {
-        added++;
-        changes.push({ tag: 'new', ref: r.ref, desc: r.description });
-      } else {
-        const changed = (r.description !== cur.description ||
-                         r.famille     !== cur.famille     ||
-                         r.fournisseur !== cur.fournisseur ||
-                         r.refFourn    !== cur.refFourn    ||
-                         (r.prixHT !== null && r.prixHT !== cur.prixHT));
-        if (changed) {
-          modified++;
-          changes.push({ tag: 'mod', ref: r.ref, desc: r.description });
-        } else {
-          unchanged++;
-        }
+    // Highlight du bouton actif
+    wb.SheetNames.forEach(n => {
+      const btn = document.getElementById('xls-tab-' + n.replace(/[^a-z0-9]/gi,'_'));
+      if (btn) {
+        btn.style.background   = n === sheetName ? 'var(--brand)' : '#F8FAFC';
+        btn.style.borderColor  = n === sheetName ? 'var(--brand)' : '#CBD5E1';
+        btn.style.color        = n === sheetName ? 'white'        : '#475569';
       }
     });
 
-    // Refs présentes dans le catalogue mais absentes du fichier
-    const deleted = S.stockData.filter(d => !parsed.find(r => r.ref === d.ref));
+    // Lire les lignes brutes (toutes)
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header:1, defval:'' });
+    S._xlsRawRows = rows;
 
-    titleEl.textContent = `📄 ${fileName} — ${parsed.length} référence${parsed.length>1?'s':''} trouvée${parsed.length>1?'s':''}`;
+    // Auto-détecter ligne d'en-têtes et colonnes
+    const { headerRowIdx, colMap } = this._xlsAutoDetect(rows);
+    S._xlsConfig = {
+      sheetName,
+      headerRowIdx,                         // 0-indexed
+      dataRowIdx: headerRowIdx + 1,         // 0-indexed
+      colMap,                               // { ref:-1..N, description:..., ... }
+    };
+
+    this._xlsRenderRawTable();
+    this._xlsRenderColDropdowns();
+    this._xlsApplyConfig();
+  },
+
+  // Auto-détecte la ligne d'en-têtes et les colonnes
+  _xlsAutoDetect(rows) {
+    // Cherche la première ligne avec ≥3 cellules non vides consécutives
+    let headerRowIdx = 0;
+    for (let i = 0; i < Math.min(rows.length, 8); i++) {
+      const filled = rows[i].filter(c => String(c).trim() !== '').length;
+      if (filled >= 3) { headerRowIdx = i; break; }
+    }
+
+    const headerRow = rows[headerRowIdx] || [];
+    // Normaliser les en-têtes
+    const norm = headerRow.map(h => String(h || '').trim()
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^a-z0-9]/g,''));
+
+    const colMap = {};
+    this._XLS_FIELDS.forEach(f => {
+      let found = -1;
+      for (const kw of (this._XLS_KEYWORDS[f.key] || [])) {
+        const idx = norm.findIndex(h => h === kw || h.includes(kw) || kw.includes(h));
+        if (idx >= 0) { found = idx; break; }
+      }
+      colMap[f.key] = found;
+    });
+    return { headerRowIdx, colMap };
+  },
+
+  // ── Étape 2a : table brute ───────────────────────────────────────────────
+  _xlsRenderRawTable() {
+    const el  = document.getElementById('xls-raw-table');
+    const cfg = S._xlsConfig;
+    if (!el || !cfg || !S._xlsRawRows) return;
+
+    const rows    = S._xlsRawRows;
+    const showMax = Math.max(cfg.headerRowIdx + 5, 8);   // afficher au moins jusqu'aux premières données
+    const display = rows.slice(0, Math.min(showMax, rows.length));
+    const colCount= Math.max(...display.map(r => r.length), 1);
+
+    let html = '<table style="border-collapse:collapse;min-width:100%;white-space:nowrap;">';
+    display.forEach((row, i) => {
+      const isHeader = (i === cfg.headerRowIdx);
+      const isData   = (i >= cfg.dataRowIdx);
+      const rowBg    = isHeader ? '#1A5276' : isData ? 'white' : '#F8FAFC';
+      const rowColor = isHeader ? 'white'   : '#334155';
+      const rowFw    = isHeader ? '700'     : '400';
+      html += `<tr style="background:${rowBg};color:${rowColor};font-weight:${rowFw};">`;
+      // Numéro de ligne cliquable
+      html += `<td onclick="App._xlsSetHeaderRow(${i})" title="Définir comme ligne d'en-têtes"
+        style="padding:3px 6px;border-right:2px solid #E2E8F0;border-bottom:1px solid #F1F5F9;
+               cursor:pointer;color:${isHeader?'white':'#94A3B8'};font-weight:700;font-size:9px;
+               background:${isHeader?'#0F3460':'#F8FAFC'};text-align:right;min-width:22px;">
+        ${isHeader ? '▶' : (i+1)}
+      </td>`;
+      // Cellules
+      for (let c = 0; c < Math.min(colCount, 8); c++) {
+        const val = String(row[c] || '');
+        const truncated = val.length > 22 ? val.substring(0,20)+'…' : val;
+        html += `<td style="padding:3px 7px;border-right:1px solid #F1F5F9;border-bottom:1px solid #F1F5F9;max-width:140px;overflow:hidden;text-overflow:ellipsis;" title="${val.replace(/"/g,'&quot;')}">${truncated}</td>`;
+      }
+      if (colCount > 8) html += `<td style="padding:3px 6px;color:#94A3B8;font-size:9px;">+${colCount-8}</td>`;
+      html += '</tr>';
+    });
+    if (rows.length > showMax) {
+      html += `<tr><td colspan="${Math.min(colCount,8)+2}" style="text-align:center;padding:4px;font-size:9px;color:#94A3B8;">… ${rows.length - showMax} lignes supplémentaires</td></tr>`;
+    }
+    html += '</table>';
+    el.innerHTML = html;
+  },
+
+  // Clic sur un numéro de ligne → définir comme ligne d'en-têtes
+  _xlsSetHeaderRow(rowIdx) {
+    if (!S._xlsConfig) return;
+    S._xlsConfig.headerRowIdx = rowIdx;
+    S._xlsConfig.dataRowIdx   = rowIdx + 1;
+    // Re-détecter les colonnes avec la nouvelle ligne d'en-têtes
+    const { colMap } = this._xlsAutoDetect(S._xlsRawRows);
+    S._xlsConfig.colMap = colMap;
+    this._xlsRenderRawTable();
+    this._xlsRenderColDropdowns();
+    this._xlsApplyConfig();
+  },
+
+  // ── Étape 2b : dropdowns colonnes ────────────────────────────────────────
+  _xlsRenderColDropdowns() {
+    const el  = document.getElementById('xls-col-grid');
+    const cfg = S._xlsConfig;
+    if (!el || !cfg || !S._xlsRawRows) return;
+
+    const headerRow = S._xlsRawRows[cfg.headerRowIdx] || [];
+    // Options : "— Ne pas importer —" + une option par colonne du fichier
+    const opts = ['<option value="-1">— Ne pas importer —</option>'];
+    headerRow.forEach((h, i) => {
+      const letter = String.fromCharCode(65 + i);  // A, B, C…
+      const label  = String(h || '').trim();
+      opts.push(`<option value="${i}">${letter}${label ? ' — ' + label.substring(0,30) : ''}</option>`);
+    });
+    const optStr = opts.join('');
+
+    el.innerHTML = this._XLS_FIELDS.map(f => {
+      const val    = cfg.colMap[f.key] ?? -1;
+      const req    = f.required ? ' *' : '';
+      const border = f.required && val === -1 ? '1.5px solid #FCA5A5' : '1.5px solid #E2E8F0';
+      return `<div>
+        <div style="font-size:9px;color:#64748B;font-weight:600;margin-bottom:2px;">${f.label}${req}</div>
+        <select onchange="App._xlsSetColMap('${f.key}', parseInt(this.value))"
+          style="width:100%;padding:6px 8px;border:${border};border-radius:7px;font-size:11px;background:white;color:#1E293B;">
+          ${optStr.replace(`value="${val}"`, `value="${val}" selected`)}
+        </select>
+      </div>`;
+    }).join('');
+  },
+
+  _xlsSetColMap(field, colIdx) {
+    if (!S._xlsConfig) return;
+    S._xlsConfig.colMap[field] = colIdx;
+    // Mettre à jour la couleur de la bordure du select
+    this._xlsRenderColDropdowns();
+    this._xlsApplyConfig();
+  },
+
+  // ── Étape 3 : parse + aperçu diff ────────────────────────────────────────
+  _xlsApplyConfig() {
+    const cfg  = S._xlsConfig;
+    const rows = S._xlsRawRows;
+    if (!cfg || !rows) return;
+
+    const cm = cfg.colMap;
+    // Vérifier que les champs requis sont mappés
+    const missingRequired = this._XLS_FIELDS.filter(f => f.required && (cm[f.key] === -1 || cm[f.key] === undefined));
+
+    const btn = document.getElementById('xls-submit-btn');
+
+    if (missingRequired.length) {
+      document.getElementById('xls-preview-section').style.display = 'none';
+      if (btn) {
+        btn.disabled = true;
+        btn.style.background = '#94A3B8';
+        btn.style.cursor = 'not-allowed';
+        btn.textContent = `⚠️ Mapper : ${missingRequired.map(f=>f.label).join(', ')}`;
+      }
+      return;
+    }
+
+    // Parser
+    const parsed = [];
+    for (let i = cfg.dataRowIdx; i < rows.length; i++) {
+      const row = rows[i];
+      const refRaw = cm.ref >= 0 ? String(row[cm.ref] ?? '').trim() : '';
+      if (!refRaw) continue;  // ligne vide
+      parsed.push({
+        ref:         refRaw,
+        description: cm.description >= 0 ? String(row[cm.description] ?? '').trim() : '',
+        famille:     cm.famille     >= 0 ? String(row[cm.famille]     ?? '').trim() : '',
+        fournisseur: cm.fournisseur >= 0 ? String(row[cm.fournisseur] ?? '').trim() : '',
+        refFourn:    cm.refFourn    >= 0 ? String(row[cm.refFourn]    ?? '').trim() : '',
+        prixHT:      cm.prixHT     >= 0 ? this._cleanPrice(row[cm.prixHT]) : null,
+      });
+    }
+
+    S._xlsParsed = parsed;
+    this._xlsRenderPreview(parsed);
+
+    if (btn) {
+      btn.disabled = parsed.length === 0;
+      btn.style.background = parsed.length ? '#1A5276' : '#94A3B8';
+      btn.style.cursor = parsed.length ? 'pointer' : 'not-allowed';
+      btn.textContent = parsed.length
+        ? `✅ Importer ${parsed.length} références dans le catalogue`
+        : '⚠️ Aucune référence trouvée';
+    }
+  },
+
+  _xlsRenderPreview(parsed) {
+    const section  = document.getElementById('xls-preview-section');
+    const diffGrid = document.getElementById('xls-diff-grid');
+    const sampleEl = document.getElementById('xls-preview-sample');
+    if (!section || !diffGrid || !sampleEl) return;
+    section.style.display = 'block';
+
+    if (!parsed.length) {
+      diffGrid.innerHTML = '<div style="color:#DC2626;font-size:12px;">Aucune référence détectée avec cette configuration.</div>';
+      sampleEl.innerHTML = '';
+      return;
+    }
+
+    // Diff local (si catalogue chargé)
+    const curMap = {};
+    S.stockData.forEach(d => { curMap[d.ref] = d; });
+    let added = 0, modified = 0, unchanged = 0;
+    const changes = [];
+
+    parsed.forEach(r => {
+      const cur = curMap[r.ref];
+      if (!cur) {
+        added++;
+        if (changes.length < 12) changes.push({ tag:'new', ref:r.ref, desc:r.description });
+      } else {
+        const chg = (r.description !== cur.description || r.famille !== cur.famille ||
+                     r.fournisseur !== cur.fournisseur || r.refFourn !== cur.refFourn ||
+                     (r.prixHT !== null && r.prixHT !== cur.prixHT));
+        if (chg) {
+          modified++;
+          if (changes.length < 12) changes.push({ tag:'mod', ref:r.ref, desc:r.description });
+        } else { unchanged++; }
+      }
+    });
+    const deleted = S.stockData.filter(d => !parsed.find(r => r.ref === d.ref));
 
     diffGrid.innerHTML = `
       <div class="diff-stat new"><div class="diff-stat-val">${added}</div><div class="diff-stat-lbl">Nouvelles</div></div>
       <div class="diff-stat mod"><div class="diff-stat-val">${modified}</div><div class="diff-stat-lbl">Modifiées</div></div>
-      <div class="diff-stat del"><div class="diff-stat-val">${deleted.length}</div><div class="diff-stat-lbl">Supprimées</div></div>
+      <div class="diff-stat del"><div class="diff-stat-val">${deleted.length}</div><div class="diff-stat-lbl">Absentes</div></div>
       <div class="diff-stat ok"><div class="diff-stat-val">${unchanged}</div><div class="diff-stat-lbl">Inchangées</div></div>`;
 
-    // Aperçu : 15 premiers changements, puis inchangées
-    const toShow = [...changes.slice(0, 15), ...deleted.slice(0, 5).map(d => ({ tag:'del', ref:d.ref, desc:d.description }))];
+    const toShow = [
+      ...changes,
+      ...deleted.slice(0,4).map(d => ({ tag:'del', ref:d.ref, desc:d.description })),
+    ].slice(0, 15);
+
     if (!toShow.length) {
-      sampleLbl.textContent = 'Aucun changement détecté.';
-      sampleEl.innerHTML = '';
+      sampleEl.innerHTML = '<div style="text-align:center;padding:12px;color:#94A3B8;font-size:11px;">Aucun changement détecté.</div>';
     } else {
-      sampleLbl.textContent = `Aperçu des changements (${toShow.length} affichés) :`;
       sampleEl.innerHTML = toShow.map(r =>
         `<div class="xls-row">
           <span class="xls-row-ref">${r.ref}</span>
           <span class="xls-row-desc">${r.desc}</span>
-          <span class="xls-row-tag ${r.tag}">${r.tag === 'new' ? 'Nouveau' : r.tag === 'mod' ? 'Modifié' : 'Supprimé'}</span>
+          <span class="xls-row-tag ${r.tag}">${r.tag==='new'?'Nouveau':r.tag==='mod'?'Modifié':'Absent'}</span>
         </div>`).join('');
+      if (parsed.length > 15) {
+        sampleEl.innerHTML += `<div style="text-align:center;padding:6px;font-size:10px;color:#94A3B8;">… ${parsed.length} références au total</div>`;
+      }
     }
-
-    preview.style.display = 'block';
-    document.getElementById('xls-dropzone').style.display = 'none';
   },
 
+  // Nettoie un prix "55,55 €" → 55.55
+  _cleanPrice(raw) {
+    if (raw === null || raw === undefined || raw === '') return null;
+    const s = String(raw).replace(/[€$£\s]/g,'').replace(',','.');
+    const n = parseFloat(s);
+    return isNaN(n) ? null : Math.round(n * 100) / 100;
+  },
+
+  // ── Reset ────────────────────────────────────────────────────────────────
   cancelXlsImport() {
-    S._xlsParsed   = null;
-    S._xlsFileName = null;
-    document.getElementById('xls-preview').style.display = 'none';
-    document.getElementById('xls-dropzone').style.display = 'flex';
-    document.getElementById('xls-input').value = '';
+    S._xlsWorkbook  = null;
+    S._xlsParsed    = null;
+    S._xlsFileName  = null;
+    S._xlsConfig    = null;
+    S._xlsRawRows   = null;
+    document.getElementById('xls-step-file').style.display   = 'block';
+    document.getElementById('xls-step-config').style.display = 'none';
+    const inp = document.getElementById('xls-input');
+    if (inp) inp.value = '';
   },
 
+  // ── Envoi à l'AppScript ──────────────────────────────────────────────────
   async submitXlsImport() {
-    if (!S._xlsParsed || !S._xlsParsed.length) return;
+    if (!S._xlsParsed?.length) return;
     if (!S.apiUrl) { this.toast('URL API non configurée'); return; }
 
     const btn = document.getElementById('xls-submit-btn');
@@ -3413,41 +3642,39 @@ const App = {
       const data = await resp.json();
 
       if (data.status === 'ok') {
-        const msg = `✅ Import terminé — ${data.added} ajout${data.added>1?'s':''}, ${data.updated} modification${data.updated>1?'s':''}, ${data.deactivated} désactivée${data.deactivated>1?'s':''}`;
-        this.toast(msg);
+        this.toast(`✅ ${data.added} ajout${data.added>1?'s':''} · ${data.updated} modif. · ${data.deactivated} désactivée${data.deactivated>1?'s':''}`);
 
-        // Lien vers le Sheet créé
-        if (data.sheetUrl) {
-          const syncBody = document.getElementById('sync-body');
-          if (syncBody) {
-            syncBody.innerHTML = `
-              <div style="background:#F0FDF4;border-radius:10px;padding:14px;margin-bottom:8px;">
-                <div style="font-weight:700;color:#15803D;margin-bottom:6px;">✅ Import réussi</div>
-                <div style="font-size:12px;color:#166534;line-height:1.6;">
-                  ${data.added} nouvelle${data.added>1?'s':''} · ${data.updated} modifiée${data.updated>1?'s':''} · ${data.deactivated} désactivée${data.deactivated>1?'s':''}
-                  · ${data.unchanged} inchangée${data.unchanged>1?'s':''}
-                </div>
+        // Afficher résultat + lien Sheet
+        const syncBody = document.getElementById('sync-body');
+        if (syncBody) {
+          syncBody.innerHTML = `
+            <div style="background:#F0FDF4;border-radius:10px;padding:14px;margin-bottom:8px;">
+              <div style="font-weight:700;color:#15803D;margin-bottom:4px;">✅ Import terminé</div>
+              <div style="font-size:12px;color:#166534;line-height:1.7;">
+                <b>${data.added}</b> nouvelle${data.added>1?'s':''} &nbsp;·&nbsp;
+                <b>${data.updated}</b> modifiée${data.updated>1?'s':''} &nbsp;·&nbsp;
+                <b>${data.deactivated}</b> désactivée${data.deactivated>1?'s':''} &nbsp;·&nbsp;
+                <b>${data.unchanged}</b> inchangée${data.unchanged>1?'s':''}
               </div>
-              <a href="${data.sheetUrl}" target="_blank"
-                style="display:flex;align-items:center;gap:8px;background:#EFF6FF;border:1.5px solid #BFDBFE;border-radius:8px;padding:10px 12px;text-decoration:none;">
-                <span style="font-size:20px;">📊</span>
-                <div>
-                  <div style="font-size:12px;font-weight:700;color:#1D4ED8;">Ouvrir "Sonotrad - Catalogue"</div>
-                  <div style="font-size:10px;color:#64748B;">Google Sheet · seuils éditables</div>
-                </div>
-                <span style="margin-left:auto;font-size:14px;color:#93C5FD;">↗</span>
-              </a>`;
-          }
+            </div>
+            ${data.sheetUrl ? `
+            <a href="${data.sheetUrl}" target="_blank"
+              style="display:flex;align-items:center;gap:8px;background:#EFF6FF;border:1.5px solid #BFDBFE;
+                     border-radius:8px;padding:10px 12px;text-decoration:none;margin-bottom:8px;">
+              <span style="font-size:20px;">📊</span>
+              <div>
+                <div style="font-size:12px;font-weight:700;color:#1D4ED8;">Ouvrir "Sonotrad - Catalogue"</div>
+                <div style="font-size:10px;color:#64748B;">Éditer les seuils directement dans le Sheet</div>
+              </div>
+              <span style="margin-left:auto;font-size:14px;color:#93C5FD;">↗</span>
+            </a>` : ''}`;
         }
 
-        // Recharger le catalogue dans la PWA
-        S.stockLoaded    = false;
+        // Invalider caches
+        S.stockLoaded     = false;
         S.analyticsLoaded = false;
         S.dashboardLoaded = false;
-        S._xlsParsed      = null;
         this.cancelXlsImport();
-
-        // Si on est dans le catalogue, le recharger silencieusement
         if (S.view === 'stock') this.loadStockCatalog();
 
       } else {
@@ -4770,7 +4997,7 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       dz.classList.remove('drag');
       const file = e.dataTransfer?.files?.[0];
-      if (file) App._parseXlsFile(file);
+      if (file) App._xlsLoadFile(file);
     });
   }
 });
