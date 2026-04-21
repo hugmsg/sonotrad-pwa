@@ -1706,7 +1706,9 @@ const App = {
       el.style.display = (S.activity === 'loxam') ? '' : 'none';
     });
     document.querySelectorAll('#main-nav .nav-tab[data-stab]').forEach(el => {
-      el.style.display = (S.activity === 'stockage') ? '' : 'none';
+      const isAdmin  = S.currentUser?.role === 'admin';
+      const isSynchro = el.dataset.stab === 'stock-sync';
+      el.style.display = (S.activity === 'stockage' && (!isSynchro || isAdmin)) ? '' : 'none';
     });
 
     // ── Views : affiche la vue active ────────────────────────────────────
