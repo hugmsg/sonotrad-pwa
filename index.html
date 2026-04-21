@@ -286,13 +286,13 @@
     .sc-thumb-ph { width:52px; height:52px; border-radius:7px; flex-shrink:0; background:#F1F5F9;
                    display:flex; align-items:center; justify-content:center; color:#CBD5E1; font-size:20px; }
     .sc-body  { flex:1; min-width:0; }
-    .sc-head  { display:flex; align-items:center; gap:5px; }
+    .sc-head  { display:flex; align-items:center; gap:6px; }
     .sc-ref   { font-family:'Courier New',monospace; font-size:13px; font-weight:700; color:var(--brand); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .sc-qty   { font-size:10px; font-weight:700; padding:2px 6px; border-radius:10px; white-space:nowrap; flex-shrink:0; }
+    .sc-qty   { font-size:13px; font-weight:700; padding:3px 9px; border-radius:10px; white-space:nowrap; flex-shrink:0; }
     .sc-qty.ok      { background:#DCFCE7; color:#15803D; }
     .sc-qty.low     { background:#FEF3C7; color:#D97706; }
     .sc-qty.unknown { background:#F1F5F9; color:#94A3B8; }
-    .sc-star  { font-size:15px; cursor:pointer; user-select:none; flex-shrink:0; line-height:1; color:#CBD5E1; }
+    .sc-star  { font-size:22px; cursor:pointer; user-select:none; flex-shrink:0; line-height:1; color:#CBD5E1; padding:2px 4px; margin-right:2px; }
     .sc-star.on { color:#F59E0B; }
     .sc-desc  { font-size:11.5px; color:#334155; line-height:1.35; margin-top:3px; }
     .sc-foot  { display:flex; gap:4px; margin-top:3px; flex-wrap:wrap; align-items:center; }
@@ -1259,7 +1259,7 @@
       </div>
       <!-- Alertes -->
       <div class="dash-section" id="dash-alerts-section" style="display:none">
-        <div class="dash-section-title">⚠️ Alertes stock</div>
+        <div class="dash-section-title">⚠️ Alertes — Mes références</div>
         <div id="dash-alerts-list"></div>
         <button onclick="App.go('stock')" style="width:100%;margin-top:4px;background:transparent;border:1.5px solid #E2E8F0;color:#475569;padding:7px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
           Voir tout le catalogue →
@@ -1762,9 +1762,7 @@ const App = {
     // ── Bonjour [Prénom] sur l'écran d'accueil ────────────────────────────
     const greetEl = document.getElementById('home-greeting');
     if (greetEl && S.currentUser?.prenom) {
-      const h = new Date().getHours();
-      const salut = h < 12 ? 'Bonjour' : h < 18 ? 'Bon après-midi' : 'Bonsoir';
-      greetEl.textContent = `${salut} ${S.currentUser.prenom} 👋`;
+      greetEl.textContent = `Bonjour ${S.currentUser.prenom}`;
     }
 
     // ── Carte admin (accueil) : visible uniquement pour les admins ───────
@@ -2396,10 +2394,10 @@ const App = {
           ${S.stockShowThumbs ? `<div style="flex-shrink:0;">${thumbHtml}</div>` : ''}
           <div class="sc-body">
             <div class="sc-head">
-              <span class="sc-ref">${d.ref}</span>
-              <span class="sc-qty ${qtyClass}">${qtyTxt}</span>
-              ${trendArrow ? `<span class="sc-trend ${trendCls}">${trendArrow}</span>` : ''}
               <span class="sc-star${isRel?' on':''}" onclick="event.stopPropagation();App.toggleStockPref('${refSafe}')">${isRel?'★':'☆'}</span>
+              <span class="sc-ref">${d.ref}</span>
+              ${trendArrow ? `<span class="sc-trend ${trendCls}">${trendArrow}</span>` : ''}
+              <span class="sc-qty ${qtyClass}">${qtyTxt}</span>
             </div>
             <div class="sc-desc">${desc}</div>
             <div class="sc-foot">
@@ -3100,14 +3098,15 @@ const App = {
     if (!kpiEl || !mvtEl) return;
 
     const total = S.stockData.length;
-    // Alertes : stock bas ou rupture (avec conso connue)
+    // Alertes : uniquement sur les références favorites (étoilées)
     const alerts = [];
     S.stockData.forEach(d => {
+      if (!S.stockPrefs.has(d.ref)) return;          // ← favoris uniquement
       const qty = this._calcStockActuel(d.ref, d.qte);
       const days = this._calcDaysToRupture(d.ref, qty);
       const seuil = d.seuil || 0;
-      if (qty !== null && qty <= 0)              alerts.push({ ref: d.ref, desc: d.description, type: 'rupture', days: 0 });
-      else if (seuil > 0 && qty !== null && qty <= seuil) alerts.push({ ref: d.ref, desc: d.description, type: 'low', days });
+      if (qty !== null && qty <= 0)                           alerts.push({ ref: d.ref, desc: d.description, type: 'rupture', days: 0 });
+      else if (seuil > 0 && qty !== null && qty <= seuil)     alerts.push({ ref: d.ref, desc: d.description, type: 'low', days });
     });
     // Trier : rupture d'abord, puis par jours croissants
     alerts.sort((a,b) => {
@@ -3140,9 +3139,13 @@ const App = {
         <div class="dash-kpi-lbl">Ruptures</div>
       </div>`;
 
-    // ── Alertes ──
-    if (alerts.length > 0) {
-      alertEl.style.display = '';
+    // ── Alertes favoris ──
+    alertEl.style.display = '';
+    if (S.stockPrefs.size === 0) {
+      alertListEl.innerHTML = `<div style="font-size:12px;color:#94A3B8;padding:8px 0;">Marque des références en ★ dans le catalogue pour les suivre ici.</div>`;
+    } else if (alerts.length === 0) {
+      alertListEl.innerHTML = `<div style="font-size:12px;color:#15803D;padding:8px 0;">✅ Toutes vos références favorites sont OK.</div>`;
+    } else {
       alertListEl.innerHTML = alerts.slice(0, 8).map(a => {
         const badgeCls = a.type === 'rupture' ? 'rupture' : 'low';
         const badgeTxt = a.type === 'rupture' ? '⛔ Rupture'
@@ -3153,8 +3156,6 @@ const App = {
           <span class="dash-alert-badge ${badgeCls}">${badgeTxt}</span>
         </div>`;
       }).join('');
-    } else {
-      alertEl.style.display = 'none';
     }
 
     // ── Mouvements récents ──
