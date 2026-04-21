@@ -1259,7 +1259,7 @@
       </div>
       <!-- Alertes -->
       <div class="dash-section" id="dash-alerts-section" style="display:none">
-        <div class="dash-section-title">⚠️ Alertes stock</div>
+        <div class="dash-section-title">⚠️ Alertes — Mes références</div>
         <div id="dash-alerts-list"></div>
         <button onclick="App.go('stock')" style="width:100%;margin-top:4px;background:transparent;border:1.5px solid #E2E8F0;color:#475569;padding:7px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
           Voir tout le catalogue →
@@ -3100,14 +3100,15 @@ const App = {
     if (!kpiEl || !mvtEl) return;
 
     const total = S.stockData.length;
-    // Alertes : stock bas ou rupture (avec conso connue)
+    // Alertes : uniquement sur les références favorites (étoilées)
     const alerts = [];
     S.stockData.forEach(d => {
+      if (!S.stockPrefs.has(d.ref)) return;          // ← favoris uniquement
       const qty = this._calcStockActuel(d.ref, d.qte);
       const days = this._calcDaysToRupture(d.ref, qty);
       const seuil = d.seuil || 0;
-      if (qty !== null && qty <= 0)              alerts.push({ ref: d.ref, desc: d.description, type: 'rupture', days: 0 });
-      else if (seuil > 0 && qty !== null && qty <= seuil) alerts.push({ ref: d.ref, desc: d.description, type: 'low', days });
+      if (qty !== null && qty <= 0)                           alerts.push({ ref: d.ref, desc: d.description, type: 'rupture', days: 0 });
+      else if (seuil > 0 && qty !== null && qty <= seuil)     alerts.push({ ref: d.ref, desc: d.description, type: 'low', days });
     });
     // Trier : rupture d'abord, puis par jours croissants
     alerts.sort((a,b) => {
@@ -3140,9 +3141,13 @@ const App = {
         <div class="dash-kpi-lbl">Ruptures</div>
       </div>`;
 
-    // ── Alertes ──
-    if (alerts.length > 0) {
-      alertEl.style.display = '';
+    // ── Alertes favoris ──
+    alertEl.style.display = '';
+    if (S.stockPrefs.size === 0) {
+      alertListEl.innerHTML = `<div style="font-size:12px;color:#94A3B8;padding:8px 0;">Marque des références en ★ dans le catalogue pour les suivre ici.</div>`;
+    } else if (alerts.length === 0) {
+      alertListEl.innerHTML = `<div style="font-size:12px;color:#15803D;padding:8px 0;">✅ Toutes vos références favorites sont OK.</div>`;
+    } else {
       alertListEl.innerHTML = alerts.slice(0, 8).map(a => {
         const badgeCls = a.type === 'rupture' ? 'rupture' : 'low';
         const badgeTxt = a.type === 'rupture' ? '⛔ Rupture'
@@ -3153,8 +3158,6 @@ const App = {
           <span class="dash-alert-badge ${badgeCls}">${badgeTxt}</span>
         </div>`;
       }).join('');
-    } else {
-      alertEl.style.display = 'none';
     }
 
     // ── Mouvements récents ──
