@@ -803,9 +803,6 @@
         <span id="back-label">Retour</span>
       </button>
       <div id="header-logo" style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="App.goHome()" title="Accueil">
-        <img src="icon-192.png" alt="Sonotrad" id="header-logo-img"
-          style="height:28px;width:auto;object-fit:contain;filter:brightness(0) invert(1);"
-          onerror="this.style.display='none'">
         <div>
           <div id="header-title" style="font-size:17px;font-weight:700;line-height:1.1;">SONOTRAD</div>
           <div id="header-subtitle" style="font-size:10px;opacity:0.6;font-weight:400;line-height:1;"></div>
@@ -831,12 +828,7 @@
     <!-- ── VIEW : HOME ───────────────────────────────────────────────────── -->
     <div class="view active" id="view-home">
       <div class="home-hero" style="text-align:center;padding:24px 0 28px;">
-        <!-- Logo ou icône fallback -->
-        <div style="margin-bottom:12px;line-height:1;">
-          <img src="icon-192.png" alt="Sonotrad" id="home-logo-img"
-            style="height:56px;width:auto;object-fit:contain;"
-            onerror="this.replaceWith(Object.assign(document.createElement('div'),{textContent:'🏢',style:'font-size:52px;line-height:1;'}))">
-        </div>
+        <div style="font-size:52px;line-height:1;margin-bottom:12px;">🏢</div>
         <h1 id="home-greeting" style="font-size:21px;font-weight:800;color:#1E293B;margin:0 0 4px;">Bonjour !</h1>
         <p style="font-size:13px;color:#64748B;margin:0;">Sélectionnez une activité</p>
       </div>
@@ -1303,10 +1295,10 @@
             style="background:#F1F5F9;border:1.5px solid #CBD5E1;color:#64748B;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
             🖼 Photos
           </button>
-          <!-- Saisie groupée -->
-          <button onclick="App.openBatchMv()"
-            style="background:#1A5276;border:1.5px solid #1A5276;color:white;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;margin-left:auto;">
-            📋 Saisie groupée
+          <!-- Actualiser quantités -->
+          <button id="stock-refresh-btn" onclick="App.refreshStockQty()"
+            style="background:#F1F5F9;border:1.5px solid #CBD5E1;color:#475569;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;margin-left:auto;">
+            🔄 Actualiser
           </button>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
@@ -1661,7 +1653,7 @@ const App = {
     if (view === 'archive'    && !S.archiveLoaded) this.loadArchive();
     if (view === 'settings')   this._fillSettings();
     if (view === 'stock-dashboard') this.loadStockDashboard();
-    if (view === 'stock'        && !S.stockLoaded) this.loadStockCatalog();
+    if (view === 'stock') { if (!S.stockLoaded) this.loadStockCatalog(); else this._renderStockList(); }
     if (view === 'stock-detail') this._renderStockDetail();
     if (view === 'stock-batch')  this._renderBatchList();
     if (view === 'stock-sync')   this.loadStockSync();
@@ -1706,7 +1698,9 @@ const App = {
       el.style.display = (S.activity === 'loxam') ? '' : 'none';
     });
     document.querySelectorAll('#main-nav .nav-tab[data-stab]').forEach(el => {
-      el.style.display = (S.activity === 'stockage') ? '' : 'none';
+      const isAdmin  = S.currentUser?.role === 'admin';
+      const isSynchro = el.dataset.stab === 'stock-sync';
+      el.style.display = (S.activity === 'stockage' && (!isSynchro || isAdmin)) ? '' : 'none';
     });
 
     // ── Views : affiche la vue active ────────────────────────────────────
@@ -2259,6 +2253,34 @@ const App = {
     this._renderStockList();
   },
 
+  async refreshStockQty() {
+    if (!S.apiUrl) return;
+    const btn = document.getElementById('stock-refresh-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Chargement…'; }
+    try {
+      const [catResp, deltaResp] = await Promise.all([
+        _fetchWithTimeout(S.apiUrl + '?action=stock_catalog',            {}, 40000),
+        _fetchWithTimeout(S.apiUrl + '?action=stock_mouvements_summary', {}, 15000),
+      ]);
+      const cat    = await catResp.json();
+      const deltas = await deltaResp.json();
+      if (cat.status === 'ok') {
+        S.stockData     = cat.data || [];
+        S.stockFamilles = cat.familles || [];
+        S.stockLoaded   = true;
+      }
+      if (deltas.status === 'ok') S.stockDeltas = deltas.summary || {};
+      S.analyticsLoaded = false;
+      S.dashboardLoaded = false;
+      this._renderStockList();
+      this.toast('✓ Quantités mises à jour');
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '🔄 Actualiser'; }
+    }
+  },
+
   setStockSearch(val) {
     S.stockFilter.search = val.toLowerCase();
     this._renderStockList();
@@ -2529,13 +2551,25 @@ const App = {
   // Soumet tout le batch
   async submitBatchMv() {
     const type  = S.batchMvType;
-    const items = Object.entries(S.batchItems);
     const note  = document.getElementById('batch-note-input')?.value?.trim() || '';
     const u     = S.currentUser;
     const user  = u ? `${u.prenom} ${u.nom}` : 'inconnu';
 
-    if (!type)           { this.toast('Sélectionne un type de mouvement'); return; }
-    if (!items.length)   { this.toast('Aucune quantité saisie'); return; }
+    if (!type) { this.toast('Sélectionne un type de mouvement'); return; }
+
+    // Pour un inventaire : inclure TOUTES les refs du catalogue (vide = 0)
+    let items;
+    if (type === 'inventaire') {
+      if (!S.stockData.length) { this.toast('Catalogue non chargé'); return; }
+      items = S.stockData.map(d => [d.ref, S.batchItems[d.ref] ?? 0]);
+      const zeroCount = items.filter(([, q]) => q === 0).length;
+      const msg = `Inventaire complet : ${items.length} référence${items.length>1?'s':''} vont être enregistrées.\n` +
+                  `${zeroCount} référence${zeroCount>1?'s':''} non renseignée${zeroCount>1?'s':''} seront mises à 0.\n\nConfirmer ?`;
+      if (!confirm(msg)) return;
+    } else {
+      items = Object.entries(S.batchItems);
+      if (!items.length) { this.toast('Aucune quantité saisie'); return; }
+    }
 
     const btn = document.getElementById('batch-submit-btn');
     if (btn) btn.disabled = true;
@@ -2555,12 +2589,17 @@ const App = {
 
       if (data.status === 'ok') {
         this.toast(`✓ ${data.count} mouvement${data.count>1?'s':''} enregistré${data.count>1?'s':''}`);
-        // Mise à jour locale des deltas
+        // Mise à jour locale de S.stockData (évite un rechargement complet)
         items.forEach(([ref, qty]) => {
-          const cur = S.stockDeltas[ref] || { delta:0, invQty:null, lastDate:null };
-          if      (type === 'inventaire') S.stockDeltas[ref] = { delta:0, invQty:qty, lastDate:new Date().toISOString() };
-          else if (type === 'entrée')     S.stockDeltas[ref] = { ...cur, delta: cur.delta + qty, lastDate:new Date().toISOString() };
-          else if (type === 'sortie')     S.stockDeltas[ref] = { ...cur, delta: cur.delta - qty, lastDate:new Date().toISOString() };
+          const item = S.stockData.find(i => i.ref === ref);
+          if (item) {
+            if      (type === 'inventaire') item.qte = Number(qty);        // 0 inclus
+            else if (type === 'entrée')     item.qte = (item.qte !== null ? item.qte : 0) + qty;
+            else if (type === 'sortie')     item.qte = (item.qte !== null ? item.qte : 0) - qty;
+            if (item.seuil !== null && item.qte !== null)
+              item.stockStatus = item.qte >= item.seuil ? 'ok' : 'low';
+            else item.stockStatus = 'ok';
+          }
         });
         // Invalider caches analytics/dashboard côté client
         S.analyticsLoaded = false;
@@ -2818,12 +2857,9 @@ const App = {
     this.loadStockMouvements(ref);
   },
 
-  // Calcule le stock réel = PIDEM qty + mouvements cumulés
+  // Stock réel : déjà calculé par l'AppScript (invQty + delta), on retourne directement
   _calcStockActuel(ref, pidemQty) {
-    const d = S.stockDeltas[ref];
-    if (!d) return pidemQty;
-    if (d.invQty !== null) return d.invQty + d.delta; // inventaire comme base
-    return pidemQty !== null ? pidemQty + d.delta : null;
+    return pidemQty;
   },
 
   // Sélectionne le type de mouvement (met à jour les boutons)
@@ -2867,11 +2903,16 @@ const App = {
       const data = await resp.json();
       if (data.status === 'ok') {
         this.toast('✓ Mouvement enregistré');
-        // Mise à jour locale du delta
-        const cur = S.stockDeltas[ref] || { delta:0, invQty:null, lastDate:null };
-        if      (type === 'inventaire') S.stockDeltas[ref] = { delta:0, invQty:qty,           lastDate: new Date().toISOString() };
-        else if (type === 'entrée')     S.stockDeltas[ref] = { ...cur, delta: cur.delta + qty, lastDate: new Date().toISOString() };
-        else if (type === 'sortie')     S.stockDeltas[ref] = { ...cur, delta: cur.delta - qty, lastDate: new Date().toISOString() };
+        // Mise à jour locale de S.stockData (évite un rechargement complet)
+        const item = S.stockData.find(i => i.ref === ref);
+        if (item) {
+          if      (type === 'inventaire') item.qte = qty;
+          else if (type === 'entrée')     item.qte = (item.qte !== null ? item.qte : 0) + qty;
+          else if (type === 'sortie')     item.qte = (item.qte !== null ? item.qte : 0) - qty;
+          if (item.seuil !== null && item.qte !== null)
+            item.stockStatus = item.qte >= item.seuil ? 'ok' : 'low';
+          else if (item.qte !== null) item.stockStatus = 'ok';
+        }
         // Invalider caches analytics/dashboard côté client
         S.analyticsLoaded = false;
         S.dashboardLoaded = false;
@@ -4161,6 +4202,7 @@ const App = {
           </div>
           <div class="dep-card-right">
             <div style="font-size:13px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${d.chantier || '\u00A0'}</div>
+            ${d.description ? `<div style="font-size:11px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${d.description.length > 55 ? d.description.substring(0,53)+'…' : d.description}</div>` : ''}
             <div style="display:flex;align-items:center;gap:4px;overflow:hidden;">
               ${chips}
               ${dur ? `<span style="font-size:10px;color:#94A3B8;white-space:nowrap;flex-shrink:0;">⏱ ${dur}</span>` : ''}
@@ -4593,6 +4635,7 @@ const App = {
           </div>
           <div class="dep-card-right">
             <div style="font-size:13px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${a.destination || '\u00A0'}</div>
+            ${a.description ? `<div style="font-size:11px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${a.description.length > 55 ? a.description.substring(0,53)+'…' : a.description}</div>` : ''}
             <div style="display:flex;align-items:center;gap:4px;overflow:hidden;">
               ${a.isParti
                 ? `<span style="background:#DCFCE7;color:#15803D;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;flex-shrink:0;">Parti</span>`
