@@ -1762,9 +1762,7 @@ const App = {
     // ── Bonjour [Prénom] sur l'écran d'accueil ────────────────────────────
     const greetEl = document.getElementById('home-greeting');
     if (greetEl && S.currentUser?.prenom) {
-      const h = new Date().getHours();
-      const salut = h < 12 ? 'Bonjour' : h < 18 ? 'Bon après-midi' : 'Bonsoir';
-      greetEl.textContent = `${salut} ${S.currentUser.prenom} 👋`;
+      greetEl.textContent = `Bonjour ${S.currentUser.prenom}`;
     }
 
     // ── Carte admin (accueil) : visible uniquement pour les admins ───────
