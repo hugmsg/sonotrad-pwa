@@ -11,6 +11,7 @@
   <link rel="apple-touch-icon" href="icon-192.svg">
   <title>Sonotrad</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     :root { --brand: #1A5276; --accent: #2E86C1; }
     * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
@@ -356,6 +357,26 @@
     .sync-ref    { font-family:'Courier New',monospace; font-size:12px; font-weight:700; color:var(--brand); }
     .sync-desc   { font-size:11px; color:#475569; margin-top:1px; }
     .sync-old    { font-size:10px; color:#94A3B8; text-decoration:line-through; }
+    /* ── Import XLS ── */
+    #xls-dropzone:hover  { border-color:var(--accent); background:#EFF6FF; }
+    #xls-dropzone.drag   { border-color:var(--brand);  background:#EFF6FF; }
+    .diff-stat { background:white; border-radius:8px; padding:8px 6px; text-align:center;
+                 border:1px solid #E2E8F0; }
+    .diff-stat-val  { font-size:20px; font-weight:800; line-height:1; }
+    .diff-stat-lbl  { font-size:9px;  color:#64748B; margin-top:2px; text-transform:uppercase; letter-spacing:.3px; }
+    .diff-stat.new  .diff-stat-val { color:#15803D; }
+    .diff-stat.mod  .diff-stat-val { color:#D97706; }
+    .diff-stat.del  .diff-stat-val { color:#DC2626; }
+    .diff-stat.ok   .diff-stat-val { color:#94A3B8; }
+    .xls-row { display:flex; align-items:center; gap:8px; padding:5px 10px;
+               font-size:11px; border-bottom:1px solid #F1F5F9; }
+    .xls-row:last-child { border-bottom:none; }
+    .xls-row-ref  { font-family:'Courier New',monospace; font-weight:700; color:var(--brand); width:70px; flex-shrink:0; }
+    .xls-row-desc { flex:1; color:#475569; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .xls-row-tag  { font-size:9px; font-weight:700; padding:1px 5px; border-radius:6px; flex-shrink:0; }
+    .xls-row-tag.new { background:#DCFCE7; color:#15803D; }
+    .xls-row-tag.mod { background:#FEF3C7; color:#D97706; }
+    .xls-row-tag.del { background:#FEE2E2; color:#DC2626; }
     /* ── Analytics section dans detail ── */
     .analytics-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin:10px 0; }
     .analytics-box  { background:#F8FAFC; border-radius:8px; padding:8px 10px; text-align:center; }
@@ -1365,15 +1386,65 @@
 
     <!-- ── VIEW : STOCK SYNC ────────────────────────────────────────────── -->
     <div class="view" id="view-stock-sync">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-        <h2 style="font-size:20px;font-weight:700;color:#1E293B;">Synchro catalogue</h2>
-        <button onclick="App.loadStockSync(true)"
-          style="background:#EFF6FF;color:#1D4ED8;border:none;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
-          🔄 Vérifier
-        </button>
+      <h2 style="font-size:20px;font-weight:700;color:#1E293B;margin-bottom:14px;">Synchro catalogue</h2>
+
+      <!-- ── Section import fichier client ── -->
+      <div class="card" style="margin-bottom:12px;">
+        <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">
+          📥 Importer fichier client (.xls / .xlsx)
+        </div>
+
+        <!-- Dropzone / bouton fichier -->
+        <label id="xls-dropzone"
+          style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+                 border:2px dashed #CBD5E1;border-radius:10px;padding:22px 16px;cursor:pointer;
+                 background:#F8FAFC;transition:border-color .15s,background .15s;">
+          <span style="font-size:32px;">📂</span>
+          <span style="font-size:13px;font-weight:600;color:#475569;">Choisir le fichier catalogue client</span>
+          <span style="font-size:11px;color:#94A3B8;">.xls, .xlsx acceptés</span>
+          <input type="file" id="xls-input" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            onchange="App.onXlsSelected(this)" style="display:none;">
+        </label>
+
+        <!-- Aperçu avant import -->
+        <div id="xls-preview" style="display:none;margin-top:12px;">
+          <div style="font-size:12px;font-weight:600;color:#1E293B;margin-bottom:6px;" id="xls-preview-title"></div>
+          <!-- Stats diff -->
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;" id="xls-diff-grid"></div>
+          <!-- Premiers résultats -->
+          <div style="font-size:11px;color:#64748B;margin-bottom:6px;" id="xls-preview-sample-label"></div>
+          <div id="xls-preview-sample" style="max-height:180px;overflow-y:auto;border:1px solid #E2E8F0;border-radius:8px;"></div>
+
+          <!-- Boutons -->
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <button onclick="App.cancelXlsImport()"
+              style="flex:1;padding:10px;border:1.5px solid #E2E8F0;background:white;color:#64748B;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+              Annuler
+            </button>
+            <button id="xls-submit-btn" onclick="App.submitXlsImport()"
+              style="flex:2;padding:10px;border:none;background:#1A5276;color:white;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+              ✅ Importer dans le catalogue
+            </button>
+          </div>
+        </div>
       </div>
-      <div id="sync-body">
-        <div style="text-align:center;padding:32px;color:#94A3B8;font-size:13px;">Chargement…</div>
+
+      <!-- ── Section diff snapshot ── -->
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">
+            🔄 État du snapshot
+          </div>
+          <button onclick="App.loadStockSync(true)"
+            style="background:#EFF6FF;color:#1D4ED8;border:none;padding:5px 9px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;">
+            Vérifier
+          </button>
+        </div>
+        <div id="sync-body">
+          <div style="text-align:center;padding:20px;color:#94A3B8;font-size:12px;">
+            Appuie sur "Vérifier" pour comparer le catalogue avec le snapshot enregistré.
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1543,6 +1614,9 @@ const S = {
   // ── Layer 1 — Sync ────────────────────────────────────────────────────
   stockSyncData:   null,   // { new, modified, deleted, unchangedCount, savedAt, isInitial }
   syncLoading:     false,
+  // ── Import XLS ───────────────────────────────────────────────────────────
+  _xlsParsed:      null,   // données parsées prêtes à envoyer
+  _xlsFileName:    null,
 };
 // ── APP ──────────────────────────────────────────────────────────────────────
 const App = {
@@ -3138,6 +3212,254 @@ const App = {
     body.innerHTML = html;
   },
 
+  /* ─ Import XLS client (SheetJS) ─ */
+
+  // Appelé quand l'utilisateur choisit un fichier
+  onXlsSelected(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    this._parseXlsFile(file);
+  },
+
+  // Parse le fichier XLS avec SheetJS
+  _parseXlsFile(file) {
+    if (typeof XLSX === 'undefined') {
+      this.toast('⚠️ Librairie SheetJS non chargée — vérifie la connexion');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const wb   = XLSX.read(data, { type: 'array', cellDates: false });
+        const wsName = wb.SheetNames[0];
+        const ws   = wb.Sheets[wsName];
+
+        // Convertir en tableau 2D (defval='' pour les cellules vides)
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+        // Structure attendue :
+        // rows[0] = titre fusionné (ignorer)
+        // rows[1] = vide (ignorer)
+        // rows[2] = en-têtes
+        // rows[3+] = données
+        if (rows.length < 4) {
+          this.toast('Fichier trop court — vérifier le format');
+          return;
+        }
+
+        // Mapper les colonnes par nom (robuste si l'ordre change)
+        const headers = rows[2].map(h => String(h || '').trim().toLowerCase()
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // retire accents
+          .replace(/[^a-z0-9]/g, ''));
+        const colIdx = {
+          ref:         this._findCol(headers, ['refrentalmanpidem','ref','reference','refarticle']),
+          description: this._findCol(headers, ['detailfournitures','detail','description','designation','libelle']),
+          famille:     this._findCol(headers, ['famillearticle','famille','categorie','type']),
+          fournisseur: this._findCol(headers, ['fournisseur','fourn','supplier']),
+          refFourn:    this._findCol(headers, ['referencefournisseur','reffournisseur','reffourn','referencesupplier']),
+          prixHT:      this._findCol(headers, ['prixht','prix','price','montant','tarif']),
+        };
+
+        if (colIdx.ref === -1 || colIdx.description === -1) {
+          this.toast('Colonnes Ref ou Description introuvables dans le fichier');
+          return;
+        }
+
+        // Parser les lignes de données
+        const parsed = [];
+        for (let i = 3; i < rows.length; i++) {
+          const row = rows[i];
+          const ref = String(row[colIdx.ref] || '').trim();
+          if (!ref || ref === '') continue; // ligne vide
+          if (/^[0-9a-zA-Z\-\/\.]+$/.test(ref) === false) continue; // ref invalide
+
+          const prixRaw = colIdx.prixHT >= 0 ? String(row[colIdx.prixHT] || '') : '';
+          const prix    = this._cleanPrice(prixRaw);
+
+          parsed.push({
+            ref:         ref,
+            description: String(row[colIdx.description] || '').trim(),
+            famille:     colIdx.famille     >= 0 ? String(row[colIdx.famille]     || '').trim() : '',
+            fournisseur: colIdx.fournisseur  >= 0 ? String(row[colIdx.fournisseur] || '').trim() : '',
+            refFourn:    colIdx.refFourn     >= 0 ? String(row[colIdx.refFourn]    || '').trim() : '',
+            prixHT:      prix,
+          });
+        }
+
+        if (!parsed.length) {
+          this.toast('Aucune référence valide trouvée dans le fichier');
+          return;
+        }
+
+        // Stocker et afficher l'aperçu
+        S._xlsParsed    = parsed;
+        S._xlsFileName  = file.name;
+        this._showXlsPreview(parsed, file.name);
+
+      } catch(err) {
+        this.toast('Erreur lecture fichier : ' + err.message);
+        console.error('[parseXls]', err);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  },
+
+  // Trouve l'index d'une colonne par liste de noms candidats
+  _findCol(headers, candidates) {
+    for (const c of candidates) {
+      const idx = headers.findIndex(h => h === c || h.includes(c) || c.includes(h));
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  },
+
+  // Nettoie un prix "55,55 €" → 55.55
+  _cleanPrice(raw) {
+    if (!raw) return null;
+    const s = String(raw).replace(/[€$£\s]/g, '').replace(',', '.');
+    const n = parseFloat(s);
+    return isNaN(n) ? null : Math.round(n * 100) / 100;
+  },
+
+  // Affiche l'aperçu du diff avant import
+  _showXlsPreview(parsed, fileName) {
+    const preview    = document.getElementById('xls-preview');
+    const titleEl    = document.getElementById('xls-preview-title');
+    const diffGrid   = document.getElementById('xls-diff-grid');
+    const sampleLbl  = document.getElementById('xls-preview-sample-label');
+    const sampleEl   = document.getElementById('xls-preview-sample');
+    if (!preview) return;
+
+    // Calculer le diff local (comparaison avec stockData si chargé)
+    let added = 0, modified = 0, unchanged = 0;
+    const currentRefs = {};
+    S.stockData.forEach(d => { currentRefs[d.ref] = d; });
+
+    const changes = [];
+    parsed.forEach(r => {
+      const cur = currentRefs[r.ref];
+      if (!cur) {
+        added++;
+        changes.push({ tag: 'new', ref: r.ref, desc: r.description });
+      } else {
+        const changed = (r.description !== cur.description ||
+                         r.famille     !== cur.famille     ||
+                         r.fournisseur !== cur.fournisseur ||
+                         r.refFourn    !== cur.refFourn    ||
+                         (r.prixHT !== null && r.prixHT !== cur.prixHT));
+        if (changed) {
+          modified++;
+          changes.push({ tag: 'mod', ref: r.ref, desc: r.description });
+        } else {
+          unchanged++;
+        }
+      }
+    });
+
+    // Refs présentes dans le catalogue mais absentes du fichier
+    const deleted = S.stockData.filter(d => !parsed.find(r => r.ref === d.ref));
+
+    titleEl.textContent = `📄 ${fileName} — ${parsed.length} référence${parsed.length>1?'s':''} trouvée${parsed.length>1?'s':''}`;
+
+    diffGrid.innerHTML = `
+      <div class="diff-stat new"><div class="diff-stat-val">${added}</div><div class="diff-stat-lbl">Nouvelles</div></div>
+      <div class="diff-stat mod"><div class="diff-stat-val">${modified}</div><div class="diff-stat-lbl">Modifiées</div></div>
+      <div class="diff-stat del"><div class="diff-stat-val">${deleted.length}</div><div class="diff-stat-lbl">Supprimées</div></div>
+      <div class="diff-stat ok"><div class="diff-stat-val">${unchanged}</div><div class="diff-stat-lbl">Inchangées</div></div>`;
+
+    // Aperçu : 15 premiers changements, puis inchangées
+    const toShow = [...changes.slice(0, 15), ...deleted.slice(0, 5).map(d => ({ tag:'del', ref:d.ref, desc:d.description }))];
+    if (!toShow.length) {
+      sampleLbl.textContent = 'Aucun changement détecté.';
+      sampleEl.innerHTML = '';
+    } else {
+      sampleLbl.textContent = `Aperçu des changements (${toShow.length} affichés) :`;
+      sampleEl.innerHTML = toShow.map(r =>
+        `<div class="xls-row">
+          <span class="xls-row-ref">${r.ref}</span>
+          <span class="xls-row-desc">${r.desc}</span>
+          <span class="xls-row-tag ${r.tag}">${r.tag === 'new' ? 'Nouveau' : r.tag === 'mod' ? 'Modifié' : 'Supprimé'}</span>
+        </div>`).join('');
+    }
+
+    preview.style.display = 'block';
+    document.getElementById('xls-dropzone').style.display = 'none';
+  },
+
+  cancelXlsImport() {
+    S._xlsParsed   = null;
+    S._xlsFileName = null;
+    document.getElementById('xls-preview').style.display = 'none';
+    document.getElementById('xls-dropzone').style.display = 'flex';
+    document.getElementById('xls-input').value = '';
+  },
+
+  async submitXlsImport() {
+    if (!S._xlsParsed || !S._xlsParsed.length) return;
+    if (!S.apiUrl) { this.toast('URL API non configurée'); return; }
+
+    const btn = document.getElementById('xls-submit-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Import en cours…'; }
+
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({
+        action: 'import_catalog_data',
+        refs:   S._xlsParsed,
+        source: S._xlsFileName || 'import.xls',
+      }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 60000);
+      const data = await resp.json();
+
+      if (data.status === 'ok') {
+        const msg = `✅ Import terminé — ${data.added} ajout${data.added>1?'s':''}, ${data.updated} modification${data.updated>1?'s':''}, ${data.deactivated} désactivée${data.deactivated>1?'s':''}`;
+        this.toast(msg);
+
+        // Lien vers le Sheet créé
+        if (data.sheetUrl) {
+          const syncBody = document.getElementById('sync-body');
+          if (syncBody) {
+            syncBody.innerHTML = `
+              <div style="background:#F0FDF4;border-radius:10px;padding:14px;margin-bottom:8px;">
+                <div style="font-weight:700;color:#15803D;margin-bottom:6px;">✅ Import réussi</div>
+                <div style="font-size:12px;color:#166534;line-height:1.6;">
+                  ${data.added} nouvelle${data.added>1?'s':''} · ${data.updated} modifiée${data.updated>1?'s':''} · ${data.deactivated} désactivée${data.deactivated>1?'s':''}
+                  · ${data.unchanged} inchangée${data.unchanged>1?'s':''}
+                </div>
+              </div>
+              <a href="${data.sheetUrl}" target="_blank"
+                style="display:flex;align-items:center;gap:8px;background:#EFF6FF;border:1.5px solid #BFDBFE;border-radius:8px;padding:10px 12px;text-decoration:none;">
+                <span style="font-size:20px;">📊</span>
+                <div>
+                  <div style="font-size:12px;font-weight:700;color:#1D4ED8;">Ouvrir "Sonotrad - Catalogue"</div>
+                  <div style="font-size:10px;color:#64748B;">Google Sheet · seuils éditables</div>
+                </div>
+                <span style="margin-left:auto;font-size:14px;color:#93C5FD;">↗</span>
+              </a>`;
+          }
+        }
+
+        // Recharger le catalogue dans la PWA
+        S.stockLoaded    = false;
+        S.analyticsLoaded = false;
+        S.dashboardLoaded = false;
+        S._xlsParsed      = null;
+        this.cancelXlsImport();
+
+        // Si on est dans le catalogue, le recharger silencieusement
+        if (S.view === 'stock') this.loadStockCatalog();
+
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+        if (btn) { btn.disabled = false; btn.textContent = '✅ Importer dans le catalogue'; }
+      }
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+      if (btn) { btn.disabled = false; btn.textContent = '✅ Importer dans le catalogue'; }
+    }
+  },
+
   async applySnapshot() {
     if (!S.apiUrl) return;
     const btn = document.querySelector('#view-stock-sync button[onclick="App.applySnapshot()"]');
@@ -4438,6 +4760,18 @@ document.addEventListener('DOMContentLoaded', () => {
   // Pré-chargement des codes en arrière-plan si le cache est périmé
   if (S.apiUrl && Date.now() - S.codesTs > CODES_TTL) {
     App._fetchCodes();
+  }
+  // ── Drag-and-drop sur la dropzone XLS ────────────────────────────────────
+  const dz = document.getElementById('xls-dropzone');
+  if (dz) {
+    dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag'); });
+    dz.addEventListener('dragleave', ()  => dz.classList.remove('drag'));
+    dz.addEventListener('drop', e => {
+      e.preventDefault();
+      dz.classList.remove('drag');
+      const file = e.dataTransfer?.files?.[0];
+      if (file) App._parseXlsFile(file);
+    });
   }
 });
 </script>
