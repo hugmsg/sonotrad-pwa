@@ -1653,7 +1653,7 @@ const App = {
     if (view === 'archive'    && !S.archiveLoaded) this.loadArchive();
     if (view === 'settings')   this._fillSettings();
     if (view === 'stock-dashboard') this.loadStockDashboard();
-    if (view === 'stock'        && !S.stockLoaded) this.loadStockCatalog();
+    if (view === 'stock') { if (!S.stockLoaded) this.loadStockCatalog(); else this._renderStockList(); }
     if (view === 'stock-detail') this._renderStockDetail();
     if (view === 'stock-batch')  this._renderBatchList();
     if (view === 'stock-sync')   this.loadStockSync();
