@@ -2551,13 +2551,25 @@ const App = {
   // Soumet tout le batch
   async submitBatchMv() {
     const type  = S.batchMvType;
-    const items = Object.entries(S.batchItems);
     const note  = document.getElementById('batch-note-input')?.value?.trim() || '';
     const u     = S.currentUser;
     const user  = u ? `${u.prenom} ${u.nom}` : 'inconnu';
 
-    if (!type)           { this.toast('Sélectionne un type de mouvement'); return; }
-    if (!items.length)   { this.toast('Aucune quantité saisie'); return; }
+    if (!type) { this.toast('Sélectionne un type de mouvement'); return; }
+
+    // Pour un inventaire : inclure TOUTES les refs du catalogue (vide = 0)
+    let items;
+    if (type === 'inventaire') {
+      if (!S.stockData.length) { this.toast('Catalogue non chargé'); return; }
+      items = S.stockData.map(d => [d.ref, S.batchItems[d.ref] ?? 0]);
+      const zeroCount = items.filter(([, q]) => q === 0).length;
+      const msg = `Inventaire complet : ${items.length} référence${items.length>1?'s':''} vont être enregistrées.\n` +
+                  `${zeroCount} référence${zeroCount>1?'s':''} non renseignée${zeroCount>1?'s':''} seront mises à 0.\n\nConfirmer ?`;
+      if (!confirm(msg)) return;
+    } else {
+      items = Object.entries(S.batchItems);
+      if (!items.length) { this.toast('Aucune quantité saisie'); return; }
+    }
 
     const btn = document.getElementById('batch-submit-btn');
     if (btn) btn.disabled = true;
@@ -2581,12 +2593,12 @@ const App = {
         items.forEach(([ref, qty]) => {
           const item = S.stockData.find(i => i.ref === ref);
           if (item) {
-            if      (type === 'inventaire') item.qte = qty;
+            if      (type === 'inventaire') item.qte = Number(qty);        // 0 inclus
             else if (type === 'entrée')     item.qte = (item.qte !== null ? item.qte : 0) + qty;
             else if (type === 'sortie')     item.qte = (item.qte !== null ? item.qte : 0) - qty;
             if (item.seuil !== null && item.qte !== null)
               item.stockStatus = item.qte >= item.seuil ? 'ok' : 'low';
-            else if (item.qte !== null) item.stockStatus = 'ok';
+            else item.stockStatus = 'ok';
           }
         });
         // Invalider caches analytics/dashboard côté client
