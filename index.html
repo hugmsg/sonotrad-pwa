@@ -828,6 +828,7 @@
     <!-- ── VIEW : HOME ───────────────────────────────────────────────────── -->
     <div class="view active" id="view-home">
       <div class="home-hero" style="text-align:center;padding:24px 0 28px;">
+        <div style="font-size:52px;line-height:1;margin-bottom:12px;">🏢</div>
         <h1 id="home-greeting" style="font-size:21px;font-weight:800;color:#1E293B;margin:0 0 4px;">Bonjour !</h1>
         <p style="font-size:13px;color:#64748B;margin:0;">Sélectionnez une activité</p>
       </div>
@@ -4154,6 +4155,7 @@ const App = {
           </div>
           <div class="dep-card-right">
             <div style="font-size:13px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${d.chantier || '\u00A0'}</div>
+            ${d.description ? `<div style="font-size:11px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${d.description.length > 55 ? d.description.substring(0,53)+'…' : d.description}</div>` : ''}
             <div style="display:flex;align-items:center;gap:4px;overflow:hidden;">
               ${chips}
               ${dur ? `<span style="font-size:10px;color:#94A3B8;white-space:nowrap;flex-shrink:0;">⏱ ${dur}</span>` : ''}
@@ -4586,6 +4588,7 @@ const App = {
           </div>
           <div class="dep-card-right">
             <div style="font-size:13px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${a.destination || '\u00A0'}</div>
+            ${a.description ? `<div style="font-size:11px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${a.description.length > 55 ? a.description.substring(0,53)+'…' : a.description}</div>` : ''}
             <div style="display:flex;align-items:center;gap:4px;overflow:hidden;">
               ${a.isParti
                 ? `<span style="background:#DCFCE7;color:#15803D;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;flex-shrink:0;">Parti</span>`
