@@ -1295,10 +1295,10 @@
             style="background:#F1F5F9;border:1.5px solid #CBD5E1;color:#64748B;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
             🖼 Photos
           </button>
-          <!-- Saisie groupée -->
-          <button onclick="App.openBatchMv()"
-            style="background:#1A5276;border:1.5px solid #1A5276;color:white;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;margin-left:auto;">
-            📋 Saisie groupée
+          <!-- Actualiser quantités -->
+          <button id="stock-refresh-btn" onclick="App.refreshStockQty()"
+            style="background:#F1F5F9;border:1.5px solid #CBD5E1;color:#475569;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;margin-left:auto;">
+            🔄 Actualiser
           </button>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
@@ -2251,6 +2251,34 @@ const App = {
 
     this._renderStockFamilleFilters();
     this._renderStockList();
+  },
+
+  async refreshStockQty() {
+    if (!S.apiUrl) return;
+    const btn = document.getElementById('stock-refresh-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Chargement…'; }
+    try {
+      const [catResp, deltaResp] = await Promise.all([
+        _fetchWithTimeout(S.apiUrl + '?action=stock_catalog',            {}, 40000),
+        _fetchWithTimeout(S.apiUrl + '?action=stock_mouvements_summary', {}, 15000),
+      ]);
+      const cat    = await catResp.json();
+      const deltas = await deltaResp.json();
+      if (cat.status === 'ok') {
+        S.stockData     = cat.data || [];
+        S.stockFamilles = cat.familles || [];
+        S.stockLoaded   = true;
+      }
+      if (deltas.status === 'ok') S.stockDeltas = deltas.summary || {};
+      S.analyticsLoaded = false;
+      S.dashboardLoaded = false;
+      this._renderStockList();
+      this.toast('✓ Quantités mises à jour');
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '🔄 Actualiser'; }
+    }
   },
 
   setStockSearch(val) {
