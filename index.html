@@ -2549,12 +2549,17 @@ const App = {
 
       if (data.status === 'ok') {
         this.toast(`✓ ${data.count} mouvement${data.count>1?'s':''} enregistré${data.count>1?'s':''}`);
-        // Mise à jour locale des deltas
+        // Mise à jour locale de S.stockData (évite un rechargement complet)
         items.forEach(([ref, qty]) => {
-          const cur = S.stockDeltas[ref] || { delta:0, invQty:null, lastDate:null };
-          if      (type === 'inventaire') S.stockDeltas[ref] = { delta:0, invQty:qty, lastDate:new Date().toISOString() };
-          else if (type === 'entrée')     S.stockDeltas[ref] = { ...cur, delta: cur.delta + qty, lastDate:new Date().toISOString() };
-          else if (type === 'sortie')     S.stockDeltas[ref] = { ...cur, delta: cur.delta - qty, lastDate:new Date().toISOString() };
+          const item = S.stockData.find(i => i.ref === ref);
+          if (item) {
+            if      (type === 'inventaire') item.qte = qty;
+            else if (type === 'entrée')     item.qte = (item.qte !== null ? item.qte : 0) + qty;
+            else if (type === 'sortie')     item.qte = (item.qte !== null ? item.qte : 0) - qty;
+            if (item.seuil !== null && item.qte !== null)
+              item.stockStatus = item.qte >= item.seuil ? 'ok' : 'low';
+            else if (item.qte !== null) item.stockStatus = 'ok';
+          }
         });
         // Invalider caches analytics/dashboard côté client
         S.analyticsLoaded = false;
@@ -2812,12 +2817,9 @@ const App = {
     this.loadStockMouvements(ref);
   },
 
-  // Calcule le stock réel = PIDEM qty + mouvements cumulés
+  // Stock réel : déjà calculé par l'AppScript (invQty + delta), on retourne directement
   _calcStockActuel(ref, pidemQty) {
-    const d = S.stockDeltas[ref];
-    if (!d) return pidemQty;
-    if (d.invQty !== null) return d.invQty + d.delta; // inventaire comme base
-    return pidemQty !== null ? pidemQty + d.delta : null;
+    return pidemQty;
   },
 
   // Sélectionne le type de mouvement (met à jour les boutons)
@@ -2861,11 +2863,16 @@ const App = {
       const data = await resp.json();
       if (data.status === 'ok') {
         this.toast('✓ Mouvement enregistré');
-        // Mise à jour locale du delta
-        const cur = S.stockDeltas[ref] || { delta:0, invQty:null, lastDate:null };
-        if      (type === 'inventaire') S.stockDeltas[ref] = { delta:0, invQty:qty,           lastDate: new Date().toISOString() };
-        else if (type === 'entrée')     S.stockDeltas[ref] = { ...cur, delta: cur.delta + qty, lastDate: new Date().toISOString() };
-        else if (type === 'sortie')     S.stockDeltas[ref] = { ...cur, delta: cur.delta - qty, lastDate: new Date().toISOString() };
+        // Mise à jour locale de S.stockData (évite un rechargement complet)
+        const item = S.stockData.find(i => i.ref === ref);
+        if (item) {
+          if      (type === 'inventaire') item.qte = qty;
+          else if (type === 'entrée')     item.qte = (item.qte !== null ? item.qte : 0) + qty;
+          else if (type === 'sortie')     item.qte = (item.qte !== null ? item.qte : 0) - qty;
+          if (item.seuil !== null && item.qte !== null)
+            item.stockStatus = item.qte >= item.seuil ? 'ok' : 'low';
+          else if (item.qte !== null) item.stockStatus = 'ok';
+        }
         // Invalider caches analytics/dashboard côté client
         S.analyticsLoaded = false;
         S.dashboardLoaded = false;
