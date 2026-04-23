@@ -784,6 +784,16 @@
     <button class="nav-tab" data-stab="stock-sync" onclick="App.go('stock-sync')" style="display:none">
       <span class="icon">🔄</span><span>Synchro</span>
     </button>
+    <!-- ── Tabs BCB (masqués hors activité BCB) ───────────────────────── -->
+    <button class="nav-tab" data-bcbtab="bcb-menu" onclick="App.go('bcb-menu')" style="display:none">
+      <span class="icon">🏠</span><span>Menu</span>
+    </button>
+    <button class="nav-tab" data-bcbtab="bcb-parc" onclick="App.go('bcb-parc')" style="display:none">
+      <span class="icon">🅿️</span><span>Parc</span>
+    </button>
+    <button class="nav-tab" data-bcbtab="bcb-consignes" onclick="App.go('bcb-consignes')" style="display:none">
+      <span class="icon">📋</span><span>Consignes</span>
+    </button>
     <!-- Bouton retour accueil (mobile uniquement) -->
     <button class="nav-tab" id="nav-home-btn" onclick="App.goHome()" style="color:#94A3B8;">
       <span class="icon">⊞</span><span>Activités</span>
@@ -843,12 +853,12 @@
           <span class="activity-badge badge-active">● Actif</span>
         </div>
 
-        <!-- BCB — bientôt -->
-        <div class="activity-card" data-ready="false">
+        <!-- BCB — actif -->
+        <div class="activity-card" data-ready="true" onclick="App.selectActivity('bcb')">
           <div class="activity-icon">🚛</div>
           <div class="activity-name">BCB</div>
           <div class="activity-desc">Vente &amp; Logistique</div>
-          <span class="activity-badge badge-soon">Bientôt</span>
+          <span class="activity-badge badge-active">● Actif</span>
         </div>
 
         <!-- Agorastore — bientôt -->
@@ -1467,6 +1477,105 @@
       </div>
     </div>
 
+    <!-- ── VIEW : BCB MENU ───────────────────────────────────────────────── -->
+    <div class="view" id="view-bcb-menu">
+      <div style="padding:20px 16px;">
+        <h2 style="font-size:18px;font-weight:700;color:#1E293B;margin-bottom:6px;">BCB</h2>
+        <p style="font-size:13px;color:#64748B;margin-bottom:20px;">Vente &amp; Logistique</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div style="background:white;border-radius:16px;padding:24px 12px 18px;box-shadow:0 2px 8px rgba(0,0,0,0.07);display:flex;flex-direction:column;align-items:center;gap:8px;opacity:0.45;cursor:default;">
+            <div style="font-size:38px;">🅿️</div>
+            <div style="font-size:14px;font-weight:700;color:#1E293B;">Parc</div>
+            <div style="font-size:11px;color:#94A3B8;text-align:center;">Gestion du parc véhicules</div>
+            <span style="background:#F1F5F9;color:#94A3B8;font-size:10px;font-weight:600;padding:2px 10px;border-radius:20px;margin-top:2px;">Bientôt</span>
+          </div>
+          <div onclick="App.go('bcb-consignes')" style="background:white;border-radius:16px;padding:24px 12px 18px;box-shadow:0 2px 8px rgba(0,0,0,0.07);display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;border:2px solid transparent;transition:border-color .15s,transform .12s;" onmouseenter="this.style.borderColor='#2E86C1';this.style.transform='translateY(-2px)'" onmouseleave="this.style.borderColor='transparent';this.style.transform=''">
+            <div style="font-size:38px;">📋</div>
+            <div style="font-size:14px;font-weight:700;color:#1E293B;">Consignes</div>
+            <div style="font-size:11px;color:#64748B;text-align:center;">Sécurité &amp; accueil chauffeur</div>
+            <span style="background:#D1FAE5;color:#065F46;font-size:10px;font-weight:600;padding:2px 10px;border-radius:20px;margin-top:2px;">● Actif</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW : BCB PARC ────────────────────────────────────────────────── -->
+    <div class="view" id="view-bcb-parc">
+      <div style="padding:48px 20px;text-align:center;color:#94A3B8;">
+        <div style="font-size:52px;margin-bottom:14px;">🚧</div>
+        <div style="font-size:16px;font-weight:600;color:#475569;">Module en développement</div>
+        <div style="font-size:13px;margin-top:6px;">Cette fonctionnalité sera disponible prochainement.</div>
+      </div>
+    </div>
+
+    <!-- ── VIEW : BCB CONSIGNES ──────────────────────────────────────────── -->
+    <div class="view" id="view-bcb-consignes">
+
+      <!-- Étape 1 : sélection langue -->
+      <div id="bcb-step-lang" style="padding:16px 16px 24px;">
+        <h2 style="font-size:16px;font-weight:700;color:#1E293B;margin-bottom:4px;">Sélectionnez la langue</h2>
+        <p style="font-size:12px;color:#64748B;margin-bottom:16px;">Choisissez la langue du chauffeur / Select driver's language</p>
+        <div id="bcb-lang-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"></div>
+      </div>
+
+      <!-- Étape 2 : consignes + formulaire -->
+      <div id="bcb-step-consignes" style="display:none;">
+        <div style="background:#1D4ED8;color:white;padding:12px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:2;">
+          <button onclick="App.bcbBackToLang()" style="background:rgba(255,255,255,0.18);border:none;color:white;border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;flex-shrink:0;">← Langue</button>
+          <div>
+            <div style="font-weight:700;font-size:14px;" id="bcb-lang-title"></div>
+            <div style="font-size:11px;opacity:0.75;">Consignes de sécurité</div>
+          </div>
+        </div>
+        <div style="padding:14px 16px 10px;background:#FFF7ED;border-bottom:2px solid #FED7AA;">
+          <div style="font-size:11px;font-weight:700;color:#92400E;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">⚠️ <span id="bcb-rules-title"></span></div>
+          <ol id="bcb-rules-list" style="margin:0;padding-left:20px;font-size:13px;color:#1E293B;line-height:1.75;"></ol>
+        </div>
+        <div style="padding:14px 16px 24px;" id="bcb-form-wrapper">
+          <div style="font-size:11px;font-weight:700;color:#1D4ED8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:14px;" id="bcb-form-title"></div>
+          <div style="display:grid;gap:11px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-nom"></label>
+                <input id="bcb-f-nom" type="text" autocapitalize="words" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-prenom"></label>
+                <input id="bcb-f-prenom" type="text" autocapitalize="words" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-tracteur"></label>
+                <input id="bcb-f-tracteur" type="text" placeholder="AB-123-CD" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;text-transform:uppercase;">
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-remorque"></label>
+                <input id="bcb-f-remorque" type="text" placeholder="XY-456-EF" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;text-transform:uppercase;">
+              </div>
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-client"></label>
+              <input id="bcb-f-client" type="text" autocapitalize="words" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-refs"></label>
+              <textarea id="bcb-f-refs" rows="3" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;resize:vertical;font-family:inherit;"></textarea>
+            </div>
+          </div>
+          <button onclick="App.bcbSubmitConsigne()" style="margin-top:18px;width:100%;background:#1D4ED8;color:white;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:600;cursor:pointer;">✅ <span id="bcb-btn-valider"></span></button>
+        </div>
+      </div>
+
+      <!-- Étape 3 : confirmation -->
+      <div id="bcb-step-confirm" style="display:none;padding:32px 20px;text-align:center;">
+        <div style="font-size:56px;margin-bottom:14px;">✅</div>
+        <div style="font-size:17px;font-weight:700;color:#065F46;margin-bottom:8px;" id="bcb-confirm-title"></div>
+        <div id="bcb-confirm-summary" style="background:#F0FDF4;border-radius:12px;padding:14px 16px;margin:14px 0 20px;font-size:13px;color:#1E293B;text-align:left;line-height:1.9;"></div>
+        <button onclick="App.bcbNewConsigne()" style="background:#E2E8F0;color:#1E293B;border:none;border-radius:10px;padding:12px 24px;font-size:13px;font-weight:600;cursor:pointer;" id="bcb-btn-nouveau"></button>
+      </div>
+    </div>
+
     <!-- ── VIEW : SETTINGS ──────────────────────────────────────────────── -->
     <div class="view" id="view-settings">
       <h2 style="font-size:20px;font-weight:700;color:#1E293B;margin-bottom:18px;">Réglages</h2>
@@ -1639,6 +1748,8 @@ const S = {
   _xlsConfig:      null,   // { sheetName, headerRowIdx, dataRowIdx, colMap }
   _xlsParsed:      null,   // données parsées prêtes à envoyer
   _xlsFileName:    null,
+  // ── BCB ──────────────────────────────────────────────────────────────────
+  bcbLang:         null,   // langue sélectionnée pour les consignes
 };
 // ── APP ──────────────────────────────────────────────────────────────────────
 const App = {
@@ -1657,6 +1768,7 @@ const App = {
     if (view === 'stock-detail') this._renderStockDetail();
     if (view === 'stock-batch')  this._renderBatchList();
     if (view === 'stock-sync')   this.loadStockSync();
+    if (view === 'bcb-consignes') this.bcbInitLangGrid();
   },
   goBack() {
     if (S.view === 'admin')        { this.goHome(); return; }
@@ -1672,7 +1784,7 @@ const App = {
     this._render();
   },
   selectActivity(name) {
-    const ready = { loxam: true, stockage: true };
+    const ready = { loxam: true, stockage: true, bcb: true };
     if (!ready[name]) {
       this.toast('Cette activité est en cours de développement 🚧');
       return;
@@ -1686,6 +1798,7 @@ const App = {
     S.activity = name;
     if (name === 'loxam')    this.go('departures');
     if (name === 'stockage') this.go('stock-dashboard');
+    if (name === 'bcb')      this.go('bcb-menu');
   },
   _render() {
     const v      = S.view;
@@ -1702,6 +1815,9 @@ const App = {
       const isSynchro = el.dataset.stab === 'stock-sync';
       el.style.display = (S.activity === 'stockage' && (!isSynchro || isAdmin)) ? '' : 'none';
     });
+    document.querySelectorAll('#main-nav .nav-tab[data-bcbtab]').forEach(el => {
+      el.style.display = (S.activity === 'bcb') ? '' : 'none';
+    });
 
     // ── Views : affiche la vue active ────────────────────────────────────
     document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
@@ -1710,10 +1826,15 @@ const App = {
     const el     = document.getElementById(viewId);
     if (el) el.classList.add('active');
 
-    // ── Nav tabs : onglet actif (LOXAM + Stockage) ──────────────────────
+    // ── Nav tabs : onglet actif (LOXAM + Stockage + BCB) ───────────────
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-    const tab = document.querySelector(`[data-tab="${v}"]`) || document.querySelector(`[data-stab="${v}"]`);
+    const tab = document.querySelector(`[data-tab="${v}"]`) || document.querySelector(`[data-stab="${v}"]`) || document.querySelector(`[data-bcbtab="${v}"]`);
     if (tab) tab.classList.add('active');
+    // BCB consignes → tab "Consignes" reste actif sur toutes les étapes
+    if (v === 'bcb-consignes') {
+      const t2 = document.querySelector('[data-bcbtab="bcb-consignes"]');
+      if (t2) t2.classList.add('active');
+    }
     // Tableau de bord stockage = tab "Tableau"
     if (['stock-dashboard'].includes(v)) {
       const t2 = document.querySelector('[data-stab="stock-dashboard"]');
@@ -4935,6 +5056,176 @@ const App = {
     } catch(e) { log('❌ POST FormData → ' + e.message); }
     log('─── Fin des tests ───');
   },
+  /* ─ BCB Consignes ─ */
+  BCB_LANGS: [
+    { code:'fr', flag:'🇫🇷', name:'Français', dir:'ltr',
+      rulesTitle:'Consignes de sécurité obligatoires',
+      formTitle:'Informations du conducteur',
+      fields:{ nom:'Nom', prenom:'Prénom', tracteur:'Immatriculation tracteur', remorque:'Immatriculation remorque', client:'Client de destination', refs:'Références à charger' },
+      valider:'Valider l\'entrée', confirmTitle:'Entrée enregistrée', nouveau:'Nouveau chauffeur',
+      rules:['Limitation de vitesse : 10 km/h sur l\'ensemble du site.','Arrêt obligatoire à chaque panneau STOP.','Les piétons sont toujours prioritaires.','Port du gilet de sécurité haute visibilité obligatoire.','Chaussures de sécurité obligatoires sur tout le site.','Utilisation du téléphone portable interdite lors des manœuvres.','Interdit de fumer sur l\'ensemble du site.','Respectez les consignes du personnel à tout moment.','Ne laissez pas votre véhicule sans surveillance dans les zones de circulation.','Tout accident ou incident doit être signalé immédiatement au personnel.'] },
+    { code:'en', flag:'🇬🇧', name:'English', dir:'ltr',
+      rulesTitle:'Mandatory safety instructions',
+      formTitle:'Driver information',
+      fields:{ nom:'Last name', prenom:'First name', tracteur:'Tractor plate', remorque:'Trailer plate', client:'Destination client', refs:'References to collect' },
+      valider:'Validate entry', confirmTitle:'Entry recorded', nouveau:'New driver',
+      rules:['Speed limit: 10 km/h throughout the site.','Mandatory stop at all STOP signs.','Pedestrians always have right of way.','High-visibility safety vest is mandatory.','Safety footwear is required throughout the site.','Mobile phone use is prohibited during maneuvers.','Smoking is strictly prohibited on the entire site.','Follow all instructions from staff at all times.','Do not leave your vehicle unattended in traffic areas.','Any accident or incident must be reported immediately to staff.'] },
+    { code:'es', flag:'🇪🇸', name:'Español', dir:'ltr',
+      rulesTitle:'Instrucciones de seguridad obligatorias',
+      formTitle:'Información del conductor',
+      fields:{ nom:'Apellido', prenom:'Nombre', tracteur:'Matrícula tractora', remorque:'Matrícula remolque', client:'Cliente de destino', refs:'Referencias a recoger' },
+      valider:'Validar entrada', confirmTitle:'Entrada registrada', nuevo:'Nuevo conductor',
+      rules:['Límite de velocidad: 10 km/h en todo el recinto.','Parada obligatoria en todas las señales de STOP.','Los peatones tienen prioridad en todo momento.','El uso del chaleco de seguridad de alta visibilidad es obligatorio.','Se requiere calzado de seguridad en todo el recinto.','Se prohíbe el uso del teléfono móvil durante las maniobras.','Está prohibido fumar en todo el recinto.','Siga las instrucciones del personal en todo momento.','No deje su vehículo sin vigilancia en zonas de circulación.','Todo accidente o incidente debe comunicarse inmediatamente al personal.'] },
+    { code:'pt', flag:'🇵🇹', name:'Português', dir:'ltr',
+      rulesTitle:'Instruções de segurança obrigatórias',
+      formTitle:'Informações do condutor',
+      fields:{ nom:'Apelido', prenom:'Nome próprio', tracteur:'Matrícula do tractor', remorque:'Matrícula do reboque', client:'Cliente de destino', refs:'Referências a carregar' },
+      valider:'Validar entrada', confirmTitle:'Entrada registada', novo:'Novo condutor',
+      rules:['Limite de velocidade: 10 km/h em todo o local.','Paragem obrigatória em todos os sinais de STOP.','Os peões têm sempre prioridade.','O uso de colete de segurança de alta visibilidade é obrigatório.','Calçado de segurança obrigatório em todo o local.','É proibido utilizar o telemóvel durante as manobras.','É proibido fumar em todo o local.','Siga as instruções do pessoal em todo momento.','Não deixe o seu veículo sem vigilância nas zonas de circulação.','Qualquer acidente ou incidente deve ser comunicado imediatamente ao pessoal.'] },
+    { code:'ro', flag:'🇷🇴', name:'Română', dir:'ltr',
+      rulesTitle:'Instrucțiuni de securitate obligatorii',
+      formTitle:'Informații despre șofer',
+      fields:{ nom:'Nume', prenom:'Prenume', tracteur:'Nr. înmatriculare cap tractor', remorque:'Nr. înmatriculare remorcă', client:'Client de destinație', refs:'Referințe de ridicat' },
+      valider:'Validare intrare', confirmTitle:'Intrare înregistrată', nou:'Șofer nou',
+      rules:['Limita de viteză: 10 km/h pe întreg amplasamentul.','Oprire obligatorie la toate semnele STOP.','Pietonii au întotdeauna prioritate.','Purtarea vestei de siguranță cu vizibilitate ridicată este obligatorie.','Încălțămintea de protecție este obligatorie pe întreg amplasamentul.','Este interzisă utilizarea telefonului mobil în timpul manevrelor.','Fumatul este strict interzis pe întreg amplasamentul.','Respectați instrucțiunile personalului în orice moment.','Nu lăsați vehiculul nesupravegheat în zonele de circulație.','Orice accident sau incident trebuie raportat imediat personalului.'] },
+    { code:'pl', flag:'🇵🇱', name:'Polski', dir:'ltr',
+      rulesTitle:'Obowiązkowe instrukcje bezpieczeństwa',
+      formTitle:'Dane kierowcy',
+      fields:{ nom:'Nazwisko', prenom:'Imię', tracteur:'Nr rej. ciągnika', remorque:'Nr rej. naczepy', client:'Klient docelowy', refs:'Referencje do odbioru' },
+      valider:'Zatwierdź wjazd', confirmTitle:'Wjazd zarejestrowany', nowy:'Nowy kierowca',
+      rules:['Ograniczenie prędkości: 10 km/h na terenie obiektu.','Obowiązkowe zatrzymanie przy wszystkich znakach STOP.','Piesi mają zawsze pierwszeństwo.','Obowiązkowe noszenie kamizelki odblaskowej.','Obuwie ochronne wymagane na terenie całego obiektu.','Używanie telefonu komórkowego podczas manewrów jest zabronione.','Palenie jest surowo zabronione na terenie całego obiektu.','Stosuj się do poleceń personelu w każdej chwili.','Nie pozostawiaj pojazdu bez nadzoru w strefach ruchu.','Każdy wypadek lub incydent należy niezwłocznie zgłosić personelowi.'] },
+    { code:'tr', flag:'🇹🇷', name:'Türkçe', dir:'ltr',
+      rulesTitle:'Zorunlu güvenlik talimatları',
+      formTitle:'Sürücü bilgileri',
+      fields:{ nom:'Soyadı', prenom:'Adı', tracteur:'Çekici plakası', remorque:'Dorse plakası', client:'Varış müşterisi', refs:'Teslim alınacak referanslar' },
+      valider:'Girişi onayla', confirmTitle:'Giriş kaydedildi', yeni:'Yeni sürücü',
+      rules:['Hız sınırı: tüm tesis genelinde 10 km/sa.','Tüm STOP işaretlerinde zorunlu duruş.','Yayaların her zaman önceliği vardır.','Yüksek görünürlüklü güvenlik yeleği takmak zorunludur.','Tesisin tamamında güvenlik ayakkabısı zorunludur.','Manevra sırasında cep telefonu kullanımı yasaktır.','Tesisin tamamında sigara içmek kesinlikle yasaktır.','Personelin talimatlarına her zaman uyun.','Araçınızı trafik alanlarında gözetimsiz bırakmayın.','Her kaza veya olay derhal personele bildirilmelidir.'] },
+    { code:'de', flag:'🇩🇪', name:'Deutsch', dir:'ltr',
+      rulesTitle:'Obligatorische Sicherheitsanweisungen',
+      formTitle:'Fahrerinformationen',
+      fields:{ nom:'Nachname', prenom:'Vorname', tracteur:'Kennzeichen Zugmaschine', remorque:'Kennzeichen Anhänger', client:'Zielkunde', refs:'Abzuholende Referenzen' },
+      valider:'Einfahrt bestätigen', confirmTitle:'Einfahrt erfasst', neu:'Neuer Fahrer',
+      rules:['Geschwindigkeitsbegrenzung: 10 km/h auf dem gesamten Gelände.','Obligatorischer Halt an allen STOP-Schildern.','Fußgänger haben stets Vorrang.','Das Tragen einer Warnweste ist Pflicht.','Sicherheitsschuhe sind auf dem gesamten Gelände vorgeschrieben.','Die Nutzung von Mobiltelefonen ist beim Rangieren verboten.','Das Rauchen ist auf dem gesamten Gelände streng verboten.','Folgen Sie jederzeit den Anweisungen des Personals.','Lassen Sie Ihr Fahrzeug in Verkehrsbereichen nicht unbeaufsichtigt.','Jeder Unfall oder Vorfall muss sofort dem Personal gemeldet werden.'] },
+    { code:'nl', flag:'🇳🇱', name:'Nederlands', dir:'ltr',
+      rulesTitle:'Verplichte veiligheidsinstructies',
+      formTitle:'Gegevens chauffeur',
+      fields:{ nom:'Achternaam', prenom:'Voornaam', tracteur:'Kenteken trekker', remorque:'Kenteken oplegger', client:'Bestemmingsklant', refs:'Te laden referenties' },
+      valider:'Inrit bevestigen', confirmTitle:'Inrit geregistreerd', nieuw:'Nieuwe chauffeur',
+      rules:['Snelheidslimiet: 10 km/u op het hele terrein.','Verplicht stoppen bij alle STOP-borden.','Voetgangers hebben altijd voorrang.','Het dragen van een veiligheidshesje met hoge zichtbaarheid is verplicht.','Veiligheidsschoenen zijn vereist op het hele terrein.','Het gebruik van een mobiele telefoon tijdens manoeuvres is verboden.','Roken is streng verboden op het hele terrein.','Volg altijd de instructies van het personeel op.','Laat uw voertuig niet onbeheerd achter in rijgebieden.','Elk ongeluk of incident moet onmiddellijk aan het personeel worden gemeld.'] },
+    { code:'bg', flag:'🇧🇬', name:'Български', dir:'ltr',
+      rulesTitle:'Задължителни инструкции за безопасност',
+      formTitle:'Данни за шофьора',
+      fields:{ nom:'Фамилия', prenom:'Ime', tracteur:'Рег. номер влекач', remorque:'Рег. номер ремарке', client:'Клиент дестинация', refs:'Референции за вземане' },
+      valider:'Потвърди влизане', confirmTitle:'Влизането е регистрирано', nov:'Нов шофьор',
+      rules:['Ограничение на скоростта: 10 км/ч на целия обект.','Задължително спиране при всички знаци СТОП.','Пешеходците винаги имат предимство.','Носенето на светлоотразителна жилетка е задължително.','Предпазни обувки са задължителни на целия обект.','Използването на мобилен телефон по време на маневри е забранено.','Пушенето е строго забранено на целия обект.','Спазвайте указанията на персонала по всяко време.','Не оставяйте превозното средство без надзор в зоните за движение.','Всеки инцидент трябва незабавно да се докладва на персонала.'] },
+    { code:'sq', flag:'🇦🇱', name:'Shqip', dir:'ltr',
+      rulesTitle:'Udhëzime të detyrueshme sigurie',
+      formTitle:'Të dhëna të shoferit',
+      fields:{ nom:'Mbiemri', prenom:'Emri', tracteur:'Targa traktori', remorque:'Targa rimorkio', client:'Klienti i destinacionit', refs:'Referencat për ngarkesë' },
+      valider:'Konfirmo hyrjen', confirmTitle:'Hyrja është regjistruar', ri:'Shofer i ri',
+      rules:['Kufiri i shpejtësisë: 10 km/orë në të gjithë territorin.','Ndalim i detyrueshëm në të gjitha shenjat STOP.','Këmbësorët kanë gjithmonë përparësi.','Veshja e jelekut të sigurisë me dukshmëri të lartë është e detyrueshme.','Këpucët e sigurisë janë të detyrueshme në të gjithë territorin.','Përdorimi i telefonit celular gjatë manovrimit është i ndaluar.','Pirja e duhanit është rreptësisht e ndaluar në të gjithë territorin.','Ndiqni gjithmonë udhëzimet e personelit.','Mos e lini automjetin tuaj pa mbikëqyrje në zonat e qarkullimit.','Çdo aksident ose incident duhet të raportohet menjëherë tek personeli.'] },
+    { code:'ar', flag:'🇸🇦', name:'العربية', dir:'rtl',
+      rulesTitle:'تعليمات السلامة الإلزامية',
+      formTitle:'معلومات السائق',
+      fields:{ nom:'اللقب', prenom:'الاسم', tracteur:'لوحة الجرار', remorque:'لوحة المقطورة', client:'العميل المقصود', refs:'المراجع المراد تحميلها' },
+      valider:'تأكيد الدخول', confirmTitle:'تم تسجيل الدخول', jadid:'سائق جديد',
+      rules:['الحد الأقصى للسرعة: 10 كم/ساعة في جميع أنحاء الموقع.','التوقف إلزامي عند جميع إشارات STOP.','المشاة لهم الأولوية في جميع الأوقات.','ارتداء سترة السلامة عالية الوضوح إلزامي.','حذاء السلامة إلزامي في جميع أنحاء الموقع.','يُحظر استخدام الهاتف المحمول أثناء المناورات.','يُحظر التدخين بشكل صارم في جميع أنحاء الموقع.','اتبع تعليمات الموظفين في جميع الأوقات.','لا تترك مركبتك دون مراقبة في مناطق الحركة.','يجب الإبلاغ فوراً عن أي حادث أو واقعة للموظفين.'] },
+  ],
+  bcbInitLangGrid() {
+    const grid = document.getElementById('bcb-lang-grid');
+    if (!grid || grid.dataset.built) return;
+    grid.dataset.built = '1';
+    this.BCB_LANGS.forEach(l => {
+      const btn = document.createElement('button');
+      btn.style.cssText = 'background:white;border:1.5px solid #E2E8F0;border-radius:12px;padding:14px 10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:inherit;transition:border-color .15s,transform .12s;';
+      btn.innerHTML = `<span style="font-size:28px;">${l.flag}</span><span style="font-size:12px;font-weight:600;color:#1E293B;">${l.name}</span>`;
+      btn.addEventListener('click', () => this.bcbSelectLang(l.code));
+      btn.addEventListener('mouseenter', () => { btn.style.borderColor='#1D4ED8'; btn.style.transform='translateY(-2px)'; });
+      btn.addEventListener('mouseleave', () => { btn.style.borderColor='#E2E8F0'; btn.style.transform=''; });
+      grid.appendChild(btn);
+    });
+  },
+  bcbSelectLang(code) {
+    const l = this.BCB_LANGS.find(x => x.code === code);
+    if (!l) return;
+    S.bcbLang = l;
+    // Populate rules
+    document.getElementById('bcb-lang-title').textContent = `${l.flag} ${l.name}`;
+    document.getElementById('bcb-rules-title').textContent = l.rulesTitle;
+    const ol = document.getElementById('bcb-rules-list');
+    ol.innerHTML = l.rules.map(r => `<li>${r}</li>`).join('');
+    // Labels form
+    document.getElementById('bcb-form-title').textContent = l.formTitle;
+    document.getElementById('bcb-lbl-nom').textContent = l.fields.nom;
+    document.getElementById('bcb-lbl-prenom').textContent = l.fields.prenom;
+    document.getElementById('bcb-lbl-tracteur').textContent = l.fields.tracteur;
+    document.getElementById('bcb-lbl-remorque').textContent = l.fields.remorque;
+    document.getElementById('bcb-lbl-client').textContent = l.fields.client;
+    document.getElementById('bcb-lbl-refs').textContent = l.fields.refs;
+    document.getElementById('bcb-btn-valider').textContent = l.valider;
+    // Direction RTL/LTR
+    const wrapper = document.getElementById('bcb-form-wrapper');
+    wrapper.style.direction = l.dir;
+    ol.style.direction = l.dir;
+    // Clear form
+    ['bcb-f-nom','bcb-f-prenom','bcb-f-tracteur','bcb-f-remorque','bcb-f-client','bcb-f-refs'].forEach(id => { document.getElementById(id).value = ''; });
+    // Show step 2
+    document.getElementById('bcb-step-lang').style.display = 'none';
+    document.getElementById('bcb-step-consignes').style.display = '';
+    document.getElementById('bcb-step-confirm').style.display = 'none';
+    // Scroll to top of view
+    document.getElementById('view-bcb-consignes').scrollTop = 0;
+  },
+  bcbBackToLang() {
+    document.getElementById('bcb-step-lang').style.display = '';
+    document.getElementById('bcb-step-consignes').style.display = 'none';
+    document.getElementById('bcb-step-confirm').style.display = 'none';
+    document.getElementById('view-bcb-consignes').scrollTop = 0;
+  },
+  bcbSubmitConsigne() {
+    const l = S.bcbLang;
+    if (!l) return;
+    const nom      = document.getElementById('bcb-f-nom').value.trim();
+    const prenom   = document.getElementById('bcb-f-prenom').value.trim();
+    const tracteur = document.getElementById('bcb-f-tracteur').value.trim().toUpperCase();
+    const remorque = document.getElementById('bcb-f-remorque').value.trim().toUpperCase();
+    const client   = document.getElementById('bcb-f-client').value.trim();
+    const refs     = document.getElementById('bcb-f-refs').value.trim();
+    if (!nom || !tracteur || !client) {
+      this.toast('⚠️ Veuillez remplir au moins le nom, le tracteur et le client.');
+      return;
+    }
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('fr-FR') + ' ' + now.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+    // Save to localStorage log
+    const entry = { ts: now.toISOString(), lang: l.code, nom, prenom, tracteur, remorque, client, refs };
+    const log = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+    log.unshift(entry);
+    if (log.length > 200) log.length = 200;
+    localStorage.setItem('snt_bcb_consignes', JSON.stringify(log));
+    // Confirmation
+    const f = l.fields;
+    document.getElementById('bcb-confirm-title').textContent = l.confirmTitle;
+    const btnNouv = document.getElementById('bcb-btn-nouveau');
+    btnNouv.textContent = l.nouveau || l.nowy || l.nov || l.ri || l.jadid || l.nieuw || l.neu || l.yeni || l.novo || 'Nouveau';
+    document.getElementById('bcb-confirm-summary').innerHTML =
+      `<b>🗓 ${dateStr}</b><br>` +
+      `${f.nom} : <b>${nom}${prenom ? ' ' + prenom : ''}</b><br>` +
+      `${f.tracteur} : <b>${tracteur}</b><br>` +
+      (remorque ? `${f.remorque} : <b>${remorque}</b><br>` : '') +
+      `${f.client} : <b>${client}</b><br>` +
+      (refs ? `${f.refs} : <b>${refs}</b>` : '');
+    document.getElementById('bcb-step-consignes').style.display = 'none';
+    document.getElementById('bcb-step-confirm').style.display = '';
+    document.getElementById('view-bcb-consignes').scrollTop = 0;
+  },
+  bcbNewConsigne() {
+    document.getElementById('bcb-step-lang').style.display = '';
+    document.getElementById('bcb-step-consignes').style.display = 'none';
+    document.getElementById('bcb-step-confirm').style.display = 'none';
+    document.getElementById('view-bcb-consignes').scrollTop = 0;
+  },
+
   /* ─ Toast ─ */
   toast(msg, ms = 2800) {
     const el = document.getElementById('toast');
