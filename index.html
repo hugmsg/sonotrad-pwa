@@ -3938,29 +3938,42 @@ const App = {
     this._renderPhotoGrid('photo-grid-2', S.arr.photos, 'arrival');
   },
   async _genCode() {
-    const dispEl  = document.getElementById('code-display');
-    const statEl  = document.getElementById('code-status');
+    const dispEl = document.getElementById('code-display');
+    const statEl = document.getElementById('code-status');
     dispEl.textContent = '· · · · · ·';
-    statEl.textContent = '';
-    // Refresh codes if stale
-    if (S.apiUrl && Date.now() - S.codesTs > CODES_TTL) {
-      statEl.textContent = 'Vérification des codes existants...';
-      await this._fetchCodes();
+    statEl.textContent = 'Génération…';
+
+    let code = null;
+    let countMsg = '';
+
+    if (S.apiUrl) {
+      try {
+        const r = await _fetchWithTimeout(S.apiUrl + '?action=generate_code', {}, 15000);
+        const d = await r.json();
+        if (d.status === 'ok' && d.code) {
+          code = d.code;
+          countMsg = d.count > 1 ? `✓ Unique parmi ${d.count} codes connus` : '';
+        }
+      } catch(_) { /* fallback local */ }
     }
-    let code, tries = 0;
-    do { code = _randCode(); tries++; } while (S.codes.has(code) && tries < 50000);
+
+    if (!code) {
+      // Fallback : génération locale si API indisponible
+      if (S.codes.size === 0 && S.apiUrl) await this._fetchCodes();
+      let tries = 0;
+      do { code = _randCode(); tries++; } while (S.codes.has(code) && tries < 50000);
+      S.codes.add(code);
+      countMsg = S.codes.size > 1 ? `✓ Unique parmi ${S.codes.size} codes (mode local)` : '';
+    }
+
     S.arr.code = code;
-    S.codes.add(code);   // reserve
     dispEl.textContent = code;
     dispEl.style.transition = 'transform 0.15s';
     dispEl.style.transform = 'scale(1.06)';
     setTimeout(() => { dispEl.style.transform = ''; }, 180);
-    statEl.textContent = S.codes.size > 1 ? `✓ Unique parmi ${S.codes.size} codes connus` : '';
+    statEl.textContent = countMsg;
   },
-  regenerateCode() {
-    if (S.arr.code) S.codes.delete(S.arr.code);
-    this._genCode();
-  },
+  regenerateCode() { this._genCode(); },
   /* ─ Photos (shared) ─ */
   triggerInput(id) { document.getElementById(id).click(); },
   async handlePhotos(evt, target) {
@@ -5327,10 +5340,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Vérifie la session → affiche login ou accueil
   App._initAuth();
   _updateOnline();
-  // Pré-chargement des codes en arrière-plan si le cache est périmé
-  if (S.apiUrl && Date.now() - S.codesTs > CODES_TTL) {
-    App._fetchCodes();
-  }
   // ── Drag-and-drop sur la dropzone XLS ────────────────────────────────────
   const dz = document.getElementById('xls-dropzone');
   if (dz) {
