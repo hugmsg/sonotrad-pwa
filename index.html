@@ -12,6 +12,7 @@
   <title>Sonotrad</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     :root { --brand: #1A5276; --accent: #2E86C1; }
     * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
@@ -5260,6 +5261,220 @@ function _randCode() {
   const C = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   return Array.from({ length: 6 }, () => C[Math.floor(Math.random() * 26)]).join('');
 }
+// ── LVU — Lettre de Voiture Unique (jsPDF) ───────────────────────────────────
+// data = { type:'LV'|'CMR', display:'01446', date:'24/04/2026',
+//   conducteur, immat_moteur, immat_semi, donneur_ordre,
+//   transporteur:{nom,adresse,ville,info,tel,rcs},
+//   expediteur:{nom,adresse,ville}, destinataire:{nom,adresse,ville},
+//   marchandises:[{qte,description,poids,note}],
+//   doc_annexe, commande, note, convoi:bool }
+function _generateLvu(data) {
+  const { jsPDF } = window.jspdf;
+  const isCMR = (data.type || 'LV').toUpperCase() === 'CMR';
+  const BANDS = [
+    { rgb: [192, 57, 43],  label: 'ORIGINAL 1 — EXPÉDITEUR / SENDER' },
+    { rgb: [39, 174, 96],  label: 'ORIGINAL 2 — ACCOMPAGNE LA MARCHANDISE / WITH THE GOODS' },
+    { rgb: [41, 128, 185], label: 'ORIGINAL 3 — TRANSPORTEUR / CARRIER' },
+  ];
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  for (let c = 0; c < (isCMR ? 3 : 1); c++) {
+    if (c > 0) doc.addPage();
+    _lvuRecto(doc, data, isCMR, isCMR ? BANDS[c] : null);
+  }
+  doc.addPage();
+  _lvuVerso(doc);
+  return doc;
+}
+
+function _lvuRecto(doc, d, isCMR, band) {
+  const ML = 8, CW = 194, x0 = ML;
+  let y = 8;
+  const sf  = (s, z) => { doc.setFont('helvetica', s); doc.setFontSize(z); };
+  const fc  = (r, g, b) => doc.setFillColor(r, g, b);
+  const tc  = (r, g, b) => doc.setTextColor(r, g, b);
+  const lw  = w => doc.setLineWidth(w);
+  const bx  = (x, y, w, h, s = 'S') => doc.rect(x, y, w, h, s);
+  const ln  = (x1, y1, x2, y2) => doc.line(x1, y1, x2, y2);
+  const tx  = (t, x, y, a = 'left') => doc.text(String(t ?? ''), x, y, { align: a });
+  const sp  = (t, w) => doc.splitTextToSize(String(t ?? ''), w);
+  const chk = (x, cy, sz, on) => {
+    bx(x, cy, sz, sz);
+    if (on) { ln(x + .5, cy + .5, x + sz - .5, cy + sz - .5); ln(x + sz - .5, cy + .5, x + .5, cy + sz - .5); }
+  };
+  doc.setDrawColor(0); tc(0, 0, 0); lw(0.3);
+
+  // ── Bande CMR ──────────────────────────────────────────────────────────────
+  if (band) {
+    fc(...band.rgb); bx(x0, y, CW, 6, 'F');
+    tc(255, 255, 255); sf('bold', 7.5); tx(band.label, x0 + CW / 2, y + 4.3, 'center');
+    tc(0, 0, 0); y += 7;
+  }
+
+  // ── Titre ──────────────────────────────────────────────────────────────────
+  lw(0.5); bx(x0, y, CW, 9);
+  sf('bold', 13); tx('LETTRE DE VOITURE UNIQUE', x0 + CW / 2, y + 6.3, 'center');
+  sf('bold', 8);  tx('N°', x0 + CW - 34, y + 4);
+  sf('bold', 15); tx(String(d.display || ''), x0 + CW - 25, y + 7.5);
+  y += 9; lw(0.3);
+
+  // ── Toggle LV / CMR ────────────────────────────────────────────────────────
+  bx(x0, y, CW / 2, 6); bx(x0 + CW / 2, y, CW / 2, 6);
+  sf('normal', 8);
+  chk(x0 + 2.5, y + 1.2, 3.5, !isCMR); tx('NATIONALE', x0 + 8, y + 4.3);
+  chk(x0 + CW / 2 + 2.5, y + 1.2, 3.5, isCMR); tx('INTERNATIONALE / CMR', x0 + CW / 2 + 8, y + 4.3);
+  y += 6;
+
+  // ── Textes légaux + date ───────────────────────────────────────────────────
+  bx(x0, y, CW / 2, 22); bx(x0 + CW / 2, y, CW / 2, 22);
+  sf('normal', 5.5);
+  doc.text(sp("À défaut de convention écrite entre les parties au contrat de transport ou de déclaration de valeur spécifiée par le donneur d'ordre, la responsabilité du transporteur, en cas de perte ou avarie survenue aux marchandises ou en cas de retard à la livraison, est limitée au montant de l'indemnité prévue par le contrat type concernant le transport.", CW / 2 - 4), x0 + 2, y + 3.8);
+  doc.text(sp("Ce transport est soumis, nonobstant toute clause contraire, à la Convention relative au contrat de transport international de marchandises par route (CMR).\nThis carriage is subject, notwithstanding any clause to the contrary, to the Convention on the Contract for the international Carriage of goods by road (CMR).", CW / 2 - 4), x0 + CW / 2 + 2, y + 3.8);
+  sf('bold', 7); tx('DATE :', x0 + CW - 38, y + 3.5);
+  sf('normal', 9); tx(d.date || '', x0 + CW - 26, y + 3.5);
+  y += 22;
+
+  // ── Transporteur + Conducteurs ─────────────────────────────────────────────
+  const Sx = x0 + CW * 0.56;
+  bx(x0, y, CW * 0.56, 30); bx(Sx, y, CW * 0.44, 30);
+  sf('bold', 6); tx('Transporteur / Carrier (nom, adresse, pays / name, address, country)', x0 + 2, y + 3.8);
+  const tl = d.transporteur || {};
+  sf('normal', 7.5);
+  let ty = y + 7.5;
+  for (const l of [tl.nom || 'TRANSPORTS MESNAGER', tl.adresse || 'Z.A. des Renardières - B.P 10',
+    tl.ville || '53250 JAVRON LES CHAPELLES', tl.info || 'SAS au capital de 500 000 €',
+    tl.tel   || 'Tél. 02.43.03.43.41', tl.rcs  || 'RCS LAVAL 314 901 869']) {
+    tx(l, x0 + 2, ty); ty += 3.7;
+  }
+  sf('bold', 6);   tx('CONDUCTEURS / Drivers', Sx + 2, y + 3.8);
+  sf('normal', 8); tx(d.conducteur || '', Sx + 2, y + 8.5);
+  ln(Sx + 1, y + 10, x0 + CW - 1, y + 10);
+  sf('bold', 6);     tx('IMMATRICULATIONS / Plate N°', Sx + 2, y + 13.5);
+  sf('normal', 6.5); tx('Véhicule moteur :', Sx + 2, y + 18);
+  sf('normal', 8);   tx(d.immat_moteur || '', Sx + 32, y + 18);
+  ln(Sx + 1, y + 19.5, x0 + CW - 1, y + 19.5);
+  sf('normal', 6.5); tx('(Semi-)remorque :', Sx + 2, y + 24.5);
+  sf('normal', 8);   tx(d.immat_semi || '', Sx + 32, y + 24.5);
+  y += 30;
+
+  // ── Donneur d'ordre ────────────────────────────────────────────────────────
+  bx(x0, y, CW, 8);
+  sf('bold', 7); tx("Donneur d'ordre :", x0 + 2, y + 3.8);
+  sf('normal', 9); tx(d.donneur_ordre || '', x0 + 37, y + 5.8);
+  y += 8;
+
+  // ── Tableau marchandises ───────────────────────────────────────────────────
+  const C1 = CW * 0.62, C2 = CW * 0.20, C3 = CW * 0.18;
+  const X2 = x0 + C1, X3 = X2 + C2;
+  bx(x0, y, C1, 7); bx(X2, y, C2, 7); bx(X3, y, C3, 7);
+  sf('bold', 6);
+  doc.text(sp('NOMBRE / Number · NATURE DE LA MARCHANDISE / Nature of the goods', C1 - 4), x0 + 2, y + 3);
+  doc.text(sp('POIDS / M.L.\nWeight / Lin. m.', C2 - 2), X2 + 1, y + 2.8);
+  tx('NOTE', X3 + C3 / 2, y + 4.5, 'center');
+  y += 7;
+  const RH = 6.2;
+  const marchs = Array.isArray(d.marchandises) ? d.marchandises : [];
+  for (let i = 0; i < 10; i++) {
+    const r = marchs[i] || {};
+    bx(x0, y, C1, RH); bx(X2, y, C2, RH); bx(X3, y, C3, RH);
+    sf('normal', 8);
+    if (r.description) tx(sp((r.qte ? r.qte + ' / ' : '') + r.description, C1 - 3)[0], x0 + 2, y + 4.2);
+    if (r.poids) tx(String(r.poids) + (String(r.poids).match(/[tT]\s*$/) ? '' : ' t'), X2 + C2 / 2, y + 4.2, 'center');
+    if (r.note)  { sf('normal', 7); tx(r.note, X3 + 1, y + 4.2); }
+    y += RH;
+  }
+
+  // ── Clause refus signature ─────────────────────────────────────────────────
+  bx(x0, y, CW / 2, 7); bx(x0 + CW / 2, y, CW / 2, 7);
+  sf('normal', 5);
+  const cls = "Le refus non motivé de signature engage la responsabilité de l'expéditeur - remettant.";
+  doc.text(sp(cls, CW / 2 - 3), x0 + 1.5, y + 2.5);
+  doc.text(sp(cls, CW / 2 - 3), x0 + CW / 2 + 1.5, y + 2.5);
+  y += 7;
+
+  // ── Réserves ───────────────────────────────────────────────────────────────
+  bx(x0, y, CW / 2, 10); bx(x0 + CW / 2, y, CW / 2, 10);
+  sf('bold', 6.5);
+  tx('Réserves / Reservations', x0 + 2, y + 3.5);     tx('AU CHARGEMENT :', x0 + 2, y + 7.5);
+  tx('Réserves / Reservations', x0 + CW / 2 + 2, y + 3.5); tx('AU DÉCHARGEMENT :', x0 + CW / 2 + 2, y + 7.5);
+  y += 10;
+
+  // ── Documents annexes + Convoi ─────────────────────────────────────────────
+  bx(x0, y, CW * .5, 9); bx(x0 + CW * .5, y, CW * .5, 9);
+  sf('bold', 7); tx('Documents annexes / Documents attached :', x0 + 2, y + 3.8);
+  sf('normal', 8); tx(d.doc_annexe || '', x0 + 2, y + 7.5);
+  sf('bold', 7); tx('Convoi exceptionnel :', x0 + CW * .5 + 2, y + 3.8);
+  const cx = x0 + CW * .5 + 52, cv = d.convoi === true || d.convoi === 'Oui';
+  chk(cx, y + 4.5, 3.5, cv);   sf('normal', 7.5); tx('OUI', cx + 5, y + 7.5);
+  chk(cx + 18, y + 4.5, 3.5, !cv); tx('NON', cx + 23, y + 7.5);
+  y += 9;
+
+  // ── Expéditeur / Destinataire ──────────────────────────────────────────────
+  bx(x0, y, CW / 2, 24); bx(x0 + CW / 2, y, CW / 2, 24);
+  sf('bold', 7);
+  tx('Chargement / Loading',   x0 + 2, y + 3.5);        tx('EXPÉDITEUR / Sender',    x0 + 2, y + 7.5);
+  tx('Déchargement / Unloading', x0 + CW / 2 + 2, y + 3.5); tx('DESTINATAIRE / Consignee', x0 + CW / 2 + 2, y + 7.5);
+  sf('normal', 8);
+  const exp = d.expediteur || {}, dst = d.destinataire || {};
+  let ey = y + 11.5, dy2 = y + 11.5;
+  for (const l of [exp.nom || 'SONOTRAD', exp.adresse || 'ZA Renardières', exp.ville || '53250 Javron-les-Chapelles']) { tx(l, x0 + 2, ey); ey += 4; }
+  for (const l of [dst.nom || '', dst.adresse || '', dst.ville || '']) { if (l) tx(l, x0 + CW / 2 + 2, dy2); dy2 += 4; }
+  y += 24;
+
+  // ── Commande + Note ────────────────────────────────────────────────────────
+  bx(x0, y, CW / 2, 10); bx(x0 + CW / 2, y, CW / 2, 10);
+  if (d.commande) { sf('bold', 7); tx('Commande n°', x0 + 2, y + 4); sf('normal', 8.5); tx(String(d.commande), x0 + 28, y + 5.5); }
+  if (d.note)     { sf('normal', 7.5); doc.text(sp(d.note, CW / 2 - 4), x0 + CW / 2 + 2, y + 4); }
+  y += 10;
+
+  // ── Signatures ─────────────────────────────────────────────────────────────
+  const SW = CW / 3;
+  bx(x0, y, SW, 22); bx(x0 + SW, y, SW, 22); bx(x0 + SW * 2, y, SW, 22);
+  sf('bold', 6);
+  tx("Cachet Expéditeur / Sender's stamp",      x0 + SW / 2,     y + 3.5, 'center');
+  doc.text(sp("Nom et signature Conducteur\nDriver's name and signature", SW - 4), x0 + SW * 1.5, y + 3, { align: 'center' });
+  tx("Cachet Destinataire / Consignee's stamp", x0 + SW * 2.5,   y + 3.5, 'center');
+}
+
+function _lvuVerso(doc) {
+  const ML = 8, CW = 194, x0 = ML;
+  const sf = (s, z) => { doc.setFont('helvetica', s); doc.setFontSize(z); };
+  const tx = (t, x, y, a = 'left') => doc.text(String(t ?? ''), x, y, { align: a });
+  const sp = (t, w) => doc.splitTextToSize(String(t ?? ''), w);
+  const HW = (CW - 4) / 2;
+
+  sf('bold', 9);
+  tx('CONDITIONS DE TRANSPORT — PLAFONDS DE RESPONSABILITÉ', x0 + CW / 2, 12, 'center');
+  sf('normal', 5.5);
+  tx('(Articles L.133-1 et suivants du Code de commerce, contrats types publiés par arrêtés ministériels)', x0 + CW / 2, 17, 'center');
+
+  const sections = [
+    { t: 'Envois < 3 T — Décret 2017-461 du 31 mars 2017',
+      b: 'PERTE ou AVARIE : 33 € par kilo de poids brut manquant ou avarié pour chacun des objets compris dans l\'envoi, avec un maximum de 1 000 € par colis.\nRETARD : Indemnisation limitée au montant du prix du transport.' },
+    { t: 'Envois ≥ 3 T — Décret 2017-461 du 31 mars 2017',
+      b: 'PERTE ou AVARIE : 20 € par kilo de poids brut de marchandises manquantes ou avariées, avec un plafond global = nombre de tonnes de l\'envoi × 3 200 €.' },
+    { t: 'Contrat type "Citernes"',
+      b: 'PERTE ou AVARIE : 3 € par kilo ou équivalent en litres de marchandises manquantes, avariées ou polluées, avec un maximum de 55 000 € par envoi.' },
+    { t: 'Contrat type "Transport sous température dirigée"',
+      b: '≥ 3 t : 14 € par kg de poids brut, sans dépasser poids (en t) × 4 000 €.\n< 3 t : 23 € par kg, sans dépasser 750 € par colis perdu ou avarié.' },
+    { t: 'Contrat type "Masses indivisibles"',
+      b: 'PERTE ou AVARIE : 60 000 € par envoi pour les dommages résultant de perte ou d\'avarie. Autres dommages : double du prix du transport, hors prestations annexes.' },
+    { t: 'Contrat type "Animaux vivants"',
+      b: 'PERTE ou AVARIE : Quel que soit le tonnage, indemnisation d\'un maximum par animal variable selon l\'espèce, conformément à l\'article D3222-4 du Code des Transports.' },
+    { t: 'Contrat type "Véhicules roulants"',
+      b: 'PERTE ou AVARIE — Véhicule neuf : valeur de remplacement HT au tarif constructeur à la date du sinistre.\nVéhicule d\'occasion coté Argus : valeur Argus à la date du sinistre.\nVéhicule d\'occasion non coté Argus : 800 €.' },
+  ];
+
+  const colX = [x0, x0 + HW + 4];
+  const colY = [22, 22];
+  sections.forEach((s, i) => {
+    const col = i < 4 ? 0 : 1, xc = colX[col];
+    let cy = colY[col];
+    sf('bold', 7); const tl = sp(s.t, HW); doc.text(tl, xc, cy); cy += tl.length * 3 + 1.5;
+    sf('normal', 6.5); const bl = sp(s.b, HW); doc.text(bl, xc, cy); cy += bl.length * 2.9 + 5;
+    colY[col] = cy;
+  });
+}
+
 function todayStr() { return new Date().toISOString().split('T')[0]; }
 function _timeStr()  { return new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
 // Date au format français court : "2 jan. 2025"
