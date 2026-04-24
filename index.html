@@ -6122,42 +6122,107 @@ function _lvuRecto(doc, d, isCMR, band) {
 
 function _lvuVerso(doc) {
   const ML = 8, CW = 194, x0 = ML;
+  const GW = 6;
+  const HW = (CW - GW) / 2;   // ~94mm par colonne
+  const c2x = x0 + HW + GW;
+
   const sf = (s, z) => { doc.setFont('helvetica', s); doc.setFontSize(z); };
-  const tx = (t, x, y, a = 'left') => doc.text(String(t ?? ''), x, y, { align: a });
+  const gc = (v) => doc.setTextColor(v, v, v);
   const sp = (t, w) => doc.splitTextToSize(String(t ?? ''), w);
-  const HW = (CW - 4) / 2;
 
-  sf('bold', 9);
-  tx('CONDITIONS DE TRANSPORT — PLAFONDS DE RESPONSABILITÉ', x0 + CW / 2, 12, 'center');
-  sf('normal', 5.5);
-  tx('(Articles L.133-1 et suivants du Code de commerce, contrats types publiés par arrêtés ministériels)', x0 + CW / 2, 17, 'center');
+  // Titre
+  gc(85); sf('bold', 8);
+  doc.text('EXTRAITS DES CONDITIONS GÉNÉRALES DE TRANSPORT', x0 + CW / 2, 11, { align: 'center' });
+  doc.setDrawColor(170, 170, 170);
+  doc.line(x0, 13.5, x0 + CW, 13.5);
 
-  const sections = [
-    { t: 'Envois < 3 T — Décret 2017-461 du 31 mars 2017',
-      b: 'PERTE ou AVARIE : 33 € par kilo de poids brut manquant ou avarié pour chacun des objets compris dans l\'envoi, avec un maximum de 1 000 € par colis.\nRETARD : Indemnisation limitée au montant du prix du transport.' },
-    { t: 'Envois ≥ 3 T — Décret 2017-461 du 31 mars 2017',
-      b: 'PERTE ou AVARIE : 20 € par kilo de poids brut de marchandises manquantes ou avariées, avec un plafond global = nombre de tonnes de l\'envoi × 3 200 €.' },
-    { t: 'Contrat type "Citernes"',
-      b: 'PERTE ou AVARIE : 3 € par kilo ou équivalent en litres de marchandises manquantes, avariées ou polluées, avec un maximum de 55 000 € par envoi.' },
-    { t: 'Contrat type "Transport sous température dirigée"',
-      b: '≥ 3 t : 14 € par kg de poids brut, sans dépasser poids (en t) × 4 000 €.\n< 3 t : 23 € par kg, sans dépasser 750 € par colis perdu ou avarié.' },
-    { t: 'Contrat type "Masses indivisibles"',
-      b: 'PERTE ou AVARIE : 60 000 € par envoi pour les dommages résultant de perte ou d\'avarie. Autres dommages : double du prix du transport, hors prestations annexes.' },
-    { t: 'Contrat type "Animaux vivants"',
-      b: 'PERTE ou AVARIE : Quel que soit le tonnage, indemnisation d\'un maximum par animal variable selon l\'espèce, conformément à l\'article D3222-4 du Code des Transports.' },
-    { t: 'Contrat type "Véhicules roulants"',
-      b: 'PERTE ou AVARIE — Véhicule neuf : valeur de remplacement HT au tarif constructeur à la date du sinistre.\nVéhicule d\'occasion coté Argus : valeur Argus à la date du sinistre.\nVéhicule d\'occasion non coté Argus : 800 €.' },
-  ];
+  // Séparateur vertical
+  doc.setDrawColor(210, 210, 210);
+  doc.line(x0 + HW + Math.floor(GW / 2), 15, x0 + HW + Math.floor(GW / 2), 284);
 
-  const colX = [x0, x0 + HW + 4];
-  const colY = [22, 22];
-  sections.forEach((s, i) => {
-    const col = i < 4 ? 0 : 1, xc = colX[col];
-    let cy = colY[col];
-    sf('bold', 7); const tl = sp(s.t, HW); doc.text(tl, xc, cy); cy += tl.length * 3 + 1.5;
-    sf('normal', 6.5); const bl = sp(s.b, HW); doc.text(bl, xc, cy); cy += bl.length * 2.9 + 5;
-    colY[col] = cy;
-  });
+  const cy = [16, 16];
+
+  function secTitle(col, text) {
+    const cx = col === 0 ? x0 : c2x;
+    gc(90); sf('bold', 7);
+    const lines = sp(text, HW - 1);
+    doc.text(lines, cx, cy[col]);
+    cy[col] += lines.length * 3.1 + 1;
+    doc.setDrawColor(160, 160, 160);
+    doc.line(cx, cy[col], cx + HW - 2, cy[col]);
+    cy[col] += 2;
+  }
+
+  function sub(col, text) {
+    const cx = col === 0 ? x0 : c2x;
+    gc(110); sf('bold', 6.5);
+    const lines = sp(text, HW - 2);
+    doc.text(lines, cx + 1, cy[col]);
+    cy[col] += lines.length * 2.85 + 1;
+  }
+
+  function body(col, text) {
+    const cx = col === 0 ? x0 : c2x;
+    gc(145); sf('normal', 6);
+    const lines = sp(text, HW - 3);
+    doc.text(lines, cx + 2, cy[col]);
+    cy[col] += lines.length * 2.55 + 2;
+  }
+
+  // ── COLONNE GAUCHE ────────────────────────────────────────────────
+
+  secTitle(0, 'TRAFIC INTÉRIEUR');
+  body(0, 'Limites non applicables en cas de déclaration de valeur (pertes/avaries) ou de déclaration d\'intérêt spécial à la livraison (retard).');
+  cy[0] += 1.5;
+
+  sub(0, 'Envois ≥ 3 tonnes  (Décret 2017-461 du 31 mars 2017)');
+  body(0, 'PERTE OU AVARIE — à concurrence de :\n  • 20 € par kilo de poids brut manquant ou avarié\n  • plafond global : nb de tonnes × 3 200 €\nLa plus faible des deux limites s\'applique.');
+  body(0, 'RETARD — Indemnisation limitée au prix du transport.');
+  cy[0] += 1.5;
+
+  sub(0, 'Envois < 3 tonnes  (Décret 2017-461 du 31 mars 2017)');
+  body(0, 'PERTE OU AVARIE — à concurrence de :\n  • 33 € par kilo de poids brut manquant ou avarié\n  • maximum 1 000 € par colis');
+  body(0, 'RETARD — Indemnisation limitée au prix du transport.');
+  cy[0] += 3;
+
+  secTitle(0, 'CONTRATS TYPES SPÉCIFIQUES');
+
+  sub(0, 'Transport sous température dirigée');
+  body(0, 'PERTE OU AVARIE\n  • Envois ≥ 3 t : 14 € par kg — plafond : nb de tonnes × 4 000 €\n  • Envois < 3 t : 23 € par kg — plafond : 750 € par colis');
+  body(0, 'RETARD — Indemnisation limitée au prix du transport.');
+  cy[0] += 2;
+
+  sub(0, 'Transport en citernes');
+  body(0, 'PERTE OU AVARIE\n  • Marchandise : 3 € par kg ou litre — plafond 55 000 € / envoi\n  • Autres dommages : plafond 300 000 € / envoi');
+  body(0, 'RETARD — Indemnisation limitée au prix du transport.');
+  cy[0] += 2;
+
+  sub(0, 'Transport d\'animaux vivants');
+  body(0, 'PERTE OU AVARIE — Indemnisation selon plafond par animal défini par le contrat type (art. D3222-4 Code des transports).');
+  body(0, 'RETARD — Indemnisation limitée au prix du transport.');
+
+  // ── COLONNE DROITE ────────────────────────────────────────────────
+
+  secTitle(1, 'CONTRATS TYPES (suite)');
+
+  sub(1, 'Transport de masses indivisibles');
+  body(1, 'PERTE OU AVARIE\n  • Dommages directs : 60 000 € par envoi\n  • Autres dommages : double du prix du transport');
+  body(1, 'RETARD — Indemnisation limitée au prix du transport.');
+  cy[1] += 2;
+
+  sub(1, 'Transport de véhicules roulants');
+  body(1, 'PERTE OU AVARIE\n  • Véhicule neuf : valeur de remplacement HT constructeur − valeur résiduelle\n  • Occasion coté Argus : valeur Argus − valeur résiduelle\n  • Occasion non coté : 800 €\n  • Autres dommages : 500 € par véhicule');
+  body(1, 'RETARD — Indemnisation limitée au prix du transport.');
+  cy[1] += 4;
+
+  secTitle(1, 'TRAFIC INTERNATIONAL (CMR)');
+  body(1, 'PERTE OU AVARIE — Sauf déclaration de valeur, intérêt spécial, vol ou faute lourde :\nIndemnisation limitée à 8,33 DTS par kilo de poids brut manquant ou avarié.');
+  body(1, 'Sont également remboursés : prix du transport, droits de douane et frais liés au transport (totalité en cas de perte totale, au prorata en cas de perte partielle).\nAucun autre dommage-intérêt n\'est dû.');
+  body(1, 'RETARD — Indemnisation limitée au prix du transport, sauf déclaration d\'intérêt spécial (CMR art. 23 et 29).');
+  cy[1] += 4;
+
+  secTitle(1, 'LITIGES');
+  body(1, 'Tout litige relatif à l\'exécution du contrat de transport relève de la compétence exclusive des tribunaux du siège social du transporteur, même en cas de pluralité de défendeurs ou appel en garantie.');
 }
 
 function todayStr() { return new Date().toISOString().split('T')[0]; }
