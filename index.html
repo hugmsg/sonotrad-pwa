@@ -1628,6 +1628,10 @@
               style="flex:1;min-width:80px;padding:8px;border-radius:8px;border:2px solid #E2E8F0;background:white;color:#64748B;font-size:13px;font-weight:600;cursor:pointer;">
               BCB
             </button>
+            <button id="lvu-src-stock" onclick="App.lvuSetSource('stock')"
+              style="flex:1;min-width:80px;padding:8px;border-radius:8px;border:2px solid #E2E8F0;background:white;color:#64748B;font-size:13px;font-weight:600;cursor:pointer;">
+              Fournitures
+            </button>
           </div>
 
           <!-- Sélecteur LOXAM -->
@@ -1651,6 +1655,20 @@
               style="margin-top:8px;background:#1D4ED8;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">
               ✓ Appliquer
             </button>
+          </div>
+
+          <!-- Sélecteur Stock / Fournitures -->
+          <div id="lvu-stock-picker" style="display:none;margin-top:12px;">
+            <div style="display:flex;gap:8px;margin-bottom:8px;">
+              <input id="lvu-stock-search" type="text" placeholder="Réf., désignation…" autocapitalize="none"
+                oninput="App._lvuRenderStockList()"
+                style="flex:1;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+              <button onclick="App.lvuApplyStock()"
+                style="background:#1D4ED8;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">
+                ✓ Appliquer
+              </button>
+            </div>
+            <div id="lvu-stock-list" style="max-height:180px;overflow-y:auto;border:1px solid #E2E8F0;border-radius:8px;"></div>
           </div>
         </div>
 
@@ -2011,6 +2029,7 @@ const App = {
     if (view === 'stock-batch')  this._renderBatchList();
     if (view === 'stock-sync')   this.loadStockSync();
     if (view === 'bcb-consignes') this.bcbInitLangGrid();
+    if (view === 'lvu-form')      this._lvuRenderMarchandises();
     if (view === 'lvu-history')   this.lvuLoadHistory();
   },
   goBack() {
@@ -5490,8 +5509,7 @@ const App = {
   /* ─ LVU ─ */
   async lvuInit() {
     this.go('lvu-form');
-    this._lvuRenderMarchandises();
-    // Fetch next number
+    // Fetch next number (non-bloquant)
     if (S.apiUrl && !S.lvu.numero) {
       try {
         const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_next_number', {}, 10000);
@@ -5503,17 +5521,13 @@ const App = {
 
   lvuSetType(type) {
     S.lvu.type = type;
-    document.getElementById('lvu-btn-lv').style.background  = type === 'LV'  ? '#1D4ED8' : 'white';
-    document.getElementById('lvu-btn-lv').style.color       = type === 'LV'  ? 'white'   : '#64748B';
-    document.getElementById('lvu-btn-lv').style.borderColor = type === 'LV'  ? '#1D4ED8' : '#E2E8F0';
-    document.getElementById('lvu-btn-cmr').style.background  = type === 'CMR' ? '#1D4ED8' : 'white';
-    document.getElementById('lvu-btn-cmr').style.color       = type === 'CMR' ? 'white'   : '#64748B';
-    document.getElementById('lvu-btn-cmr').style.borderColor = type === 'CMR' ? '#1D4ED8' : '#E2E8F0';
+    document.getElementById('lvu-btn-lv').style.cssText  += `;background:${type==='LV' ?'#1D4ED8':'white'};color:${type==='LV'?'white':'#64748B'};border-color:${type==='LV'?'#1D4ED8':'#E2E8F0'}`;
+    document.getElementById('lvu-btn-cmr').style.cssText += `;background:${type==='CMR'?'#1D4ED8':'white'};color:${type==='CMR'?'white':'#64748B'};border-color:${type==='CMR'?'#1D4ED8':'#E2E8F0'}`;
   },
 
   lvuSetSource(src) {
     S.lvu.source = src;
-    ['manual','loxam','bcb'].forEach(s => {
+    ['manual','loxam','bcb','stock'].forEach(s => {
       const btn = document.getElementById('lvu-src-' + s);
       if (!btn) return;
       btn.style.borderColor = s === src ? '#1D4ED8' : '#E2E8F0';
@@ -5522,63 +5536,83 @@ const App = {
     });
     document.getElementById('lvu-loxam-picker').style.display = src === 'loxam' ? '' : 'none';
     document.getElementById('lvu-bcb-picker').style.display   = src === 'bcb'   ? '' : 'none';
-    if (src === 'loxam' && S.lvu.loxamItems.length === 0) this.lvuLoadLoxam();
+    document.getElementById('lvu-stock-picker').style.display = src === 'stock' ? '' : 'none';
+    if (src === 'loxam') this.lvuLoadLoxam();
     if (src === 'bcb'   && S.lvu.bcbArrivals.length === 0) this.lvuLoadBcb();
+    if (src === 'stock') this._lvuRenderStockList();
   },
 
-  async lvuLoadLoxam() {
-    if (!S.apiUrl) return;
+  lvuLoadLoxam() {
+    // Réutilise les données déjà chargées dans S.arrivalsData si disponibles
     const el = document.getElementById('lvu-loxam-list');
-    el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">Chargement…</div>';
-    try {
-      const r = await _fetchWithTimeout(S.apiUrl + '?action=list&user=' + encodeURIComponent(S.currentUser?.login || ''), {}, 15000);
-      const d = await r.json();
-      const items = (d.arrivalsData || []).filter(i => i.present);
-      S.lvu.loxamItems = items;
+    if (!el) return;
+    if (S.arrivalsData && S.arrivalsData.length > 0) {
+      S.lvu.loxamItems = S.arrivalsData.filter(i => i.present !== false);
       this._lvuRenderLoxamList();
-    } catch (_) {
-      el.innerHTML = '<div style="padding:12px;color:#EF4444;font-size:13px;">Erreur de chargement</div>';
+      return;
     }
+    if (!S.apiUrl) { el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">URL API non configurée</div>'; return; }
+    el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">Chargement…</div>';
+    _fetchWithTimeout(S.apiUrl + '?action=arrivals&scope=active', {}, 20000)
+      .then(r => r.json())
+      .then(d => {
+        const raw = Array.isArray(d) ? d : (d.data || []);
+        S.lvu.loxamItems = raw;
+        S.arrivalsData = raw; // cache pour l'activité LOXAM
+        this._lvuRenderLoxamList();
+      })
+      .catch(() => { el.innerHTML = '<div style="padding:12px;color:#EF4444;font-size:13px;">Erreur de chargement</div>'; });
   },
 
   _lvuRenderLoxamList() {
     const el = document.getElementById('lvu-loxam-list');
     if (!el) return;
     const q = (document.getElementById('lvu-loxam-search')?.value || '').toLowerCase();
-    const items = S.lvu.loxamItems.filter(i =>
-      !q || (i.description || '').toLowerCase().includes(q) || (i.code || '').toLowerCase().includes(q) || (i.module || '').toLowerCase().includes(q)
-    );
-    if (!items.length) { el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">Aucun résultat</div>'; return; }
+    const items = S.lvu.loxamItems.filter(i => {
+      if (!q) return true;
+      return (i.description || '').toLowerCase().includes(q)
+          || (i.code        || '').toLowerCase().includes(q)
+          || (i.module      || '').toLowerCase().includes(q)
+          || (i.codeModule  || '').toLowerCase().includes(q)
+          || (i.chantier    || '').toLowerCase().includes(q);
+    });
+    if (!items.length) {
+      el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">'
+        + (S.lvu.loxamItems.length === 0 ? 'Aucun module présent' : 'Aucun résultat pour cette recherche') + '</div>';
+      return;
+    }
     el.innerHTML = items.map(i => {
-      const sel = S.lvu.selectedItems.has(i.code);
-      return `<div onclick="App.lvuToggleLoxam('${i.code}')"
-        style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #F1F5F9;cursor:pointer;background:${sel ? '#EFF6FF' : 'white'}">
-        <div style="width:20px;height:20px;border-radius:4px;border:2px solid ${sel ? '#1D4ED8' : '#CBD5E1'};background:${sel ? '#1D4ED8' : 'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          ${sel ? '<span style="color:white;font-size:13px;line-height:1;">✓</span>' : ''}
+      const key = i.code || i.codeModule || i.module || '';
+      const sel = S.lvu.selectedItems.has(key);
+      const label = i.description || i.module || key || '—';
+      const sub   = [key, i.chantier].filter(Boolean).join(' · ');
+      return `<div onclick="App.lvuToggleLoxam('${key.replace(/'/g,"&#39;")}')"
+        style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #F1F5F9;cursor:pointer;background:${sel?'#EFF6FF':'white'}">
+        <div style="width:20px;height:20px;border-radius:4px;border:2px solid ${sel?'#1D4ED8':'#CBD5E1'};background:${sel?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          ${sel?'<span style="color:white;font-size:12px;">✓</span>':''}
         </div>
         <div style="flex:1;min-width:0;">
-          <div style="font-size:13px;font-weight:600;color:#1E293B;">${i.description || i.module || '—'}</div>
-          <div style="font-size:11px;color:#64748B;">${i.code || ''} ${i.chantier ? '· ' + i.chantier : ''}</div>
+          <div style="font-size:13px;font-weight:600;color:#1E293B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
+          <div style="font-size:11px;color:#64748B;">${sub}</div>
         </div>
       </div>`;
     }).join('');
   },
 
-  lvuToggleLoxam(code) {
-    if (S.lvu.selectedItems.has(code)) S.lvu.selectedItems.delete(code);
-    else S.lvu.selectedItems.add(code);
+  lvuToggleLoxam(key) {
+    if (S.lvu.selectedItems.has(key)) S.lvu.selectedItems.delete(key);
+    else S.lvu.selectedItems.add(key);
     this._lvuRenderLoxamList();
   },
 
   lvuApplyLoxam() {
     const rows = [];
-    S.lvu.loxamItems.filter(i => S.lvu.selectedItems.has(i.code)).forEach(i => {
-      rows.push({ qte: 1, description: i.description || i.module || i.code, poids: '', note: i.code });
+    S.lvu.loxamItems.forEach(i => {
+      const key = i.code || i.codeModule || i.module || '';
+      if (!S.lvu.selectedItems.has(key)) return;
+      rows.push({ qte: 1, description: i.description || i.module || key, poids: '', note: key });
     });
-    if (rows.length) {
-      S.lvu.marchandises = rows;
-      this._lvuRenderMarchandises();
-    }
+    if (rows.length) { S.lvu.marchandises = rows; this._lvuRenderMarchandises(); }
     document.getElementById('lvu-loxam-picker').style.display = 'none';
     this.toast(`${rows.length} article(s) importé(s)`);
   },
@@ -5603,12 +5637,12 @@ const App = {
     const items = S.lvu.bcbArrivals;
     if (!items.length) { el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">Aucune arrivée disponible</div>'; return; }
     el.innerHTML = items.map((i, idx) => {
-      const sel = S.lvu.selectedBcb.has(idx);
+      const sel   = S.lvu.selectedBcb.has(idx);
       const label = i.client || i.ref || `Arrivée ${idx + 1}`;
       return `<div onclick="App.lvuToggleBcb(${idx})"
-        style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #F1F5F9;cursor:pointer;background:${sel ? '#EFF6FF' : 'white'}">
-        <div style="width:20px;height:20px;border-radius:4px;border:2px solid ${sel ? '#1D4ED8' : '#CBD5E1'};background:${sel ? '#1D4ED8' : 'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          ${sel ? '<span style="color:white;font-size:13px;line-height:1;">✓</span>' : ''}
+        style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #F1F5F9;cursor:pointer;background:${sel?'#EFF6FF':'white'}">
+        <div style="width:20px;height:20px;border-radius:4px;border:2px solid ${sel?'#1D4ED8':'#CBD5E1'};background:${sel?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          ${sel?'<span style="color:white;font-size:12px;">✓</span>':''}
         </div>
         <div style="font-size:13px;color:#1E293B;">${label}</div>
       </div>`;
@@ -5627,56 +5661,117 @@ const App = {
       const i = S.lvu.bcbArrivals[idx];
       if (i) rows.push({ qte: 1, description: i.client || i.ref || '', poids: '', note: '' });
     });
-    if (rows.length) {
-      S.lvu.marchandises = rows;
-      this._lvuRenderMarchandises();
-    }
+    if (rows.length) { S.lvu.marchandises = rows; this._lvuRenderMarchandises(); }
     document.getElementById('lvu-bcb-picker').style.display = 'none';
     this.toast(`${rows.length} article(s) importé(s)`);
+  },
+
+  _lvuRenderStockList() {
+    const el = document.getElementById('lvu-stock-list');
+    if (!el) return;
+    const q     = (document.getElementById('lvu-stock-search')?.value || '').toLowerCase();
+    const items = (S.stockData || []).filter(i =>
+      !q || (i.ref || '').toLowerCase().includes(q) || (i.designation || '').toLowerCase().includes(q)
+    ).slice(0, 80);
+    if (!S.stockData || !S.stockData.length) {
+      el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">Catalogue Stockage non chargé — accédez d\'abord à l\'activité Stockage</div>';
+      return;
+    }
+    if (!items.length) { el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">Aucun résultat</div>'; return; }
+    el.innerHTML = items.map(i => {
+      const key = i.ref || '';
+      const sel = (S.lvu.selectedStock || new Set()).has(key);
+      return `<div onclick="App.lvuToggleStock('${key.replace(/'/g,"&#39;")}')"
+        style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid #F1F5F9;cursor:pointer;background:${sel?'#EFF6FF':'white'}">
+        <div style="width:20px;height:20px;border-radius:4px;border:2px solid ${sel?'#1D4ED8':'#CBD5E1'};background:${sel?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          ${sel?'<span style="color:white;font-size:12px;">✓</span>':''}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:#1E293B;">${i.ref || '—'}</div>
+          <div style="font-size:11px;color:#64748B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${i.designation || ''}</div>
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  lvuToggleStock(key) {
+    if (!S.lvu.selectedStock) S.lvu.selectedStock = new Set();
+    if (S.lvu.selectedStock.has(key)) S.lvu.selectedStock.delete(key);
+    else S.lvu.selectedStock.add(key);
+    this._lvuRenderStockList();
+  },
+
+  lvuApplyStock() {
+    if (!S.lvu.selectedStock) return;
+    const rows = [];
+    (S.stockData || []).forEach(i => {
+      if (!S.lvu.selectedStock.has(i.ref)) return;
+      rows.push({ qte: 1, description: (i.ref ? i.ref + ' — ' : '') + (i.designation || ''), poids: '', note: i.ref || '' });
+    });
+    if (rows.length) { S.lvu.marchandises = rows; this._lvuRenderMarchandises(); }
+    document.getElementById('lvu-stock-picker').style.display = 'none';
+    this.toast(`${rows.length} référence(s) importée(s)`);
+  },
+
+  _lvuSyncFromDom() {
+    // Lit les valeurs actuelles des inputs dans le state avant tout re-rendu
+    const tbody = document.getElementById('lvu-marchandises-body');
+    if (!tbody) return;
+    tbody.querySelectorAll('tr').forEach((tr, i) => {
+      if (!S.lvu.marchandises[i]) return;
+      const inputs = tr.querySelectorAll('input[type="number"], input[type="text"]');
+      if (inputs[0]) S.lvu.marchandises[i].qte          = inputs[0].value;
+      if (inputs[1]) S.lvu.marchandises[i].description  = inputs[1].value;
+      if (inputs[2]) S.lvu.marchandises[i].poids        = inputs[2].value;
+    });
   },
 
   _lvuRenderMarchandises() {
     const tbody = document.getElementById('lvu-marchandises-body');
     if (!tbody) return;
-    if (!S.lvu.marchandises.length) S.lvu.marchandises = [{ qte: '', description: '', poids: '', note: '' }];
-    tbody.innerHTML = S.lvu.marchandises.map((r, i) => `
-      <tr>
-        <td style="padding:4px 2px;"><input type="number" min="1" value="${r.qte}" oninput="S.lvu.marchandises[${i}].qte=this.value"
-          style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:5px 4px;font-size:12px;outline:none;"></td>
-        <td style="padding:4px 2px;"><input type="text" value="${r.description}" oninput="S.lvu.marchandises[${i}].description=this.value"
-          style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:5px 4px;font-size:12px;outline:none;"></td>
-        <td style="padding:4px 2px;"><input type="number" min="0" step="0.001" value="${r.poids}" oninput="S.lvu.marchandises[${i}].poids=this.value"
-          style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:5px 4px;font-size:12px;outline:none;"></td>
-        <td style="padding:4px 2px;text-align:center;">
-          ${S.lvu.marchandises.length > 1
-            ? `<button onclick="App.lvuRemoveRow(${i})" style="background:none;border:none;color:#EF4444;font-size:16px;cursor:pointer;padding:2px 4px;">✕</button>`
-            : ''}
+    if (!S.lvu.marchandises || !S.lvu.marchandises.length) {
+      S.lvu.marchandises = [{ qte: '', description: '', poids: '', note: '' }];
+    }
+    tbody.innerHTML = S.lvu.marchandises.map((r, i) => {
+      const canRemove = S.lvu.marchandises.length > 1;
+      return `<tr>
+        <td style="padding:3px 2px;"><input type="number" min="1" value="${r.qte||''}"
+          style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:5px 4px;font-size:12px;outline:none;box-sizing:border-box;"></td>
+        <td style="padding:3px 2px;"><input type="text" value="${(r.description||'').replace(/"/g,'&quot;')}"
+          style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:5px 4px;font-size:12px;outline:none;box-sizing:border-box;"></td>
+        <td style="padding:3px 2px;"><input type="number" min="0" step="0.001" value="${r.poids||''}"
+          style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:5px 4px;font-size:12px;outline:none;box-sizing:border-box;"></td>
+        <td style="padding:3px 2px;text-align:center;width:28px;">
+          ${canRemove ? `<button onclick="App.lvuRemoveRow(${i})" style="background:none;border:none;color:#EF4444;font-size:16px;cursor:pointer;padding:0 4px;line-height:1;">✕</button>` : ''}
         </td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
   },
 
   lvuAddRow() {
-    if (S.lvu.marchandises.length >= 10) { this.toast('Maximum 10 lignes'); return; }
+    if ((S.lvu.marchandises || []).length >= 10) { this.toast('Maximum 10 lignes'); return; }
+    this._lvuSyncFromDom();
+    if (!S.lvu.marchandises) S.lvu.marchandises = [];
     S.lvu.marchandises.push({ qte: '', description: '', poids: '', note: '' });
     this._lvuRenderMarchandises();
   },
 
   lvuRemoveRow(i) {
+    this._lvuSyncFromDom();
     S.lvu.marchandises.splice(i, 1);
     this._lvuRenderMarchandises();
   },
 
   _lvuCollectFormData() {
+    this._lvuSyncFromDom(); // lit les valeurs DOM avant tout
     const v = id => (document.getElementById(id)?.value || '').trim();
     const today = new Date();
-    const dd = String(today.getDate()).padStart(2,'0');
-    const mm = String(today.getMonth()+1).padStart(2,'0');
-    const dateStr = `${dd}/${mm}/${today.getFullYear()}`;
-    const marchandises = S.lvu.marchandises
-      .filter(r => r.description || r.qte)
+    const dateStr = `${String(today.getDate()).padStart(2,'0')}/${String(today.getMonth()+1).padStart(2,'0')}/${today.getFullYear()}`;
+    const marchandises = (S.lvu.marchandises || [])
+      .filter(r => (r.description || '').trim() || (r.qte || '').toString().trim())
       .map(r => ({ qte: r.qte || 1, description: r.description || '', poids: r.poids || '', note: r.note || '' }));
     return {
-      type:         S.lvu.type,
+      type:         S.lvu.type || 'LV',
       display:      S.lvu.display || '00000',
       date:         dateStr,
       conducteur:   v('lvu-f-conducteur'),
@@ -5700,7 +5795,6 @@ const App = {
     const btnText = document.getElementById('lvu-btn-generate-text');
     if (btnText) btnText.textContent = '⏳ Génération…';
     try {
-      // Fetch number if not yet loaded
       if (!S.lvu.numero && S.apiUrl) {
         try {
           const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_next_number', {}, 10000);
@@ -5712,22 +5806,16 @@ const App = {
       const doc  = _generateLvu(data);
       S.lvu.lastDoc  = doc;
       S.lvu.lastData = data;
-      // Show result
-      const res = document.getElementById('lvu-result');
+      const res   = document.getElementById('lvu-result');
       const title = document.getElementById('lvu-result-title');
       const info  = document.getElementById('lvu-result-info');
-      if (res) res.style.display = '';
+      if (res)   res.style.display = '';
       if (title) title.textContent = `✅ ${data.type} N° ${data.display} générée`;
-      if (info) {
-        const dest = data.destinataire?.nom || '—';
-        const n = data.marchandises?.length || 0;
-        info.textContent = `${data.date} · ${dest} · ${n} ligne(s) de marchandises`;
-      }
-      document.getElementById('lvu-save-status').textContent = '';
-      // Scroll to result
+      if (info)  info.textContent  = `${data.date} · ${data.destinataire?.nom || '—'} · ${data.marchandises?.length || 0} ligne(s)`;
+      if (document.getElementById('lvu-save-status')) document.getElementById('lvu-save-status').textContent = '';
       res?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (e) {
-      this.toast('Erreur lors de la génération : ' + e.message);
+      this.toast('Erreur génération : ' + e.message);
     } finally {
       S.lvu.generating = false;
       if (btnText) btnText.textContent = '📄 Générer la lettre de voiture';
@@ -5737,8 +5825,7 @@ const App = {
   lvuPrint() {
     if (!S.lvu.lastDoc || !S.lvu.lastData) return;
     const d = S.lvu.lastData;
-    const filename = `LV_${d.display}_${(d.destinataire?.nom || 'transport').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
-    S.lvu.lastDoc.save(filename);
+    S.lvu.lastDoc.save(`LV_${d.display}_${(d.destinataire?.nom || 'transport').replace(/[^a-zA-Z0-9]/g,'_')}.pdf`);
   },
 
   async lvuSaveToDrive() {
@@ -5747,76 +5834,54 @@ const App = {
     const statusEl = document.getElementById('lvu-save-status');
     if (statusEl) statusEl.textContent = '⏳ Enregistrement…';
     try {
-      const d    = S.lvu.lastData;
-      const b64  = S.lvu.lastDoc.output('datauristring').split(',')[1];
-      const filename = `LV_${d.display}_${(d.destinataire?.nom || 'transport').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+      const d   = S.lvu.lastData;
+      const b64 = S.lvu.lastDoc.output('datauristring').split(',')[1];
       const payload = {
-        action:      'lv_save',
-        pdf_b64:     b64,
-        filename,
-        numero:      S.lvu.numero,
-        display:     d.display,
-        date:        d.date,
-        type:        d.type,
-        conducteur:  d.conducteur,
-        immat_moteur: d.immat_moteur,
-        immat_semi:  d.immat_semi,
-        expediteur:  d.expediteur?.nom || '',
-        destinataire: d.destinataire?.nom || '',
-        doc_annexe:  d.doc_annexe || '',
-        commande:    d.commande || '',
-        note:        d.note || '',
-        convoi:      d.convoi ? 'Oui' : 'Non',
-        poids:       (d.marchandises || []).reduce((s, r) => s + (parseFloat(r.poids) || 0), 0).toFixed(3),
-        ml:          '',
+        action: 'lv_save',
+        pdf_b64: b64,
+        type: d.type, conducteur: d.conducteur,
+        immat_moteur: d.immat_moteur, immat_semi: d.immat_semi,
+        expediteur: d.expediteur?.nom || '', destinataire: d.destinataire?.nom || '',
+        doc_annexe: d.doc_annexe || '', commande: d.commande || '',
+        note: d.note || '', convoi: d.convoi ? 'Oui' : 'Non',
+        poids: (d.marchandises || []).reduce((s, r) => s + (parseFloat(r.poids) || 0), 0).toFixed(3),
+        ml: '',
       };
-      const r = await _fetchWithTimeout(S.apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      }, 30000);
+      const r   = await _fetchWithTimeout(S.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) }, 30000);
       const res = await r.json();
       if (res.status === 'ok' || res.status === 'partial') {
-        // Le backend retourne le numéro réel utilisé (lu depuis G1 au moment de la sauvegarde)
         const savedDisplay = res.numero || d.display;
-        if (statusEl) statusEl.textContent = `✅ Enregistré sur Drive (N° ${savedDisplay})`;
-        // Invalider le numéro en cache — la prochaine génération refera un GET lv_next_number
-        S.lvu.numero  = null;
-        S.lvu.display = null;
-        document.getElementById('lvu-result-title').textContent = `✅ ${d.type} N° ${savedDisplay} enregistrée`;
-        this.toast(`LV N° ${savedDisplay} enregistrée sur Drive !`);
-        if (res.status === 'partial') {
-          setTimeout(() => { if (statusEl) statusEl.textContent += ' ⚠️ archivage partiel'; }, 100);
-        }
+        if (statusEl) statusEl.textContent = `✅ N° ${savedDisplay} enregistré sur Drive`;
+        S.lvu.numero = null; S.lvu.display = null;
+        if (document.getElementById('lvu-result-title')) document.getElementById('lvu-result-title').textContent = `✅ ${d.type} N° ${savedDisplay} enregistrée`;
+        this.toast(`LV N° ${savedDisplay} enregistrée !`);
+        if (res.status === 'partial' && statusEl) statusEl.textContent += ' ⚠️ archivage partiel';
       } else {
-        if (statusEl) statusEl.textContent = '❌ Erreur : ' + (res.error || res.message || 'inconnue');
+        if (statusEl) statusEl.textContent = '❌ ' + (res.error || 'erreur inconnue');
       }
-    } catch (e) {
-      if (statusEl) statusEl.textContent = '❌ ' + e.message;
-    }
+    } catch (e) { if (statusEl) statusEl.textContent = '❌ ' + e.message; }
   },
 
   lvuNew() {
-    S.lvu.lastDoc  = null;
-    S.lvu.lastData = null;
+    S.lvu.lastDoc = null; S.lvu.lastData = null;
     S.lvu.marchandises = [];
-    S.lvu.selectedItems.clear();
-    S.lvu.selectedBcb.clear();
-    document.getElementById('lvu-result').style.display = 'none';
-    // Reset fields
+    S.lvu.selectedItems.clear(); S.lvu.selectedBcb.clear();
+    if (S.lvu.selectedStock) S.lvu.selectedStock.clear();
+    const res = document.getElementById('lvu-result');
+    if (res) res.style.display = 'none';
     ['lvu-f-conducteur','lvu-f-immat-moteur','lvu-f-immat-semi','lvu-f-donneur',
      'lvu-f-exp-nom','lvu-f-exp-adresse','lvu-f-exp-ville',
      'lvu-f-dest-nom','lvu-f-dest-adresse','lvu-f-dest-ville',
      'lvu-f-doc','lvu-f-commande','lvu-f-note'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.value = '';
+      const el = document.getElementById(id); if (el) el.value = '';
     });
-    document.getElementById('lvu-convoi-non').checked = true;
+    const nonEl = document.getElementById('lvu-convoi-non');
+    if (nonEl) nonEl.checked = true;
     this._lvuRenderMarchandises();
-    document.getElementById('view-lvu-form').scrollTop = 0;
+    const v = document.getElementById('view-lvu-form'); if (v) v.scrollTop = 0;
   },
 
-  async lvuLoadHistory(force = false) {
+  async lvuLoadHistory() {
     if (!S.apiUrl) {
       document.getElementById('lvu-history-list').innerHTML =
         '<div style="padding:20px;color:#94A3B8;text-align:center;">URL API non configurée</div>';
@@ -5825,9 +5890,9 @@ const App = {
     const el = document.getElementById('lvu-history-list');
     el.innerHTML = '<div style="text-align:center;padding:40px;color:#94A3B8;font-size:14px;">Chargement…</div>';
     try {
-      const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_history', {}, 15000);
-      const d = await r.json();
-      const rows = d.rows || [];
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=lv_history', {}, 15000);
+      const d    = await r.json();
+      const rows = d.history || d.rows || [];
       if (!rows.length) {
         el.innerHTML = '<div style="text-align:center;padding:40px;color:#94A3B8;font-size:14px;">Aucun document trouvé</div>';
         return;
@@ -5835,12 +5900,12 @@ const App = {
       el.innerHTML = rows.map(row => `
         <div style="background:white;border-radius:10px;padding:12px 14px;margin-bottom:8px;border:1px solid #E2E8F0;">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
-            <span style="font-size:14px;font-weight:700;color:#1E293B;">${row.type || 'LV'} N° ${row.numero || '—'}</span>
-            <span style="font-size:12px;color:#64748B;">${row.date || ''}</span>
+            <span style="font-size:14px;font-weight:700;color:#1E293B;">${row.type||'LV'} N° ${row.numero||'—'}</span>
+            <span style="font-size:12px;color:#64748B;">${row.date||''}</span>
           </div>
-          <div style="font-size:13px;color:#475569;">${row.destinataire || '—'}</div>
-          ${row.conducteur ? `<div style="font-size:12px;color:#94A3B8;margin-top:2px;">${row.conducteur} · ${row.immat_moteur || ''}</div>` : ''}
-          ${row.commande ? `<div style="font-size:12px;color:#94A3B8;">Cde: ${row.commande}</div>` : ''}
+          <div style="font-size:13px;color:#475569;">${row.destinataire||'—'}</div>
+          ${row.conducteur?`<div style="font-size:12px;color:#94A3B8;margin-top:2px;">${row.conducteur} · ${row.immat_moteur||''}</div>`:''}
+          ${row.commande?`<div style="font-size:12px;color:#94A3B8;">Cde : ${row.commande}</div>`:''}
         </div>`).join('');
     } catch (e) {
       el.innerHTML = `<div style="text-align:center;padding:40px;color:#EF4444;font-size:13px;">Erreur : ${e.message}</div>`;
