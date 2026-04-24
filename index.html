@@ -5976,11 +5976,11 @@ function _lvuRecto(doc, d, isCMR, band) {
   }
 
   // ── Titre ──────────────────────────────────────────────────────────────────
-  lw(0.5); bx(x0, y, CW, 9);
+  lw(0.5); fc(15, 52, 96); bx(x0, y, CW, 9, 'FD'); tc(255, 255, 255);
   sf('bold', 13); tx('LETTRE DE VOITURE UNIQUE', x0 + CW / 2, y + 6.3, 'center');
   sf('bold', 8);  tx('N°', x0 + CW - 34, y + 4);
   sf('bold', 15); tx(String(d.display || ''), x0 + CW - 25, y + 7.5);
-  y += 9; lw(0.3);
+  tc(0, 0, 0); y += 9; lw(0.3);
 
   // ── Toggle LV / CMR ────────────────────────────────────────────────────────
   bx(x0, y, CW / 2, 6); bx(x0 + CW / 2, y, CW / 2, 6);
@@ -6000,8 +6000,9 @@ function _lvuRecto(doc, d, isCMR, band) {
   doc.text(sp("À défaut de convention écrite entre les parties au contrat de transport ou de déclaration de valeur spécifiée par le donneur d'ordre, la responsabilité du transporteur, en cas de perte ou avarie survenue aux marchandises ou en cas de retard à la livraison, est limitée au montant de l'indemnité prévue par le contrat type concernant le transport.", CW / 2 - 4), x0 + 2, y + 3.5);
   // Texte CMR (droite, limité pour ne pas déborder sur la zone date)
   doc.text(sp("Ce transport est soumis, nonobstant toute clause contraire, à la Convention relative au contrat de transport international de marchandises par route (CMR).\nThis carriage is subject, notwithstanding any clause to the contrary, to the Convention on the Contract for the international Carriage of goods by road (CMR).", CW / 2 - dateW - 3), x0 + CW / 2 + 2, y + 3.5);
-  // Date (zone dédiée, droite)
-  sf('bold', 6.5);  tx('DATE',      x0 + CW - dateW + 2, y + 5.5);
+  // Date (zone dédiée, droite) — fond coloré + label gras bien visible
+  fc(220, 228, 240); bx(x0 + CW - dateW, y, dateW, 6.5, 'F'); tc(0, 0, 0);
+  sf('bold', 8); tx('DATE', x0 + CW - dateW / 2, y + 4.8, 'center');
   ln(x0 + CW - dateW + 1, y + 7, x0 + CW - 1, y + 7);
   sf('normal', 8.5); tx(d.date || '', x0 + CW - dateW / 2, y + 13, 'center');
   y += 22;
@@ -6009,6 +6010,7 @@ function _lvuRecto(doc, d, isCMR, band) {
   // ── Transporteur + Conducteurs ─────────────────────────────────────────────
   const Sx = x0 + CW * 0.56;
   bx(x0, y, CW * 0.56, 30); bx(Sx, y, CW * 0.44, 30);
+  lw(0.7); ln(Sx, y, Sx, y + 30); lw(0.3);
   fc(235, 235, 235); bx(x0, y, CW * 0.56, 5.5, 'F'); bx(Sx, y, CW * 0.44, 5.5, 'F'); tc(0,0,0);
   sf('bold', 6); tx('Transporteur / Carrier (nom, adresse, pays / name, address, country)', x0 + 2, y + 3.8);
   const tl = d.transporteur || {};
@@ -6057,6 +6059,7 @@ function _lvuRecto(doc, d, isCMR, band) {
   const marchs = Array.isArray(d.marchandises) ? d.marchandises : [];
   for (let i = 0; i < 10; i++) {
     const r = marchs[i] || {};
+    if (i % 2 === 1) { fc(248, 248, 248); bx(x0, y, CW, RH, 'F'); tc(0, 0, 0); }
     bx(x0, y, C1, RH); bx(X2, y, C2, RH); bx(X3, y, C3, RH);
     sf('normal', 8);
     if (r.description) tx(sp((r.qte ? r.qte + ' / ' : '') + r.description, C1 - 3)[0], x0 + 2, y + 4.2);
@@ -6074,12 +6077,12 @@ function _lvuRecto(doc, d, isCMR, band) {
   y += 7;
 
   // ── Réserves ───────────────────────────────────────────────────────────────
-  bx(x0, y, CW / 2, 10); bx(x0 + CW / 2, y, CW / 2, 10);
+  bx(x0, y, CW / 2, 15); bx(x0 + CW / 2, y, CW / 2, 15);
   fc(235, 235, 235); bx(x0, y, CW / 2, 4.5, 'F'); bx(x0 + CW / 2, y, CW / 2, 4.5, 'F'); tc(0,0,0);
   sf('bold', 6.5);
   tx('Réserves AU CHARGEMENT', x0 + 2, y + 3.2);
   tx('Réserves AU DÉCHARGEMENT', x0 + CW / 2 + 2, y + 3.2);
-  y += 10;
+  y += 15;
 
   // ── Documents annexes + Convoi ─────────────────────────────────────────────
   bx(x0, y, CW * .5, 9); bx(x0 + CW * .5, y, CW * .5, 9);
@@ -6112,12 +6115,20 @@ function _lvuRecto(doc, d, isCMR, band) {
 
   // ── Signatures ─────────────────────────────────────────────────────────────
   const SW = CW / 3;
-  bx(x0, y, SW, 22); bx(x0 + SW, y, SW, 22); bx(x0 + SW * 2, y, SW, 22);
+  bx(x0, y, SW, 28); bx(x0 + SW, y, SW, 28); bx(x0 + SW * 2, y, SW, 28);
   fc(235, 235, 235); bx(x0, y, SW, 5, 'F'); bx(x0 + SW, y, SW, 5, 'F'); bx(x0 + SW * 2, y, SW, 5, 'F'); tc(0,0,0);
   sf('bold', 6);
   tx("Cachet Expéditeur / Sender's stamp",      x0 + SW / 2,     y + 3.5, 'center');
   doc.text(sp("Nom et signature Conducteur\nDriver's name and signature", SW - 4), x0 + SW * 1.5, y + 3, { align: 'center' });
   tx("Cachet Destinataire / Consignee's stamp", x0 + SW * 2.5,   y + 3.5, 'center');
+  // Lignes pointillées de signature dans chaque colonne
+  doc.setLineDash([1.5, 1.5]);
+  lw(0.25);
+  ln(x0 + 3,          y + 22, x0 + SW - 3,      y + 22);
+  ln(x0 + SW + 3,     y + 22, x0 + SW * 2 - 3,  y + 22);
+  ln(x0 + SW * 2 + 3, y + 22, x0 + CW - 3,      y + 22);
+  doc.setLineDash([]);
+  lw(0.3);
 }
 
 function _lvuVerso(doc) {
