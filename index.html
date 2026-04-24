@@ -5776,14 +5776,20 @@ const App = {
         body: JSON.stringify(payload),
       }, 30000);
       const res = await r.json();
-      if (res.status === 'ok') {
-        if (statusEl) statusEl.textContent = '✅ Enregistré sur Drive';
-        // Update number for next LV
-        S.lvu.numero = (S.lvu.numero || 0) + 1;
-        S.lvu.display = String(S.lvu.numero).padStart(5, '0');
-        this.toast('LV enregistrée sur Drive !');
+      if (res.status === 'ok' || res.status === 'partial') {
+        // Le backend retourne le numéro réel utilisé (lu depuis G1 au moment de la sauvegarde)
+        const savedDisplay = res.numero || d.display;
+        if (statusEl) statusEl.textContent = `✅ Enregistré sur Drive (N° ${savedDisplay})`;
+        // Invalider le numéro en cache — la prochaine génération refera un GET lv_next_number
+        S.lvu.numero  = null;
+        S.lvu.display = null;
+        document.getElementById('lvu-result-title').textContent = `✅ ${d.type} N° ${savedDisplay} enregistrée`;
+        this.toast(`LV N° ${savedDisplay} enregistrée sur Drive !`);
+        if (res.status === 'partial') {
+          setTimeout(() => { if (statusEl) statusEl.textContent += ' ⚠️ archivage partiel'; }, 100);
+        }
       } else {
-        if (statusEl) statusEl.textContent = '❌ Erreur : ' + (res.message || 'inconnue');
+        if (statusEl) statusEl.textContent = '❌ Erreur : ' + (res.error || res.message || 'inconnue');
       }
     } catch (e) {
       if (statusEl) statusEl.textContent = '❌ ' + e.message;
