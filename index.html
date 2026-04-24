@@ -795,6 +795,13 @@
     <button class="nav-tab" data-bcbtab="bcb-consignes" onclick="App.go('bcb-consignes')" style="display:none">
       <span class="icon">📋</span><span>Consignes</span>
     </button>
+    <!-- ── Tabs LVU (masqués hors activité LVU) ──────────────────────────── -->
+    <button class="nav-tab" data-lvutab="lvu-form" onclick="App.go('lvu-form')" style="display:none">
+      <span class="icon">📝</span><span>Formulaire</span>
+    </button>
+    <button class="nav-tab" data-lvutab="lvu-history" onclick="App.go('lvu-history')" style="display:none">
+      <span class="icon">📋</span><span>Historique</span>
+    </button>
     <!-- Bouton retour accueil (mobile uniquement) -->
     <button class="nav-tab" id="nav-home-btn" onclick="App.goHome()" style="color:#94A3B8;">
       <span class="icon">⊞</span><span>Activités</span>
@@ -870,12 +877,12 @@
           <span class="activity-badge badge-soon">Bientôt</span>
         </div>
 
-        <!-- LV / CMR — bientôt -->
-        <div class="activity-card" data-ready="false">
+        <!-- LV / CMR — actif -->
+        <div class="activity-card" data-ready="true" onclick="App.selectActivity('lvu')">
           <div class="activity-icon">📄</div>
           <div class="activity-name">LV / CMR</div>
           <div class="activity-desc">Lettres de voiture</div>
-          <span class="activity-badge badge-soon">Bientôt</span>
+          <span class="activity-badge badge-active">● Actif</span>
         </div>
 
         <!-- Stockage — actif -->
@@ -935,6 +942,7 @@
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-bcb"        value="bcb"              > BCB</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-agorastore" value="agorastore"       > Agorastore</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-stockage"   value="stockage"         > Stockage</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-lvu"        value="lvu"              > LV/CMR</label>
           </div>
         </div>
         <div style="margin-bottom:12px;">
@@ -1585,6 +1593,217 @@
       </div>
     </div>
 
+    <!-- ── VIEW : LVU — FORMULAIRE ──────────────────────────────────────── -->
+    <div class="view" id="view-lvu-form">
+      <div style="padding:16px;">
+
+        <!-- Type LV / CMR -->
+        <div class="card" style="margin-bottom:12px;">
+          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Type de document</p>
+          <div style="display:flex;gap:10px;">
+            <button id="lvu-btn-lv" onclick="App.lvuSetType('LV')"
+              style="flex:1;padding:10px;border-radius:10px;border:2px solid #1D4ED8;background:#1D4ED8;color:white;font-size:14px;font-weight:700;cursor:pointer;">
+              LV Nationale
+            </button>
+            <button id="lvu-btn-cmr" onclick="App.lvuSetType('CMR')"
+              style="flex:1;padding:10px;border-radius:10px;border:2px solid #E2E8F0;background:white;color:#64748B;font-size:14px;font-weight:700;cursor:pointer;">
+              CMR Internationale
+            </button>
+          </div>
+        </div>
+
+        <!-- Source -->
+        <div class="card" style="margin-bottom:12px;">
+          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Source de données</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button id="lvu-src-manual" onclick="App.lvuSetSource('manual')"
+              style="flex:1;min-width:80px;padding:8px;border-radius:8px;border:2px solid #1D4ED8;background:#EFF6FF;color:#1D4ED8;font-size:13px;font-weight:600;cursor:pointer;">
+              Manuel
+            </button>
+            <button id="lvu-src-loxam" onclick="App.lvuSetSource('loxam')"
+              style="flex:1;min-width:80px;padding:8px;border-radius:8px;border:2px solid #E2E8F0;background:white;color:#64748B;font-size:13px;font-weight:600;cursor:pointer;">
+              LOXAM
+            </button>
+            <button id="lvu-src-bcb" onclick="App.lvuSetSource('bcb')"
+              style="flex:1;min-width:80px;padding:8px;border-radius:8px;border:2px solid #E2E8F0;background:white;color:#64748B;font-size:13px;font-weight:600;cursor:pointer;">
+              BCB
+            </button>
+          </div>
+
+          <!-- Sélecteur LOXAM -->
+          <div id="lvu-loxam-picker" style="display:none;margin-top:12px;">
+            <div style="display:flex;gap:8px;margin-bottom:8px;">
+              <input id="lvu-loxam-search" type="text" placeholder="Rechercher..." autocapitalize="none"
+                oninput="App._lvuRenderLoxamList()"
+                style="flex:1;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+              <button onclick="App.lvuApplyLoxam()"
+                style="background:#1D4ED8;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">
+                ✓ Appliquer
+              </button>
+            </div>
+            <div id="lvu-loxam-list" style="max-height:180px;overflow-y:auto;border:1px solid #E2E8F0;border-radius:8px;"></div>
+          </div>
+
+          <!-- Sélecteur BCB -->
+          <div id="lvu-bcb-picker" style="display:none;margin-top:12px;">
+            <div id="lvu-bcb-list" style="max-height:180px;overflow-y:auto;border:1px solid #E2E8F0;border-radius:8px;"></div>
+            <button onclick="App.lvuApplyBcb()"
+              style="margin-top:8px;background:#1D4ED8;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">
+              ✓ Appliquer
+            </button>
+          </div>
+        </div>
+
+        <!-- Conducteur / Véhicule -->
+        <div class="card" style="margin-bottom:12px;">
+          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Conducteur &amp; Véhicule</p>
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Conducteur(s)</label>
+          <input id="lvu-f-conducteur" type="text" autocapitalize="words" placeholder="Nom Prénom"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:10px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Immat. moteur</label>
+              <input id="lvu-f-immat-moteur" type="text" placeholder="AB-123-CD" autocapitalize="characters"
+                style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;text-transform:uppercase;">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Immat. semi</label>
+              <input id="lvu-f-immat-semi" type="text" placeholder="XY-456-EF" autocapitalize="characters"
+                style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;text-transform:uppercase;">
+            </div>
+          </div>
+        </div>
+
+        <!-- Donneur d'ordre -->
+        <div class="card" style="margin-bottom:12px;">
+          <label style="font-size:13px;font-weight:700;color:#1E293B;display:block;margin-bottom:8px;">Donneur d'ordre</label>
+          <input id="lvu-f-donneur" type="text" autocapitalize="words" placeholder="Société / Nom"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
+        </div>
+
+        <!-- Expéditeur -->
+        <div class="card" style="margin-bottom:12px;">
+          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Expéditeur (chargement)</p>
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Nom / Société</label>
+          <input id="lvu-f-exp-nom" type="text" autocapitalize="words"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Adresse</label>
+          <input id="lvu-f-exp-adresse" type="text" autocapitalize="words"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Ville / CP</label>
+          <input id="lvu-f-exp-ville" type="text" autocapitalize="words"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
+        </div>
+
+        <!-- Destinataire -->
+        <div class="card" style="margin-bottom:12px;">
+          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Destinataire (livraison)</p>
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Nom / Société</label>
+          <input id="lvu-f-dest-nom" type="text" autocapitalize="words"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Adresse</label>
+          <input id="lvu-f-dest-adresse" type="text" autocapitalize="words"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Ville / CP</label>
+          <input id="lvu-f-dest-ville" type="text" autocapitalize="words"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
+        </div>
+
+        <!-- Marchandises -->
+        <div class="card" style="margin-bottom:12px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <p style="font-size:13px;font-weight:700;color:#1E293B;margin:0;">Marchandises</p>
+            <button onclick="App.lvuAddRow()"
+              style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;">
+              + Ligne
+            </button>
+          </div>
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead>
+                <tr style="background:#F8FAFC;">
+                  <th style="padding:6px 4px;text-align:left;color:#64748B;font-weight:600;width:12%;">Qté</th>
+                  <th style="padding:6px 4px;text-align:left;color:#64748B;font-weight:600;">Description</th>
+                  <th style="padding:6px 4px;text-align:left;color:#64748B;font-weight:600;width:15%;">Poids (t)</th>
+                  <th style="padding:6px 4px;width:8%;"></th>
+                </tr>
+              </thead>
+              <tbody id="lvu-marchandises-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Informations complémentaires -->
+        <div class="card" style="margin-bottom:12px;">
+          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Informations complémentaires</p>
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Documents annexes</label>
+          <input id="lvu-f-doc" type="text"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:10px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">N° de commande</label>
+          <input id="lvu-f-commande" type="text"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:10px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Note de livraison</label>
+          <textarea id="lvu-f-note" rows="3"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;resize:vertical;font-family:inherit;margin-bottom:10px;"></textarea>
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:8px;">Convoi exceptionnel</label>
+          <div style="display:flex;gap:10px;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+              <input type="radio" name="lvu-convoi" id="lvu-convoi-non" value="non" checked> Non
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+              <input type="radio" name="lvu-convoi" id="lvu-convoi-oui" value="oui"> Oui
+            </label>
+          </div>
+        </div>
+
+        <!-- Bouton générer -->
+        <button onclick="App.lvuGenerate()"
+          style="width:100%;background:#1D4ED8;color:white;border:none;border-radius:12px;padding:15px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:16px;">
+          <span id="lvu-btn-generate-text">📄 Générer la lettre de voiture</span>
+        </button>
+
+        <!-- Zone résultat -->
+        <div id="lvu-result" style="display:none;">
+          <div class="card" style="margin-bottom:12px;background:#F0FDF4;border:1.5px solid #86EFAC;">
+            <div style="font-size:16px;font-weight:700;color:#065F46;margin-bottom:6px;" id="lvu-result-title">✅ LV N° 01446 générée</div>
+            <div style="font-size:13px;color:#1E293B;margin-bottom:14px;" id="lvu-result-info"></div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <button onclick="App.lvuPrint()"
+                style="flex:1;min-width:120px;background:#1D4ED8;color:white;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;">
+                🖨️ Imprimer / PDF
+              </button>
+              <button onclick="App.lvuSaveToDrive()"
+                style="flex:1;min-width:120px;background:white;color:#1D4ED8;border:2px solid #1D4ED8;border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;">
+                ☁️ Enregistrer Drive
+              </button>
+            </div>
+            <div id="lvu-save-status" style="margin-top:10px;font-size:12px;color:#64748B;"></div>
+          </div>
+          <button onclick="App.lvuNew()"
+            style="width:100%;background:#E2E8F0;color:#1E293B;border:none;border-radius:10px;padding:12px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px;">
+            + Nouvelle lettre de voiture
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── VIEW : LVU — HISTORIQUE ────────────────────────────────────────── -->
+    <div class="view" id="view-lvu-history">
+      <div style="padding:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <h2 style="font-size:18px;font-weight:700;color:#1E293B;margin:0;">Historique LV / CMR</h2>
+          <button onclick="App.lvuLoadHistory(true)"
+            style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;">
+            ↻ Actualiser
+          </button>
+        </div>
+        <div id="lvu-history-list">
+          <div style="text-align:center;padding:40px;color:#94A3B8;font-size:14px;">Chargement…</div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── VIEW : SETTINGS ──────────────────────────────────────────────── -->
     <div class="view" id="view-settings">
       <h2 style="font-size:20px;font-weight:700;color:#1E293B;margin-bottom:18px;">Réglages</h2>
@@ -1759,6 +1978,20 @@ const S = {
   _xlsFileName:    null,
   // ── BCB ──────────────────────────────────────────────────────────────────
   bcbLang:         null,   // langue sélectionnée pour les consignes
+  // ── LVU ──────────────────────────────────────────────────────────────────
+  lvu: {
+    source:        'manual',
+    type:          'LV',
+    numero:        null,
+    display:       null,
+    loxamItems:    [],
+    selectedItems: new Set(),
+    bcbArrivals:   [],
+    selectedBcb:   new Set(),
+    generating:    false,
+    lastDoc:       null,
+    lastData:      null,
+  },
 };
 // ── APP ──────────────────────────────────────────────────────────────────────
 const App = {
@@ -1778,6 +2011,7 @@ const App = {
     if (view === 'stock-batch')  this._renderBatchList();
     if (view === 'stock-sync')   this.loadStockSync();
     if (view === 'bcb-consignes') this.bcbInitLangGrid();
+    if (view === 'lvu-history')   this.lvuLoadHistory();
   },
   goBack() {
     if (S.view === 'admin')        { this.goHome(); return; }
@@ -1793,7 +2027,7 @@ const App = {
     this._render();
   },
   selectActivity(name) {
-    const ready = { loxam: true, stockage: true, bcb: true };
+    const ready = { loxam: true, stockage: true, bcb: true, lvu: true };
     if (!ready[name]) {
       this.toast('Cette activité est en cours de développement 🚧');
       return;
@@ -1808,6 +2042,7 @@ const App = {
     if (name === 'loxam')    this.go('departures');
     if (name === 'stockage') this.go('stock-dashboard');
     if (name === 'bcb')      this.go('bcb-menu');
+    if (name === 'lvu')      this.lvuInit();
   },
   _render() {
     const v      = S.view;
@@ -1827,6 +2062,9 @@ const App = {
     document.querySelectorAll('#main-nav .nav-tab[data-bcbtab]').forEach(el => {
       el.style.display = (S.activity === 'bcb') ? '' : 'none';
     });
+    document.querySelectorAll('#main-nav .nav-tab[data-lvutab]').forEach(el => {
+      el.style.display = (S.activity === 'lvu') ? '' : 'none';
+    });
 
     // ── Views : affiche la vue active ────────────────────────────────────
     document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
@@ -1837,7 +2075,7 @@ const App = {
 
     // ── Nav tabs : onglet actif (LOXAM + Stockage + BCB) ───────────────
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-    const tab = document.querySelector(`[data-tab="${v}"]`) || document.querySelector(`[data-stab="${v}"]`) || document.querySelector(`[data-bcbtab="${v}"]`);
+    const tab = document.querySelector(`[data-tab="${v}"]`) || document.querySelector(`[data-stab="${v}"]`) || document.querySelector(`[data-bcbtab="${v}"]`) || document.querySelector(`[data-lvutab="${v}"]`);
     if (tab) tab.classList.add('active');
     // BCB consignes → tab "Consignes" reste actif sur toutes les étapes
     if (v === 'bcb-consignes') {
@@ -1871,10 +2109,11 @@ const App = {
 
     // Titre + sous-titre du header selon l'activité
     const activityMeta = {
-      loxam:    { icon: '🏗️', title: 'LOXAM',      sub: 'Arrivées & Départs' },
-      bcb:      { icon: '🚛', title: 'BCB',         sub: 'Vente & Logistique' },
-      agora:    { icon: '🏷️', title: 'Agorastore',  sub: 'Ventes en ligne'    },
+      loxam:    { icon: '🏗️', title: 'LOXAM',         sub: 'Arrivées & Départs'  },
+      bcb:      { icon: '🚛', title: 'BCB',            sub: 'Vente & Logistique'  },
+      agora:    { icon: '🏷️', title: 'Agorastore',     sub: 'Ventes en ligne'     },
       stockage: { icon: '📦', title: 'Stockage Pidem', sub: 'Gestion des pièces'  },
+      lvu:      { icon: '📄', title: 'LV / CMR',       sub: 'Lettres de voiture'  },
     };
     const titleEl    = document.getElementById('header-title');
     const subtitleEl = document.getElementById('header-subtitle');
@@ -2152,7 +2391,7 @@ const App = {
           <div style="margin-bottom:8px;padding:8px 10px;background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:8px;">
             <div style="font-size:11px;font-weight:600;color:#94A3B8;margin-bottom:6px;">ACTIVITÉS</div>
             <div style="display:flex;flex-wrap:wrap;gap:8px;">
-              ${['loxam','bcb','agorastore','stockage'].map(a => `
+              ${['loxam','bcb','agorastore','stockage','lvu'].map(a => `
                 <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">
                   <input type="checkbox" id="uact-${u.prenom}-${u.nom}-${a}" value="${a}"
                     ${u.activites.includes(a)?'checked':''}
@@ -2199,7 +2438,7 @@ const App = {
   _hideCreateUserForm() {
     document.getElementById('admin-create-form').style.display = 'none';
     ['nu-prenom','nu-nom','nu-pin'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-    ['loxam','bcb','agorastore','stockage'].forEach(a => {
+    ['loxam','bcb','agorastore','stockage','lvu'].forEach(a => {
       const el = document.getElementById('nu-act-' + a);
       if (el) el.checked = (a === 'loxam'); // reset : loxam coché par défaut
     });
@@ -2213,7 +2452,7 @@ const App = {
     const nom    = document.getElementById('nu-nom').value.trim();
     const role   = document.getElementById('nu-role').value;
     const pin    = document.getElementById('nu-pin').value.trim();
-    const activites = ['loxam','bcb','agorastore','stockage'].filter(a => {
+    const activites = ['loxam','bcb','agorastore','stockage','lvu'].filter(a => {
       const el = document.getElementById('nu-act-' + a); return el && el.checked;
     });
 
@@ -2287,7 +2526,7 @@ const App = {
   },
 
   async _updateUserActivites(prenom, nom) {
-    const activites = ['loxam','bcb','agorastore','stockage'].filter(a => {
+    const activites = ['loxam','bcb','agorastore','stockage','lvu'].filter(a => {
       const el = document.getElementById(`uact-${prenom}-${nom}-${a}`);
       return el && el.checked;
     });
@@ -5246,6 +5485,360 @@ const App = {
     document.getElementById('bcb-step-consignes').style.display = 'none';
     document.getElementById('bcb-step-confirm').style.display = 'none';
     document.getElementById('view-bcb-consignes').scrollTop = 0;
+  },
+
+  /* ─ LVU ─ */
+  async lvuInit() {
+    this.go('lvu-form');
+    this._lvuRenderMarchandises();
+    // Fetch next number
+    if (S.apiUrl && !S.lvu.numero) {
+      try {
+        const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_next_number', {}, 10000);
+        const d = await r.json();
+        if (d.status === 'ok') { S.lvu.numero = d.numero; S.lvu.display = d.display; }
+      } catch (_) {}
+    }
+  },
+
+  lvuSetType(type) {
+    S.lvu.type = type;
+    document.getElementById('lvu-btn-lv').style.background  = type === 'LV'  ? '#1D4ED8' : 'white';
+    document.getElementById('lvu-btn-lv').style.color       = type === 'LV'  ? 'white'   : '#64748B';
+    document.getElementById('lvu-btn-lv').style.borderColor = type === 'LV'  ? '#1D4ED8' : '#E2E8F0';
+    document.getElementById('lvu-btn-cmr').style.background  = type === 'CMR' ? '#1D4ED8' : 'white';
+    document.getElementById('lvu-btn-cmr').style.color       = type === 'CMR' ? 'white'   : '#64748B';
+    document.getElementById('lvu-btn-cmr').style.borderColor = type === 'CMR' ? '#1D4ED8' : '#E2E8F0';
+  },
+
+  lvuSetSource(src) {
+    S.lvu.source = src;
+    ['manual','loxam','bcb'].forEach(s => {
+      const btn = document.getElementById('lvu-src-' + s);
+      if (!btn) return;
+      btn.style.borderColor = s === src ? '#1D4ED8' : '#E2E8F0';
+      btn.style.background  = s === src ? '#EFF6FF' : 'white';
+      btn.style.color       = s === src ? '#1D4ED8' : '#64748B';
+    });
+    document.getElementById('lvu-loxam-picker').style.display = src === 'loxam' ? '' : 'none';
+    document.getElementById('lvu-bcb-picker').style.display   = src === 'bcb'   ? '' : 'none';
+    if (src === 'loxam' && S.lvu.loxamItems.length === 0) this.lvuLoadLoxam();
+    if (src === 'bcb'   && S.lvu.bcbArrivals.length === 0) this.lvuLoadBcb();
+  },
+
+  async lvuLoadLoxam() {
+    if (!S.apiUrl) return;
+    const el = document.getElementById('lvu-loxam-list');
+    el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">Chargement…</div>';
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=list&user=' + encodeURIComponent(S.currentUser?.login || ''), {}, 15000);
+      const d = await r.json();
+      const items = (d.arrivalsData || []).filter(i => i.present);
+      S.lvu.loxamItems = items;
+      this._lvuRenderLoxamList();
+    } catch (_) {
+      el.innerHTML = '<div style="padding:12px;color:#EF4444;font-size:13px;">Erreur de chargement</div>';
+    }
+  },
+
+  _lvuRenderLoxamList() {
+    const el = document.getElementById('lvu-loxam-list');
+    if (!el) return;
+    const q = (document.getElementById('lvu-loxam-search')?.value || '').toLowerCase();
+    const items = S.lvu.loxamItems.filter(i =>
+      !q || (i.description || '').toLowerCase().includes(q) || (i.code || '').toLowerCase().includes(q) || (i.module || '').toLowerCase().includes(q)
+    );
+    if (!items.length) { el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">Aucun résultat</div>'; return; }
+    el.innerHTML = items.map(i => {
+      const sel = S.lvu.selectedItems.has(i.code);
+      return `<div onclick="App.lvuToggleLoxam('${i.code}')"
+        style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #F1F5F9;cursor:pointer;background:${sel ? '#EFF6FF' : 'white'}">
+        <div style="width:20px;height:20px;border-radius:4px;border:2px solid ${sel ? '#1D4ED8' : '#CBD5E1'};background:${sel ? '#1D4ED8' : 'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          ${sel ? '<span style="color:white;font-size:13px;line-height:1;">✓</span>' : ''}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:#1E293B;">${i.description || i.module || '—'}</div>
+          <div style="font-size:11px;color:#64748B;">${i.code || ''} ${i.chantier ? '· ' + i.chantier : ''}</div>
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  lvuToggleLoxam(code) {
+    if (S.lvu.selectedItems.has(code)) S.lvu.selectedItems.delete(code);
+    else S.lvu.selectedItems.add(code);
+    this._lvuRenderLoxamList();
+  },
+
+  lvuApplyLoxam() {
+    const rows = [];
+    S.lvu.loxamItems.filter(i => S.lvu.selectedItems.has(i.code)).forEach(i => {
+      rows.push({ qte: 1, description: i.description || i.module || i.code, poids: '', note: i.code });
+    });
+    if (rows.length) {
+      S.lvu.marchandises = rows;
+      this._lvuRenderMarchandises();
+    }
+    document.getElementById('lvu-loxam-picker').style.display = 'none';
+    this.toast(`${rows.length} article(s) importé(s)`);
+  },
+
+  async lvuLoadBcb() {
+    if (!S.apiUrl) return;
+    const el = document.getElementById('lvu-bcb-list');
+    el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">Chargement…</div>';
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=bcb_arrivals&user=' + encodeURIComponent(S.currentUser?.login || ''), {}, 15000);
+      const d = await r.json();
+      S.lvu.bcbArrivals = d.arrivals || [];
+      this._lvuRenderBcbList();
+    } catch (_) {
+      el.innerHTML = '<div style="padding:12px;color:#EF4444;font-size:13px;">Erreur de chargement</div>';
+    }
+  },
+
+  _lvuRenderBcbList() {
+    const el = document.getElementById('lvu-bcb-list');
+    if (!el) return;
+    const items = S.lvu.bcbArrivals;
+    if (!items.length) { el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">Aucune arrivée disponible</div>'; return; }
+    el.innerHTML = items.map((i, idx) => {
+      const sel = S.lvu.selectedBcb.has(idx);
+      const label = i.client || i.ref || `Arrivée ${idx + 1}`;
+      return `<div onclick="App.lvuToggleBcb(${idx})"
+        style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #F1F5F9;cursor:pointer;background:${sel ? '#EFF6FF' : 'white'}">
+        <div style="width:20px;height:20px;border-radius:4px;border:2px solid ${sel ? '#1D4ED8' : '#CBD5E1'};background:${sel ? '#1D4ED8' : 'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          ${sel ? '<span style="color:white;font-size:13px;line-height:1;">✓</span>' : ''}
+        </div>
+        <div style="font-size:13px;color:#1E293B;">${label}</div>
+      </div>`;
+    }).join('');
+  },
+
+  lvuToggleBcb(idx) {
+    if (S.lvu.selectedBcb.has(idx)) S.lvu.selectedBcb.delete(idx);
+    else S.lvu.selectedBcb.add(idx);
+    this._lvuRenderBcbList();
+  },
+
+  lvuApplyBcb() {
+    const rows = [];
+    [...S.lvu.selectedBcb].forEach(idx => {
+      const i = S.lvu.bcbArrivals[idx];
+      if (i) rows.push({ qte: 1, description: i.client || i.ref || '', poids: '', note: '' });
+    });
+    if (rows.length) {
+      S.lvu.marchandises = rows;
+      this._lvuRenderMarchandises();
+    }
+    document.getElementById('lvu-bcb-picker').style.display = 'none';
+    this.toast(`${rows.length} article(s) importé(s)`);
+  },
+
+  _lvuRenderMarchandises() {
+    const tbody = document.getElementById('lvu-marchandises-body');
+    if (!tbody) return;
+    if (!S.lvu.marchandises.length) S.lvu.marchandises = [{ qte: '', description: '', poids: '', note: '' }];
+    tbody.innerHTML = S.lvu.marchandises.map((r, i) => `
+      <tr>
+        <td style="padding:4px 2px;"><input type="number" min="1" value="${r.qte}" oninput="S.lvu.marchandises[${i}].qte=this.value"
+          style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:5px 4px;font-size:12px;outline:none;"></td>
+        <td style="padding:4px 2px;"><input type="text" value="${r.description}" oninput="S.lvu.marchandises[${i}].description=this.value"
+          style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:5px 4px;font-size:12px;outline:none;"></td>
+        <td style="padding:4px 2px;"><input type="number" min="0" step="0.001" value="${r.poids}" oninput="S.lvu.marchandises[${i}].poids=this.value"
+          style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:5px 4px;font-size:12px;outline:none;"></td>
+        <td style="padding:4px 2px;text-align:center;">
+          ${S.lvu.marchandises.length > 1
+            ? `<button onclick="App.lvuRemoveRow(${i})" style="background:none;border:none;color:#EF4444;font-size:16px;cursor:pointer;padding:2px 4px;">✕</button>`
+            : ''}
+        </td>
+      </tr>`).join('');
+  },
+
+  lvuAddRow() {
+    if (S.lvu.marchandises.length >= 10) { this.toast('Maximum 10 lignes'); return; }
+    S.lvu.marchandises.push({ qte: '', description: '', poids: '', note: '' });
+    this._lvuRenderMarchandises();
+  },
+
+  lvuRemoveRow(i) {
+    S.lvu.marchandises.splice(i, 1);
+    this._lvuRenderMarchandises();
+  },
+
+  _lvuCollectFormData() {
+    const v = id => (document.getElementById(id)?.value || '').trim();
+    const today = new Date();
+    const dd = String(today.getDate()).padStart(2,'0');
+    const mm = String(today.getMonth()+1).padStart(2,'0');
+    const dateStr = `${dd}/${mm}/${today.getFullYear()}`;
+    const marchandises = S.lvu.marchandises
+      .filter(r => r.description || r.qte)
+      .map(r => ({ qte: r.qte || 1, description: r.description || '', poids: r.poids || '', note: r.note || '' }));
+    return {
+      type:         S.lvu.type,
+      display:      S.lvu.display || '00000',
+      date:         dateStr,
+      conducteur:   v('lvu-f-conducteur'),
+      immat_moteur: v('lvu-f-immat-moteur').toUpperCase(),
+      immat_semi:   v('lvu-f-immat-semi').toUpperCase(),
+      donneur_ordre: v('lvu-f-donneur'),
+      transporteur: { nom: 'TRANSPORTS MESNAGER', adresse: 'La Perrière', ville: '61360 SAINT-DENIS-DE-VILLENETTE', info: 'SIRET 803 611 093 00026', tel: '06 08 39 91 53', rcs: '' },
+      expediteur:   { nom: v('lvu-f-exp-nom'), adresse: v('lvu-f-exp-adresse'), ville: v('lvu-f-exp-ville') },
+      destinataire: { nom: v('lvu-f-dest-nom'), adresse: v('lvu-f-dest-adresse'), ville: v('lvu-f-dest-ville') },
+      marchandises,
+      doc_annexe:   v('lvu-f-doc'),
+      commande:     v('lvu-f-commande'),
+      note:         v('lvu-f-note'),
+      convoi:       document.getElementById('lvu-convoi-oui')?.checked || false,
+    };
+  },
+
+  async lvuGenerate() {
+    if (S.lvu.generating) return;
+    S.lvu.generating = true;
+    const btnText = document.getElementById('lvu-btn-generate-text');
+    if (btnText) btnText.textContent = '⏳ Génération…';
+    try {
+      // Fetch number if not yet loaded
+      if (!S.lvu.numero && S.apiUrl) {
+        try {
+          const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_next_number', {}, 10000);
+          const d = await r.json();
+          if (d.status === 'ok') { S.lvu.numero = d.numero; S.lvu.display = d.display; }
+        } catch (_) {}
+      }
+      const data = this._lvuCollectFormData();
+      const doc  = _generateLvu(data);
+      S.lvu.lastDoc  = doc;
+      S.lvu.lastData = data;
+      // Show result
+      const res = document.getElementById('lvu-result');
+      const title = document.getElementById('lvu-result-title');
+      const info  = document.getElementById('lvu-result-info');
+      if (res) res.style.display = '';
+      if (title) title.textContent = `✅ ${data.type} N° ${data.display} générée`;
+      if (info) {
+        const dest = data.destinataire?.nom || '—';
+        const n = data.marchandises?.length || 0;
+        info.textContent = `${data.date} · ${dest} · ${n} ligne(s) de marchandises`;
+      }
+      document.getElementById('lvu-save-status').textContent = '';
+      // Scroll to result
+      res?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e) {
+      this.toast('Erreur lors de la génération : ' + e.message);
+    } finally {
+      S.lvu.generating = false;
+      if (btnText) btnText.textContent = '📄 Générer la lettre de voiture';
+    }
+  },
+
+  lvuPrint() {
+    if (!S.lvu.lastDoc || !S.lvu.lastData) return;
+    const d = S.lvu.lastData;
+    const filename = `LV_${d.display}_${(d.destinataire?.nom || 'transport').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+    S.lvu.lastDoc.save(filename);
+  },
+
+  async lvuSaveToDrive() {
+    if (!S.lvu.lastDoc || !S.lvu.lastData) return;
+    if (!S.apiUrl) { this.toast('URL API non configurée'); return; }
+    const statusEl = document.getElementById('lvu-save-status');
+    if (statusEl) statusEl.textContent = '⏳ Enregistrement…';
+    try {
+      const d    = S.lvu.lastData;
+      const b64  = S.lvu.lastDoc.output('datauristring').split(',')[1];
+      const filename = `LV_${d.display}_${(d.destinataire?.nom || 'transport').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+      const payload = {
+        action:      'lv_save',
+        pdf_b64:     b64,
+        filename,
+        numero:      S.lvu.numero,
+        display:     d.display,
+        date:        d.date,
+        type:        d.type,
+        conducteur:  d.conducteur,
+        immat_moteur: d.immat_moteur,
+        immat_semi:  d.immat_semi,
+        expediteur:  d.expediteur?.nom || '',
+        destinataire: d.destinataire?.nom || '',
+        doc_annexe:  d.doc_annexe || '',
+        commande:    d.commande || '',
+        note:        d.note || '',
+        convoi:      d.convoi ? 'Oui' : 'Non',
+        poids:       (d.marchandises || []).reduce((s, r) => s + (parseFloat(r.poids) || 0), 0).toFixed(3),
+        ml:          '',
+      };
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }, 30000);
+      const res = await r.json();
+      if (res.status === 'ok') {
+        if (statusEl) statusEl.textContent = '✅ Enregistré sur Drive';
+        // Update number for next LV
+        S.lvu.numero = (S.lvu.numero || 0) + 1;
+        S.lvu.display = String(S.lvu.numero).padStart(5, '0');
+        this.toast('LV enregistrée sur Drive !');
+      } else {
+        if (statusEl) statusEl.textContent = '❌ Erreur : ' + (res.message || 'inconnue');
+      }
+    } catch (e) {
+      if (statusEl) statusEl.textContent = '❌ ' + e.message;
+    }
+  },
+
+  lvuNew() {
+    S.lvu.lastDoc  = null;
+    S.lvu.lastData = null;
+    S.lvu.marchandises = [];
+    S.lvu.selectedItems.clear();
+    S.lvu.selectedBcb.clear();
+    document.getElementById('lvu-result').style.display = 'none';
+    // Reset fields
+    ['lvu-f-conducteur','lvu-f-immat-moteur','lvu-f-immat-semi','lvu-f-donneur',
+     'lvu-f-exp-nom','lvu-f-exp-adresse','lvu-f-exp-ville',
+     'lvu-f-dest-nom','lvu-f-dest-adresse','lvu-f-dest-ville',
+     'lvu-f-doc','lvu-f-commande','lvu-f-note'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    document.getElementById('lvu-convoi-non').checked = true;
+    this._lvuRenderMarchandises();
+    document.getElementById('view-lvu-form').scrollTop = 0;
+  },
+
+  async lvuLoadHistory(force = false) {
+    if (!S.apiUrl) {
+      document.getElementById('lvu-history-list').innerHTML =
+        '<div style="padding:20px;color:#94A3B8;text-align:center;">URL API non configurée</div>';
+      return;
+    }
+    const el = document.getElementById('lvu-history-list');
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:#94A3B8;font-size:14px;">Chargement…</div>';
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_history', {}, 15000);
+      const d = await r.json();
+      const rows = d.rows || [];
+      if (!rows.length) {
+        el.innerHTML = '<div style="text-align:center;padding:40px;color:#94A3B8;font-size:14px;">Aucun document trouvé</div>';
+        return;
+      }
+      el.innerHTML = rows.map(row => `
+        <div style="background:white;border-radius:10px;padding:12px 14px;margin-bottom:8px;border:1px solid #E2E8F0;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
+            <span style="font-size:14px;font-weight:700;color:#1E293B;">${row.type || 'LV'} N° ${row.numero || '—'}</span>
+            <span style="font-size:12px;color:#64748B;">${row.date || ''}</span>
+          </div>
+          <div style="font-size:13px;color:#475569;">${row.destinataire || '—'}</div>
+          ${row.conducteur ? `<div style="font-size:12px;color:#94A3B8;margin-top:2px;">${row.conducteur} · ${row.immat_moteur || ''}</div>` : ''}
+          ${row.commande ? `<div style="font-size:12px;color:#94A3B8;">Cde: ${row.commande}</div>` : ''}
+        </div>`).join('');
+    } catch (e) {
+      el.innerHTML = `<div style="text-align:center;padding:40px;color:#EF4444;font-size:13px;">Erreur : ${e.message}</div>`;
+    }
   },
 
   /* ─ Toast ─ */
