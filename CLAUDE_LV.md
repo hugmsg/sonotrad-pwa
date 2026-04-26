@@ -6,91 +6,268 @@ PWA Sonotrad — Application web progressive de gestion des transports pour SONO
 La PWA permet de créer, remplir et exporter des Lettres de Voiture Uniques (LV nationales) et des CMR (transport international).
 
 **Fichier principal :** `index.html`
-**Fonction de rendu :** `_lvuRecto()` — environ ligne 5960
+**Fonction de rendu recto :** `_lvuRecto()` — environ ligne 5960
+**Fonction de rendu verso :** `_lvuVerso()` — à créer
 **Librairie PDF :** jsPDF (coordonnées en mm, origine en haut à gauche)
 **Format :** A4 portrait, 210 × 297 mm
 
 ---
 
+## Documents de référence
+
+Trois fichiers à conserver à la racine du projet :
+
+1. **`lv-layout-constants.js`** — toutes les constantes de mise en page (X, Y, W, H, couleurs, fontes)
+2. **`LV_REFERENCE.pdf`** — PDF modèle validé (recto + verso) à reproduire fidèlement
+3. **`lv_modele_corrige.html`** — source HTML/CSS du modèle, utile pour comprendre le layout cible
+
+**Règle absolue :** toute modification de mise en page passe par `lv-layout-constants.js`, jamais en dur dans le code de rendu. Toute évolution doit produire un PDF visuellement identique au modèle de référence.
+
+---
+
 ## Architecture du générateur PDF
 
-Le PDF est **entièrement construit par calcul de coordonnées** dans `_lvuRecto()`.
-Il n'y a pas de template externe ni de fichier modèle : tout est code JS.
-
-Les coordonnées sont externalisées dans **`lv-layout-constants.js`** (à la racine du projet).
-**Toujours modifier les dimensions et positions via ce fichier, jamais en dur dans `_lvuRecto()`.**
+Le PDF est entièrement construit par calcul de coordonnées dans `_lvuRecto()` et `_lvuVerso()`.
+Aucun template externe — tout est code JS jsPDF.
 
 ```
 index.html
-  └── _lvuRecto()
-        └── importe LV depuis lv-layout-constants.js
-              └── toutes les constantes Y, H, X, W, couleurs, fontes
+  ├── _lvuRecto(lvData)  → page 1 du PDF
+  └── _lvuVerso()        → page 2 du PDF (statique, conditions générales)
+        └── importent toutes deux LV depuis lv-layout-constants.js
 ```
 
 ---
 
-## Structure du document LV (de haut en bas)
+## Charte visuelle
 
-| Section | Constantes clés | Description |
+### Couleurs
+
+| Usage | Hex | RGB jsPDF |
 |---|---|---|
-| 1. Titre | `HEADER_Y`, `HEADER_H` | "LETTRE DE VOITURE UNIQUE" + N° |
-| 2. Nationale/CMR | `NAT_CMR_Y`, `CHECKBOX_SIZE` | Cases à cocher + labels bilingues |
-| 3. Mentions légales | `LEGAL_Y`, `DATE_X` | Texte réglementaire FR + EN + date |
-| 4. Transporteur | `TRANS_Y`, `TRANS_COL_W` | Coordonnées transporteur + conducteurs + immatriculations |
-| 5. Donneur d'ordre | `DO_Y`, `DO_H` | Ligne identité donneur d'ordre |
-| 6. Marchandises | `MARC_HEADER_Y`, `MARC_ROW_H` | Tableau articles (N lignes) |
-| 7. Refus signature | `REFUS_Y` (calculé) | Mention légale refus |
-| 8. Réserves | `RESERVES_Y` (calculé) | Réserves chargement / déchargement |
-| 9. Docs / Convoi | `DOCS_Y` (calculé) | Documents annexes + case convoi exceptionnel |
-| 10. Expéditeur/Dest. | `ADDR_Y` (calculé) | Adresses expéditeur et destinataire |
-| 11. Signatures | `SIG_Y` (calculé) | 3 colonnes : expéditeur, conducteur, destinataire |
+| Bleu marine principal (titre, DATE, MARCHANDISES, bordures) | `#1f3a5f` | `[31, 58, 95]` |
+| Bleu très clair (en-têtes colonnes marc, ligne TOTAL) | `#dde6f2` | `[221, 230, 242]` |
+| Gris clair (séparateurs intra-tableau marchandises) | `#b8c6d9` | `[184, 198, 217]` |
+| Fond ligne paire marchandises | `#f7f9fc` | `[247, 249, 252]` |
+| Fond donneur d'ordre / refus signature | `#f3f6fb` | `[243, 246, 251]` |
+| **Verso : texte corps** | `#c0c0c0` | `[192, 192, 192]` |
+| **Verso : titres blocs** | `#b0b0b0` | `[176, 176, 176]` |
+| **Verso : bordures** | `#efefef` | `[239, 239, 239]` |
+| **Verso : fond en-têtes blocs** | `#fbfbfb` | `[251, 251, 251]` |
 
-Les sections 7 à 11 ont des `Y` calculés (getters) qui dépendent du nombre de lignes marchandises.
-**Si tu modifies `MARC_ROWS`, toutes les sections en dessous se décalent automatiquement.**
+### Typographie
+
+Police unique : **Helvetica** (jsPDF default).
+Tailles en pt : 5.5 (mentions légales), 6.3 (labels colonnes), 7.5 (corps), 8 (sections), 10 (titre transporteur), 14 (titre principal), 22 (numéro LV).
 
 ---
 
-## Règles de rendu jsPDF à respecter
+## Structure du document RECTO
 
-```javascript
-// Coordonnées toujours en mm depuis le coin haut-gauche
-// Origine : doc.setPage() → (0,0) = haut gauche
+Le recto utilise une **architecture en 2 colonnes superposées sur les 3 premières sections**, puis pleine largeur ensuite.
 
-// Police : toujours explicite avant chaque drawText
-doc.setFont('Helvetica', 'bold');     // ou 'normal', 'italic'
-doc.setFontSize(LV.FONT_SECTION);
-
-// Cellule avec fond coloré
-doc.setFillColor(...LV.COLOR_SECTION_BG);
-doc.rect(x, y, w, h, 'F');           // 'F' = filled, 'FD' = filled+bordered
-
-// Texte aligné à gauche (défaut)
-doc.text('MON TEXTE', x + 2, y + h/2 + doc.getFontSize()/4);
-// Le +2 est le padding interne, h/2 + size/4 centre verticalement
-
-// Texte centré
-doc.text('TITRE', LV.MARGIN + LV.CONTENT_W/2, y + h/2, { align: 'center' });
-
-// Bordure seule
-doc.setDrawColor(...LV.COLOR_BORDER);
-doc.setLineWidth(0.3);
-doc.rect(x, y, w, h, 'S');           // 'S' = stroke seulement
-
-// Ligne de séparation
-doc.line(x1, y, x2, y);
+```
+┌──────────────────────────────────────┬──────────────┐
+│ TITRE bleu marine "LETTRE DE..."     │              │
+├──────────────────┬───────────────────┤   N° 01449   │  ← bloc N° fait
+│ ☒ NATIONALE      │ ☐ INTERNATIONALE  │  18.5 mm     │   18.5 mm de haut
+│                  │       [CMR]       │              │   = titre + NAT/CMR
+├──────────────────┼───────────────────┼──────────────┤
+│ Mentions FR      │ Mentions CMR FR   │ ████ DATE ███│
+│                  │ + EN              │ 24/04/2026   │
+└──────────────────┴───────────────────┴──────────────┘
+[zone pleine largeur en dessous]
+Transporteur / Conducteurs / Immat.
+Donneur d'ordre
+MARCHANDISES (header) + 11 lignes
+Refus signature
+Réserves Chargement / Déchargement
+Documents annexes / Convoi exceptionnel
+Expéditeur / Destinataire
+Signatures (3 colonnes)
 ```
 
+### Tableau des sections
+
+| # | Section | Hauteur | Notes |
+|---|---|---|---|
+| 1 | Titre principal | 11 mm | Fond `#1f3a5f`, texte blanc 14pt bold, lettre-spacing 1pt |
+| 2 | NATIONALE / INTERNATIONALE+CMR | 7 mm | 2 colonnes égales (78 mm chacune), checkbox 3.8mm |
+| 3 | Mentions légales FR / CMR | 18 mm | 2 colonnes égales (78 mm chacune), texte 5.5pt italique pour EN |
+| 4 | Bloc N° + DATE (colonne droite) | 18.5 mm + reste | Largeur fixe 42 mm |
+| 5 | Transporteur / Conducteurs / Immatriculations | 34 mm | Gauche 116mm + droite 82mm (cond 13mm + immat reste) |
+| 6 | Donneur d'ordre | 9 mm | Fond `#f3f6fb`, label gauche 34mm + valeur reste |
+| 7 | Header MARCHANDISES / GOODS | 6 mm | Fond `#1f3a5f`, texte blanc centré |
+| 8 | En-têtes colonnes marchandises | 6 mm | Fond `#dde6f2`, 4 colonnes : 24/flex/30/22 mm |
+| 9 | 10 lignes marchandises + 1 ligne TOTAL | 11 × 8.5 mm | Alternance fond `#f7f9fc` / blanc, ligne TOTAL fond `#dde6f2` |
+| 10 | Refus signature (2 colonnes) | 7 mm | Fond `#f3f6fb`, texte 5.8pt italique |
+| 11 | Réserves Chargement / Déchargement | 20 mm | 2 colonnes égales |
+| 12 | Documents annexes / Convoi exceptionnel | 10 mm | Gauche flex + droite avec OUI/NON |
+| 13 | Expéditeur / Destinataire | 26 mm | 2 colonnes égales |
+| 14 | Signatures (3 colonnes) | 32 mm | Égales, en-tête fond `#dde6f2`, ligne pointillée en bas |
+
+**Total : 285 mm** (= 297 - 2×6 mm de marge)
+
 ---
 
-## Données dynamiques injectées dans le PDF
+## Spécifications détaillées des sections critiques
 
-Les valeurs viennent de l'objet `lvData` passé en paramètre à `_lvuRecto(lvData)` :
+### Bloc N° + DATE (colonne droite, largeur 42 mm)
+
+```
+┌──────────────┐
+│              │  ← 18.5 mm (titre 11mm + NAT/CMR 7mm + 0.5mm bordure)
+│  N°  01449   │     fond blanc, N° 10pt bold, 01449 22pt bold
+│              │     couleur #1f3a5f
+├──────────────┤
+│ ████ DATE ██ │  ← 6 mm, fond #1f3a5f, texte blanc 8pt bold
+├──────────────┤
+│              │
+│  24/04/2026  │  ← reste, fond blanc, 13pt bold #1f3a5f, centré
+│              │
+└──────────────┘
+```
+
+**Important :** la séparation horizontale entre le bloc N° et le bandeau DATE doit tomber **exactement au même niveau** que la séparation entre la zone NATIONALE/CMR et les mentions légales. Calage : `y = 18.5 mm` après marge haute.
+
+### Logo CMR (case INTERNATIONALE)
+
+À côté du texte "INTERNATIONALE" et de la checkbox, ajouter une étiquette encadrée "CMR" :
+- Bordure : 0.8pt `#1f3a5f`
+- Border-radius : 1.2 mm
+- Padding : 0.5mm vertical, 2mm horizontal
+- Texte : "CMR" 7pt bold `#1f3a5f`, letter-spacing 0.3pt
+- Fond : blanc
+- Marge gauche : 4 mm depuis le texte INTERNATIONALE
+
+### Tableau marchandises
+
+- 10 lignes de saisie + 1 ligne TOTAL
+- Hauteur ligne : **8.5 mm** (compactes pour permettre 11 lignes au total)
+- Colonnes : `Nombre` 24mm | `Nature` flex | `Poids/M.L.` 30mm | `Note` 22mm
+- En-tête colonnes : fond `#dde6f2`, texte `#1f3a5f` 6.3pt bold UPPERCASE letter-spacing 0.3pt
+- Lignes : alternance blanc / `#f7f9fc`, séparateurs `#b8c6d9` 0.3pt
+- Ligne TOTAL : fond `#dde6f2`, bordure haute `#1f3a5f` 0.6pt, texte 7.8pt bold `#1f3a5f`, libellé "TOTAL / Total" aligné à droite dans la colonne Nature
+
+### Zone signatures
+
+3 colonnes égales (largeur ~64.7 mm), hauteur 32 mm.
+Pour chaque colonne :
+- En-tête : fond `#dde6f2`, texte `#1f3a5f` 7pt bold UPPERCASE centré, padding 1.2mm
+- Sous-titre anglais : 6pt italique `#555` centré
+- Zone vide pour cachet/signature
+- Ligne pointillée en bas : `border-bottom 0.8pt dashed #1f3a5f`, marges latérales 3mm, position 2mm du bas
+
+---
+
+## Structure du document VERSO (filigrane gris discret)
+
+Le verso présente les conditions générales de transport. **Rendu volontairement très discret** — l'information juridique est présente mais ne doit pas dominer visuellement.
+
+### Layout global
+
+```
+┌─────────────────────────────────────────────┐
+│ CONDITIONS DE TRANSPORT — PLAFONDS DE...    │  ← titre 13pt #b5b5b5
+│ Articles L.133-1 et suivants...             │  ← sous-titre 8pt italique #c8c8c8
+├─────────────────────────────────────────────┤
+│ ┌─────────────────┐  ┌─────────────────┐   │
+│ │ TRAFIC INT. ≥3T │  │ MASSES INDIVIS. │   │
+│ ├─────────────────┤  ├─────────────────┤   │
+│ │ TRAFIC INT. <3T │  │ VÉHICULES ROUL. │   │
+│ ├─────────────────┤  ├─────────────────┤   │  ← 2 colonnes
+│ │ TEMP. DIRIGÉE   │  │ CMR INTERNATL.  │   │     5 blocs gauche
+│ ├─────────────────┤  ├─────────────────┤   │     4 blocs droite
+│ │ CITERNES        │  │ LITIGES         │   │     flex:1 pour étirer
+│ ├─────────────────┤  ├─────────────────┤   │
+│ │ ANIMAUX VIVANTS │  │ DÉCL. VALEUR    │   │
+│ └─────────────────┘  └─────────────────┘   │
+├─────────────────────────────────────────────┤
+│ TRANSPORTS MESNAGER — La Perrière · ...     │  ← footer
+└─────────────────────────────────────────────┘
+```
+
+### Spécifications de rendu verso
+
+**En-tête** :
+- Titre : 13pt bold, `#b5b5b5`, letter-spacing 0.6pt, centré
+- Sous-titre : 8pt italique, `#c8c8c8`, centré
+- Bordure inférieure : 0.3pt `#ececec`
+
+**Blocs de conditions** (9 blocs) :
+- Bordure : 0.3pt `#efefef`
+- En-tête bloc : fond `#fbfbfb`, texte `#b0b0b0` 8.5pt bold, padding 1.8mm × 3mm
+- Corps bloc : padding 2.5mm × 3mm, texte 7.8pt `#c0c0c0`, line-height 1.55
+- Listes : puces `·` (point central) en `#d5d5d5` 13pt, items 7.5pt `#c0c0c0`
+- Mention "Retard" : bordure haute pointillée 0.3pt `#ececec`, italique `#c8c8c8` 7.5pt
+- Étirement uniforme : flex:1 sur chaque bloc
+
+**Footer** :
+- Bordure haute 0.3pt `#efefef`
+- Coordonnées TRANSPORTS MESNAGER en `#d0d0d0` 6.5pt
+- "TRANSPORTS MESNAGER" en `#b8b8b8` UPPERCASE letter-spacing 0.3pt
+
+### Contenu textuel des 9 blocs
+
+**Colonne gauche :**
+
+1. **TRAFIC INTÉRIEUR · ENVOIS ≥ 3 TONNES** (réf. Décret 2017-461 du 31 mars 2017)
+   - Perte ou avarie : 20 €/kg de poids brut manquant ou avarié, plafond global nb tonnes × 3 200 €
+   - Note : "La plus faible des deux limites s'applique."
+   - Retard : indemnisation limitée au prix du transport
+
+2. **TRAFIC INTÉRIEUR · ENVOIS < 3 TONNES** (réf. Décret 2017-461)
+   - Perte ou avarie : 33 €/kg, max 1 000 €/colis
+   - Retard : prix du transport
+
+3. **TRANSPORT SOUS TEMPÉRATURE DIRIGÉE**
+   - Envois ≥ 3 t : 14 €/kg, plafond nb t × 4 000 €
+   - Envois < 3 t : 23 €/kg, plafond 750 €/colis
+   - Retard : prix du transport
+
+4. **TRANSPORT EN CITERNES**
+   - Marchandise : 3 €/kg ou litre, plafond 55 000 €/envoi
+   - Autres dommages : plafond 300 000 €/envoi
+   - Retard : prix du transport
+
+5. **TRANSPORT D'ANIMAUX VIVANTS**
+   - Indemnisation selon plafond par animal (art. D3222-4 Code des transports)
+   - Retard : prix du transport
+
+**Colonne droite :**
+
+6. **TRANSPORT DE MASSES INDIVISIBLES**
+   - Dommages directs : 60 000 €/envoi
+   - Autres dommages : double du prix du transport
+   - Retard : prix du transport
+
+7. **TRANSPORT DE VÉHICULES ROULANTS**
+   - Véhicule neuf : valeur de remplacement HT au tarif constructeur
+   - Occasion coté Argus : valeur Argus
+   - Occasion non coté : 800 €
+   - Autres dommages : 500 €/véhicule
+   - Retard : prix du transport
+
+8. **TRAFIC INTERNATIONAL · CONVENTION CMR**
+   - Indemnisation limitée à **8,33 DTS par kg** de poids brut (sauf déclaration de valeur, intérêt spécial, vol ou faute lourde)
+   - Remboursement aussi : prix du transport, droits de douane, frais liés
+   - Retard : prix du transport sauf déclaration intérêt spécial (CMR art. 23 et 29)
+
+9. **LITIGES · COMPÉTENCE JURIDICTIONNELLE**
+   - Compétence exclusive des tribunaux du siège social du transporteur
+
+10. **DÉCLARATIONS DE VALEUR**
+    - Limites non applicables en cas de déclaration de valeur ou d'intérêt spécial à la livraison
+
+---
+
+## Données dynamiques (objet `lvData` passé à `_lvuRecto()`)
 
 ```javascript
 lvData = {
   numero:         '01449',
   date:           '24/04/2026',
-  type:           'nationale',       // ou 'cmr'
+  type:           'nationale',       // 'nationale' | 'cmr'
   transporteur: {
     nom:          'TRANSPORTS MESNAGER',
     adresse:      'La Perrière',
@@ -104,81 +281,101 @@ lvData = {
   remorque:       '',
   donneurOrdre:   '',
   marchandises: [
-    { nombre: '1/1', nature: '', poids: '', note: '1' },
-    { nombre: '1/2', nature: '', poids: '', note: '2' },
-    // ... jusqu'à LV.MARC_ROWS lignes
+    { nombre: '', nature: '', poids: '', note: '' },
+    // ... jusqu'à 10 lignes
   ],
+  total:          { poids: '' },     // pour la 11ème ligne TOTAL
   reservesChargement:   '',
   reservesDechargement: '',
   documentsAnnexes:     '',
-  convoiExceptionnel:   false,        // true/false → case cochée
-  expediteur: {
-    nom:     'SONOTRAD',
-    adresse: 'ZA Renardières',
-    cp_ville:'53250 Javron-les-Chapelles',
-  },
-  destinataire: {
-    nom:     '',
-    adresse: '',
-    cp_ville:'',
-  },
+  convoiExceptionnel:   false,
+  expediteur:    { nom: '', adresse: '', cp_ville: '' },
+  destinataire:  { nom: '', adresse: '', cp_ville: '' },
 }
 ```
 
 ---
 
-## Points d'amélioration prioritaires (v2)
+## Règles de rendu jsPDF
 
-### Corrections immédiates
-- [ ] **Titre** : passer le fond de gris neutre à bleu marine `[15, 52, 96]` — différenciation visuelle forte
-- [ ] **DATE** : mettre en gras, ajouter un fond légèrement coloré pour la faire ressortir
-- [ ] **Zone signatures** : augmenter `SIG_H` à 28 mm minimum + ajouter ligne pointillée de signature dans chaque cellule
-- [ ] **Réserves** : `RESERVES_H` à 15 mm pour permettre l'écriture manuscrite
-- [ ] **Colonne NOTE** : `MARC_COL_NOTE_W` à 35 mm (trop étroite actuellement)
+```javascript
+// Coordonnées en mm depuis le coin haut-gauche
+doc.setFont('Helvetica', 'bold');     // 'normal' | 'italic'
+doc.setFontSize(LV.FONT_SECTION);
 
-### Améliorations esthétiques
-- [ ] Alternance de couleur sur les lignes du tableau marchandises (pair/impair)
-- [ ] Logo SONOTRAD en haut à gauche du titre (si fichier PNG dispo dans `/assets/`)
-- [ ] Filet séparateur plus épais entre colonnes transporteur et conducteurs
-- [ ] Padding interne homogène : `+2 mm` à gauche de chaque cellule texte
+// Cellule avec fond
+doc.setFillColor(...LV.COLOR_HEADER_BG);
+doc.rect(x, y, w, h, 'F');           // F=filled, FD=filled+bordered, S=stroke
 
-### Fonctionnalités à venir
-- [ ] **Mode remplissage progressif** : certains champs sont remplis à l'étape chargement (transporteur, expéditeur), d'autres à la livraison (réserves, destinataire, signatures)
-- [ ] **Version CMR** : adaptation bilingue FR/EN de toutes les sections (même layout, textes différents)
-- [ ] **Verso** : conditions de transport et plafonds de responsabilité (voir LV_VERSO_CONDITIONS)
-- [ ] **QR code** : insérer un QR code en haut à droite renvoyant vers l'URL de la LV en ligne
+// Texte aligné gauche (avec padding interne 2mm)
+doc.text('TEXTE', x + 2, y + h/2 + size/4);
+
+// Texte centré
+doc.text('TITRE', x + w/2, y + h/2 + size/4, { align: 'center' });
+
+// Bordure
+doc.setDrawColor(...LV.COLOR_BORDER);
+doc.setLineWidth(0.3);
+doc.line(x1, y, x2, y);
+
+// Ligne pointillée (signature)
+doc.setLineDashPattern([1, 1], 0);
+doc.line(x1, y, x2, y);
+doc.setLineDashPattern([], 0);
+```
 
 ---
 
-## Comment modifier le layout — procédure
+## Points de vigilance — règles non-négociables
+
+### 1. Alignement vertical NATIONALE/CMR ↔ FR/CMR
+La séparation entre NATIONALE et INTERNATIONALE doit tomber **exactement** au milieu de la zone gauche (78 mm depuis le bord), pile au-dessus de la séparation entre les mentions légales FR et CMR.
+
+### 2. Alignement horizontal N°/DATE ↔ NATIONALE/CMR / mentions légales
+La séparation horizontale entre le bloc N° et le bandeau DATE doit tomber **exactement** au même niveau (`y = 18.5 mm` après marge haute) que la séparation entre la ligne NATIONALE/CMR et les mentions légales.
+
+### 3. Aucun texte ne doit dépasser de sa cellule
+- Toute valeur dynamique (donneur d'ordre, immatriculations, marchandises) doit être tronquée si trop longue
+- Utiliser `doc.splitTextToSize(text, maxWidth)` ou troncature manuelle avec ellipsis "…"
+
+### 4. Verso obligatoirement en gris filigrane
+Aucune couleur saturée sur le verso. Le verso est un support juridique, pas un élément graphique. Toutes les valeurs gris entre `#b0b0b0` (le plus foncé) et `#efefef` (le plus clair).
+
+### 5. Logo CMR toujours présent
+Même si la case INTERNATIONALE n'est pas cochée, l'étiquette "CMR" doit apparaître à côté pour signaler la nature du document aux contrôles étrangers.
+
+---
+
+## Procédure de modification du layout
 
 1. Ouvrir `lv-layout-constants.js`
-2. Modifier la constante concernée (ex : `SIG_H: 28`)
-3. Lancer la génération d'une LV de test dans la PWA
-4. Vérifier visuellement dans le PDF — les sections calculées (Y getters) se repositionnent automatiquement
-5. Si un chevauchement apparaît, augmenter la hauteur de la section en cause
+2. Identifier la constante concernée (ex : `H_NUM_BLOCK: 18.5`)
+3. Modifier la valeur
+4. Lancer la génération d'une LV de test dans la PWA
+5. Comparer visuellement avec `LV_REFERENCE.pdf`
+6. Si écart visible, ajuster jusqu'à correspondance parfaite
 
-**Ne jamais** patcher une coordonnée directement dans `_lvuRecto()` sans reporter la valeur dans `lv-layout-constants.js`.
-
----
-
-## Contraintes réglementaires à respecter
-
-- Le document doit être **lisible par la police** (contrôle routier) → taille de fonte minimum 6pt pour les mentions légales, 7pt pour le contenu
-- Les champs **réserves** doivent rester **modifiables à la main** à l'impression → hauteur minimum 12 mm
-- La case **NATIONALE / CMR** doit être cochée avec un **X visible** (taille checkbox 3.5 mm minimum)
-- Le numéro de LV doit figurer **en haut à droite en grands caractères** (min 12pt, bold)
-- Conserver les deux langues (FR/EN) pour les sections concernées par la CMR
+**Ne jamais** patcher une coordonnée directement dans `_lvuRecto()` ou `_lvuVerso()` sans reporter la valeur dans `lv-layout-constants.js`.
 
 ---
 
-## Fichiers liés
+## Évolutions futures prévues
+
+- [ ] **Mode remplissage progressif** : transporteur + expéditeur à l'étape chargement, réserves + destinataire + signatures à la livraison
+- [ ] **QR code** en haut à droite renvoyant vers l'URL de la LV en ligne (intégrable dans le bloc N°)
+- [ ] **Export multi-pages** si plus de 10 marchandises (page recto principale + pages annexes)
+- [ ] **Logo SONOTRAD** à intégrer dans la zone titre (en haut à gauche, à gauche du texte "LETTRE DE VOITURE UNIQUE")
+- [ ] **Signature électronique** avec horodatage cryptographique au lieu de signature manuscrite
+
+---
+
+## Fichiers du module LV
 
 ```
 sonotrad-pwa/
-├── index.html                    ← fonction _lvuRecto() ~ligne 5960
-├── lv-layout-constants.js        ← CE FICHIER — source de vérité du layout
-├── assets/
-│   └── logo-sonotrad.png         ← à créer/intégrer pour le logo
-└── CLAUDE.md                     ← CE FICHIER — contexte pour Claude Code
+├── index.html                           ← _lvuRecto() ~ligne 5960, _lvuVerso() à créer
+├── lv-layout-constants.js               ← source de vérité du layout
+├── LV_REFERENCE.pdf                     ← PDF modèle validé à reproduire
+├── lv_modele_corrige.html               ← source HTML du modèle (référence)
+└── CLAUDE.md (ce fichier)
 ```

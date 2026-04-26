@@ -1,175 +1,185 @@
 /**
  * LV_LAYOUT — Constantes de mise en page pour la génération PDF jsPDF
- * Lettre de Voiture Unique (Nationale / CMR)
- * 
- * FORMAT : A4 portrait — 210 × 297 mm
- * Marges : 8 mm de chaque côté (zone utile : 194 mm de large)
- * 
- * USAGE : importer ces constantes en tête de _lvuRecto() pour remplacer
- * les coordonnées numériques en dur. Toute modification de mise en page
- * doit passer par ce fichier, jamais directement dans le code de rendu.
- * 
- * SECTIONS (de haut en bas) :
- *   1. En-tête titre + N°
- *   2. Bande NATIONALE / INTERNATIONALE CMR
- *   3. Bloc mentions légales + DATE
- *   4. Bloc TRANSPORTEUR / CONDUCTEURS / IMMATRICULATIONS
- *   5. Ligne DONNEUR D'ORDRE
- *   6. Tableau MARCHANDISES (header + lignes)
- *   7. Pied de tableau (refus signature)
- *   8. RÉSERVES CHARGEMENT / DÉCHARGEMENT
- *   9. DOCUMENTS ANNEXES / CONVOI EXCEPTIONNEL
- *  10. EXPÉDITEUR / DESTINATAIRE
- *  11. Signatures (3 colonnes)
+ * Lettre de Voiture Unique (Nationale / CMR) — Sonotrad
+ *
+ * SOURCE DE VÉRITÉ : ces valeurs sont calées sur LV_REFERENCE.pdf
+ * Toute modification de mise en page doit passer par ce fichier.
+ *
+ * UNITÉS : mm depuis le coin haut-gauche de la page A4
+ * COULEURS : tableaux RGB pour jsPDF (doc.setFillColor(...COLOR))
  */
 
 const LV = {
 
-  // ─── PAGE ──────────────────────────────────────────────────────────────────
-  PAGE_W: 210,          // largeur A4 en mm
-  PAGE_H: 297,          // hauteur A4 en mm
-  MARGIN: 8,            // marge gauche et droite
-  get CONTENT_W() { return this.PAGE_W - this.MARGIN * 2; }, // 194 mm
+  // ═══ PAGE ═══════════════════════════════════════════════════════════════
+  PAGE_W: 210,            // largeur A4 en mm
+  PAGE_H: 297,            // hauteur A4
+  MARGIN: 6,              // marge gauche/droite/haut/bas
+  get CONTENT_W() { return this.PAGE_W - this.MARGIN * 2; },  // 198 mm
+  get CONTENT_H() { return this.PAGE_H - this.MARGIN * 2; },  // 285 mm
 
-  // ─── TYPOGRAPHIE ───────────────────────────────────────────────────────────
-  FONT_TITLE:     12,   // "LETTRE DE VOITURE UNIQUE"
-  FONT_SECTION:    7,   // labels de section (TRANSPORTEUR, MARCHANDISES…)
-  FONT_BODY:       7,   // contenu courant
-  FONT_SMALL:      6,   // texte légal (mentions CMR)
-  FONT_NUM:       14,   // numéro de LV (ex : 01449) — gras
+  // ═══ TYPOGRAPHIE (en pt) ════════════════════════════════════════════════
+  FONT_TITLE_MAIN:    14,   // "LETTRE DE VOITURE UNIQUE"
+  FONT_NUM_LABEL:     10,   // "N°"
+  FONT_NUM_VALUE:     22,   // "01449"
+  FONT_DATE_HEADER:    8,   // "DATE" (bandeau bleu)
+  FONT_DATE_VALUE:    13,   // "24/04/2026"
+  FONT_NATCMR:         8,   // "NATIONALE", "INTERNATIONALE"
+  FONT_CMR_LOGO:       7,   // étiquette "CMR"
+  FONT_LEGAL:        5.5,   // mentions légales FR/CMR
+  FONT_LABEL:        6.3,   // labels de section ("Transporteur / Carrier...")
+  FONT_BODY:         7.5,   // contenu courant
+  FONT_TRANS_NAME:    10,   // "TRANSPORTS MESNAGER"
+  FONT_SECTION:        8,   // "MARCHANDISES / GOODS"
+  FONT_MARC_COL:     6.3,   // headers colonnes marchandises
+  FONT_MARC_ROW:     7.5,   // contenu lignes marchandises
+  FONT_MARC_TOTAL:   7.8,   // ligne TOTAL
+  FONT_REFUS:        5.8,   // texte refus signature
+  FONT_SIG_HEADER:     7,   // "CACHET EXPÉDITEUR"
+  FONT_SIG_SUB:        6,   // "Sender's stamp"
 
-  // ─── COULEURS ──────────────────────────────────────────────────────────────
-  COLOR_HEADER_BG:     [15, 52, 96],    // fond titre principal (bleu marine)
-  COLOR_SECTION_BG:    [220, 220, 220], // fond headers de sections (gris clair)
-  COLOR_MARCHANDISES:  [60, 60, 60],    // fond bande MARCHANDISES (gris foncé)
-  COLOR_BORDER:        [80, 80, 80],    // bordures des cellules
-  COLOR_WHITE:         [255, 255, 255],
-  COLOR_BLACK:         [0, 0, 0],
-  COLOR_TEXT_LIGHT:    [80, 80, 80],    // texte secondaire
+  // ═══ COULEURS RECTO ═════════════════════════════════════════════════════
+  COLOR_PRIMARY:        [31, 58, 95],     // #1f3a5f bleu marine principal
+  COLOR_LIGHT_BLUE:     [221, 230, 242],  // #dde6f2 fond en-têtes marc, ligne TOTAL
+  COLOR_GREY_BLUE:      [184, 198, 217],  // #b8c6d9 séparateurs marchandises
+  COLOR_ALT_ROW:        [247, 249, 252],  // #f7f9fc fond lignes paires marc
+  COLOR_SOFT_BG:        [243, 246, 251],  // #f3f6fb donneur d'ordre, refus
+  COLOR_WHITE:          [255, 255, 255],
+  COLOR_BLACK:          [0, 0, 0],
+  COLOR_TEXT_MUTED:     [85, 85, 85],     // #555 sous-titres signatures
 
-  // ─── SECTION 1 : EN-TÊTE TITRE ─────────────────────────────────────────────
-  HEADER_Y:        8,   // Y de départ (haut de la page)
-  HEADER_H:       11,   // hauteur du bandeau titre
-  HEADER_TITLE_X: 90,   // X centré approximatif du titre (jsPDF gère le centrage)
-  HEADER_NUM_X:  170,   // X du bloc N° (droite)
-  HEADER_NUM_W:   32,   // largeur du bloc N°
+  // ═══ COULEURS VERSO (filigrane gris) ════════════════════════════════════
+  V_TEXT:               [192, 192, 192],  // #c0c0c0 corps de texte
+  V_TITLE_BLOCK:        [176, 176, 176],  // #b0b0b0 titres de blocs
+  V_TITLE_MAIN:         [181, 181, 181],  // #b5b5b5 titre principal
+  V_SUBTITLE:           [200, 200, 200],  // #c8c8c8 sous-titres
+  V_REF:                [208, 208, 208],  // #d0d0d0 références (décrets...)
+  V_BORDER:             [239, 239, 239],  // #efefef bordures blocs
+  V_BORDER_LIGHTER:     [236, 236, 236],  // #ececec séparateurs internes
+  V_BG_HEADER:          [251, 251, 251],  // #fbfbfb fond en-têtes blocs
+  V_BULLET:             [213, 213, 213],  // #d5d5d5 puces
+  V_FOOTER_TEXT:        [184, 184, 184],  // #b8b8b8 footer "TRANSPORTS MESNAGER"
 
-  // ─── SECTION 2 : NATIONALE / INTERNATIONALE CMR ────────────────────────────
-  NAT_CMR_Y:      19,   // Y de la bande de choix
-  NAT_CMR_H:       7,   // hauteur
-  NAT_COL_W:      50,   // largeur colonne NATIONALE (checkbox + texte)
-  CMR_COL_X:      66,   // X de départ INTERNATIONALE/CMR
-  CHECKBOX_SIZE:   3.5, // taille des cases à cocher
-  CHECKBOX_OFFSET_Y: 1.8, // décalage vertical case dans la ligne
+  // ═══ ZONE SUPÉRIEURE (3 premières sections) ═════════════════════════════
+  // Layout : colonne gauche (156 mm) + colonne droite (42 mm)
+  TOP_LEFT_W:    156,    // largeur zone gauche (titre + NAT/CMR + légal)
+  TOP_RIGHT_W:    42,    // largeur zone droite (N° + DATE)
 
-  // ─── SECTION 3 : MENTIONS LÉGALES + DATE ───────────────────────────────────
-  LEGAL_Y:        26,   // Y du bloc mentions légales
-  LEGAL_H:        20,   // hauteur totale du bloc
-  LEGAL_FR_W:     55,   // largeur colonne texte français
-  LEGAL_CMR_X:    63,   // X de la colonne texte CMR anglais
-  LEGAL_CMR_W:    52,   // largeur colonne texte CMR (limité pour ne pas déborder sur zone DATE)
-  DATE_X:        162,   // X du bloc DATE
-  DATE_W:         40,   // largeur du bloc DATE
-  DATE_LABEL_Y:   29,   // Y du label "DATE"
-  DATE_VALUE_Y:   35,   // Y de la valeur de date
+  // SECTION 1 : Titre principal (dans zone gauche)
+  H_TITLE:        11,    // hauteur bandeau titre
+  Y_TITLE:         6,    // y de départ (= MARGIN)
 
-  // ─── SECTION 4 : TRANSPORTEUR / CONDUCTEURS ────────────────────────────────
-  TRANS_Y:        46,   // Y de départ du bloc transporteur
-  TRANS_H:        30,   // hauteur totale
-  TRANS_COL_W:    95,   // largeur colonne transporteur (gauche)
-  COND_COL_X:    111,   // X colonne conducteurs (droite)
-  COND_COL_W:     40,   // largeur colonne conducteurs
-  IMMAT_COL_X:   111,   // X colonne immatriculations
-  IMMAT_COL_W:    91,   // largeur colonne immatriculations
-  TRANS_LINE_H:    4.5, // hauteur d'une ligne d'adresse
+  // SECTION 2 : NATIONALE / INTERNATIONALE+CMR (dans zone gauche)
+  H_NATCMR:        7,    // hauteur ligne choix
+  get Y_NATCMR()  { return this.Y_TITLE + this.H_TITLE; },     // 17
+  W_NATCMR_HALF:  78,    // largeur de chaque option (NAT et CMR)
+  CHECKBOX_SIZE: 3.8,    // taille des cases à cocher
 
-  // ─── SECTION 5 : DONNEUR D'ORDRE ───────────────────────────────────────────
-  DO_Y:           76,   // Y de la ligne donneur d'ordre
-  DO_H:            8,   // hauteur
+  // CMR logo (étiquette encadrée à côté de INTERNATIONALE)
+  CMR_LOGO_W:    9.5,    // largeur étiquette CMR
+  CMR_LOGO_H:      4,    // hauteur
+  CMR_LOGO_RADIUS: 1.2,  // border-radius
+  CMR_LOGO_PAD_X:  2,    // padding horizontal interne
+  CMR_LOGO_OFFSET: 4,    // marge gauche depuis "INTERNATIONALE"
 
-  // ─── SECTION 6 : TABLEAU MARCHANDISES ──────────────────────────────────────
-  MARC_HEADER_Y:  84,   // Y de l'en-tête MARCHANDISES/GOODS
-  MARC_HEADER_H:   5,   // hauteur bandeau
-  MARC_COLS_Y:    89,   // Y des sous-colonnes (NOMBRE, POIDS, NOTE)
-  MARC_COLS_H:     7,   // hauteur des labels de colonnes
-  MARC_ROW_Y:     96,   // Y de la première ligne de données
-  MARC_ROW_H:      7,   // hauteur d'une ligne article
-  MARC_ROWS:      10,   // nombre de lignes affichées (à ajuster)
-  MARC_COL_DESC_W:120,  // largeur colonne description article
-  MARC_COL_POIDS_X:128, // X colonne poids
-  MARC_COL_POIDS_W: 40, // largeur colonne poids
-  MARC_COL_NOTE_X: 172, // X colonne NOTE
-  MARC_COL_NOTE_W:  35, // largeur colonne NOTE
+  // SECTION 3 : Mentions légales FR / CMR (dans zone gauche)
+  H_LEGAL:        18,    // hauteur bloc mentions légales
+  get Y_LEGAL()   { return this.Y_NATCMR + this.H_NATCMR; },   // 24
+  W_LEGAL_HALF:   78,    // largeur de chaque colonne (FR et CMR)
 
-  // ─── SECTION 7 : PIED DE TABLEAU (refus signature) ─────────────────────────
-  get REFUS_Y() {
-    return this.MARC_ROW_Y + (this.MARC_ROWS * this.MARC_ROW_H);
-  },
-  REFUS_H:         6,   // hauteur
+  // SECTION 4 : Bloc N° + DATE (zone droite)
+  X_TOP_RIGHT:   162,    // x du début de la colonne droite (MARGIN + TOP_LEFT_W)
+  H_NUM_BLOCK:  18.5,    // hauteur bloc N° (calé sur titre + NAT/CMR + bordure)
+  get Y_NUM_BLOCK() { return this.Y_TITLE; },                  // 6
+  H_DATE_HEADER:   6,    // hauteur bandeau "DATE"
+  get Y_DATE_HEADER() { return this.Y_NUM_BLOCK + this.H_NUM_BLOCK; },  // 24.5
+  // Note : H_DATE_VALUE = ce qui reste pour atteindre Y_TRANSPORTEUR
 
-  // ─── SECTION 8 : RÉSERVES ──────────────────────────────────────────────────
-  get RESERVES_Y() { return this.REFUS_Y + this.REFUS_H; },
-  RESERVES_H:     15,   // hauteur des blocs réserves
-  RESERVES_HALF_W: 97,  // largeur de chaque colonne (gauche / droite)
+  // ═══ ZONE PLEINE LARGEUR ════════════════════════════════════════════════
+  get Y_TRANSPORTEUR() { return this.Y_LEGAL + this.H_LEGAL; },  // 42
 
-  // ─── SECTION 9 : DOCUMENTS / CONVOI EXCEPTIONNEL ──────────────────────────
-  get DOCS_Y() { return this.RESERVES_Y + this.RESERVES_H; },
-  DOCS_H:          9,
-  DOCS_COL_W:     97,   // largeur colonne documents
-  CONVOI_COL_X:  105,   // X colonne convoi exceptionnel
-  CONVOI_COL_W:   97,
+  // SECTION 5 : Transporteur / Conducteurs / Immatriculations
+  H_TRANSPORTEUR:   34,
+  W_TRANS_LEFT:    116,    // colonne transporteur (gauche)
+  W_TRANS_RIGHT:    82,    // colonne conducteurs+immat (droite)
+  H_COND:           13,    // hauteur sous-bloc CONDUCTEURS
+  // H_IMMAT calculé : H_TRANSPORTEUR - H_COND
 
-  // ─── SECTION 10 : EXPÉDITEUR / DESTINATAIRE ────────────────────────────────
-  get ADDR_Y() { return this.DOCS_Y + this.DOCS_H; },
-  ADDR_H:         28,   // hauteur des blocs adresse
-  ADDR_COL_W:     97,   // largeur colonne expéditeur
-  DEST_COL_X:    105,   // X colonne destinataire
+  // SECTION 6 : Donneur d'ordre
+  H_DONNEUR:         9,
+  get Y_DONNEUR()  { return this.Y_TRANSPORTEUR + this.H_TRANSPORTEUR; },
+  W_DONNEUR_LABEL:  34,
 
-  // ─── SECTION 11 : SIGNATURES ───────────────────────────────────────────────
-  get SIG_Y() { return this.ADDR_Y + this.ADDR_H; },
-  SIG_H:          28,   // hauteur zone signatures
-  SIG_COL_W:      64,   // largeur de chaque colonne (3 colonnes égales ~194/3)
-  SIG_COL2_X:     72,   // X colonne centrale (conducteur)
-  SIG_COL3_X:    138,   // X colonne droite (destinataire)
+  // SECTION 7 : Header MARCHANDISES / GOODS
+  H_MARC_HEADER:     6,
+  get Y_MARC_HEADER() { return this.Y_DONNEUR + this.H_DONNEUR; },
+
+  // SECTION 8 : En-têtes colonnes marchandises
+  H_MARC_COLS:       6,
+  W_MARC_NOMBRE:    24,
+  W_MARC_POIDS:     30,
+  W_MARC_NOTE:      22,
+  // W_MARC_NATURE = CONTENT_W - (24+30+22) = 122
+
+  // SECTION 9 : Lignes marchandises (10 + 1 TOTAL)
+  H_MARC_ROW:      8.5,
+  N_MARC_ROWS:      10,    // nombre de lignes de saisie
+  // Ligne TOTAL : même hauteur, fond LIGHT_BLUE, bordure haute 0.6pt PRIMARY
+
+  // SECTION 10 : Refus signature (2 colonnes égales)
+  H_REFUS:           7,
+
+  // SECTION 11 : Réserves Chargement / Déchargement
+  H_RESERVES:       20,
+
+  // SECTION 12 : Documents annexes / Convoi exceptionnel
+  H_DOCS:           10,
+
+  // SECTION 13 : Expéditeur / Destinataire
+  H_ADDR:           26,
+
+  // SECTION 14 : Signatures (3 colonnes égales)
+  H_SIG:            32,
+  N_SIG_COLS:        3,
+  H_SIG_HEADER:    4.5,    // hauteur bandeau "CACHET EXPÉDITEUR"
+  SIG_LINE_MARGIN:   3,    // marge latérale ligne pointillée
+  SIG_LINE_BOTTOM:   2,    // distance bas de la ligne pointillée
+
+  // ═══ VERSO ══════════════════════════════════════════════════════════════
+  V_HEADER_TITLE_FONT: 13,
+  V_HEADER_SUB_FONT:    8,
+  V_BLOCK_TITLE_FONT: 8.5,
+  V_BLOCK_BODY_FONT:  7.8,
+  V_BLOCK_LIST_FONT:  7.5,
+  V_FOOTER_FONT:      6.5,
+
+  V_HEADER_PAD_BOTTOM: 4,
+  V_HEADER_MARGIN_BOTTOM: 6,
+  V_COL_GAP:           6,    // espace entre colonnes gauche/droite
+  V_BLOCK_GAP:         4,    // espace vertical entre blocs d'une colonne
+  V_BLOCK_PAD_X:       3,
+  V_BLOCK_PAD_Y:     2.5,
+  V_BLOCK_TITLE_PAD_X: 3,
+  V_BLOCK_TITLE_PAD_Y: 1.8,
+
+  // 9 blocs : 5 à gauche, 4 à droite (étirement uniforme via flex)
+  V_BLOCKS_LEFT:  5,
+  V_BLOCKS_RIGHT: 4,
+
+  // ═══ HELPERS ═══════════════════════════════════════════════════════════
+  // Padding interne standard pour les cellules avec texte
+  CELL_PAD_X: 2,
+  CELL_PAD_Y: 1.3,
+
+  // Épaisseurs de traits
+  STROKE_DOC_BORDER: 0.6,    // bordure externe du document
+  STROKE_SECTION:    0.4,    // séparateurs de sections
+  STROKE_INTRA:      0.3,    // séparateurs internes (lignes marchandises)
+  STROKE_TOTAL:      0.6,    // bordure haute ligne TOTAL
+  STROKE_SIG_LINE:   0.8,    // ligne pointillée signatures
+  STROKE_VERSO:      0.3,    // toutes bordures verso
 
 };
 
-/**
- * NOTES DE CORRECTIONS PRIORITAIRES (à partir de la LV 01449 générée)
- * 
- * 1. SECTION LÉGALE (Y:26) :
- *    - Le texte FR et CMR déborde sur la zone DATE → réduire LEGAL_CMR_W ou
- *      augmenter LEGAL_H pour laisser de l'air
- *    - La DATE est lisible mais le label "DATE" manque de hiérarchie visuelle
- *      → passer DATE en gras, augmenter légèrement FONT_NUM
- * 
- * 2. SECTION TRANSPORTEUR (Y:46) :
- *    - Bonne lisibilité globale
- *    - Ajouter un filet séparateur entre colonne transporteur et conducteurs
- *    - "CONDUCTEURS" et "IMMATRICULATIONS" : espacer davantage (TRANS_LINE_H += 1)
- * 
- * 3. TABLEAU MARCHANDISES :
- *    - Lignes vides trop nombreuses visuellement → si aucune donnée sur une ligne,
- *      griser le fond légèrement (alternance de couleur)
- *    - La colonne NOTE est trop étroite → MARC_COL_NOTE_W: 35
- * 
- * 4. RÉSERVES (Y calculé) :
- *    - Prévoir une hauteur min de 15 mm (RESERVES_H: 15) pour permettre
- *      l'écriture manuscrite à l'impression
- * 
- * 5. ZONE SIGNATURES :
- *    - SIG_H actuel trop juste pour les cachets (tampons entreprise)
- *      → SIG_H: 28 recommandé
- *    - Ajouter une ligne tirets pointillés dans chaque colonne signature
- *      pour guider la signature
- * 
- * 6. ESTHÉTIQUE GLOBALE :
- *    - Remplacer COLOR_HEADER_BG par [15, 52, 96] (bleu marine pro)
- *      pour différencier du gris des sections
- *    - Ajouter le logo SONOTRAD en haut à gauche du titre si disponible
- *    - Vérifier que toutes les polices sont Helvetica ou Arial
- *      (éviter le mélange de familles)
- */
-
-// Export pour usage en module ES
+// Export ES module
 if (typeof module !== 'undefined') module.exports = { LV };

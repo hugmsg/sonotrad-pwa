@@ -12,6 +12,7 @@
   <title>Sonotrad</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="lv-layout-constants.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     :root { --brand: #1A5276; --accent: #2E86C1; }
@@ -5952,288 +5953,472 @@ function _generateLvu(data) {
 }
 
 function _lvuRecto(doc, d, isCMR, band) {
-  const ML = 8, CW = 194, x0 = ML;
-  let y = 8;
+  const x0 = LV.MARGIN;
+  const CW = LV.CONTENT_W;
+  const rx = x0 + LV.TOP_LEFT_W;   // X colonne droite (N° + DATE)
+
   const sf  = (s, z) => { doc.setFont('helvetica', s); doc.setFontSize(z); };
-  const fc  = (r, g, b) => doc.setFillColor(r, g, b);
-  const tc  = (r, g, b) => doc.setTextColor(r, g, b);
-  const lw  = w => doc.setLineWidth(w);
+  const fc  = (...c) => doc.setFillColor(...c);
+  const tc  = (...c) => doc.setTextColor(...c);
+  const dc  = (...c) => doc.setDrawColor(...c);
+  const lw  = w  => doc.setLineWidth(w);
   const bx  = (x, y, w, h, s = 'S') => doc.rect(x, y, w, h, s);
   const ln  = (x1, y1, x2, y2) => doc.line(x1, y1, x2, y2);
   const tx  = (t, x, y, a = 'left') => doc.text(String(t ?? ''), x, y, { align: a });
   const sp  = (t, w) => doc.splitTextToSize(String(t ?? ''), w);
+  const vc  = (y, h, s) => y + h / 2 + s * 0.176;
   const chk = (x, cy, sz, on) => {
     bx(x, cy, sz, sz);
     if (on) { ln(x + .5, cy + .5, x + sz - .5, cy + sz - .5); ln(x + sz - .5, cy + .5, x + .5, cy + sz - .5); }
   };
-  doc.setDrawColor(0); tc(0, 0, 0); lw(0.3);
+  dc(0, 0, 0); tc(0, 0, 0); lw(LV.STROKE_INTRA);
+  let y = LV.Y_TITLE;
 
-  // ── Bande CMR ──────────────────────────────────────────────────────────────
+  // ── Bande CMR colorée (exemplaires multiples) ────────────────────────────
   if (band) {
     fc(...band.rgb); bx(x0, y, CW, 6, 'F');
-    tc(255, 255, 255); sf('bold', 7.5); tx(band.label, x0 + CW / 2, y + 4.3, 'center');
+    tc(...LV.COLOR_WHITE); sf('bold', LV.FONT_MARC_ROW);
+    tx(band.label, x0 + CW / 2, y + 4.3, 'center');
     tc(0, 0, 0); y += 7;
   }
 
-  // ── Titre ──────────────────────────────────────────────────────────────────
-  lw(0.5); fc(15, 52, 96); bx(x0, y, CW, 9, 'FD'); tc(255, 255, 255);
-  sf('bold', 13); tx('LETTRE DE VOITURE UNIQUE', x0 + CW / 2, y + 6.3, 'center');
-  sf('bold', 8);  tx('N°', x0 + CW - 34, y + 4);
-  sf('bold', 15); tx(String(d.display || ''), x0 + CW - 25, y + 7.5);
-  tc(0, 0, 0); y += 9; lw(0.3);
+  // ═══ ZONE SUPÉRIEURE : col. gauche (TOP_LEFT_W) + col. droite (TOP_RIGHT_W)
 
-  // ── Toggle LV / CMR ────────────────────────────────────────────────────────
-  bx(x0, y, CW / 2, 6); bx(x0 + CW / 2, y, CW / 2, 6);
-  sf('normal', 8);
-  chk(x0 + 2.5, y + 1.2, 3.5, !isCMR); tx('NATIONALE', x0 + 8, y + 4.3);
-  chk(x0 + CW / 2 + 2.5, y + 1.2, 3.5, isCMR); tx('INTERNATIONALE / CMR', x0 + CW / 2 + 8, y + 4.3);
-  y += 6;
+  // ── Section 1 : Titre (zone gauche) ─────────────────────────────────────
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  fc(...LV.COLOR_PRIMARY); bx(x0, y, LV.TOP_LEFT_W, LV.H_TITLE, 'FD');
+  tc(...LV.COLOR_WHITE); sf('bold', LV.FONT_TITLE_MAIN);
+  tx('LETTRE DE VOITURE UNIQUE', x0 + LV.TOP_LEFT_W / 2, vc(y, LV.H_TITLE, LV.FONT_TITLE_MAIN), 'center');
 
-  // ── Textes légaux + date ───────────────────────────────────────────────────
-  // Boîte gauche (droit national), boîte droite (CMR), date en haut à droite
-  const dateW = 42; // largeur réservée pour la date dans la boîte droite
-  bx(x0, y, CW / 2, 22); bx(x0 + CW / 2, y, CW / 2, 22);
-  // Séparateur vertical : texte CMR | date
-  ln(x0 + CW - dateW, y, x0 + CW - dateW, y + 22);
-  // Texte LV (gauche)
-  sf('normal', 5);
-  doc.text(sp("À défaut de convention écrite entre les parties au contrat de transport ou de déclaration de valeur spécifiée par le donneur d'ordre, la responsabilité du transporteur, en cas de perte ou avarie survenue aux marchandises ou en cas de retard à la livraison, est limitée au montant de l'indemnité prévue par le contrat type concernant le transport.", CW / 2 - 4), x0 + 2, y + 3.5);
-  // Texte CMR (droite, limité pour ne pas déborder sur la zone date)
-  doc.text(sp("Ce transport est soumis, nonobstant toute clause contraire, à la Convention relative au contrat de transport international de marchandises par route (CMR).\nThis carriage is subject, notwithstanding any clause to the contrary, to the Convention on the Contract for the international Carriage of goods by road (CMR).", CW / 2 - dateW - 3), x0 + CW / 2 + 2, y + 3.5);
-  // Date (zone dédiée, droite) — fond coloré + label gras bien visible
-  fc(220, 228, 240); bx(x0 + CW - dateW, y, dateW, 6.5, 'F'); tc(0, 0, 0);
-  sf('bold', 8); tx('DATE', x0 + CW - dateW / 2, y + 4.8, 'center');
-  ln(x0 + CW - dateW + 1, y + 7, x0 + CW - 1, y + 7);
-  sf('normal', 8.5); tx(d.date || '', x0 + CW - dateW / 2, y + 13, 'center');
-  y += 22;
+  // ── Section 4a : Bloc N° (colonne droite) ────────────────────────────────
+  bx(rx, y, LV.TOP_RIGHT_W, LV.H_NUM_BLOCK);
+  tc(...LV.COLOR_PRIMARY);
+  sf('bold', LV.FONT_NUM_LABEL);
+  tx('N°', rx + 5, vc(y, LV.H_NUM_BLOCK, LV.FONT_NUM_LABEL));
+  sf('bold', LV.FONT_NUM_VALUE);
+  tx(String(d.numero ?? d.display ?? ''), rx + 13, vc(y, LV.H_NUM_BLOCK, LV.FONT_NUM_VALUE));
+  tc(0, 0, 0); lw(LV.STROKE_INTRA);
 
-  // ── Transporteur + Conducteurs ─────────────────────────────────────────────
-  const Sx = x0 + CW * 0.56;
-  bx(x0, y, CW * 0.56, 30); bx(Sx, y, CW * 0.44, 30);
-  lw(0.7); ln(Sx, y, Sx, y + 30); lw(0.3);
-  fc(235, 235, 235); bx(x0, y, CW * 0.56, 5.5, 'F'); bx(Sx, y, CW * 0.44, 5.5, 'F'); tc(0,0,0);
-  sf('bold', 6); tx('Transporteur / Carrier (nom, adresse, pays / name, address, country)', x0 + 2, y + 3.8);
-  const tl = d.transporteur || {};
-  sf('normal', 7.5);
-  let ty = y + 7.5;
-  for (const l of [tl.nom || 'TRANSPORTS MESNAGER', tl.adresse || 'Z.A. des Renardières - B.P 10',
-    tl.ville || '53250 JAVRON LES CHAPELLES', tl.info || 'SAS au capital de 500 000 €',
-    tl.tel   || 'Tél. 02.43.03.43.41', tl.rcs  || 'RCS LAVAL 314 901 869']) {
-    tx(l, x0 + 2, ty); ty += 3.7;
-  }
-  sf('bold', 6);   tx('CONDUCTEURS / Drivers', Sx + 2, y + 3.8);
-  sf('normal', 8); tx(d.conducteur || '', Sx + 2, y + 8.5);
-  ln(Sx + 1, y + 10, x0 + CW - 1, y + 10);
-  sf('bold', 6);     tx('IMMATRICULATIONS / Plate N°', Sx + 2, y + 13.5);
-  sf('normal', 6.5); tx('Véhicule moteur :', Sx + 2, y + 18);
-  sf('normal', 8);   tx(d.immat_moteur || '', Sx + 32, y + 18);
-  ln(Sx + 1, y + 19.5, x0 + CW - 1, y + 19.5);
-  sf('normal', 6.5); tx('(Semi-)remorque :', Sx + 2, y + 24.5);
-  sf('normal', 8);   tx(d.immat_semi || '', Sx + 32, y + 24.5);
-  y += 30;
+  // ── Section 2 : NATIONALE / INTERNATIONALE (zone gauche) ─────────────────
+  const y2 = y + LV.H_TITLE;
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y2, LV.W_NATCMR_HALF, LV.H_NATCMR);
+  bx(x0 + LV.W_NATCMR_HALF, y2, LV.W_NATCMR_HALF, LV.H_NATCMR);
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  sf('bold', LV.FONT_NATCMR); tc(0, 0, 0);
+  const chkY  = y2 + (LV.H_NATCMR - LV.CHECKBOX_SIZE) / 2;
+  const txtVY = vc(y2, LV.H_NATCMR, LV.FONT_NATCMR);
+  chk(x0 + LV.CELL_PAD_X, chkY, LV.CHECKBOX_SIZE, !isCMR);
+  tx('NATIONALE', x0 + LV.CELL_PAD_X + LV.CHECKBOX_SIZE + 2, txtVY);
+  const intlX = x0 + LV.W_NATCMR_HALF;
+  chk(intlX + LV.CELL_PAD_X, chkY, LV.CHECKBOX_SIZE, isCMR);
+  tx('INTERNATIONALE', intlX + LV.CELL_PAD_X + LV.CHECKBOX_SIZE + 2, txtVY);
+  // Étiquette CMR (toujours visible)
+  const cmrLogoX = intlX + LV.W_NATCMR_HALF - LV.CMR_LOGO_W - LV.CELL_PAD_X;
+  const cmrLogoY = y2 + (LV.H_NATCMR - LV.CMR_LOGO_H) / 2;
+  dc(...LV.COLOR_PRIMARY); lw(0.8);
+  doc.roundedRect(cmrLogoX, cmrLogoY, LV.CMR_LOGO_W, LV.CMR_LOGO_H, LV.CMR_LOGO_RADIUS, LV.CMR_LOGO_RADIUS, 'S');
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_CMR_LOGO);
+  doc.setCharSpace(0.3);
+  tx('CMR', cmrLogoX + LV.CMR_LOGO_W / 2, vc(cmrLogoY, LV.CMR_LOGO_H, LV.FONT_CMR_LOGO), 'center');
+  doc.setCharSpace(0);
 
-  // ── Donneur d'ordre ────────────────────────────────────────────────────────
-  bx(x0, y, CW, 8);
-  fc(235, 235, 235); bx(x0, y, CW, 5.5, 'F'); tc(0,0,0);
-  sf('bold', 7); tx("Donneur d'ordre :", x0 + 2, y + 3.8);
-  sf('normal', 9); tx(d.donneur_ordre || '', x0 + 37, y + 5.8);
-  y += 8;
+  // ── Section 4b : Bandeau DATE (colonne droite) ────────────────────────────
+  const dateHdrY = y + LV.H_NUM_BLOCK;
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  fc(...LV.COLOR_PRIMARY); bx(rx, dateHdrY, LV.TOP_RIGHT_W, LV.H_DATE_HEADER, 'FD');
+  tc(...LV.COLOR_WHITE); sf('bold', LV.FONT_DATE_HEADER);
+  doc.setCharSpace(1);
+  tx('DATE', rx + LV.TOP_RIGHT_W / 2, vc(dateHdrY, LV.H_DATE_HEADER, LV.FONT_DATE_HEADER), 'center');
+  doc.setCharSpace(0);
 
-  // ── Tableau marchandises ───────────────────────────────────────────────────
-  lw(0.5);
-  const C1 = CW * 0.62, C2 = CW * 0.20, C3 = CW * 0.18;
-  const X2 = x0 + C1, X3 = X2 + C2;
-  // Titre de section
-  fc(60, 80, 120); bx(x0, y, CW, 5, 'F'); tc(255,255,255);
-  sf('bold', 7); tx('MARCHANDISES / GOODS', x0 + CW / 2, y + 3.5, 'center');
-  tc(0,0,0); y += 5; lw(0.3);
-  // Header colonnes
-  fc(220, 225, 235); bx(x0, y, C1, 7, 'F'); bx(X2, y, C2, 7, 'F'); bx(X3, y, C3, 7, 'F'); tc(0,0,0);
-  bx(x0, y, C1, 7); bx(X2, y, C2, 7); bx(X3, y, C3, 7);
-  sf('bold', 6);
-  doc.text(sp('NOMBRE / Number · NATURE DE LA MARCHANDISE / Nature of the goods', C1 - 4), x0 + 2, y + 3);
-  doc.text(sp('POIDS / M.L.\nWeight / Lin. m.', C2 - 2), X2 + 1, y + 2.8);
-  tx('NOTE', X3 + C3 / 2, y + 4.5, 'center');
-  y += 7;
-  const RH = 6.2;
+  // ── Section 3 : Mentions légales (zone gauche) ────────────────────────────
+  const y3 = y2 + LV.H_NATCMR;
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y3, LV.W_LEGAL_HALF, LV.H_LEGAL);
+  bx(x0 + LV.W_LEGAL_HALF, y3, LV.W_LEGAL_HALF, LV.H_LEGAL);
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  sf('italic', LV.FONT_LEGAL); tc(0, 0, 0);
+  doc.text(sp("À défaut de convention écrite entre les parties au contrat de transport ou de déclaration de valeur spécifiée par le donneur d'ordre, la responsabilité du transporteur, en cas de perte ou avarie survenue aux marchandises ou en cas de retard à la livraison, est limitée au montant de l'indemnité prévue par le contrat type concernant le transport.", LV.W_LEGAL_HALF - LV.CELL_PAD_X * 2), x0 + LV.CELL_PAD_X, y3 + LV.CELL_PAD_Y * 2);
+  doc.text(sp("Ce transport est soumis, nonobstant toute clause contraire, à la Convention relative au contrat de transport international de marchandises par route (CMR).\nThis carriage is subject, notwithstanding any clause to the contrary, to the Convention on the Contract for the international Carriage of goods by road (CMR).", LV.W_LEGAL_HALF - LV.CELL_PAD_X * 2), x0 + LV.W_LEGAL_HALF + LV.CELL_PAD_X, y3 + LV.CELL_PAD_Y * 2);
+
+  // ── Section 4c : Valeur de la date (colonne droite) ──────────────────────
+  const dateValY = dateHdrY + LV.H_DATE_HEADER;
+  const dateValH = (y3 + LV.H_LEGAL) - dateValY;  // reste jusqu'à Y_TRANSPORTEUR
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(rx, dateValY, LV.TOP_RIGHT_W, dateValH);
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_DATE_VALUE);
+  tx(d.date ?? '', rx + LV.TOP_RIGHT_W / 2, vc(dateValY, dateValH, LV.FONT_DATE_VALUE), 'center');
+  tc(0, 0, 0); dc(0, 0, 0); lw(LV.STROKE_INTRA);
+
+  // ═══ ZONE PLEINE LARGEUR
+  y = y3 + LV.H_LEGAL;   // = LV.Y_TRANSPORTEUR (+ décalage bande si CMR)
+
+  // ── Section 5 : Transporteur + Conducteurs / Immatriculations ─────────────
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y, CW, LV.H_TRANSPORTEUR);
+  lw(LV.STROKE_DOC_BORDER); ln(x0 + LV.W_TRANS_LEFT, y, x0 + LV.W_TRANS_LEFT, y + LV.H_TRANSPORTEUR);
+  fc(...LV.COLOR_LIGHT_BLUE);
+  bx(x0, y, LV.W_TRANS_LEFT, 4.5, 'F');
+  bx(x0 + LV.W_TRANS_LEFT, y, LV.W_TRANS_RIGHT, 4.5, 'F');
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_LABEL);
+  tx('Transporteur / Carrier (nom, adresse, pays / name, address, country)', x0 + LV.CELL_PAD_X, y + 3.2);
+  const tl = d.transporteur ?? {};
+  tc(0, 0, 0); sf('bold', LV.FONT_TRANS_NAME);
+  let ty = y + 8;
+  tx(tl.nom ?? 'TRANSPORTS MESNAGER', x0 + LV.CELL_PAD_X, ty); ty += 4.2;
+  sf('normal', LV.FONT_BODY);
+  for (const l of [
+    tl.adresse ?? 'Z.A. des Renardières - B.P 10',
+    tl.cp_ville ?? tl.ville ?? '53250 JAVRON LES CHAPELLES',
+    tl.siret ? 'SIRET : ' + tl.siret : (tl.info ?? 'SAS au capital de 500 000 €'),
+    tl.telephone ?? tl.tel ?? 'Tél. 02.43.03.43.41',
+    tl.rcs ?? 'RCS LAVAL 314 901 869',
+  ]) { tx(l, x0 + LV.CELL_PAD_X, ty); ty += 3.7; }
+  const cx2 = x0 + LV.W_TRANS_LEFT;
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_LABEL);
+  tx('CONDUCTEURS / Drivers', cx2 + LV.CELL_PAD_X, y + 3.2);
+  tc(0, 0, 0); sf('normal', LV.FONT_BODY);
+  tx(d.conducteur ?? '', cx2 + LV.CELL_PAD_X, y + LV.H_COND / 2 + 2.5);
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_INTRA);
+  ln(cx2 + 1, y + LV.H_COND, x0 + CW - 1, y + LV.H_COND);
+  const imY = y + LV.H_COND;
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_LABEL);
+  tx('IMMATRICULATIONS / Plate N°', cx2 + LV.CELL_PAD_X, imY + 4);
+  tc(0, 0, 0); sf('normal', LV.FONT_LABEL);
+  tx('Véhicule moteur :', cx2 + LV.CELL_PAD_X, imY + 9);
+  sf('normal', LV.FONT_BODY);
+  tx(d.vehicule ?? d.immat_moteur ?? '', cx2 + LV.CELL_PAD_X + 23, imY + 9);
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_INTRA);
+  ln(cx2 + 1, imY + 10.5, x0 + CW - 1, imY + 10.5);
+  sf('normal', LV.FONT_LABEL); tx('(Semi-)remorque :', cx2 + LV.CELL_PAD_X, imY + 16);
+  sf('normal', LV.FONT_BODY);  tx(d.remorque ?? d.immat_semi ?? '', cx2 + LV.CELL_PAD_X + 23, imY + 16);
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_TRANSPORTEUR;
+
+  // ── Section 6 : Donneur d'ordre ───────────────────────────────────────────
+  fc(...LV.COLOR_SOFT_BG); bx(x0, y, CW, LV.H_DONNEUR, 'F');
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y, CW, LV.H_DONNEUR);
+  ln(x0 + LV.W_DONNEUR_LABEL, y, x0 + LV.W_DONNEUR_LABEL, y + LV.H_DONNEUR);
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_BODY);
+  tx("Donneur d'ordre :", x0 + LV.CELL_PAD_X, vc(y, LV.H_DONNEUR, LV.FONT_BODY));
+  tc(0, 0, 0); sf('normal', LV.FONT_BODY + 1.5);
+  const doVal = sp(String(d.donneurOrdre ?? d.donneur_ordre ?? ''), CW - LV.W_DONNEUR_LABEL - LV.CELL_PAD_X * 2);
+  if (doVal[0]) tx(doVal[0], x0 + LV.W_DONNEUR_LABEL + LV.CELL_PAD_X, vc(y, LV.H_DONNEUR, LV.FONT_BODY + 1.5));
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_DONNEUR;
+
+  // ── Section 7 : Header MARCHANDISES / GOODS ──────────────────────────────
+  fc(...LV.COLOR_PRIMARY); bx(x0, y, CW, LV.H_MARC_HEADER, 'F');
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y, CW, LV.H_MARC_HEADER, 'S');
+  tc(...LV.COLOR_WHITE); sf('bold', LV.FONT_SECTION);
+  doc.setCharSpace(0.5);
+  tx('MARCHANDISES / GOODS', x0 + CW / 2, vc(y, LV.H_MARC_HEADER, LV.FONT_SECTION), 'center');
+  doc.setCharSpace(0);
+  tc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_MARC_HEADER;
+
+  // ── Section 8 : En-têtes colonnes ─────────────────────────────────────────
+  const W_NAT   = CW - LV.W_MARC_NOMBRE - LV.W_MARC_POIDS - LV.W_MARC_NOTE;
+  const X_NAT   = x0 + LV.W_MARC_NOMBRE;
+  const X_POIDS = X_NAT + W_NAT;
+  const X_NOTE  = X_POIDS + LV.W_MARC_POIDS;
+  fc(...LV.COLOR_LIGHT_BLUE); bx(x0, y, CW, LV.H_MARC_COLS, 'F');
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0,     y, LV.W_MARC_NOMBRE, LV.H_MARC_COLS);
+  bx(X_NAT,  y, W_NAT,            LV.H_MARC_COLS);
+  bx(X_POIDS,y, LV.W_MARC_POIDS,  LV.H_MARC_COLS);
+  bx(X_NOTE, y, LV.W_MARC_NOTE,   LV.H_MARC_COLS);
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_MARC_COL);
+  doc.setCharSpace(0.3);
+  doc.text(sp('NOMBRE\nNumber', LV.W_MARC_NOMBRE - 2), x0 + LV.W_MARC_NOMBRE / 2, y + LV.CELL_PAD_Y + 1, { align: 'center' });
+  doc.text(sp('NATURE DE LA MARCHANDISE / Nature of the goods', W_NAT - 4), X_NAT + W_NAT / 2, y + LV.CELL_PAD_Y + 1, { align: 'center' });
+  doc.text(sp('POIDS / M.L.\nWeight / Lin. m.', LV.W_MARC_POIDS - 2), X_POIDS + LV.W_MARC_POIDS / 2, y + LV.CELL_PAD_Y + 1, { align: 'center' });
+  tx('NOTE', X_NOTE + LV.W_MARC_NOTE / 2, vc(y, LV.H_MARC_COLS, LV.FONT_MARC_COL), 'center');
+  doc.setCharSpace(0);
+  tc(0, 0, 0); dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_MARC_COLS;
+
+  // ── Section 9 : Lignes marchandises + ligne TOTAL ─────────────────────────
   const marchs = Array.isArray(d.marchandises) ? d.marchandises : [];
-  for (let i = 0; i < 10; i++) {
-    const r = marchs[i] || {};
-    if (i % 2 === 1) { fc(248, 248, 248); bx(x0, y, CW, RH, 'F'); tc(0, 0, 0); }
-    bx(x0, y, C1, RH); bx(X2, y, C2, RH); bx(X3, y, C3, RH);
-    sf('normal', 8);
-    if (r.description) tx(sp((r.qte ? r.qte + ' / ' : '') + r.description, C1 - 3)[0], x0 + 2, y + 4.2);
-    if (r.poids) tx(String(r.poids) + (String(r.poids).match(/[tT]\s*$/) ? '' : ' t'), X2 + C2 / 2, y + 4.2, 'center');
-    if (r.note)  { sf('normal', 7); tx(r.note, X3 + 1, y + 4.2); }
-    y += RH;
+  for (let i = 0; i < LV.N_MARC_ROWS; i++) {
+    const r = marchs[i] ?? {};
+    if (i % 2 === 0) { fc(...LV.COLOR_ALT_ROW); bx(x0, y, CW, LV.H_MARC_ROW, 'F'); }
+    dc(...LV.COLOR_GREY_BLUE); lw(LV.STROKE_INTRA);
+    bx(x0,     y, LV.W_MARC_NOMBRE, LV.H_MARC_ROW);
+    bx(X_NAT,  y, W_NAT,            LV.H_MARC_ROW);
+    bx(X_POIDS,y, LV.W_MARC_POIDS,  LV.H_MARC_ROW);
+    bx(X_NOTE, y, LV.W_MARC_NOTE,   LV.H_MARC_ROW);
+    tc(0, 0, 0);
+    const rowY  = vc(y, LV.H_MARC_ROW, LV.FONT_MARC_ROW);
+    const nombre = String(r.nombre ?? r.qte ?? '');
+    const nature = String(r.nature ?? r.description ?? '');
+    const poids  = String(r.poids ?? '');
+    const note   = String(r.note ?? '');
+    sf('normal', LV.FONT_MARC_ROW);
+    if (nombre) tx(nombre, x0 + LV.CELL_PAD_X, rowY);
+    if (nature) tx((sp(nature, W_NAT - LV.CELL_PAD_X * 2))[0] ?? '', X_NAT + LV.CELL_PAD_X, rowY);
+    if (poids)  tx(poids + (poids.match(/[tT]\s*$/) ? '' : ' t'), X_POIDS + LV.W_MARC_POIDS / 2, rowY, 'center');
+    if (note)   { sf('normal', LV.FONT_MARC_COL); tx(note, X_NOTE + LV.CELL_PAD_X, rowY); }
+    y += LV.H_MARC_ROW;
   }
+  // Ligne TOTAL
+  const tot = d.total ?? {};
+  fc(...LV.COLOR_LIGHT_BLUE); bx(x0, y, CW, LV.H_MARC_ROW, 'F');
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_TOTAL); ln(x0, y, x0 + CW, y);
+  lw(LV.STROKE_INTRA);
+  bx(x0,     y, LV.W_MARC_NOMBRE, LV.H_MARC_ROW);
+  bx(X_NAT,  y, W_NAT,            LV.H_MARC_ROW);
+  bx(X_POIDS,y, LV.W_MARC_POIDS,  LV.H_MARC_ROW);
+  bx(X_NOTE, y, LV.W_MARC_NOTE,   LV.H_MARC_ROW);
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_MARC_TOTAL);
+  const totY = vc(y, LV.H_MARC_ROW, LV.FONT_MARC_TOTAL);
+  tx('TOTAL / Total', X_NAT + W_NAT - LV.CELL_PAD_X, totY, 'right');
+  if (tot.poids) tx(String(tot.poids), X_POIDS + LV.W_MARC_POIDS / 2, totY, 'center');
+  tc(0, 0, 0); dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_MARC_ROW;
 
-  // ── Clause refus signature ─────────────────────────────────────────────────
-  bx(x0, y, CW / 2, 7); bx(x0 + CW / 2, y, CW / 2, 7);
-  sf('normal', 5);
-  const cls = "Le refus non motivé de signature engage la responsabilité de l'expéditeur - remettant.";
-  doc.text(sp(cls, CW / 2 - 3), x0 + 1.5, y + 2.5);
-  doc.text(sp(cls, CW / 2 - 3), x0 + CW / 2 + 1.5, y + 2.5);
-  y += 7;
+  // ── Section 10 : Refus de signature ──────────────────────────────────────
+  fc(...LV.COLOR_SOFT_BG); bx(x0, y, CW, LV.H_REFUS, 'F');
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y, CW / 2, LV.H_REFUS);
+  bx(x0 + CW / 2, y, CW / 2, LV.H_REFUS);
+  sf('italic', LV.FONT_REFUS); tc(0, 0, 0);
+  const refusTxt = "Le refus non motivé de signature engage la responsabilité de l'expéditeur - remettant.";
+  doc.text(sp(refusTxt, CW / 2 - LV.CELL_PAD_X * 2), x0 + LV.CELL_PAD_X, y + LV.CELL_PAD_Y * 2);
+  doc.text(sp(refusTxt, CW / 2 - LV.CELL_PAD_X * 2), x0 + CW / 2 + LV.CELL_PAD_X, y + LV.CELL_PAD_Y * 2);
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_REFUS;
 
-  // ── Réserves ───────────────────────────────────────────────────────────────
-  bx(x0, y, CW / 2, 15); bx(x0 + CW / 2, y, CW / 2, 15);
-  fc(235, 235, 235); bx(x0, y, CW / 2, 4.5, 'F'); bx(x0 + CW / 2, y, CW / 2, 4.5, 'F'); tc(0,0,0);
-  sf('bold', 6.5);
-  tx('Réserves AU CHARGEMENT', x0 + 2, y + 3.2);
-  tx('Réserves AU DÉCHARGEMENT', x0 + CW / 2 + 2, y + 3.2);
-  y += 15;
+  // ── Section 11 : Réserves Chargement / Déchargement ──────────────────────
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y, CW / 2, LV.H_RESERVES);
+  bx(x0 + CW / 2, y, CW / 2, LV.H_RESERVES);
+  fc(...LV.COLOR_LIGHT_BLUE); bx(x0, y, CW / 2, 5, 'F'); bx(x0 + CW / 2, y, CW / 2, 5, 'F');
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_BODY);
+  tx('Réserves AU CHARGEMENT',   x0 + LV.CELL_PAD_X,           y + 3.5);
+  tx('Réserves AU DÉCHARGEMENT', x0 + CW / 2 + LV.CELL_PAD_X, y + 3.5);
+  tc(0, 0, 0); sf('normal', LV.FONT_BODY);
+  const resC = String(d.reservesChargement ?? d.reserves_chargement ?? '');
+  const resD = String(d.reservesDechargement ?? d.reserves_dechargement ?? '');
+  if (resC) { const ls = sp(resC, CW / 2 - LV.CELL_PAD_X * 2); doc.text(ls.slice(0, 2), x0 + LV.CELL_PAD_X, y + 9); }
+  if (resD) { const ls = sp(resD, CW / 2 - LV.CELL_PAD_X * 2); doc.text(ls.slice(0, 2), x0 + CW / 2 + LV.CELL_PAD_X, y + 9); }
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_RESERVES;
 
-  // ── Documents annexes + Convoi ─────────────────────────────────────────────
-  bx(x0, y, CW * .5, 9); bx(x0 + CW * .5, y, CW * .5, 9);
-  sf('bold', 7); tx('Documents annexes / Documents attached :', x0 + 2, y + 3.8);
-  sf('normal', 8); tx(d.doc_annexe || '', x0 + 2, y + 7.5);
-  sf('bold', 7); tx('Convoi exceptionnel :', x0 + CW * .5 + 2, y + 3.8);
-  const cx = x0 + CW * .5 + 52, cv = d.convoi === true || d.convoi === 'Oui';
-  chk(cx, y + 4.5, 3.5, cv);   sf('normal', 7.5); tx('OUI', cx + 5, y + 7.5);
-  chk(cx + 18, y + 4.5, 3.5, !cv); tx('NON', cx + 23, y + 7.5);
-  y += 9;
+  // ── Section 12 : Documents annexes / Convoi exceptionnel ─────────────────
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y, CW / 2, LV.H_DOCS);
+  bx(x0 + CW / 2, y, CW / 2, LV.H_DOCS);
+  fc(...LV.COLOR_LIGHT_BLUE); bx(x0, y, CW / 2, 4.5, 'F'); bx(x0 + CW / 2, y, CW / 2, 4.5, 'F');
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_BODY);
+  tx('Documents annexes / Documents attached', x0 + LV.CELL_PAD_X,           y + 3.2);
+  tx('Convoi exceptionnel',                    x0 + CW / 2 + LV.CELL_PAD_X, y + 3.2);
+  tc(0, 0, 0); sf('normal', LV.FONT_BODY);
+  tx(String(d.documentsAnnexes ?? d.doc_annexe ?? ''), x0 + LV.CELL_PAD_X, y + 7.5);
+  const cv = d.convoiExceptionnel === true || d.convoi === true || d.convoi === 'Oui';
+  const cbX = x0 + CW * 0.68;
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  chk(cbX, y + 4.8, LV.CHECKBOX_SIZE, cv);   tx('OUI', cbX + LV.CHECKBOX_SIZE + 1.5, y + 8.2);
+  chk(cbX + 16, y + 4.8, LV.CHECKBOX_SIZE, !cv); tx('NON', cbX + 16 + LV.CHECKBOX_SIZE + 1.5, y + 8.2);
+  y += LV.H_DOCS;
 
-  // ── Expéditeur / Destinataire ──────────────────────────────────────────────
-  bx(x0, y, CW / 2, 24); bx(x0 + CW / 2, y, CW / 2, 24);
-  fc(235, 235, 235); bx(x0, y, CW / 2, 5, 'F'); bx(x0 + CW / 2, y, CW / 2, 5, 'F'); tc(0,0,0);
-  sf('bold', 7);
-  tx('EXPÉDITEUR / Sender — Chargement',    x0 + 2,           y + 3.5);
-  tx('DESTINATAIRE / Consignee — Livraison', x0 + CW / 2 + 2, y + 3.5);
-  sf('normal', 8);
-  const exp = d.expediteur || {}, dst = d.destinataire || {};
-  let ey = y + 11.5, dy2 = y + 11.5;
-  for (const l of [exp.nom || 'SONOTRAD', exp.adresse || 'ZA Renardières', exp.ville || '53250 Javron-les-Chapelles']) { tx(l, x0 + 2, ey); ey += 4; }
-  for (const l of [dst.nom || '', dst.adresse || '', dst.ville || '']) { if (l) tx(l, x0 + CW / 2 + 2, dy2); dy2 += 4; }
-  y += 24;
+  // ── Section 13 : Expéditeur / Destinataire ────────────────────────────────
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y, CW / 2, LV.H_ADDR);
+  bx(x0 + CW / 2, y, CW / 2, LV.H_ADDR);
+  fc(...LV.COLOR_LIGHT_BLUE); bx(x0, y, CW / 2, 5, 'F'); bx(x0 + CW / 2, y, CW / 2, 5, 'F');
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_BODY);
+  tx('EXPÉDITEUR / Sender — Chargement',    x0 + LV.CELL_PAD_X,           y + 3.5);
+  tx('DESTINATAIRE / Consignee — Livraison', x0 + CW / 2 + LV.CELL_PAD_X, y + 3.5);
+  tc(0, 0, 0); sf('normal', LV.FONT_BODY);
+  const exp = d.expediteur ?? {}, dst = d.destinataire ?? {};
+  let ey = y + 9.5, dy2 = y + 9.5;
+  for (const l of [exp.nom ?? 'SONOTRAD', exp.adresse, exp.cp_ville ?? exp.ville].filter(Boolean)) { tx(l, x0 + LV.CELL_PAD_X, ey); ey += 4; }
+  for (const l of [dst.nom, dst.adresse, dst.cp_ville ?? dst.ville].filter(Boolean))              { tx(l, x0 + CW / 2 + LV.CELL_PAD_X, dy2); dy2 += 4; }
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_ADDR;
 
-  // ── Commande + Note ────────────────────────────────────────────────────────
-  bx(x0, y, CW / 2, 10); bx(x0 + CW / 2, y, CW / 2, 10);
-  if (d.commande) { sf('bold', 7); tx('Commande n°', x0 + 2, y + 4); sf('normal', 8.5); tx(String(d.commande), x0 + 28, y + 5.5); }
-  if (d.note)     { sf('normal', 7.5); doc.text(sp(d.note, CW / 2 - 4), x0 + CW / 2 + 2, y + 4); }
-  y += 10;
-
-  // ── Signatures ─────────────────────────────────────────────────────────────
-  const SW = CW / 3;
-  bx(x0, y, SW, 28); bx(x0 + SW, y, SW, 28); bx(x0 + SW * 2, y, SW, 28);
-  fc(235, 235, 235); bx(x0, y, SW, 5, 'F'); bx(x0 + SW, y, SW, 5, 'F'); bx(x0 + SW * 2, y, SW, 5, 'F'); tc(0,0,0);
-  sf('bold', 6);
-  tx("Cachet Expéditeur / Sender's stamp",      x0 + SW / 2,     y + 3.5, 'center');
-  doc.text(sp("Nom et signature Conducteur\nDriver's name and signature", SW - 4), x0 + SW * 1.5, y + 3, { align: 'center' });
-  tx("Cachet Destinataire / Consignee's stamp", x0 + SW * 2.5,   y + 3.5, 'center');
-  // Lignes pointillées de signature dans chaque colonne
-  doc.setLineDash([1.5, 1.5]);
-  lw(0.25);
-  ln(x0 + 3,          y + 22, x0 + SW - 3,      y + 22);
-  ln(x0 + SW + 3,     y + 22, x0 + SW * 2 - 3,  y + 22);
-  ln(x0 + SW * 2 + 3, y + 22, x0 + CW - 3,      y + 22);
+  // ── Section 14 : Signatures (3 colonnes) ─────────────────────────────────
+  const SW = CW / LV.N_SIG_COLS;
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  for (let i = 0; i < LV.N_SIG_COLS; i++) bx(x0 + SW * i, y, SW, LV.H_SIG);
+  fc(...LV.COLOR_LIGHT_BLUE);
+  for (let i = 0; i < LV.N_SIG_COLS; i++) bx(x0 + SW * i, y, SW, LV.H_SIG_HEADER, 'F');
+  const sigLabels = [
+    ["Cachet Expéditeur", "Sender's stamp"],
+    ["Nom & signature Conducteur", "Driver's name & signature"],
+    ["Cachet Destinataire", "Consignee's stamp"],
+  ];
+  for (let i = 0; i < LV.N_SIG_COLS; i++) {
+    const sx = x0 + SW * i + SW / 2;
+    tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_SIG_HEADER);
+    tx(sigLabels[i][0], sx, y + LV.H_SIG_HEADER * 0.55, 'center');
+    tc(...LV.COLOR_TEXT_MUTED); sf('italic', LV.FONT_SIG_SUB);
+    tx(sigLabels[i][1], sx, y + LV.H_SIG_HEADER * 0.92, 'center');
+  }
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SIG_LINE);
+  doc.setLineDash([1.5, 1]);
+  const sigLineY = y + LV.H_SIG - LV.SIG_LINE_BOTTOM;
+  for (let i = 0; i < LV.N_SIG_COLS; i++) {
+    ln(x0 + SW * i + LV.SIG_LINE_MARGIN, sigLineY, x0 + SW * (i + 1) - LV.SIG_LINE_MARGIN, sigLineY);
+  }
   doc.setLineDash([]);
-  lw(0.3);
+  lw(LV.STROKE_INTRA);
 }
 
 function _lvuVerso(doc) {
-  const ML = 8, CW = 194, x0 = ML;
-  const GW = 6;
-  const HW = (CW - GW) / 2;   // ~94mm par colonne
-  const c2x = x0 + HW + GW;
+  const x0 = LV.MARGIN;
+  const CW = LV.CONTENT_W;
+  const HW = (CW - LV.V_COL_GAP) / 2;   // 96mm par colonne
+  const c2x = x0 + HW + LV.V_COL_GAP;
 
-  const sf = (s, z) => { doc.setFont('helvetica', s); doc.setFontSize(z); };
-  const gc = (v) => doc.setTextColor(v, v, v);
-  const sp = (t, w) => doc.splitTextToSize(String(t ?? ''), w);
+  const sf  = (s, z) => { doc.setFont('helvetica', s); doc.setFontSize(z); };
+  const fc  = (...c) => doc.setFillColor(...c);
+  const tc  = (...c) => doc.setTextColor(...c);
+  const dc  = (...c) => doc.setDrawColor(...c);
+  const lw  = w  => doc.setLineWidth(w);
+  const bx  = (x, y, w, h, s = 'S') => doc.rect(x, y, w, h, s);
+  const ln  = (x1, y1, x2, y2) => doc.line(x1, y1, x2, y2);
+  const tx  = (t, x, y, a = 'left') => doc.text(String(t ?? ''), x, y, { align: a });
+  const sp  = (t, w) => doc.splitTextToSize(String(t ?? ''), w);
+  const lh  = s => s * 0.353 * 1.55;   // hauteur de ligne pour fonte s (pt)
 
-  // Titre
-  gc(85); sf('bold', 8);
-  doc.text('EXTRAITS DES CONDITIONS GÉNÉRALES DE TRANSPORT', x0 + CW / 2, 11, { align: 'center' });
-  doc.setDrawColor(170, 170, 170);
-  doc.line(x0, 13.5, x0 + CW, 13.5);
+  // ── En-tête ──────────────────────────────────────────────────────────────
+  let y = LV.MARGIN;
+  tc(...LV.V_TITLE_MAIN); sf('bold', LV.V_HEADER_TITLE_FONT);
+  doc.setCharSpace(0.6);
+  tx('CONDITIONS DE TRANSPORT — PLAFONDS DE RESPONSABILITÉ', x0 + CW / 2, y + 7, 'center');
+  doc.setCharSpace(0);
+  tc(...LV.V_SUBTITLE); sf('italic', LV.V_HEADER_SUB_FONT);
+  tx("Articles L.133-1 et suivants du Code de Commerce — contrats types applicables (décrets d'application de la loi du 6 février 1998)", x0 + CW / 2, y + 13, 'center');
+  dc(...LV.V_BORDER); lw(LV.STROKE_VERSO);
+  ln(x0, y + 16, x0 + CW, y + 16);
+  y += 16 + LV.V_HEADER_MARGIN_BOTTOM;
 
-  // Séparateur vertical
-  doc.setDrawColor(210, 210, 210);
-  doc.line(x0 + HW + Math.floor(GW / 2), 15, x0 + HW + Math.floor(GW / 2), 284);
+  // ── Calcul des hauteurs de blocs ─────────────────────────────────────────
+  const footerY = LV.PAGE_H - LV.MARGIN - 9;
+  const blocksH = footerY - y - 2;
+  const BH_L = (blocksH - (LV.V_BLOCKS_LEFT  - 1) * LV.V_BLOCK_GAP) / LV.V_BLOCKS_LEFT;
+  const BH_R = (blocksH - (LV.V_BLOCKS_RIGHT - 1) * LV.V_BLOCK_GAP) / LV.V_BLOCKS_RIGHT;
+  const BLOCK_HDR_H = LV.V_BLOCK_TITLE_PAD_Y * 2 + LV.V_BLOCK_TITLE_FONT * 0.353;
 
-  const cy = [16, 16];
-
-  function secTitle(col, text) {
-    const cx = col === 0 ? x0 : c2x;
-    gc(90); sf('bold', 7);
-    const lines = sp(text, HW - 1);
-    doc.text(lines, cx, cy[col]);
-    cy[col] += lines.length * 3.1 + 1;
-    doc.setDrawColor(160, 160, 160);
-    doc.line(cx, cy[col], cx + HW - 2, cy[col]);
-    cy[col] += 2;
+  // ── Rendu d'un bloc ───────────────────────────────────────────────────────
+  function drawBlock(col, blockY, bh, title, items) {
+    const bLeft = col === 0 ? x0 : c2x;
+    dc(...LV.V_BORDER); lw(LV.STROKE_VERSO);
+    bx(bLeft, blockY, HW, bh);
+    fc(...LV.V_BG_HEADER); bx(bLeft, blockY, HW, BLOCK_HDR_H, 'F');
+    dc(...LV.V_BORDER); lw(LV.STROKE_VERSO);
+    ln(bLeft, blockY + BLOCK_HDR_H, bLeft + HW, blockY + BLOCK_HDR_H);
+    tc(...LV.V_TITLE_BLOCK); sf('bold', LV.V_BLOCK_TITLE_FONT);
+    tx(title, bLeft + LV.V_BLOCK_TITLE_PAD_X, blockY + LV.V_BLOCK_TITLE_PAD_Y + LV.V_BLOCK_TITLE_FONT * 0.353);
+    let cy = blockY + BLOCK_HDR_H + LV.V_BLOCK_PAD_Y;
+    for (const item of items) {
+      if (item.t === 'sub') {
+        tc(...LV.V_TITLE_BLOCK); sf('bold', LV.V_BLOCK_BODY_FONT);
+        const lines = sp(item.v, HW - LV.V_BLOCK_PAD_X * 2);
+        doc.text(lines, bLeft + LV.V_BLOCK_PAD_X, cy);
+        cy += lines.length * lh(LV.V_BLOCK_BODY_FONT) + 1;
+      } else if (item.t === 'bullet') {
+        tc(...LV.V_BULLET); sf('normal', 13);
+        tx('·', bLeft + LV.V_BLOCK_PAD_X, cy);
+        tc(...LV.V_TEXT); sf('normal', LV.V_BLOCK_LIST_FONT);
+        const lines = sp(item.v, HW - LV.V_BLOCK_PAD_X * 2 - 4);
+        doc.text(lines, bLeft + LV.V_BLOCK_PAD_X + 3.5, cy);
+        cy += lines.length * lh(LV.V_BLOCK_LIST_FONT) + 0.8;
+      } else if (item.t === 'retard') {
+        cy += 0.5;
+        dc(...LV.V_BORDER_LIGHTER); lw(LV.STROKE_VERSO);
+        doc.setLineDash([0.8, 0.8]);
+        ln(bLeft + LV.V_BLOCK_PAD_X, cy, bLeft + HW - LV.V_BLOCK_PAD_X, cy);
+        doc.setLineDash([]);
+        cy += 1.5;
+        tc(...LV.V_SUBTITLE); sf('italic', LV.V_BLOCK_LIST_FONT);
+        const lines = sp(item.v, HW - LV.V_BLOCK_PAD_X * 2);
+        doc.text(lines, bLeft + LV.V_BLOCK_PAD_X, cy);
+        cy += lines.length * lh(LV.V_BLOCK_LIST_FONT) + 1;
+      } else {
+        tc(...LV.V_TEXT); sf('normal', LV.V_BLOCK_BODY_FONT);
+        const lines = sp(item.v, HW - LV.V_BLOCK_PAD_X * 2);
+        doc.text(lines, bLeft + LV.V_BLOCK_PAD_X, cy);
+        cy += lines.length * lh(LV.V_BLOCK_BODY_FONT) + 1.5;
+      }
+    }
   }
 
-  function sub(col, text) {
-    const cx = col === 0 ? x0 : c2x;
-    gc(110); sf('bold', 6.5);
-    const lines = sp(text, HW - 2);
-    doc.text(lines, cx + 1, cy[col]);
-    cy[col] += lines.length * 2.85 + 1;
-  }
+  // ── Blocs colonne gauche (5 blocs) ────────────────────────────────────────
+  const LEFT = [
+    { title: 'TRAFIC INTÉRIEUR · ENVOIS ≥ 3 TONNES', items: [
+      { t: 'body',   v: 'Réf. Décret 2017-461 du 31 mars 2017' },
+      { t: 'bullet', v: 'Perte ou avarie : 20 €/kg de poids brut manquant ou avarié' },
+      { t: 'bullet', v: 'Plafond global : nb de tonnes × 3 200 €' },
+      { t: 'body',   v: "La plus faible des deux limites s'applique." },
+      { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
+    ]},
+    { title: 'TRAFIC INTÉRIEUR · ENVOIS < 3 TONNES', items: [
+      { t: 'body',   v: 'Réf. Décret 2017-461 du 31 mars 2017' },
+      { t: 'bullet', v: 'Perte ou avarie : 33 €/kg, maximum 1 000 €/colis' },
+      { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
+    ]},
+    { title: 'TRANSPORT SOUS TEMPÉRATURE DIRIGÉE', items: [
+      { t: 'bullet', v: 'Envois ≥ 3 t : 14 €/kg — plafond : nb tonnes × 4 000 €' },
+      { t: 'bullet', v: 'Envois < 3 t : 23 €/kg — plafond : 750 €/colis' },
+      { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
+    ]},
+    { title: 'TRANSPORT EN CITERNES', items: [
+      { t: 'bullet', v: 'Marchandise : 3 €/kg ou litre — plafond 55 000 €/envoi' },
+      { t: 'bullet', v: 'Autres dommages : plafond 300 000 €/envoi' },
+      { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
+    ]},
+    { title: "TRANSPORT D'ANIMAUX VIVANTS", items: [
+      { t: 'body',   v: 'Indemnisation selon plafond par animal (art. D3222-4 Code des transports).' },
+      { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
+    ]},
+  ];
 
-  function body(col, text) {
-    const cx = col === 0 ? x0 : c2x;
-    gc(145); sf('normal', 6);
-    const lines = sp(text, HW - 3);
-    doc.text(lines, cx + 2, cy[col]);
-    cy[col] += lines.length * 2.55 + 2;
-  }
+  // ── Blocs colonne droite (4 blocs) ───────────────────────────────────────
+  const RIGHT = [
+    { title: 'TRANSPORT DE MASSES INDIVISIBLES', items: [
+      { t: 'bullet', v: 'Dommages directs : 60 000 €/envoi' },
+      { t: 'bullet', v: 'Autres dommages : double du prix du transport' },
+      { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
+    ]},
+    { title: 'TRANSPORT DE VÉHICULES ROULANTS', items: [
+      { t: 'bullet', v: 'Véhicule neuf : valeur de remplacement HT au tarif constructeur' },
+      { t: 'bullet', v: 'Occasion coté Argus : valeur Argus' },
+      { t: 'bullet', v: 'Occasion non coté : 800 €' },
+      { t: 'bullet', v: 'Autres dommages : 500 €/véhicule' },
+      { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
+    ]},
+    { title: 'TRAFIC INTERNATIONAL · CONVENTION CMR', items: [
+      { t: 'body',   v: "Sauf déclaration de valeur, intérêt spécial, vol ou faute lourde :" },
+      { t: 'bullet', v: 'Indemnisation limitée à 8,33 DTS/kg de poids brut manquant ou avarié' },
+      { t: 'body',   v: 'Remboursement : prix du transport, droits de douane et frais liés.' },
+      { t: 'retard', v: "Retard : prix du transport sauf déclaration d'intérêt spécial (CMR art. 23 et 29)." },
+    ]},
+    { title: 'LITIGES · DÉCLARATIONS DE VALEUR', items: [
+      { t: 'sub',    v: 'Compétence juridictionnelle' },
+      { t: 'body',   v: "Tout litige relève de la compétence exclusive des tribunaux du siège social du transporteur." },
+      { t: 'sub',    v: 'Déclarations de valeur' },
+      { t: 'body',   v: "Les limites ci-dessus ne s'appliquent pas en cas de déclaration de valeur ou d'intérêt spécial à la livraison." },
+    ]},
+  ];
 
-  // ── COLONNE GAUCHE ────────────────────────────────────────────────
+  for (let i = 0; i < LEFT.length;  i++) drawBlock(0, y + i * (BH_L + LV.V_BLOCK_GAP), BH_L, LEFT[i].title,  LEFT[i].items);
+  for (let i = 0; i < RIGHT.length; i++) drawBlock(1, y + i * (BH_R + LV.V_BLOCK_GAP), BH_R, RIGHT[i].title, RIGHT[i].items);
 
-  secTitle(0, 'TRAFIC INTÉRIEUR');
-  body(0, 'Limites non applicables en cas de déclaration de valeur (pertes/avaries) ou de déclaration d\'intérêt spécial à la livraison (retard).');
-  cy[0] += 1.5;
-
-  sub(0, 'Envois ≥ 3 tonnes  (Décret 2017-461 du 31 mars 2017)');
-  body(0, 'PERTE OU AVARIE — à concurrence de :\n  • 20 € par kilo de poids brut manquant ou avarié\n  • plafond global : nb de tonnes × 3 200 €\nLa plus faible des deux limites s\'applique.');
-  body(0, 'RETARD — Indemnisation limitée au prix du transport.');
-  cy[0] += 1.5;
-
-  sub(0, 'Envois < 3 tonnes  (Décret 2017-461 du 31 mars 2017)');
-  body(0, 'PERTE OU AVARIE — à concurrence de :\n  • 33 € par kilo de poids brut manquant ou avarié\n  • maximum 1 000 € par colis');
-  body(0, 'RETARD — Indemnisation limitée au prix du transport.');
-  cy[0] += 3;
-
-  secTitle(0, 'CONTRATS TYPES SPÉCIFIQUES');
-
-  sub(0, 'Transport sous température dirigée');
-  body(0, 'PERTE OU AVARIE\n  • Envois ≥ 3 t : 14 € par kg — plafond : nb de tonnes × 4 000 €\n  • Envois < 3 t : 23 € par kg — plafond : 750 € par colis');
-  body(0, 'RETARD — Indemnisation limitée au prix du transport.');
-  cy[0] += 2;
-
-  sub(0, 'Transport en citernes');
-  body(0, 'PERTE OU AVARIE\n  • Marchandise : 3 € par kg ou litre — plafond 55 000 € / envoi\n  • Autres dommages : plafond 300 000 € / envoi');
-  body(0, 'RETARD — Indemnisation limitée au prix du transport.');
-  cy[0] += 2;
-
-  sub(0, 'Transport d\'animaux vivants');
-  body(0, 'PERTE OU AVARIE — Indemnisation selon plafond par animal défini par le contrat type (art. D3222-4 Code des transports).');
-  body(0, 'RETARD — Indemnisation limitée au prix du transport.');
-
-  // ── COLONNE DROITE ────────────────────────────────────────────────
-
-  secTitle(1, 'CONTRATS TYPES (suite)');
-
-  sub(1, 'Transport de masses indivisibles');
-  body(1, 'PERTE OU AVARIE\n  • Dommages directs : 60 000 € par envoi\n  • Autres dommages : double du prix du transport');
-  body(1, 'RETARD — Indemnisation limitée au prix du transport.');
-  cy[1] += 2;
-
-  sub(1, 'Transport de véhicules roulants');
-  body(1, 'PERTE OU AVARIE\n  • Véhicule neuf : valeur de remplacement HT constructeur − valeur résiduelle\n  • Occasion coté Argus : valeur Argus − valeur résiduelle\n  • Occasion non coté : 800 €\n  • Autres dommages : 500 € par véhicule');
-  body(1, 'RETARD — Indemnisation limitée au prix du transport.');
-  cy[1] += 4;
-
-  secTitle(1, 'TRAFIC INTERNATIONAL (CMR)');
-  body(1, 'PERTE OU AVARIE — Sauf déclaration de valeur, intérêt spécial, vol ou faute lourde :\nIndemnisation limitée à 8,33 DTS par kilo de poids brut manquant ou avarié.');
-  body(1, 'Sont également remboursés : prix du transport, droits de douane et frais liés au transport (totalité en cas de perte totale, au prorata en cas de perte partielle).\nAucun autre dommage-intérêt n\'est dû.');
-  body(1, 'RETARD — Indemnisation limitée au prix du transport, sauf déclaration d\'intérêt spécial (CMR art. 23 et 29).');
-  cy[1] += 4;
-
-  secTitle(1, 'LITIGES');
-  body(1, 'Tout litige relatif à l\'exécution du contrat de transport relève de la compétence exclusive des tribunaux du siège social du transporteur, même en cas de pluralité de défendeurs ou appel en garantie.');
+  // ── Footer ────────────────────────────────────────────────────────────────
+  dc(...LV.V_BORDER); lw(LV.STROKE_VERSO);
+  ln(x0, footerY, x0 + CW, footerY);
+  tc(...LV.V_FOOTER_TEXT); sf('bold', LV.V_FOOTER_FONT);
+  doc.setCharSpace(0.3);
+  tx('TRANSPORTS MESNAGER', x0 + CW / 2, footerY + 4, 'center');
+  doc.setCharSpace(0);
+  tc(...LV.V_REF); sf('normal', LV.V_FOOTER_FONT);
+  tx('La Perrière · 61360 SAINT-DENIS-DE-VILLENETTE · SIRET 803 611 093 00026 · contact@transports-mesnager.fr', x0 + CW / 2, footerY + 7.5, 'center');
 }
 
 function todayStr() { return new Date().toISOString().split('T')[0]; }
