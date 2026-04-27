@@ -162,9 +162,9 @@ const LV = {
   V_BLOCK_TITLE_PAD_X: 3,
   V_BLOCK_TITLE_PAD_Y: 1.8,
 
-  // 9 blocs : 5 à gauche, 4 à droite (étirement uniforme via flex)
+  // 10 blocs : 5 à gauche, 5 à droite (étirement uniforme via flex)
   V_BLOCKS_LEFT:  5,
-  V_BLOCKS_RIGHT: 4,
+  V_BLOCKS_RIGHT: 5,
 
   // ═══ HELPERS ═══════════════════════════════════════════════════════════
   // Padding interne standard pour les cellules avec texte

@@ -5780,7 +5780,7 @@ const App = {
       immat_moteur: v('lvu-f-immat-moteur').toUpperCase(),
       immat_semi:   v('lvu-f-immat-semi').toUpperCase(),
       donneur_ordre: v('lvu-f-donneur'),
-      transporteur: { nom: 'TRANSPORTS MESNAGER', adresse: 'La Perrière', ville: '61360 SAINT-DENIS-DE-VILLENETTE', info: 'SIRET 803 611 093 00026', tel: '06 08 39 91 53', rcs: '' },
+      transporteur: { nom: 'TRANSPORTS MESNAGER', adresse: 'La Perrière', ville: '61360 SAINT-DENIS-DE-VILLENETTE', info: 'SIRET 803 611 093 00026 · 06 08 39 91 53', rcs: 'RCS LAVAL 314 901 869' },
       expediteur:   { nom: v('lvu-f-exp-nom'), adresse: v('lvu-f-exp-adresse'), ville: v('lvu-f-exp-ville') },
       destinataire: { nom: v('lvu-f-dest-nom'), adresse: v('lvu-f-dest-adresse'), ville: v('lvu-f-dest-ville') },
       marchandises,
@@ -6071,10 +6071,11 @@ function _lvuRecto(doc, d, isCMR, band) {
   for (const l of [
     tl.adresse ?? 'Z.A. des Renardières - B.P 10',
     tl.cp_ville ?? tl.ville ?? '53250 JAVRON LES CHAPELLES',
-    tl.siret ? 'SIRET : ' + tl.siret : (tl.info ?? 'SAS au capital de 500 000 €'),
-    tl.telephone ?? tl.tel ?? 'Tél. 02.43.03.43.41',
-    tl.rcs ?? 'RCS LAVAL 314 901 869',
-  ]) { tx(l, x0 + LV.CELL_PAD_X, ty); ty += 3.7; }
+    tl.siret
+      ? 'SIRET : ' + tl.siret + (tl.telephone ? ' · ' + tl.telephone : '')
+      : (tl.info ?? 'SAS au capital de 500 000 €'),
+    tl.rcs || 'RCS LAVAL 314 901 869',
+  ].filter(Boolean)) { tx(l, x0 + LV.CELL_PAD_X, ty); ty += 3.7; }
   const cx2 = x0 + LV.W_TRANS_LEFT;
   tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_LABEL);
   tx('CONDUCTEURS / Drivers', cx2 + LV.CELL_PAD_X, y + 3.2);
@@ -6186,9 +6187,10 @@ function _lvuRecto(doc, d, isCMR, band) {
   bx(x0, y, CW / 2, LV.H_REFUS);
   bx(x0 + CW / 2, y, CW / 2, LV.H_REFUS);
   sf('italic', LV.FONT_REFUS); tc(0, 0, 0);
-  const refusTxt = "Le refus non motivé de signature engage la responsabilité de l'expéditeur - remettant.";
-  doc.text(sp(refusTxt, CW / 2 - LV.CELL_PAD_X * 2), x0 + LV.CELL_PAD_X, y + LV.CELL_PAD_Y * 2);
-  doc.text(sp(refusTxt, CW / 2 - LV.CELL_PAD_X * 2), x0 + CW / 2 + LV.CELL_PAD_X, y + LV.CELL_PAD_Y * 2);
+  const refusExp  = "Le refus non motivé de signature engage la responsabilité de l'expéditeur-remettant.";
+  const refusDest = "Le refus non motivé de signature engage la responsabilité du destinataire.";
+  doc.text(sp(refusExp,  CW / 2 - LV.CELL_PAD_X * 2), x0 +           LV.CELL_PAD_X, y + LV.CELL_PAD_Y * 2);
+  doc.text(sp(refusDest, CW / 2 - LV.CELL_PAD_X * 2), x0 + CW / 2 + LV.CELL_PAD_X, y + LV.CELL_PAD_Y * 2);
   dc(0, 0, 0); lw(LV.STROKE_INTRA);
   y += LV.H_REFUS;
 
@@ -6266,6 +6268,10 @@ function _lvuRecto(doc, d, isCMR, band) {
     ln(x0 + SW * i + LV.SIG_LINE_MARGIN, sigLineY, x0 + SW * (i + 1) - LV.SIG_LINE_MARGIN, sigLineY);
   }
   doc.setLineDash([]);
+  // Bordure externe du document (par-dessus toutes les sections)
+  const docTopY = LV.Y_TITLE + (band ? 7 : 0);
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_DOC_BORDER);
+  bx(x0, docTopY, CW, y + LV.H_SIG - docTopY, 'S');
   lw(LV.STROKE_INTRA);
 }
 
@@ -6399,11 +6405,11 @@ function _lvuVerso(doc) {
       { t: 'body',   v: 'Remboursement : prix du transport, droits de douane et frais liés.' },
       { t: 'retard', v: "Retard : prix du transport sauf déclaration d'intérêt spécial (CMR art. 23 et 29)." },
     ]},
-    { title: 'LITIGES · DÉCLARATIONS DE VALEUR', items: [
-      { t: 'sub',    v: 'Compétence juridictionnelle' },
-      { t: 'body',   v: "Tout litige relève de la compétence exclusive des tribunaux du siège social du transporteur." },
-      { t: 'sub',    v: 'Déclarations de valeur' },
-      { t: 'body',   v: "Les limites ci-dessus ne s'appliquent pas en cas de déclaration de valeur ou d'intérêt spécial à la livraison." },
+    { title: 'LITIGES · COMPÉTENCE JURIDICTIONNELLE', items: [
+      { t: 'body',   v: "Tout litige relatif à l'exécution du contrat de transport relève de la compétence exclusive des tribunaux du siège social du transporteur, même en cas de pluralité de défendeurs ou d'appel en garantie." },
+    ]},
+    { title: 'DÉCLARATIONS DE VALEUR', items: [
+      { t: 'body',   v: "Les limites ci-dessus ne s'appliquent pas en cas de déclaration de valeur (pertes et avaries) ou de déclaration d'intérêt spécial à la livraison (retard), établies par le donneur d'ordre préalablement au transport." },
     ]},
   ];
 
