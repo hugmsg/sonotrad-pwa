@@ -1673,6 +1673,12 @@
           </div>
         </div>
 
+        <!-- Transporteur -->
+        <div class="card" style="margin-bottom:12px;">
+          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Transporteur</p>
+          <div id="lvu-transporteur-btns"></div>
+        </div>
+
         <!-- Conducteur / Véhicule -->
         <div class="card" style="margin-bottom:12px;">
           <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Conducteur &amp; Véhicule</p>
@@ -2010,6 +2016,8 @@ const S = {
     generating:    false,
     lastDoc:       null,
     lastData:      null,
+    transporteur:  null,
+    agencies:      [],
   },
 };
 // ── APP ──────────────────────────────────────────────────────────────────────
@@ -5510,6 +5518,8 @@ const App = {
   /* ─ LVU ─ */
   async lvuInit() {
     this.go('lvu-form');
+    if (!S.lvu.transporteur) S.lvu.transporteur = LVU_TRANSPORTEURS[0];
+    this._lvuRenderTransporteurUI();
     // Fetch next number (non-bloquant)
     if (S.apiUrl && !S.lvu.numero) {
       try {
@@ -5538,7 +5548,7 @@ const App = {
     document.getElementById('lvu-loxam-picker').style.display = src === 'loxam' ? '' : 'none';
     document.getElementById('lvu-bcb-picker').style.display   = src === 'bcb'   ? '' : 'none';
     document.getElementById('lvu-stock-picker').style.display = src === 'stock' ? '' : 'none';
-    if (src === 'loxam') this.lvuLoadLoxam();
+    if (src === 'loxam') { this.lvuLoadLoxam(); this.lvuLoadAgencies(); }
     if (src === 'bcb'   && S.lvu.bcbArrivals.length === 0) this.lvuLoadBcb();
     if (src === 'stock') this._lvuRenderStockList();
   },
@@ -5576,6 +5586,8 @@ const App = {
           || (i.code        || '').toLowerCase().includes(q)
           || (i.module      || '').toLowerCase().includes(q)
           || (i.codeModule  || '').toLowerCase().includes(q)
+          || (i.numModule   || '').toLowerCase().includes(q)
+          || (i.agence      || '').toLowerCase().includes(q)
           || (i.chantier    || '').toLowerCase().includes(q);
     });
     if (!items.length) {
@@ -5586,8 +5598,9 @@ const App = {
     el.innerHTML = items.map(i => {
       const key = i.code || i.codeModule || i.module || '';
       const sel = S.lvu.selectedItems.has(key);
-      const label = i.description || i.module || key || '—';
-      const sub   = [key, i.chantier].filter(Boolean).join(' · ');
+      const numM  = i.numModule || i.codeModule || '';
+      const label = numM ? `Module N° ${numM}` : (i.description || i.module || key || '—');
+      const sub   = [key, i.type || i.module, i.agence].filter(Boolean).join(' · ');
       return `<div onclick="App.lvuToggleLoxam('${key.replace(/'/g,"&#39;")}')"
         style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #F1F5F9;cursor:pointer;background:${sel?'#EFF6FF':'white'}">
         <div style="width:20px;height:20px;border-radius:4px;border:2px solid ${sel?'#1D4ED8':'#CBD5E1'};background:${sel?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
@@ -5609,14 +5622,32 @@ const App = {
 
   lvuApplyLoxam() {
     const rows = [];
+    let firstAgence = null;
     S.lvu.loxamItems.forEach(i => {
       const key = i.code || i.codeModule || i.module || '';
       if (!S.lvu.selectedItems.has(key)) return;
-      rows.push({ qte: 1, description: i.description || i.module || key, poids: '', note: key });
+      const numM = i.numModule || i.codeModule || '';
+      const desc = numM ? `Module N° ${numM}` : (i.description || i.module || key);
+      rows.push({ qte: 1, description: desc, poids: '', note: key });
+      if (i.agence && !firstAgence) firstAgence = i.agence;
     });
-    if (rows.length) { S.lvu.marchandises = rows; this._lvuRenderMarchandises(); }
+    if (rows.length) {
+      S.lvu.marchandises = rows;
+      this._lvuRenderMarchandises();
+      if (firstAgence && S.lvu.agencies.length > 0) {
+        const ag = S.lvu.agencies.find(a => a.code === firstAgence || a.code === firstAgence.padStart(4,'0'));
+        if (ag) {
+          const fn = document.getElementById('lvu-f-dest-nom');
+          const fa = document.getElementById('lvu-f-dest-adresse');
+          const fv = document.getElementById('lvu-f-dest-ville');
+          if (fn && !fn.value)   fn.value = ag.nom;
+          if (fa && !fa.value)   fa.value = ag.adresse;
+          if (fv && !fv.value)   fv.value = `${ag.cp} ${ag.ville}`.trim();
+        }
+      }
+    }
     document.getElementById('lvu-loxam-picker').style.display = 'none';
-    this.toast(`${rows.length} article(s) importé(s)`);
+    this.toast(`${rows.length} module(s) importé(s)`);
   },
 
   async lvuLoadBcb() {
@@ -5780,7 +5811,7 @@ const App = {
       immat_moteur: v('lvu-f-immat-moteur').toUpperCase(),
       immat_semi:   v('lvu-f-immat-semi').toUpperCase(),
       donneur_ordre: v('lvu-f-donneur'),
-      transporteur: { nom: 'TRANSPORTS MESNAGER', adresse: 'La Perrière', ville: '61360 SAINT-DENIS-DE-VILLENETTE', info: 'SIRET 803 611 093 00026 · 06 08 39 91 53', rcs: 'RCS LAVAL 314 901 869' },
+      transporteur: S.lvu.transporteur || LVU_TRANSPORTEURS[0],
       expediteur:   { nom: v('lvu-f-exp-nom'), adresse: v('lvu-f-exp-adresse'), ville: v('lvu-f-exp-ville') },
       destinataire: { nom: v('lvu-f-dest-nom'), adresse: v('lvu-f-dest-adresse'), ville: v('lvu-f-dest-ville') },
       marchandises,
@@ -5864,6 +5895,32 @@ const App = {
     } catch (e) { if (statusEl) statusEl.textContent = '❌ ' + e.message; }
   },
 
+  lvuSelectTransporteur(idx) {
+    S.lvu.transporteur = LVU_TRANSPORTEURS[idx] || null;
+    this._lvuRenderTransporteurUI();
+  },
+
+  _lvuRenderTransporteurUI() {
+    const el = document.getElementById('lvu-transporteur-btns');
+    if (!el) return;
+    const selId = S.lvu.transporteur?.id;
+    el.innerHTML = LVU_TRANSPORTEURS.map((t, i) => `
+      <button onclick="App.lvuSelectTransporteur(${i})"
+        style="text-align:left;width:100%;padding:10px 12px;border-radius:10px;border:2px solid ${selId===t.id?'#1D4ED8':'#E2E8F0'};background:${selId===t.id?'#EFF6FF':'white'};cursor:pointer;margin-bottom:4px;">
+        <div style="font-size:13px;font-weight:700;color:${selId===t.id?'#1D4ED8':'#1E293B'};">${t.nom}</div>
+        <div style="font-size:11px;color:#64748B;margin-top:2px;">${t.adresse} · ${t.ville}</div>
+      </button>`).join('');
+  },
+
+  async lvuLoadAgencies() {
+    if (S.lvu.agencies.length > 0 || !S.apiUrl) return;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_agencies', {}, 10000);
+      const d = await r.json();
+      if (d.status === 'ok') S.lvu.agencies = d.agencies || [];
+    } catch (_) {}
+  },
+
   lvuNew() {
     S.lvu.lastDoc = null; S.lvu.lastData = null;
     S.lvu.marchandises = [];
@@ -5927,6 +5984,11 @@ function _randCode() {
   const C = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   return Array.from({ length: 6 }, () => C[Math.floor(Math.random() * 26)]).join('');
 }
+// ── LVU — Transporteurs pré-enregistrés ──────────────────────────────────────
+const LVU_TRANSPORTEURS = [
+  { id: 'mesnager', nom: 'TRANSPORTS MESNAGER', adresse: 'La Perrière', ville: '61360 SAINT-DENIS-DE-VILLENETTE', info: 'SIRET 803 611 093 00026 · 06 08 39 91 53', rcs: 'RCS LAVAL 314 901 869' },
+];
+
 // ── LVU — Lettre de Voiture Unique (jsPDF) ───────────────────────────────────
 // data = { type:'LV'|'CMR', display:'01446', date:'24/04/2026',
 //   conducteur, immat_moteur, immat_semi, donneur_ordre,
@@ -5943,12 +6005,12 @@ function _generateLvu(data) {
     { rgb: [41, 128, 185], label: 'ORIGINAL 3 — TRANSPORTEUR / CARRIER' },
   ];
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-  for (let c = 0; c < (isCMR ? 3 : 1); c++) {
+  for (let c = 0; c < 3; c++) {
     if (c > 0) doc.addPage();
-    _lvuRecto(doc, data, isCMR, isCMR ? BANDS[c] : null);
+    _lvuRecto(doc, data, isCMR, BANDS[c]);
+    doc.addPage();
+    _lvuVerso(doc);
   }
-  doc.addPage();
-  _lvuVerso(doc);
   return doc;
 }
 
