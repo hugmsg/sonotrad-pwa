@@ -5556,21 +5556,15 @@ const App = {
   lvuLoadLoxam() {
     const el = document.getElementById('lvu-loxam-list');
     if (!el) return;
-    // Réutilise les données déjà chargées par l'activité LOXAM
-    if (S.arrivalsLoaded && S.arrivalsData && S.arrivalsData.length > 0) {
-      S.lvu.loxamItems = S.arrivalsData;
-      this._lvuRenderLoxamList();
-      return;
-    }
+    // Réutilise si déjà chargé dans cette session
+    if (S.lvu.loxamItems.length > 0) { this._lvuRenderLoxamList(); return; }
     if (!S.apiUrl) { el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">URL API non configurée</div>'; return; }
     el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">Chargement…</div>';
-    _fetchWithTimeout(S.apiUrl + '?action=arrivals', {}, 50000)
+    // Source : Planning (modules à expédier), pas Arrivées
+    _fetchWithTimeout(S.apiUrl + '?action=lv_loxam_planning', {}, 30000)
       .then(r => r.json())
       .then(d => {
-        const raw = Array.isArray(d) ? d : (d.data || []);
-        S.lvu.loxamItems   = raw;
-        S.arrivalsData     = raw;
-        S.arrivalsLoaded   = true;
+        S.lvu.loxamItems = d.data || [];
         this._lvuRenderLoxamList();
       })
       .catch(err => { el.innerHTML = `<div style="padding:12px;color:#EF4444;font-size:13px;">Erreur : ${err.message}</div>`; });
@@ -5582,13 +5576,13 @@ const App = {
     const q = (document.getElementById('lvu-loxam-search')?.value || '').toLowerCase();
     const items = S.lvu.loxamItems.filter(i => {
       if (!q) return true;
-      return (i.description || '').toLowerCase().includes(q)
+      return (i.codeModule  || '').toLowerCase().includes(q)
           || (i.code        || '').toLowerCase().includes(q)
+          || (i.chantier    || '').toLowerCase().includes(q)
+          || (i.ag          || '').toLowerCase().includes(q)
           || (i.module      || '').toLowerCase().includes(q)
-          || (i.codeModule  || '').toLowerCase().includes(q)
-          || (i.numModule   || '').toLowerCase().includes(q)
-          || (i.agence      || '').toLowerCase().includes(q)
-          || (i.chantier    || '').toLowerCase().includes(q);
+          || (i.description || '').toLowerCase().includes(q)
+          || (i.numModule   || '').toLowerCase().includes(q);
     });
     if (!items.length) {
       el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">'
@@ -5598,9 +5592,9 @@ const App = {
     el.innerHTML = items.map(i => {
       const key = i.code || i.codeModule || i.module || '';
       const sel = S.lvu.selectedItems.has(key);
-      const numM  = i.numModule || i.codeModule || '';
+      const numM  = i.codeModule || i.numModule || '';
       const label = numM ? `Module N° ${numM}` : (i.description || i.module || key || '—');
-      const sub   = [key, i.type || i.module, i.agence].filter(Boolean).join(' · ');
+      const sub   = [key, i.module, i.chantier].filter(Boolean).join(' · ');
       return `<div onclick="App.lvuToggleLoxam('${key.replace(/'/g,"&#39;")}')"
         style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #F1F5F9;cursor:pointer;background:${sel?'#EFF6FF':'white'}">
         <div style="width:20px;height:20px;border-radius:4px;border:2px solid ${sel?'#1D4ED8':'#CBD5E1'};background:${sel?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
@@ -5626,16 +5620,18 @@ const App = {
     S.lvu.loxamItems.forEach(i => {
       const key = i.code || i.codeModule || i.module || '';
       if (!S.lvu.selectedItems.has(key)) return;
-      const numM = i.numModule || i.codeModule || '';
+      const numM = i.codeModule || i.numModule || '';
       const desc = numM ? `Module N° ${numM}` : (i.description || i.module || key);
       rows.push({ qte: 1, description: desc, poids: '', note: key });
-      if (i.agence && !firstAgence) firstAgence = i.agence;
+      // Code agence : col "ag" (D) du Planning, sinon parse depuis "1043 - 72 ARNAGE Cedex"
+      const agCode = i.ag || ((i.chantier || '').match(/^(\d{3,6})/)||[])[1] || '';
+      if (agCode && !firstAgence) firstAgence = agCode;
     });
     if (rows.length) {
       S.lvu.marchandises = rows;
       this._lvuRenderMarchandises();
       if (firstAgence && S.lvu.agencies.length > 0) {
-        const ag = S.lvu.agencies.find(a => a.code === firstAgence || a.code === firstAgence.padStart(4,'0'));
+        const ag = S.lvu.agencies.find(a => a.code === firstAgence || a.code === firstAgence.padStart(4,'0') || a.code.replace(/^0+/,'') === firstAgence.replace(/^0+/,''));
         if (ag) {
           const fn = document.getElementById('lvu-f-dest-nom');
           const fa = document.getElementById('lvu-f-dest-adresse');
@@ -5986,7 +5982,7 @@ function _randCode() {
 }
 // ── LVU — Transporteurs pré-enregistrés ──────────────────────────────────────
 const LVU_TRANSPORTEURS = [
-  { id: 'mesnager', nom: 'TRANSPORTS MESNAGER', adresse: 'La Perrière', ville: '61360 SAINT-DENIS-DE-VILLENETTE', info: 'SIRET 803 611 093 00026 · 06 08 39 91 53', rcs: 'RCS LAVAL 314 901 869' },
+  { id: 'mesnager', nom: 'TRANSPORTS MESNAGER', adresse: 'ZA Renardière - B.P 10', ville: '53250 JAVRON-LES-CHAPELLES', info: 'SAS au capital de 500 000 €, Tél. 02.43.03.43.41', rcs: 'RCS LAVAL 314 901 869 - N° TVA FR 18 314 901 869' },
 ];
 
 // ── LVU — Lettre de Voiture Unique (jsPDF) ───────────────────────────────────
