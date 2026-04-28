@@ -1239,14 +1239,20 @@
         <p style="font-size:16px;font-weight:600;">Aucun article en production</p>
         <p style="font-size:13px;margin-top:4px;">Les articles actifs du Planning apparaîtront ici</p>
       </div>
-      <!-- Barre flottante sélection LV -->
-      <div id="dep-lv-bar" style="display:none;position:sticky;bottom:0;background:#1D4ED8;border-radius:12px;margin:8px -4px 0;padding:12px 16px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-          <span id="dep-lv-count" style="color:white;font-weight:600;font-size:13px;"></span>
-          <button onclick="App.depCreateLv()"
-            style="background:white;color:#1D4ED8;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">
-            📄 Créer LV →
-          </button>
+      <!-- Barre flottante sélection -->
+      <div id="dep-lv-bar" style="display:none;position:sticky;bottom:0;background:#1E293B;border-radius:12px;margin:8px -4px 0;padding:10px 14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span id="dep-lv-count" style="color:#94A3B8;font-weight:600;font-size:12px;flex-shrink:0;"></span>
+          <div style="display:flex;gap:8px;flex-shrink:0;">
+            <button onclick="App.depMarkParti()"
+              style="background:#10B981;color:white;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">
+              ✅ Parti →
+            </button>
+            <button onclick="App.depCreateLv()"
+              style="background:#3B82F6;color:white;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">
+              📄 LV →
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -4743,6 +4749,36 @@ const App = {
     // Appliquer les modules (source loxam + marchandises + destinataire)
     this.lvuSetSource('loxam');
     this.lvuApplyLoxam();
+  },
+  async depMarkParti() {
+    if (!S.depSelected.size) return;
+    const codes = [...S.depSelected];
+    const n = codes.length;
+    const ok = window.confirm(`Marquer ${n} module${n > 1 ? 's' : ''} comme parti${n > 1 ? 's' : ''} ?\n\n${codes.join(', ')}`);
+    if (!ok) return;
+    this.toast('Mise à jour en cours…');
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ action:'dep_mark_parti', codes })
+      }, 30000);
+      const res = await r.json();
+      if (res.status === 'ok') {
+        const updatedSet = new Set((res.updated || []).map(c => c.toUpperCase()));
+        S.deps = S.deps.filter(d => !updatedSet.has((d.code || '').toUpperCase()));
+        S.depSelectMode = false;
+        S.depSelected.clear();
+        const btn = document.getElementById('dep-lv-toggle-btn');
+        if (btn) { btn.style.background = 'white'; btn.style.borderColor = '#E2E8F0'; btn.style.color = '#64748B'; }
+        this._updateDepLvBar();
+        this._renderDepList();
+        this.toast(`✅ ${res.count} module${res.count > 1 ? 's' : ''} marqué${res.count > 1 ? 's' : ''} parti${res.count > 1 ? 's' : ''}`);
+      } else {
+        this.toast('❌ ' + (res.error || 'Erreur inconnue'));
+      }
+    } catch(e) {
+      this.toast('❌ Erreur réseau : ' + e.message);
+    }
   },
   openDep(idx) {
     S.selDep        = S.deps[idx];
