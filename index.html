@@ -5622,7 +5622,7 @@ const App = {
       if (!S.lvu.selectedItems.has(key)) return;
       const numM = i.codeModule || i.numModule || '';
       const desc = numM ? `Module N° ${numM}` : (i.description || i.module || key);
-      rows.push({ qte: 1, description: desc, poids: '', note: key });
+      rows.push({ qte: 1, description: desc, poids: '2.5', note: key, ml: i.ml || '' });
       // Code agence : col "ag" (D) du Planning, sinon parse depuis "1043 - 72 ARNAGE Cedex"
       const agCode = i.ag || ((i.chantier || '').match(/^(\d{3,6})/)||[])[1] || '';
       if (agCode && !firstAgence) firstAgence = agCode;
@@ -5798,7 +5798,17 @@ const App = {
     const dateStr = `${String(today.getDate()).padStart(2,'0')}/${String(today.getMonth()+1).padStart(2,'0')}/${today.getFullYear()}`;
     const marchandises = (S.lvu.marchandises || [])
       .filter(r => (r.description || '').trim() || (r.qte || '').toString().trim())
-      .map(r => ({ qte: r.qte || 1, description: r.description || '', poids: r.poids || '', note: r.note || '' }));
+      .map(r => ({ qte: r.qte || 1, description: r.description || '', poids: r.poids || '', note: r.note || '', ml: r.ml || '' }));
+    let totalPoidsNum = 0, totalML = 0;
+    marchandises.forEach(r => {
+      const p = parseFloat(r.poids);
+      if (!isNaN(p)) totalPoidsNum += p * (Number(r.qte) || 1);
+      const m = parseFloat(r.ml);
+      if (!isNaN(m)) totalML += m;
+    });
+    const total = {};
+    if (totalPoidsNum > 0) total.poids = parseFloat(totalPoidsNum.toFixed(2)) + ' t';
+    if (totalML > 0) total.ml = parseFloat(totalML.toFixed(2)) + ' ml';
     return {
       type:         S.lvu.type || 'LV',
       display:      S.lvu.display || '00000',
@@ -5811,6 +5821,7 @@ const App = {
       expediteur:   { nom: v('lvu-f-exp-nom'), adresse: v('lvu-f-exp-adresse'), ville: v('lvu-f-exp-ville') },
       destinataire: { nom: v('lvu-f-dest-nom'), adresse: v('lvu-f-dest-adresse'), ville: v('lvu-f-dest-ville') },
       marchandises,
+      total,
       doc_annexe:   v('lvu-f-doc'),
       commande:     v('lvu-f-commande'),
       note:         v('lvu-f-note'),
@@ -6235,6 +6246,7 @@ function _lvuRecto(doc, d, isCMR, band) {
   const totY = vc(y, LV.H_MARC_ROW, LV.FONT_MARC_TOTAL);
   tx('TOTAL / Total', X_NAT + W_NAT - LV.CELL_PAD_X, totY, 'right');
   if (tot.poids) tx(String(tot.poids), X_POIDS + LV.W_MARC_POIDS / 2, totY, 'center');
+  if (tot.ml) { sf('normal', LV.FONT_MARC_TOTAL); tx(String(tot.ml), X_NOTE + LV.CELL_PAD_X, totY); }
   // Convoi exceptionnel dans la cellule NOMBRE (ligne TOTAL)
   const cv2 = d.convoiExceptionnel === true || d.convoi === true || d.convoi === 'Oui';
   sf('bold', 5); tc(...LV.COLOR_PRIMARY);
@@ -6313,9 +6325,9 @@ function _lvuRecto(doc, d, isCMR, band) {
   fc(...LV.COLOR_LIGHT_BLUE);
   for (let i = 0; i < LV.N_SIG_COLS; i++) bx(x0 + SW * i, y, SW, LV.H_SIG_HEADER, 'F');
   const sigLabels = [
-    ["Cachet Expéditeur", "Sender's stamp"],
-    ["Nom & signature Conducteur", "Driver's name & signature"],
-    ["Cachet Destinataire", "Consignee's stamp"],
+    ["CACHET EXPÉDITEUR", "Sender's stamp"],
+    ["NOM & SIGNATURE CONDUCTEUR", "Driver's name and signature"],
+    ["CACHET DESTINATAIRE", "Consignee's stamp"],
   ];
   for (let i = 0; i < LV.N_SIG_COLS; i++) {
     const sx = x0 + SW * i + SW / 2;
@@ -6358,7 +6370,7 @@ function _lvuVerso(doc) {
   // ── En-tête ──────────────────────────────────────────────────────────────
   let y = LV.MARGIN;
   tc(...LV.V_TITLE_MAIN); sf('bold', LV.V_HEADER_TITLE_FONT);
-  doc.setCharSpace(0.6);
+  doc.setCharSpace(0.2);
   tx('CONDITIONS DE TRANSPORT - PLAFONDS DE RESPONSABILITÉ', x0 + CW / 2, y + 7, 'center');
   doc.setCharSpace(0);
   tc(...LV.V_SUBTITLE); sf('italic', LV.V_HEADER_SUB_FONT);
@@ -6399,12 +6411,12 @@ function _lvuVerso(doc) {
         doc.text(lines, bLeft + LV.V_BLOCK_PAD_X + 3.5, cy);
         cy += lines.length * lh(LV.V_BLOCK_LIST_FONT) + 0.8;
       } else if (item.t === 'retard') {
-        cy += 0.5;
+        cy += 2.0;
         dc(...LV.V_BORDER_LIGHTER); lw(LV.STROKE_VERSO);
         doc.setLineDash([0.8, 0.8]);
         ln(bLeft + LV.V_BLOCK_PAD_X, cy, bLeft + HW - LV.V_BLOCK_PAD_X, cy);
         doc.setLineDash([]);
-        cy += 1.5;
+        cy += 2.5;
         tc(...LV.V_SUBTITLE); sf('italic', LV.V_BLOCK_LIST_FONT);
         const lines = sp(item.v, HW - LV.V_BLOCK_PAD_X * 2);
         doc.text(lines, bLeft + LV.V_BLOCK_PAD_X, cy);

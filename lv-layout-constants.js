@@ -130,10 +130,10 @@ const LV = {
   H_REFUS:           7,
 
   // SECTION 11 : Réserves Chargement / Déchargement
-  H_RESERVES:       20,
+  H_RESERVES:       16,
 
   // SECTION 12 : Documents annexes / Convoi exceptionnel
-  H_DOCS:           10,
+  H_DOCS:           14,
 
   // SECTION 13 : Expéditeur / Destinataire
   H_ADDR:           26,
