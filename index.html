@@ -5735,7 +5735,7 @@ const App = {
     const rows = [];
     (S.stockData || []).forEach(i => {
       if (!S.lvu.selectedStock.has(i.ref)) return;
-      rows.push({ qte: 1, description: (i.ref ? i.ref + ' — ' : '') + (i.designation || ''), poids: '', note: i.ref || '' });
+      rows.push({ qte: 1, description: (i.ref ? i.ref + ' - ' : '') + (i.designation || ''), poids: '', note: i.ref || '' });
     });
     if (rows.length) { S.lvu.marchandises = rows; this._lvuRenderMarchandises(); }
     document.getElementById('lvu-stock-picker').style.display = 'none';
@@ -5998,9 +5998,9 @@ function _generateLvu(data) {
   const { jsPDF } = window.jspdf;
   const isCMR = (data.type || 'LV').toUpperCase() === 'CMR';
   const BANDS = [
-    { rgb: [192, 57, 43],  label: 'ORIGINAL 1 — EXPÉDITEUR / SENDER' },
-    { rgb: [39, 174, 96],  label: 'ORIGINAL 2 — ACCOMPAGNE LA MARCHANDISE / WITH THE GOODS' },
-    { rgb: [41, 128, 185], label: 'ORIGINAL 3 — TRANSPORTEUR / CARRIER' },
+    { rgb: [192, 57, 43],  label: 'ORIGINAL 1 - EXPÉDITEUR / SENDER' },
+    { rgb: [39, 174, 96],  label: 'ORIGINAL 2 - ACCOMPAGNE LA MARCHANDISE / WITH THE GOODS' },
+    { rgb: [41, 128, 185], label: 'ORIGINAL 3 - TRANSPORTEUR / CARRIER' },
   ];
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   for (let c = 0; c < 3; c++) {
@@ -6118,9 +6118,6 @@ function _lvuRecto(doc, d, isCMR, band) {
   dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
   bx(x0, y, CW, LV.H_TRANSPORTEUR);
   lw(LV.STROKE_DOC_BORDER); ln(x0 + LV.W_TRANS_LEFT, y, x0 + LV.W_TRANS_LEFT, y + LV.H_TRANSPORTEUR);
-  fc(...LV.COLOR_LIGHT_BLUE);
-  bx(x0, y, LV.W_TRANS_LEFT, 4.5, 'F');
-  bx(x0 + LV.W_TRANS_LEFT, y, LV.W_TRANS_RIGHT, 4.5, 'F');
   tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_LABEL);
   tx('Transporteur / Carrier (nom, adresse, pays / name, address, country)', x0 + LV.CELL_PAD_X, y + 3.2);
   const tl = d.transporteur ?? {};
@@ -6267,7 +6264,6 @@ function _lvuRecto(doc, d, isCMR, band) {
   dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
   bx(x0, y, CW / 2, LV.H_RESERVES);
   bx(x0 + CW / 2, y, CW / 2, LV.H_RESERVES);
-  fc(...LV.COLOR_LIGHT_BLUE); bx(x0, y, CW / 2, 5, 'F'); bx(x0 + CW / 2, y, CW / 2, 5, 'F');
   tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_BODY);
   tx('Réserves AU CHARGEMENT',   x0 + LV.CELL_PAD_X,           y + 3.5);
   tx('Réserves AU DÉCHARGEMENT', x0 + CW / 2 + LV.CELL_PAD_X, y + 3.5);
@@ -6283,7 +6279,6 @@ function _lvuRecto(doc, d, isCMR, band) {
   dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
   bx(x0, y, CW / 2, LV.H_DOCS);
   bx(x0 + CW / 2, y, CW / 2, LV.H_DOCS);
-  fc(...LV.COLOR_LIGHT_BLUE); bx(x0, y, CW / 2, 4.5, 'F'); bx(x0 + CW / 2, y, CW / 2, 4.5, 'F');
   tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_BODY);
   tx('Documents annexes / Documents attached', x0 + LV.CELL_PAD_X,           y + 3.2);
   tx('Note de livraison',                      x0 + CW / 2 + LV.CELL_PAD_X, y + 3.2);
@@ -6300,10 +6295,9 @@ function _lvuRecto(doc, d, isCMR, band) {
   dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
   bx(x0, y, CW / 2, LV.H_ADDR);
   bx(x0 + CW / 2, y, CW / 2, LV.H_ADDR);
-  fc(...LV.COLOR_LIGHT_BLUE); bx(x0, y, CW / 2, 5, 'F'); bx(x0 + CW / 2, y, CW / 2, 5, 'F');
   tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_BODY);
-  tx('EXPÉDITEUR / Sender — Chargement',    x0 + LV.CELL_PAD_X,           y + 3.5);
-  tx('DESTINATAIRE / Consignee — Livraison', x0 + CW / 2 + LV.CELL_PAD_X, y + 3.5);
+  tx('EXPÉDITEUR / Sender - Chargement',    x0 + LV.CELL_PAD_X,           y + 3.5);
+  tx('DESTINATAIRE / Consignee - Livraison', x0 + CW / 2 + LV.CELL_PAD_X, y + 3.5);
   tc(0, 0, 0); sf('normal', LV.FONT_BODY);
   const exp = d.expediteur ?? {}, dst = d.destinataire ?? {};
   let ey = y + 9.5, dy2 = y + 9.5;
@@ -6365,10 +6359,10 @@ function _lvuVerso(doc) {
   let y = LV.MARGIN;
   tc(...LV.V_TITLE_MAIN); sf('bold', LV.V_HEADER_TITLE_FONT);
   doc.setCharSpace(0.6);
-  tx('CONDITIONS DE TRANSPORT — PLAFONDS DE RESPONSABILITÉ', x0 + CW / 2, y + 7, 'center');
+  tx('CONDITIONS DE TRANSPORT - PLAFONDS DE RESPONSABILITÉ', x0 + CW / 2, y + 7, 'center');
   doc.setCharSpace(0);
   tc(...LV.V_SUBTITLE); sf('italic', LV.V_HEADER_SUB_FONT);
-  tx("Articles L.133-1 et suivants du Code de Commerce — contrats types applicables (décrets d'application de la loi du 6 février 1998)", x0 + CW / 2, y + 13, 'center');
+  tx("Articles L.133-1 et suivants du Code de Commerce · Contrats types publiés par arrêtés ministériels", x0 + CW / 2, y + 13, 'center');
   dc(...LV.V_BORDER); lw(LV.STROKE_VERSO);
   ln(x0, y + 16, x0 + CW, y + 16);
   y += 16 + LV.V_HEADER_MARGIN_BOTTOM;
@@ -6426,7 +6420,7 @@ function _lvuVerso(doc) {
 
   // ── Blocs colonne gauche (5 blocs) ────────────────────────────────────────
   const LEFT = [
-    { title: 'TRAFIC INTÉRIEUR · ENVOIS ≥ 3 TONNES', items: [
+    { title: 'TRAFIC INTÉRIEUR · ENVOIS >= 3 TONNES', items: [
       { t: 'body',   v: 'Réf. Décret 2017-461 du 31 mars 2017' },
       { t: 'bullet', v: 'Perte ou avarie : 20 €/kg de poids brut manquant ou avarié' },
       { t: 'bullet', v: 'Plafond global : nb de tonnes × 3 200 €' },
@@ -6439,12 +6433,12 @@ function _lvuVerso(doc) {
       { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
     ]},
     { title: 'TRANSPORT SOUS TEMPÉRATURE DIRIGÉE', items: [
-      { t: 'bullet', v: 'Envois ≥ 3 t : 14 €/kg — plafond : nb tonnes × 4 000 €' },
-      { t: 'bullet', v: 'Envois < 3 t : 23 €/kg — plafond : 750 €/colis' },
+      { t: 'bullet', v: 'Envois >= 3 t : 14 EUR/kg - plafond : nb tonnes x 4 000 EUR' },
+      { t: 'bullet', v: 'Envois < 3 t : 23 EUR/kg - plafond : 750 EUR/colis' },
       { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
     ]},
     { title: 'TRANSPORT EN CITERNES', items: [
-      { t: 'bullet', v: 'Marchandise : 3 €/kg ou litre — plafond 55 000 €/envoi' },
+      { t: 'bullet', v: 'Marchandise : 3 €/kg ou litre - plafond55 000 €/envoi' },
       { t: 'bullet', v: 'Autres dommages : plafond 300 000 €/envoi' },
       { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
     ]},
