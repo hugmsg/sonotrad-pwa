@@ -5875,6 +5875,8 @@ const App = {
         note: d.note || '', convoi: d.convoi ? 'Oui' : 'Non',
         poids: (d.marchandises || []).reduce((s, r) => s + (parseFloat(r.poids) || 0), 0).toFixed(3),
         ml: '',
+        planning_codes: (d.marchandises || []).map(m => m.note).filter(Boolean),
+        marchandises_desc: (d.marchandises || []).map(m => m.description).filter(Boolean).join(', '),
       };
       const r   = await _fetchWithTimeout(S.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) }, 30000);
       const res = await r.json();
@@ -6236,6 +6238,15 @@ function _lvuRecto(doc, d, isCMR, band) {
   const totY = vc(y, LV.H_MARC_ROW, LV.FONT_MARC_TOTAL);
   tx('TOTAL / Total', X_NAT + W_NAT - LV.CELL_PAD_X, totY, 'right');
   if (tot.poids) tx(String(tot.poids), X_POIDS + LV.W_MARC_POIDS / 2, totY, 'center');
+  // Convoi exceptionnel dans la cellule NOMBRE (ligne TOTAL)
+  const cv2 = d.convoiExceptionnel === true || d.convoi === true || d.convoi === 'Oui';
+  sf('bold', 5); tc(...LV.COLOR_PRIMARY);
+  tx('Convoi except.', x0 + LV.CELL_PAD_X, y + 3.2);
+  tc(0, 0, 0); dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  chk(x0 + LV.CELL_PAD_X,      y + 4.3, 3.0, cv2);
+  sf('normal', 5.5); tx('OUI', x0 + LV.CELL_PAD_X + 4.2, y + 7.0);
+  chk(x0 + LV.CELL_PAD_X + 12, y + 4.3, 3.0, !cv2);
+  tx('NON', x0 + LV.CELL_PAD_X + 16.2, y + 7.0);
   tc(0, 0, 0); dc(0, 0, 0); lw(LV.STROKE_INTRA);
   y += LV.H_MARC_ROW;
 
@@ -6268,21 +6279,21 @@ function _lvuRecto(doc, d, isCMR, band) {
   dc(0, 0, 0); lw(LV.STROKE_INTRA);
   y += LV.H_RESERVES;
 
-  // ── Section 12 : Documents annexes / Convoi exceptionnel ─────────────────
+  // ── Section 12 : Documents annexes + Commande / Note de livraison ─────────
   dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
   bx(x0, y, CW / 2, LV.H_DOCS);
   bx(x0 + CW / 2, y, CW / 2, LV.H_DOCS);
   fc(...LV.COLOR_LIGHT_BLUE); bx(x0, y, CW / 2, 4.5, 'F'); bx(x0 + CW / 2, y, CW / 2, 4.5, 'F');
   tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_BODY);
   tx('Documents annexes / Documents attached', x0 + LV.CELL_PAD_X,           y + 3.2);
-  tx('Convoi exceptionnel',                    x0 + CW / 2 + LV.CELL_PAD_X, y + 3.2);
+  tx('Note de livraison',                      x0 + CW / 2 + LV.CELL_PAD_X, y + 3.2);
   tc(0, 0, 0); sf('normal', LV.FONT_BODY);
-  tx(String(d.documentsAnnexes ?? d.doc_annexe ?? ''), x0 + LV.CELL_PAD_X, y + 7.5);
-  const cv = d.convoiExceptionnel === true || d.convoi === true || d.convoi === 'Oui';
-  const cbX = x0 + CW * 0.68;
+  const docStr = String(d.documentsAnnexes ?? d.doc_annexe ?? '');
+  const cmdStr = d.commande ? 'Cde : ' + d.commande : '';
+  if (docStr) tx(docStr, x0 + LV.CELL_PAD_X, y + 7.0);
+  if (cmdStr) tx(cmdStr, x0 + LV.CELL_PAD_X, y + (docStr ? 9.5 : 7.0));
+  if (d.note) tx(String(d.note), x0 + CW / 2 + LV.CELL_PAD_X, y + 7.0);
   dc(0, 0, 0); lw(LV.STROKE_INTRA);
-  chk(cbX, y + 4.8, LV.CHECKBOX_SIZE, cv);   tx('OUI', cbX + LV.CHECKBOX_SIZE + 1.5, y + 8.2);
-  chk(cbX + 16, y + 4.8, LV.CHECKBOX_SIZE, !cv); tx('NON', cbX + 16 + LV.CHECKBOX_SIZE + 1.5, y + 8.2);
   y += LV.H_DOCS;
 
   // ── Section 13 : Expéditeur / Destinataire ────────────────────────────────
@@ -6363,7 +6374,7 @@ function _lvuVerso(doc) {
   y += 16 + LV.V_HEADER_MARGIN_BOTTOM;
 
   // ── Calcul des hauteurs de blocs ─────────────────────────────────────────
-  const footerY = LV.PAGE_H - LV.MARGIN - 9;
+  const footerY = LV.PAGE_H - LV.MARGIN;
   const blocksH = footerY - y - 2;
   const BH_L = (blocksH - (LV.V_BLOCKS_LEFT  - 1) * LV.V_BLOCK_GAP) / LV.V_BLOCKS_LEFT;
   const BH_R = (blocksH - (LV.V_BLOCKS_RIGHT - 1) * LV.V_BLOCK_GAP) / LV.V_BLOCKS_RIGHT;
@@ -6474,15 +6485,6 @@ function _lvuVerso(doc) {
   for (let i = 0; i < LEFT.length;  i++) drawBlock(0, y + i * (BH_L + LV.V_BLOCK_GAP), BH_L, LEFT[i].title,  LEFT[i].items);
   for (let i = 0; i < RIGHT.length; i++) drawBlock(1, y + i * (BH_R + LV.V_BLOCK_GAP), BH_R, RIGHT[i].title, RIGHT[i].items);
 
-  // ── Footer ────────────────────────────────────────────────────────────────
-  dc(...LV.V_BORDER); lw(LV.STROKE_VERSO);
-  ln(x0, footerY, x0 + CW, footerY);
-  tc(...LV.V_FOOTER_TEXT); sf('bold', LV.V_FOOTER_FONT);
-  doc.setCharSpace(0.3);
-  tx('TRANSPORTS MESNAGER', x0 + CW / 2, footerY + 4, 'center');
-  doc.setCharSpace(0);
-  tc(...LV.V_REF); sf('normal', LV.V_FOOTER_FONT);
-  tx('La Perrière · 61360 SAINT-DENIS-DE-VILLENETTE · SIRET 803 611 093 00026 · contact@transports-mesnager.fr', x0 + CW / 2, footerY + 7.5, 'center');
 }
 
 function todayStr() { return new Date().toISOString().split('T')[0]; }
