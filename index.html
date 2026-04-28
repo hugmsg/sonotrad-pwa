@@ -6008,7 +6008,7 @@ const App = {
         doc_annexe: d.doc_annexe || '', commande: d.commande || '',
         note: d.note || '', convoi: d.convoi ? 'Oui' : 'Non',
         poids: (d.marchandises || []).reduce((s, r) => s + (parseFloat(r.poids) || 0), 0).toFixed(3),
-        ml: d.total?.ml || '',
+        ml: parseFloat(d.total?.ml) || '',
         planning_codes: (d.marchandises || []).map(m => m.note).filter(Boolean),
         marchandises_desc: (d.marchandises || []).map(m => m.description).filter(Boolean).join(', '),
       };
