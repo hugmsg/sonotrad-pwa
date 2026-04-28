@@ -4713,6 +4713,21 @@ const App = {
     if (!selectedDeps.length) return;
     const userActs = S.currentUser?.activites || [];
     if (!userActs.includes('lvu')) { this.toast('⛔ Accès LV non autorisé'); return; }
+
+    // Vérifier que tous les modules ont la même destination (code agence)
+    if (selectedDeps.length > 1) {
+      const agCodes = [...new Set(selectedDeps.map(d =>
+        (d.ag || ((d.chantier || '').match(/^(\d{3,6})/)||[])[1] || '').trim()
+      ).filter(Boolean))];
+      if (agCodes.length > 1) {
+        const ok = window.confirm(
+          `⚠️ Destinations différentes détectées (agences : ${agCodes.join(', ')}).\n` +
+          `Une LV est normalement par destination.\nContinuer quand même ?`
+        );
+        if (!ok) return;
+      }
+    }
+
     // Réinitialiser la sélection
     S.depSelectMode = false;
     S.depSelected.clear();
@@ -4722,10 +4737,11 @@ const App = {
     // Basculer vers l'activité LVU
     S.activity = 'lvu';
     await this.lvuInit();
-    // Appliquer les modules comme source LOXAM
+    // Charger les agences en premier (await) pour que lvuApplyLoxam puisse pré-remplir le destinataire
+    await this.lvuLoadAgencies();
+    // Appliquer les modules (source loxam + marchandises + destinataire)
     this.lvuSetSource('loxam');
     this.lvuApplyLoxam();
-    this.lvuLoadAgencies();
   },
   openDep(idx) {
     S.selDep        = S.deps[idx];
