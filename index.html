@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
@@ -402,6 +402,7 @@
     .batch-qty-input { width:40px; height:30px; border:none; border-left:1.5px solid #E2E8F0; border-right:1.5px solid #E2E8F0; text-align:center; font-size:14px; font-weight:700; color:#1E293B; background:white; padding:0; }
     .batch-qty-input:focus { outline:none; background:#F8FAFC; }
     .dep-card:active { transform: scale(0.98); }
+    .dep-card.dep-selected { background:#EFF6FF; box-shadow:0 0 0 2px #1D4ED8; }
     .dep-card-left  { flex: 0 0 86px; min-width:0; overflow:hidden; padding-right:8px; border-right:1px solid #F1F5F9; }
     .dep-card-right { flex: 1; min-width:0; padding-left:8px; }
     /* ── Scope segmented control (Production: Actifs / Avec partis) ── */
@@ -1171,6 +1172,10 @@
             style="background:none;border:1px solid #E2E8F0;border-radius:16px;padding:4px 10px;font-size:11px;color:#64748B;cursor:pointer;display:flex;align-items:center;gap:3px;">
             <span id="dep-sort-icon">↑</span><span id="dep-sort-label">En cours → Terminé</span>
           </button>
+          <button id="dep-lv-toggle-btn" onclick="App.toggleDepSelectMode()"
+            style="background:white;border:1.5px solid #E2E8F0;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;color:#64748B;cursor:pointer;">
+            📄 LV
+          </button>
           <button onclick="App.loadDepartures(true)" style="background:#EBF5FB;color:var(--brand);border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻</button>
         </div>
       </div>
@@ -1233,6 +1238,16 @@
         <div style="font-size:52px;margin-bottom:12px;">🚛</div>
         <p style="font-size:16px;font-weight:600;">Aucun article en production</p>
         <p style="font-size:13px;margin-top:4px;">Les articles actifs du Planning apparaîtront ici</p>
+      </div>
+      <!-- Barre flottante sélection LV -->
+      <div id="dep-lv-bar" style="display:none;position:sticky;bottom:0;background:#1D4ED8;border-radius:12px;margin:8px -4px 0;padding:12px 16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+          <span id="dep-lv-count" style="color:white;font-weight:600;font-size:13px;"></span>
+          <button onclick="App.depCreateLv()"
+            style="background:white;color:#1D4ED8;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">
+            📄 Créer LV →
+          </button>
+        </div>
       </div>
     </div>
     <!-- ── VIEW : DEPARTURE DETAIL ──────────────────────────────────────── -->
@@ -1958,6 +1973,8 @@ const S = {
   depDateFrom:     '',      // 'YYYY-MM-DD' ou vide
   depDateTo:       '',      // 'YYYY-MM-DD' ou vide
   depFiltersOpen:  false,   // panneau filtres détaillés ouvert/fermé
+  depSelectMode:   false,   // mode sélection multi-modules pour créer LV
+  depSelected:     new Set(),
   // Arrivals (depuis serveur)
   arrivalsData:    [],
   arrivalsSummary: {},
@@ -4589,30 +4606,36 @@ const App = {
       return S.depSortAsc ? ra - rb : rb - ra;
     });
     list.innerHTML = filtered.map((d, i) => {
-      const realIdx = S.deps.indexOf(d);
-      const code  = d.code || '------';
-      const titre = d.module || code;
-      const cur   = this._depCurrentStatus(d);
-      const chipMap = {
+      const realIdx  = S.deps.indexOf(d);
+      const code     = d.code || '------';
+      const titre    = d.module || code;
+      const cur      = this._depCurrentStatus(d);
+      const selected = S.depSelectMode && S.depSelected.has(code);
+      const chipMap  = {
         enCours:    '<span class="chip chip-blue">En cours</span>',
         aControler: '<span class="chip chip-yellow">À contrôler</span>',
         termine:    '<span class="chip chip-green">Terminé</span>',
         deCote:     '<span class="chip" style="background:#F3E8FF;color:#6B21A8;">De côté</span>',
       };
-      const chips = cur ? chipMap[cur] : '';
-      const dur   = _duration(d.debut, d.status && d.status.termine ? d.fin : null);
+      const chips   = cur ? chipMap[cur] : '';
+      const dur     = _duration(d.debut, d.status && d.status.termine ? d.fin : null);
+      const onclick = S.depSelectMode ? `App.toggleDepSelect('${code}')` : `App.openDep(${realIdx})`;
+      const cbHtml  = S.depSelectMode
+        ? `<div style="width:22px;height:22px;border-radius:6px;border:2px solid ${selected?'#1D4ED8':'#CBD5E1'};background:${selected?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;color:white;">${selected?'✓':''}</div>`
+        : '';
       return `
-        <div class="dep-card" onclick="App.openDep(${realIdx})">
+        <div class="dep-card${selected?' dep-selected':''}" onclick="${onclick}">
+          ${cbHtml}
           <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;width:38px;">
             <div style="width:34px;height:34px;background:#EBF5FB;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;">📤</div>
             <div style="font-family:'Courier New',monospace;font-size:9px;color:#94A3B8;text-align:center;line-height:1.1;max-width:38px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${code}</div>
           </div>
           <div class="dep-card-left">
-            <div class="code-mono" style="font-size:14px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.codeModule || '\u00A0'}</div>
-            <div style="font-size:10px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titre !== code ? titre : '\u00A0'}</div>
+            <div class="code-mono" style="font-size:14px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.codeModule || '&nbsp;'}</div>
+            <div style="font-size:10px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titre !== code ? titre : '&nbsp;'}</div>
           </div>
           <div class="dep-card-right">
-            <div style="font-size:13px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${d.chantier || '\u00A0'}</div>
+            <div style="font-size:13px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${d.chantier || '&nbsp;'}</div>
             ${d.description ? `<div style="font-size:11px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${d.description.length > 55 ? d.description.substring(0,53)+'…' : d.description}</div>` : ''}
             <div style="display:flex;align-items:center;gap:4px;overflow:hidden;">
               ${chips}
@@ -4620,7 +4643,7 @@ const App = {
               ${S.depPhotosLog[code] ? `<span style="font-size:10px;background:#F0FDF4;color:#166534;border-radius:6px;padding:1px 5px;white-space:nowrap;flex-shrink:0;">📷 ${S.depPhotosLog[code].count}</span>` : ''}
             </div>
           </div>
-          <span style="color:#CBD5E1;font-size:16px;flex-shrink:0;">›</span>
+          ${S.depSelectMode ? '' : '<span style="color:#CBD5E1;font-size:16px;flex-shrink:0;">›</span>'}
         </div>`;
     }).join('');
     // ── Section Partis ────────────────────────────────────────────────────
@@ -4657,6 +4680,52 @@ const App = {
           <p style="font-size:12px;color:#94A3B8;text-align:center;padding:12px 0;">Aucun parti correspondant</p>`;
       }
     }
+  },
+  toggleDepSelectMode() {
+    S.depSelectMode = !S.depSelectMode;
+    S.depSelected.clear();
+    const btn = document.getElementById('dep-lv-toggle-btn');
+    if (btn) {
+      btn.style.background   = S.depSelectMode ? '#EFF6FF' : 'white';
+      btn.style.borderColor  = S.depSelectMode ? '#1D4ED8' : '#E2E8F0';
+      btn.style.color        = S.depSelectMode ? '#1D4ED8' : '#64748B';
+    }
+    this._updateDepLvBar();
+    this._renderDepList();
+  },
+  toggleDepSelect(code) {
+    if (S.depSelected.has(code)) S.depSelected.delete(code);
+    else S.depSelected.add(code);
+    this._updateDepLvBar();
+    this._renderDepList();
+  },
+  _updateDepLvBar() {
+    const bar   = document.getElementById('dep-lv-bar');
+    const count = document.getElementById('dep-lv-count');
+    if (!bar) return;
+    const n = S.depSelected.size;
+    bar.style.display = (S.depSelectMode && n > 0) ? '' : 'none';
+    if (count) count.textContent = `${n} module${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''}`;
+  },
+  async depCreateLv() {
+    if (!S.depSelected.size) return;
+    const selectedDeps = S.deps.filter(d => S.depSelected.has(d.code));
+    if (!selectedDeps.length) return;
+    const userActs = S.currentUser?.activites || [];
+    if (!userActs.includes('lvu')) { this.toast('⛔ Accès LV non autorisé'); return; }
+    // Réinitialiser la sélection
+    S.depSelectMode = false;
+    S.depSelected.clear();
+    // Pré-remplir les items LOXAM avec les modules sélectionnés
+    S.lvu.loxamItems    = selectedDeps;
+    S.lvu.selectedItems = new Set(selectedDeps.map(d => d.code));
+    // Basculer vers l'activité LVU
+    S.activity = 'lvu';
+    await this.lvuInit();
+    // Appliquer les modules comme source LOXAM
+    this.lvuSetSource('loxam');
+    this.lvuApplyLoxam();
+    this.lvuLoadAgencies();
   },
   openDep(idx) {
     S.selDep        = S.deps[idx];
@@ -5885,7 +5954,7 @@ const App = {
         doc_annexe: d.doc_annexe || '', commande: d.commande || '',
         note: d.note || '', convoi: d.convoi ? 'Oui' : 'Non',
         poids: (d.marchandises || []).reduce((s, r) => s + (parseFloat(r.poids) || 0), 0).toFixed(3),
-        ml: '',
+        ml: d.total?.ml || '',
         planning_codes: (d.marchandises || []).map(m => m.note).filter(Boolean),
         marchandises_desc: (d.marchandises || []).map(m => m.description).filter(Boolean).join(', '),
       };
