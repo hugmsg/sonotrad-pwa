@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>LV 01449 — Modèle corrigé</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: #fff;
+    font-family: Helvetica, Arial, sans-serif;
+    color: #000;
+  }
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PAGE A4 — 210 × 297 mm, marges réduites à 6 mm pour exploiter l'espace
+     ═══════════════════════════════════════════════════════════════════════════ */
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  .page {
+    width: 210mm;
+    height: 297mm;
+    background: #fff;
+    padding: 6mm;
+    font-size: 7.5pt;
+    line-height: 1.25;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    page-break-after: always;
+    box-sizing: border-box;
+  }
+  .page:last-child { page-break-after: auto; }
+
+  /* Structure principale : empile les sections, la marchandises prend l'espace restant */
+  .doc {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    border: 0.6pt solid #1f3a5f;
+  }
+
+  /* ── Réinit ── */
+  .row       { display: flex; }
+  .cell      { padding: 1.3mm 2mm; overflow: hidden; }
+  .bordered  { border-top: 0.4pt solid #1f3a5f; }
+  .bdr-r     { border-right: 0.4pt solid #1f3a5f; }
+  .bold      { font-weight: bold; }
+  .small     { font-size: 5.8pt; line-height: 1.3; }
+  .tiny      { font-size: 5.3pt; line-height: 1.25; }
+  .label     { font-weight: bold; font-size: 6.3pt; color: #1f3a5f; text-transform: none; }
+  .white     { color: #fff; }
+  .center    { text-align: center; }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     ZONE SUPÉRIEURE — Layout 2 colonnes
+     Gauche (flex 1) : titre + NATIONALE/CMR + mentions légales FR/CMR
+     Droite (42mm)  : N° en haut + DATE en dessous (bloc unifié)
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .top-zone {
+    display: flex;
+    align-items: stretch;
+  }
+  .top-left {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    border-right: 0.4pt solid #1f3a5f;
+    min-width: 0;
+  }
+  .top-right {
+    flex: 0 0 42mm;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* Bloc N° (haut) — occupe la hauteur du titre + ligne NATIONALE/CMR */
+  .top-right .num-block {
+    flex: 0 0 18.5mm;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3mm;
+    padding: 0 3mm;
+    border-bottom: 0.4pt solid #1f3a5f;
+  }
+  .top-right .num-block .num-label {
+    font-size: 10pt;
+    font-weight: bold;
+    color: #1f3a5f;
+  }
+  .top-right .num-block .num-value {
+    font-size: 22pt;
+    font-weight: bold;
+    color: #1f3a5f;
+    letter-spacing: 0.5pt;
+  }
+
+  /* Bloc DATE (bas) */
+  .top-right .date-block {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .top-right .date-block .date-header {
+    background: #1f3a5f;
+    color: #fff;
+    font-weight: bold;
+    font-size: 8pt;
+    text-align: center;
+    padding: 1.5mm;
+    letter-spacing: 0.5pt;
+  }
+  .top-right .date-block .date-value {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13pt;
+    font-weight: bold;
+    color: #1f3a5f;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     1. TITRE (dans top-left)
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .header-title {
+    background: #1f3a5f;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14pt;
+    font-weight: bold;
+    letter-spacing: 1pt;
+    padding: 2.5mm 4mm;
+    min-height: 11mm;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     2. NATIONALE / CMR — Cases de choix
+     Largeur top-left = 198 - 42 = 156mm
+     Séparation au milieu = 78mm pour aligner avec FR/CMR en dessous
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .natcmr {
+    display: flex;
+    min-height: 7mm;
+    border-top: 0.4pt solid #1f3a5f;
+  }
+  .natcmr .opt-nat {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    padding: 1.5mm 3mm;
+    border-right: 0.4pt solid #1f3a5f;
+  }
+  .natcmr .opt-cmr {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    padding: 1.5mm 3mm;
+  }
+  .natcmr .checkbox { margin-right: 3mm; }
+  .checkbox {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.8mm;
+    height: 3.8mm;
+    border: 0.9pt solid #1f3a5f;
+    font-size: 9pt;
+    font-weight: bold;
+    color: #1f3a5f;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  /* Logo CMR à côté de la case */
+  .cmr-logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 4mm;
+    padding: 0.5mm 2mm;
+    border: 0.8pt solid #1f3a5f;
+    border-radius: 1.2mm;
+    font-size: 7pt;
+    font-weight: bold;
+    color: #1f3a5f;
+    letter-spacing: 0.3pt;
+    background: #fff;
+    line-height: 1;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     3. MENTIONS LÉGALES — 2 colonnes FR/CMR (alignées avec NAT/CMR)
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .legal {
+    display: flex;
+    min-height: 18mm;
+    border-top: 0.4pt solid #1f3a5f;
+  }
+  .legal .legal-fr {
+    flex: 1;
+    padding: 1.5mm 2.5mm;
+    border-right: 0.4pt solid #1f3a5f;
+  }
+  .legal .legal-cmr {
+    flex: 1;
+    padding: 1.5mm 2.5mm;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     4. TRANSPORTEUR / CONDUCTEURS / IMMATRICULATIONS
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .transporteur {
+    display: flex;
+    min-height: 34mm;
+  }
+  .trans-left {
+    flex: 1;
+    padding: 1.8mm 2.5mm;
+  }
+  .trans-left .t-name {
+    font-size: 10pt;
+    font-weight: bold;
+    margin: 1.2mm 0 0.8mm;
+  }
+  .trans-left .t-info {
+    font-size: 7.5pt;
+    line-height: 1.45;
+  }
+  .trans-right {
+    flex: 0 0 82mm;
+    display: flex;
+    flex-direction: column;
+  }
+  .trans-right .cond {
+    flex: 0 0 13mm;
+    padding: 1.5mm 2.5mm;
+    border-bottom: 0.4pt solid #1f3a5f;
+  }
+  .trans-right .cond .cond-value {
+    font-size: 8pt;
+    font-weight: 600;
+    margin-top: 1mm;
+  }
+  .trans-right .immat {
+    flex: 1;
+    padding: 1.5mm 2.5mm;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .trans-right .immat .immat-line {
+    display: flex;
+    align-items: baseline;
+    gap: 2mm;
+    padding: 1.2mm 0;
+    max-width: 100%;
+    width: 100%;
+    box-sizing: border-box;
+    position: relative;
+  }
+  .trans-right .immat .immat-line:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    border-bottom: 0.3pt dotted #8aa3c3;
+  }
+  .trans-right .immat .immat-label {
+    font-size: 7pt;
+    color: #555;
+    flex: 0 0 26mm;
+    white-space: nowrap;
+  }
+  .trans-right .immat .immat-value {
+    flex: 1 1 0;
+    font-weight: 600;
+    font-size: 7.5pt;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     5. DONNEUR D'ORDRE
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .donneur {
+    display: flex;
+    align-items: center;
+    min-height: 9mm;
+    background: #f3f6fb;
+  }
+  .donneur .donneur-label {
+    padding: 1.5mm 2.5mm;
+    flex: 0 0 34mm;
+  }
+  .donneur .donneur-value {
+    flex: 1;
+    padding: 1.5mm 2.5mm;
+    font-weight: 600;
+    font-size: 8pt;
+    border-left: 0.4pt solid #1f3a5f;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     6. MARCHANDISES — flex: 1 pour prendre l'espace restant
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .marc {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .marc-header {
+    background: #1f3a5f;
+    color: #fff;
+    font-weight: bold;
+    font-size: 8pt;
+    text-align: center;
+    padding: 1.8mm;
+    letter-spacing: 0.8pt;
+  }
+  .marc-cols {
+    display: flex;
+    background: #dde6f2;
+    border-top: 0.4pt solid #1f3a5f;
+    border-bottom: 0.4pt solid #1f3a5f;
+  }
+  .marc-cols > div {
+    padding: 1.3mm 2mm;
+    font-weight: bold;
+    font-size: 6.3pt;
+    color: #1f3a5f;
+    text-transform: uppercase;
+    letter-spacing: 0.3pt;
+  }
+  .marc-cols .c-nombre { flex: 0 0 24mm; border-right: 0.4pt solid #1f3a5f; text-align: center; }
+  .marc-cols .c-nature { flex: 1; border-right: 0.4pt solid #1f3a5f; }
+  .marc-cols .c-poids  { flex: 0 0 30mm; border-right: 0.4pt solid #1f3a5f; text-align: center; }
+  .marc-cols .c-note   { flex: 0 0 22mm; text-align: center; }
+
+  .marc-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .marc-row {
+    height: 8.5mm;
+    display: flex;
+    border-bottom: 0.3pt solid #b8c6d9;
+  }
+  .marc-row:last-child { border-bottom: none; }
+  .marc-row.alt { background: #f7f9fc; }
+  .marc-row > div {
+    padding: 0.8mm 2mm;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 7.5pt;
+    display: flex;
+    align-items: center;
+  }
+  .marc-row .c-nombre { flex: 0 0 24mm; border-right: 0.3pt solid #b8c6d9; justify-content: center; }
+  .marc-row .c-nature { flex: 1; border-right: 0.3pt solid #b8c6d9; }
+  .marc-row .c-poids  { flex: 0 0 30mm; border-right: 0.3pt solid #b8c6d9; justify-content: center; }
+  .marc-row .c-note   { flex: 0 0 22mm; justify-content: center; }
+  .marc-row.total {
+    background: #dde6f2;
+    border-top: 0.6pt solid #1f3a5f;
+    font-weight: bold;
+    color: #1f3a5f;
+  }
+  .marc-row.total > div { font-size: 7.8pt; }
+  .marc-row.total .c-nature { text-align: right; padding-right: 3mm; justify-content: flex-end; }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     7. REFUS SIGNATURE
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .refus {
+    display: flex;
+    background: #f3f6fb;
+    min-height: 7mm;
+  }
+  .refus .r {
+    flex: 1;
+    padding: 1.2mm 2.5mm;
+    font-size: 5.8pt;
+    font-style: italic;
+    color: #333;
+    display: flex;
+    align-items: center;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     8. RÉSERVES
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .reserves {
+    display: flex;
+    min-height: 20mm;
+  }
+  .reserves .r {
+    flex: 1;
+    padding: 1.5mm 2.5mm;
+    display: flex;
+    flex-direction: column;
+    gap: 1.2mm;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     9. DOCUMENTS / CONVOI EXCEPTIONNEL
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .docs {
+    display: flex;
+    min-height: 10mm;
+  }
+  .docs .docs-col {
+    flex: 1;
+    padding: 1.5mm 2.5mm;
+    display: flex;
+    flex-direction: column;
+    gap: 1mm;
+  }
+  .docs .convoi {
+    flex: 1;
+    padding: 1.5mm 2.5mm;
+    display: flex;
+    align-items: center;
+    gap: 4mm;
+  }
+  .docs .convoi .opts {
+    display: flex;
+    gap: 6mm;
+    margin-left: auto;
+  }
+  .docs .convoi .opt {
+    display: flex;
+    align-items: center;
+    font-weight: 600;
+    font-size: 8pt;
+  }
+  .docs .convoi .opt .checkbox { margin-right: 2.5mm; }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     10. EXPÉDITEUR / DESTINATAIRE
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .addr {
+    display: flex;
+    min-height: 26mm;
+  }
+  .addr .a {
+    flex: 1;
+    padding: 2mm 2.5mm;
+    display: flex;
+    flex-direction: column;
+  }
+  .addr .a .a-name {
+    font-size: 9pt;
+    font-weight: bold;
+    margin: 1.5mm 0 0.5mm;
+  }
+  .addr .a .a-info {
+    font-size: 7.5pt;
+    line-height: 1.5;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     11. SIGNATURES
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .signatures {
+    display: flex;
+    min-height: 32mm;
+  }
+  .sig {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 1.8mm 2mm 2mm;
+  }
+  .sig .sig-head {
+    background: #dde6f2;
+    color: #1f3a5f;
+    font-weight: bold;
+    font-size: 7pt;
+    text-align: center;
+    padding: 1.2mm;
+    letter-spacing: 0.3pt;
+  }
+  .sig .sig-sub {
+    font-size: 6pt;
+    text-align: center;
+    color: #555;
+    padding: 0.8mm 0 0;
+  }
+  .sig .sig-zone {
+    flex: 1;
+    position: relative;
+    margin-top: auto;
+  }
+  .sig .sig-line {
+    position: absolute;
+    bottom: 2mm;
+    left: 3mm;
+    right: 3mm;
+    border-bottom: 0.8pt dashed #1f3a5f;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     VERSO — Conditions de transport (rendu discret gris sur blanc)
+     ═══════════════════════════════════════════════════════════════════════════ */
+  .page.verso {
+    page-break-before: always;
+  }
+  .verso-header {
+    background: #fff;
+    color: #c0c0c0;
+    text-align: center;
+    padding: 3mm 4mm 4mm;
+    margin-bottom: 6mm;
+    border-bottom: 0.3pt solid #ececec;
+  }
+  .verso-header h1 {
+    font-size: 13pt;
+    font-weight: bold;
+    letter-spacing: 0.6pt;
+    margin-bottom: 2mm;
+    color: #b5b5b5;
+  }
+  .verso-header .verso-subtitle {
+    font-size: 8pt;
+    font-weight: normal;
+    color: #c8c8c8;
+    font-style: italic;
+  }
+  .verso-body {
+    display: flex;
+    flex-direction: row;
+    gap: 6mm;
+    flex: 1;
+  }
+  .verso-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4mm;
+    min-width: 0;
+  }
+  .verso-block {
+    border: 0.3pt solid #efefef;
+    overflow: hidden;
+    flex: 1;
+  }
+  .verso-block .block-title {
+    background: #fbfbfb;
+    color: #b0b0b0;
+    font-weight: bold;
+    font-size: 8.5pt;
+    padding: 1.8mm 3mm;
+    border-bottom: 0.3pt solid #f2f2f2;
+    letter-spacing: 0.3pt;
+  }
+  .verso-block .block-body {
+    padding: 2.5mm 3mm;
+    font-size: 7.8pt;
+    line-height: 1.55;
+    color: #c0c0c0;
+  }
+  .verso-block .block-ref {
+    font-size: 6.8pt;
+    color: #d0d0d0;
+    font-style: italic;
+    margin-bottom: 1.8mm;
+  }
+  .verso-block .dmg-label {
+    font-weight: bold;
+    color: #b0b0b0;
+    font-size: 7.8pt;
+    margin-top: 2mm;
+    margin-bottom: 0.8mm;
+  }
+  .verso-block .dmg-label:first-child { margin-top: 0; }
+  .verso-block ul {
+    margin: 0.8mm 0 0 4mm;
+    padding: 0;
+    list-style: none;
+  }
+  .verso-block ul li {
+    position: relative;
+    padding-left: 4mm;
+    margin-bottom: 0.8mm;
+    font-size: 7.5pt;
+    line-height: 1.5;
+    color: #c0c0c0;
+  }
+  .verso-block ul li::before {
+    content: "·";
+    position: absolute;
+    left: 0;
+    top: -1.5mm;
+    color: #d5d5d5;
+    font-weight: bold;
+    font-size: 13pt;
+  }
+  .verso-block .retard {
+    margin-top: 2mm;
+    padding-top: 1.8mm;
+    border-top: 0.3pt dotted #ececec;
+    font-style: italic;
+    color: #c8c8c8;
+    font-size: 7.5pt;
+  }
+  .verso-block .retard strong { color: #b0b0b0; font-weight: bold; }
+  .verso-block strong { color: #b0b0b0; }
+  .verso-footer {
+    margin-top: 5mm;
+    padding: 3mm;
+    border-top: 0.3pt solid #efefef;
+    font-size: 6.5pt;
+    line-height: 1.55;
+    text-align: center;
+    color: #d0d0d0;
+  }
+  .verso-footer strong {
+    color: #b8b8b8;
+    text-transform: uppercase;
+    letter-spacing: 0.3pt;
+  }
+
+</style>
+</head>
+<body>
+<div class="page">
+<div class="doc">
+
+  <!-- ═══ ZONE SUPÉRIEURE — Layout 2 colonnes ═══ -->
+  <div class="top-zone">
+
+    <!-- Colonne gauche : titre + NATIONALE/CMR + mentions légales -->
+    <div class="top-left">
+      <div class="header-title">LETTRE DE VOITURE UNIQUE</div>
+
+      <div class="natcmr">
+        <div class="opt-nat">
+          <span class="checkbox">✕</span>
+          <span class="bold">NATIONALE</span>
+        </div>
+        <div class="opt-cmr">
+          <span class="checkbox"></span>
+          <span class="bold">INTERNATIONALE</span>
+          <span class="cmr-logo">CMR</span>
+        </div>
+      </div>
+
+      <div class="legal">
+        <div class="legal-fr small">
+          À défaut de convention écrite entre les parties au contrat de transport ou de déclaration de valeur spécifiée par le donneur d'ordre, la responsabilité du transporteur, en cas de perte ou avarie survenue aux marchandises ou en cas de retard à la livraison, est limitée au montant de l'indemnité prévue par le contrat type concernant le transport.
+        </div>
+        <div class="legal-cmr small">
+          Ce transport est soumis, nonobstant toute clause contraire, à la Convention relative au contrat de transport international de marchandises par route (CMR).<br><br>
+          <em>This carriage is subject, notwithstanding any clause to the contrary, to the Convention on the Contract for the international Carriage of goods by road (CMR).</em>
+        </div>
+      </div>
+    </div>
+
+    <!-- Colonne droite : N° en haut + DATE en bas (bloc unifié) -->
+    <div class="top-right">
+      <div class="num-block">
+        <span class="num-label">N°</span>
+        <span class="num-value">01449</span>
+      </div>
+      <div class="date-block">
+        <div class="date-header">DATE</div>
+        <div class="date-value">24/04/2026</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══ 4. TRANSPORTEUR / CONDUCTEURS / IMMATRICULATIONS ═══ -->
+  <div class="transporteur bordered">
+    <div class="trans-left bdr-r">
+      <div class="label">Transporteur / Carrier (nom, adresse, pays / name, address, country)</div>
+      <div class="t-name">TRANSPORTS MESNAGER</div>
+      <div class="t-info">
+        La Perrière<br>
+        61360 SAINT-DENIS-DE-VILLENETTE<br>
+        SIRET 803 611 093 00026 &nbsp;·&nbsp; 06 08 39 91 53<br>
+        RCS LAVAL 314 901 869
+      </div>
+    </div>
+    <div class="trans-right">
+      <div class="cond">
+        <div class="label">CONDUCTEURS / Drivers</div>
+        <div class="cond-value">Test</div>
+      </div>
+      <div class="immat">
+        <div class="label" style="margin-bottom:1.5mm;">IMMATRICULATIONS / Plate N°</div>
+        <div class="immat-line">
+          <span class="immat-label">Véhicule moteur :</span>
+          <span class="immat-value"></span>
+        </div>
+        <div class="immat-line">
+          <span class="immat-label">(Semi-)remorque :</span>
+          <span class="immat-value"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 5. DONNEUR D'ORDRE ═══ -->
+  <div class="donneur bordered">
+    <div class="donneur-label label">Donneur d'ordre :</div>
+    <div class="donneur-value"></div>
+  </div>
+
+  <!-- ═══ 6. MARCHANDISES ═══ -->
+  <div class="marc bordered">
+    <div class="marc-header">MARCHANDISES / GOODS</div>
+    <div class="marc-cols">
+      <div class="c-nombre">Nombre<br><span style="font-weight:normal;font-size:5.5pt;">Number</span></div>
+      <div class="c-nature">Nature de la marchandise <span style="font-weight:normal;font-size:5.8pt;color:#5a6d85;">/ Nature of the goods</span></div>
+      <div class="c-poids">Poids / M.L.<br><span style="font-weight:normal;font-size:5.5pt;">Weight / Lin. m.</span></div>
+      <div class="c-note">Note</div>
+    </div>
+    <div class="marc-body">
+      <div class="marc-row">    <div class="c-nombre"></div><div class="c-nature"></div><div class="c-poids"></div><div class="c-note"></div></div>
+      <div class="marc-row alt"><div class="c-nombre"></div><div class="c-nature"></div><div class="c-poids"></div><div class="c-note"></div></div>
+      <div class="marc-row">    <div class="c-nombre"></div><div class="c-nature"></div><div class="c-poids"></div><div class="c-note"></div></div>
+      <div class="marc-row alt"><div class="c-nombre"></div><div class="c-nature"></div><div class="c-poids"></div><div class="c-note"></div></div>
+      <div class="marc-row">    <div class="c-nombre"></div><div class="c-nature"></div><div class="c-poids"></div><div class="c-note"></div></div>
+      <div class="marc-row alt"><div class="c-nombre"></div><div class="c-nature"></div><div class="c-poids"></div><div class="c-note"></div></div>
+      <div class="marc-row">    <div class="c-nombre"></div><div class="c-nature"></div><div class="c-poids"></div><div class="c-note"></div></div>
+      <div class="marc-row alt"><div class="c-nombre"></div><div class="c-nature"></div><div class="c-poids"></div><div class="c-note"></div></div>
+      <div class="marc-row">    <div class="c-nombre"></div><div class="c-nature"></div><div class="c-poids"></div><div class="c-note"></div></div>
+      <div class="marc-row alt"><div class="c-nombre"></div><div class="c-nature"></div><div class="c-poids"></div><div class="c-note"></div></div>
+      <div class="marc-row total"><div class="c-nombre"></div><div class="c-nature">TOTAL / Total</div><div class="c-poids"></div><div class="c-note"></div></div>
+    </div>
+  </div>
+
+  <!-- ═══ 7. REFUS SIGNATURE ═══ -->
+  <div class="refus bordered">
+    <div class="r bdr-r">Le refus non motivé de signature engage la responsabilité de l'expéditeur-remettant.</div>
+    <div class="r">Le refus non motivé de signature engage la responsabilité du destinataire.</div>
+  </div>
+
+  <!-- ═══ 8. RÉSERVES ═══ -->
+  <div class="reserves bordered">
+    <div class="r bdr-r">
+      <div class="label">Réserves AU CHARGEMENT</div>
+    </div>
+    <div class="r">
+      <div class="label">Réserves AU DÉCHARGEMENT</div>
+    </div>
+  </div>
+
+  <!-- ═══ 9. DOCUMENTS / CONVOI EXCEPTIONNEL ═══ -->
+  <div class="docs bordered">
+    <div class="docs-col bdr-r">
+      <div class="label">Documents annexes / Documents attached :</div>
+    </div>
+    <div class="convoi">
+      <span class="label">Convoi exceptionnel :</span>
+      <div class="opts">
+        <div class="opt"><span class="checkbox"></span> OUI</div>
+        <div class="opt"><span class="checkbox">✕</span> NON</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 10. EXPÉDITEUR / DESTINATAIRE ═══ -->
+  <div class="addr bordered">
+    <div class="a bdr-r">
+      <div class="label">EXPÉDITEUR / Sender — Chargement</div>
+      <div class="a-name">SONOTRAD</div>
+      <div class="a-info">
+        ZA Renardières<br>
+        53250 Javron-les-Chapelles
+      </div>
+    </div>
+    <div class="a">
+      <div class="label">DESTINATAIRE / Consignee — Livraison</div>
+    </div>
+  </div>
+
+  <!-- ═══ 11. SIGNATURES ═══ -->
+  <div class="signatures bordered">
+    <div class="sig bdr-r">
+      <div class="sig-head">CACHET EXPÉDITEUR</div>
+      <div class="sig-sub">Sender's stamp</div>
+      <div class="sig-zone"><div class="sig-line"></div></div>
+    </div>
+    <div class="sig bdr-r">
+      <div class="sig-head">NOM &amp; SIGNATURE CONDUCTEUR</div>
+      <div class="sig-sub">Driver's name and signature</div>
+      <div class="sig-zone"><div class="sig-line"></div></div>
+    </div>
+    <div class="sig">
+      <div class="sig-head">CACHET DESTINATAIRE</div>
+      <div class="sig-sub">Consignee's stamp</div>
+      <div class="sig-zone"><div class="sig-line"></div></div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     VERSO — Conditions générales de transport
+     ══════════════════════════════════════════════════════════════════════════ -->
+<div class="page verso">
+
+  <div class="verso-header">
+    <h1>CONDITIONS DE TRANSPORT — PLAFONDS DE RESPONSABILITÉ</h1>
+    <div class="verso-subtitle">Articles L.133-1 et suivants du Code de commerce · Contrats types publiés par arrêtés ministériels</div>
+  </div>
+
+  <div class="verso-body">
+
+    <!-- COLONNE GAUCHE -->
+    <div class="verso-col">
+
+      <div class="verso-block">
+        <div class="block-title">TRAFIC INTÉRIEUR · ENVOIS ≥ 3 TONNES</div>
+        <div class="block-body">
+          <div class="block-ref">Décret 2017-461 du 31 mars 2017</div>
+          <div class="dmg-label">Perte ou avarie</div>
+          <ul>
+            <li>20 € par kg de poids brut manquant ou avarié</li>
+            <li>Plafond global : nb de tonnes × 3 200 €</li>
+          </ul>
+          <div style="font-size:6.5pt;font-style:italic;margin-top:1mm;color:#555;">La plus faible des deux limites s'applique.</div>
+          <div class="retard"><strong>Retard</strong> — Indemnisation limitée au prix du transport.</div>
+        </div>
+      </div>
+
+      <div class="verso-block">
+        <div class="block-title">TRAFIC INTÉRIEUR · ENVOIS &lt; 3 TONNES</div>
+        <div class="block-body">
+          <div class="block-ref">Décret 2017-461 du 31 mars 2017</div>
+          <div class="dmg-label">Perte ou avarie</div>
+          <ul>
+            <li>33 € par kg de poids brut manquant ou avarié</li>
+            <li>Maximum 1 000 € par colis</li>
+          </ul>
+          <div class="retard"><strong>Retard</strong> — Indemnisation limitée au prix du transport.</div>
+        </div>
+      </div>
+
+      <div class="verso-block">
+        <div class="block-title">TRANSPORT SOUS TEMPÉRATURE DIRIGÉE</div>
+        <div class="block-body">
+          <div class="dmg-label">Perte ou avarie</div>
+          <ul>
+            <li>Envois ≥ 3 t : 14 € / kg — plafond nb t × 4 000 €</li>
+            <li>Envois &lt; 3 t : 23 € / kg — plafond 750 € / colis</li>
+          </ul>
+          <div class="retard"><strong>Retard</strong> — Indemnisation limitée au prix du transport.</div>
+        </div>
+      </div>
+
+      <div class="verso-block">
+        <div class="block-title">TRANSPORT EN CITERNES</div>
+        <div class="block-body">
+          <div class="dmg-label">Perte ou avarie</div>
+          <ul>
+            <li>Marchandise : 3 € / kg ou litre — plafond 55 000 € / envoi</li>
+            <li>Autres dommages : plafond 300 000 € / envoi</li>
+          </ul>
+          <div class="retard"><strong>Retard</strong> — Indemnisation limitée au prix du transport.</div>
+        </div>
+      </div>
+
+      <div class="verso-block">
+        <div class="block-title">TRANSPORT D'ANIMAUX VIVANTS</div>
+        <div class="block-body">
+          <div class="dmg-label">Perte ou avarie</div>
+          <div style="font-size:7pt;line-height:1.4;">Indemnisation selon plafond par animal défini par le contrat type (art. D3222-4 du Code des transports).</div>
+          <div class="retard"><strong>Retard</strong> — Indemnisation limitée au prix du transport.</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- COLONNE DROITE -->
+    <div class="verso-col">
+
+      <div class="verso-block">
+        <div class="block-title">TRANSPORT DE MASSES INDIVISIBLES</div>
+        <div class="block-body">
+          <div class="dmg-label">Perte ou avarie</div>
+          <ul>
+            <li>Dommages directs : 60 000 € par envoi</li>
+            <li>Autres dommages : double du prix du transport</li>
+          </ul>
+          <div class="retard"><strong>Retard</strong> — Indemnisation limitée au prix du transport.</div>
+        </div>
+      </div>
+
+      <div class="verso-block">
+        <div class="block-title">TRANSPORT DE VÉHICULES ROULANTS</div>
+        <div class="block-body">
+          <div class="dmg-label">Perte ou avarie</div>
+          <ul>
+            <li>Véhicule neuf : valeur de remplacement HT au tarif constructeur</li>
+            <li>Occasion coté Argus : valeur Argus à la date du sinistre</li>
+            <li>Occasion non coté Argus : 800 €</li>
+            <li>Autres dommages : 500 € par véhicule</li>
+          </ul>
+          <div class="retard"><strong>Retard</strong> — Indemnisation limitée au prix du transport.</div>
+        </div>
+      </div>
+
+      <div class="verso-block">
+        <div class="block-title">TRAFIC INTERNATIONAL · CONVENTION CMR</div>
+        <div class="block-body">
+          <div class="dmg-label">Perte ou avarie</div>
+          <div style="font-size:7pt;line-height:1.4;margin-bottom:1mm;">Sauf déclaration de valeur, intérêt spécial, vol ou faute lourde : indemnisation limitée à <strong>8,33 DTS par kg</strong> de poids brut manquant ou avarié.</div>
+          <div style="font-size:6.8pt;line-height:1.4;color:#333;">Sont également remboursés : prix du transport, droits de douane et frais liés au transport — totalité en cas de perte totale, au prorata en cas de perte partielle. Aucun autre dommage-intérêt n'est dû.</div>
+          <div class="retard"><strong>Retard</strong> — Indemnisation limitée au prix du transport, sauf déclaration d'intérêt spécial (CMR art. 23 et 29).</div>
+        </div>
+      </div>
+
+      <div class="verso-block">
+        <div class="block-title">LITIGES · COMPÉTENCE JURIDICTIONNELLE</div>
+        <div class="block-body">
+          <div style="font-size:7pt;line-height:1.45;">Tout litige relatif à l'exécution du contrat de transport relève de la <strong>compétence exclusive des tribunaux du siège social du transporteur</strong>, même en cas de pluralité de défendeurs ou d'appel en garantie.</div>
+        </div>
+      </div>
+
+      <div class="verso-block">
+        <div class="block-title">DÉCLARATIONS DE VALEUR</div>
+        <div class="block-body">
+          <div style="font-size:6.8pt;line-height:1.45;">Les limites ci-dessus ne s'appliquent pas en cas de <strong>déclaration de valeur</strong> (pertes et avaries) ou de <strong>déclaration d'intérêt spécial à la livraison</strong> (retard), établies par le donneur d'ordre préalablement au transport.</div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <div class="verso-footer">
+    <strong>Transports Mesnager</strong> — La Perrière · 61360 Saint-Denis-de-Villenette · SIRET 803 611 093 00026 · RCS LAVAL 314 901 869<br>
+    Document établi conformément à la réglementation en vigueur. Valable pour le transport national et international.
+  </div>
+
+</div>
+</body>
+</html>

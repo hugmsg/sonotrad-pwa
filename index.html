@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
@@ -12,6 +12,8 @@
   <title>Sonotrad</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="lv-layout-constants.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     :root { --brand: #1A5276; --accent: #2E86C1; }
     * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
@@ -400,6 +402,7 @@
     .batch-qty-input { width:40px; height:30px; border:none; border-left:1.5px solid #E2E8F0; border-right:1.5px solid #E2E8F0; text-align:center; font-size:14px; font-weight:700; color:#1E293B; background:white; padding:0; }
     .batch-qty-input:focus { outline:none; background:#F8FAFC; }
     .dep-card:active { transform: scale(0.98); }
+    .dep-card.dep-selected { background:#EFF6FF; box-shadow:0 0 0 2px #1D4ED8; }
     .dep-card-left  { flex: 0 0 86px; min-width:0; overflow:hidden; padding-right:8px; border-right:1px solid #F1F5F9; }
     .dep-card-right { flex: 1; min-width:0; padding-left:8px; }
     /* ── Scope segmented control (Production: Actifs / Avec partis) ── */
@@ -784,6 +787,23 @@
     <button class="nav-tab" data-stab="stock-sync" onclick="App.go('stock-sync')" style="display:none">
       <span class="icon">🔄</span><span>Synchro</span>
     </button>
+    <!-- ── Tabs BCB (masqués hors activité BCB) ───────────────────────── -->
+    <button class="nav-tab" data-bcbtab="bcb-menu" onclick="App.go('bcb-menu')" style="display:none">
+      <span class="icon">🏠</span><span>Menu</span>
+    </button>
+    <button class="nav-tab" data-bcbtab="bcb-parc" onclick="App.go('bcb-parc')" style="display:none">
+      <span class="icon">🅿️</span><span>Parc</span>
+    </button>
+    <button class="nav-tab" data-bcbtab="bcb-consignes" onclick="App.go('bcb-consignes')" style="display:none">
+      <span class="icon">📋</span><span>Consignes</span>
+    </button>
+    <!-- ── Tabs LVU (masqués hors activité LVU) ──────────────────────────── -->
+    <button class="nav-tab" data-lvutab="lvu-form" onclick="App.go('lvu-form')" style="display:none">
+      <span class="icon">📝</span><span>Formulaire</span>
+    </button>
+    <button class="nav-tab" data-lvutab="lvu-history" onclick="App.go('lvu-history')" style="display:none">
+      <span class="icon">📋</span><span>Historique</span>
+    </button>
     <!-- Bouton retour accueil (mobile uniquement) -->
     <button class="nav-tab" id="nav-home-btn" onclick="App.goHome()" style="color:#94A3B8;">
       <span class="icon">⊞</span><span>Activités</span>
@@ -843,12 +863,12 @@
           <span class="activity-badge badge-active">● Actif</span>
         </div>
 
-        <!-- BCB — bientôt -->
-        <div class="activity-card" data-ready="false">
+        <!-- BCB — actif -->
+        <div class="activity-card" data-ready="true" onclick="App.selectActivity('bcb')">
           <div class="activity-icon">🚛</div>
           <div class="activity-name">BCB</div>
           <div class="activity-desc">Vente &amp; Logistique</div>
-          <span class="activity-badge badge-soon">Bientôt</span>
+          <span class="activity-badge badge-active">● Actif</span>
         </div>
 
         <!-- Agorastore — bientôt -->
@@ -859,10 +879,18 @@
           <span class="activity-badge badge-soon">Bientôt</span>
         </div>
 
+        <!-- LV / CMR — actif -->
+        <div class="activity-card" data-ready="true" onclick="App.selectActivity('lvu')">
+          <div class="activity-icon">📄</div>
+          <div class="activity-name">LV / CMR</div>
+          <div class="activity-desc">Lettres de voiture</div>
+          <span class="activity-badge badge-active">● Actif</span>
+        </div>
+
         <!-- Stockage — actif -->
         <div class="activity-card" data-ready="true" onclick="App.selectActivity('stockage')">
           <div class="activity-icon">📦</div>
-          <div class="activity-name">Stockage</div>
+          <div class="activity-name">Stockage Pidem</div>
           <div class="activity-desc">Catalogue &amp; Inventaire PIDEM</div>
           <span class="activity-badge badge-active">● Actif</span>
         </div>
@@ -916,6 +944,7 @@
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-bcb"        value="bcb"              > BCB</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-agorastore" value="agorastore"       > Agorastore</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-stockage"   value="stockage"         > Stockage</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-lvu"        value="lvu"              > LV/CMR</label>
           </div>
         </div>
         <div style="margin-bottom:12px;">
@@ -1143,6 +1172,10 @@
             style="background:none;border:1px solid #E2E8F0;border-radius:16px;padding:4px 10px;font-size:11px;color:#64748B;cursor:pointer;display:flex;align-items:center;gap:3px;">
             <span id="dep-sort-icon">↑</span><span id="dep-sort-label">En cours → Terminé</span>
           </button>
+          <button id="dep-lv-toggle-btn" onclick="App.toggleDepSelectMode()"
+            style="background:white;border:1.5px solid #E2E8F0;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;color:#64748B;cursor:pointer;">
+            📄 LV
+          </button>
           <button onclick="App.loadDepartures(true)" style="background:#EBF5FB;color:var(--brand);border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻</button>
         </div>
       </div>
@@ -1205,6 +1238,22 @@
         <div style="font-size:52px;margin-bottom:12px;">🚛</div>
         <p style="font-size:16px;font-weight:600;">Aucun article en production</p>
         <p style="font-size:13px;margin-top:4px;">Les articles actifs du Planning apparaîtront ici</p>
+      </div>
+      <!-- Barre flottante sélection -->
+      <div id="dep-lv-bar" style="display:none;position:sticky;bottom:0;background:#1E293B;border-radius:12px;margin:8px -4px 0;padding:10px 14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span id="dep-lv-count" style="color:#94A3B8;font-weight:600;font-size:12px;flex-shrink:0;"></span>
+          <div style="display:flex;gap:8px;flex-shrink:0;">
+            <button onclick="App.depMarkParti()"
+              style="background:#10B981;color:white;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">
+              ✅ Parti →
+            </button>
+            <button onclick="App.depCreateLv()"
+              style="background:#3B82F6;color:white;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">
+              📄 LV →
+            </button>
+          </div>
+        </div>
       </div>
     </div>
     <!-- ── VIEW : DEPARTURE DETAIL ──────────────────────────────────────── -->
@@ -1467,6 +1516,340 @@
       </div>
     </div>
 
+    <!-- ── VIEW : BCB MENU ───────────────────────────────────────────────── -->
+    <div class="view" id="view-bcb-menu">
+      <div style="padding:20px 16px;">
+        <h2 style="font-size:18px;font-weight:700;color:#1E293B;margin-bottom:6px;">BCB</h2>
+        <p style="font-size:13px;color:#64748B;margin-bottom:20px;">Vente &amp; Logistique</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <div style="background:white;border-radius:16px;padding:24px 12px 18px;box-shadow:0 2px 8px rgba(0,0,0,0.07);display:flex;flex-direction:column;align-items:center;gap:8px;opacity:0.45;cursor:default;">
+            <div style="font-size:38px;">🅿️</div>
+            <div style="font-size:14px;font-weight:700;color:#1E293B;">Parc</div>
+            <div style="font-size:11px;color:#94A3B8;text-align:center;">Gestion du parc véhicules</div>
+            <span style="background:#F1F5F9;color:#94A3B8;font-size:10px;font-weight:600;padding:2px 10px;border-radius:20px;margin-top:2px;">Bientôt</span>
+          </div>
+          <div onclick="App.go('bcb-consignes')" style="background:white;border-radius:16px;padding:24px 12px 18px;box-shadow:0 2px 8px rgba(0,0,0,0.07);display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;border:2px solid transparent;transition:border-color .15s,transform .12s;" onmouseenter="this.style.borderColor='#2E86C1';this.style.transform='translateY(-2px)'" onmouseleave="this.style.borderColor='transparent';this.style.transform=''">
+            <div style="font-size:38px;">📋</div>
+            <div style="font-size:14px;font-weight:700;color:#1E293B;">Consignes</div>
+            <div style="font-size:11px;color:#64748B;text-align:center;">Sécurité &amp; accueil chauffeur</div>
+            <span style="background:#D1FAE5;color:#065F46;font-size:10px;font-weight:600;padding:2px 10px;border-radius:20px;margin-top:2px;">● Actif</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW : BCB PARC ────────────────────────────────────────────────── -->
+    <div class="view" id="view-bcb-parc">
+      <div style="padding:48px 20px;text-align:center;color:#94A3B8;">
+        <div style="font-size:52px;margin-bottom:14px;">🚧</div>
+        <div style="font-size:16px;font-weight:600;color:#475569;">Module en développement</div>
+        <div style="font-size:13px;margin-top:6px;">Cette fonctionnalité sera disponible prochainement.</div>
+      </div>
+    </div>
+
+    <!-- ── VIEW : BCB CONSIGNES ──────────────────────────────────────────── -->
+    <div class="view" id="view-bcb-consignes">
+
+      <!-- Étape 1 : sélection langue -->
+      <div id="bcb-step-lang" style="padding:16px 16px 24px;">
+        <h2 style="font-size:16px;font-weight:700;color:#1E293B;margin-bottom:4px;">Sélectionnez la langue</h2>
+        <p style="font-size:12px;color:#64748B;margin-bottom:16px;">Choisissez la langue du chauffeur / Select driver's language</p>
+        <div id="bcb-lang-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"></div>
+      </div>
+
+      <!-- Étape 2 : consignes + formulaire -->
+      <div id="bcb-step-consignes" style="display:none;">
+        <div style="background:#1D4ED8;color:white;padding:12px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:2;">
+          <button onclick="App.bcbBackToLang()" style="background:rgba(255,255,255,0.18);border:none;color:white;border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;flex-shrink:0;">← Langue</button>
+          <div>
+            <div style="font-weight:700;font-size:14px;" id="bcb-lang-title"></div>
+            <div style="font-size:11px;opacity:0.75;">Consignes de sécurité</div>
+          </div>
+        </div>
+        <div style="padding:14px 16px 10px;background:#FFF7ED;border-bottom:2px solid #FED7AA;">
+          <div style="font-size:11px;font-weight:700;color:#92400E;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">⚠️ <span id="bcb-rules-title"></span></div>
+          <ol id="bcb-rules-list" style="margin:0;padding-left:20px;font-size:13px;color:#1E293B;line-height:1.75;"></ol>
+        </div>
+        <div style="padding:14px 16px 24px;" id="bcb-form-wrapper">
+          <div style="font-size:11px;font-weight:700;color:#1D4ED8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:14px;" id="bcb-form-title"></div>
+          <div style="display:grid;gap:11px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-nom"></label>
+                <input id="bcb-f-nom" type="text" autocapitalize="words" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-prenom"></label>
+                <input id="bcb-f-prenom" type="text" autocapitalize="words" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-tracteur"></label>
+                <input id="bcb-f-tracteur" type="text" placeholder="AB-123-CD" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;text-transform:uppercase;">
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-remorque"></label>
+                <input id="bcb-f-remorque" type="text" placeholder="XY-456-EF" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;text-transform:uppercase;">
+              </div>
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-client"></label>
+              <input id="bcb-f-client" type="text" autocapitalize="words" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-refs"></label>
+              <textarea id="bcb-f-refs" rows="3" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;resize:vertical;font-family:inherit;"></textarea>
+            </div>
+          </div>
+          <button onclick="App.bcbSubmitConsigne()" style="margin-top:18px;width:100%;background:#1D4ED8;color:white;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:600;cursor:pointer;">✅ <span id="bcb-btn-valider"></span></button>
+        </div>
+      </div>
+
+      <!-- Étape 3 : confirmation -->
+      <div id="bcb-step-confirm" style="display:none;padding:32px 20px;text-align:center;">
+        <div style="font-size:56px;margin-bottom:14px;">✅</div>
+        <div style="font-size:17px;font-weight:700;color:#065F46;margin-bottom:8px;" id="bcb-confirm-title"></div>
+        <div id="bcb-confirm-summary" style="background:#F0FDF4;border-radius:12px;padding:14px 16px;margin:14px 0 20px;font-size:13px;color:#1E293B;text-align:left;line-height:1.9;"></div>
+        <button onclick="App.bcbNewConsigne()" style="background:#E2E8F0;color:#1E293B;border:none;border-radius:10px;padding:12px 24px;font-size:13px;font-weight:600;cursor:pointer;" id="bcb-btn-nouveau"></button>
+      </div>
+    </div>
+
+    <!-- ── VIEW : LVU — FORMULAIRE ──────────────────────────────────────── -->
+    <div class="view" id="view-lvu-form">
+      <div style="padding:16px;">
+
+        <!-- Type LV / CMR -->
+        <div class="card" style="margin-bottom:12px;">
+          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Type de document</p>
+          <div style="display:flex;gap:10px;">
+            <button id="lvu-btn-lv" onclick="App.lvuSetType('LV')"
+              style="flex:1;padding:10px;border-radius:10px;border:2px solid #1D4ED8;background:#1D4ED8;color:white;font-size:14px;font-weight:700;cursor:pointer;">
+              LV Nationale
+            </button>
+            <button id="lvu-btn-cmr" onclick="App.lvuSetType('CMR')"
+              style="flex:1;padding:10px;border-radius:10px;border:2px solid #E2E8F0;background:white;color:#64748B;font-size:14px;font-weight:700;cursor:pointer;">
+              CMR Internationale
+            </button>
+          </div>
+        </div>
+
+        <!-- Source -->
+        <div class="card" style="margin-bottom:12px;">
+          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Source de données</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button id="lvu-src-manual" onclick="App.lvuSetSource('manual')"
+              style="flex:1;min-width:80px;padding:8px;border-radius:8px;border:2px solid #1D4ED8;background:#EFF6FF;color:#1D4ED8;font-size:13px;font-weight:600;cursor:pointer;">
+              Manuel
+            </button>
+            <button id="lvu-src-loxam" onclick="App.lvuSetSource('loxam')"
+              style="flex:1;min-width:80px;padding:8px;border-radius:8px;border:2px solid #E2E8F0;background:white;color:#64748B;font-size:13px;font-weight:600;cursor:pointer;">
+              LOXAM
+            </button>
+            <button id="lvu-src-bcb" onclick="App.lvuSetSource('bcb')"
+              style="flex:1;min-width:80px;padding:8px;border-radius:8px;border:2px solid #E2E8F0;background:white;color:#64748B;font-size:13px;font-weight:600;cursor:pointer;">
+              BCB
+            </button>
+            <button id="lvu-src-stock" onclick="App.lvuSetSource('stock')"
+              style="flex:1;min-width:80px;padding:8px;border-radius:8px;border:2px solid #E2E8F0;background:white;color:#64748B;font-size:13px;font-weight:600;cursor:pointer;">
+              Fournitures
+            </button>
+          </div>
+
+          <!-- Sélecteur LOXAM -->
+          <div id="lvu-loxam-picker" style="display:none;margin-top:12px;">
+            <div style="display:flex;gap:8px;margin-bottom:8px;">
+              <input id="lvu-loxam-search" type="text" placeholder="Rechercher..." autocapitalize="none"
+                oninput="App._lvuRenderLoxamList()"
+                style="flex:1;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+              <button onclick="App.lvuApplyLoxam()"
+                style="background:#1D4ED8;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">
+                ✓ Appliquer
+              </button>
+            </div>
+            <div id="lvu-loxam-list" style="max-height:180px;overflow-y:auto;border:1px solid #E2E8F0;border-radius:8px;"></div>
+          </div>
+
+          <!-- Sélecteur BCB -->
+          <div id="lvu-bcb-picker" style="display:none;margin-top:12px;">
+            <div id="lvu-bcb-list" style="max-height:180px;overflow-y:auto;border:1px solid #E2E8F0;border-radius:8px;"></div>
+            <button onclick="App.lvuApplyBcb()"
+              style="margin-top:8px;background:#1D4ED8;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">
+              ✓ Appliquer
+            </button>
+          </div>
+
+          <!-- Sélecteur Stock / Fournitures -->
+          <div id="lvu-stock-picker" style="display:none;margin-top:12px;">
+            <div style="display:flex;gap:8px;margin-bottom:8px;">
+              <input id="lvu-stock-search" type="text" placeholder="Réf., désignation…" autocapitalize="none"
+                oninput="App._lvuRenderStockList()"
+                style="flex:1;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+              <button onclick="App.lvuApplyStock()"
+                style="background:#1D4ED8;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">
+                ✓ Appliquer
+              </button>
+            </div>
+            <div id="lvu-stock-list" style="max-height:180px;overflow-y:auto;border:1px solid #E2E8F0;border-radius:8px;"></div>
+          </div>
+        </div>
+
+        <!-- Transporteur -->
+        <div class="card" style="margin-bottom:12px;">
+          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Transporteur</p>
+          <div id="lvu-transporteur-btns"></div>
+        </div>
+
+        <!-- Conducteur / Véhicule -->
+        <div class="card" style="margin-bottom:12px;">
+          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Conducteur &amp; Véhicule</p>
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Conducteur(s)</label>
+          <input id="lvu-f-conducteur" type="text" autocapitalize="words" placeholder="Nom Prénom"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:10px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Immat. moteur</label>
+              <input id="lvu-f-immat-moteur" type="text" placeholder="AB-123-CD" autocapitalize="characters"
+                style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;text-transform:uppercase;">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Immat. semi</label>
+              <input id="lvu-f-immat-semi" type="text" placeholder="XY-456-EF" autocapitalize="characters"
+                style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;text-transform:uppercase;">
+            </div>
+          </div>
+        </div>
+
+        <!-- Donneur d'ordre -->
+        <div class="card" style="margin-bottom:12px;">
+          <label style="font-size:13px;font-weight:700;color:#1E293B;display:block;margin-bottom:8px;">Donneur d'ordre</label>
+          <input id="lvu-f-donneur" type="text" autocapitalize="words" placeholder="Société / Nom"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
+        </div>
+
+        <!-- Expéditeur -->
+        <div class="card" style="margin-bottom:12px;">
+          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Expéditeur (chargement)</p>
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Nom / Société</label>
+          <input id="lvu-f-exp-nom" type="text" autocapitalize="words"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Adresse</label>
+          <input id="lvu-f-exp-adresse" type="text" autocapitalize="words"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Ville / CP</label>
+          <input id="lvu-f-exp-ville" type="text" autocapitalize="words"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
+        </div>
+
+        <!-- Destinataire -->
+        <div class="card" style="margin-bottom:12px;">
+          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Destinataire (livraison)</p>
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Nom / Société</label>
+          <input id="lvu-f-dest-nom" type="text" autocapitalize="words"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Adresse</label>
+          <input id="lvu-f-dest-adresse" type="text" autocapitalize="words"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Ville / CP</label>
+          <input id="lvu-f-dest-ville" type="text" autocapitalize="words"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
+        </div>
+
+        <!-- Marchandises -->
+        <div class="card" style="margin-bottom:12px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <p style="font-size:13px;font-weight:700;color:#1E293B;margin:0;">Marchandises</p>
+            <button onclick="App.lvuAddRow()"
+              style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;">
+              + Ligne
+            </button>
+          </div>
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead>
+                <tr style="background:#F8FAFC;">
+                  <th style="padding:6px 4px;text-align:left;color:#64748B;font-weight:600;width:12%;">Qté</th>
+                  <th style="padding:6px 4px;text-align:left;color:#64748B;font-weight:600;">Description</th>
+                  <th style="padding:6px 4px;text-align:left;color:#64748B;font-weight:600;width:15%;">Poids (t)</th>
+                  <th style="padding:6px 4px;width:8%;"></th>
+                </tr>
+              </thead>
+              <tbody id="lvu-marchandises-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Informations complémentaires -->
+        <div class="card" style="margin-bottom:12px;">
+          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Informations complémentaires</p>
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Documents annexes</label>
+          <input id="lvu-f-doc" type="text"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:10px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">N° de commande</label>
+          <input id="lvu-f-commande" type="text"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:10px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Note de livraison</label>
+          <textarea id="lvu-f-note" rows="3"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;resize:vertical;font-family:inherit;margin-bottom:10px;"></textarea>
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:8px;">Convoi exceptionnel</label>
+          <div style="display:flex;gap:10px;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+              <input type="radio" name="lvu-convoi" id="lvu-convoi-non" value="non" checked> Non
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+              <input type="radio" name="lvu-convoi" id="lvu-convoi-oui" value="oui"> Oui
+            </label>
+          </div>
+        </div>
+
+        <!-- Bouton générer -->
+        <button onclick="App.lvuGenerate()"
+          style="width:100%;background:#1D4ED8;color:white;border:none;border-radius:12px;padding:15px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:16px;">
+          <span id="lvu-btn-generate-text">📄 Générer la lettre de voiture</span>
+        </button>
+
+        <!-- Zone résultat -->
+        <div id="lvu-result" style="display:none;">
+          <div class="card" style="margin-bottom:12px;background:#F0FDF4;border:1.5px solid #86EFAC;">
+            <div style="font-size:16px;font-weight:700;color:#065F46;margin-bottom:6px;" id="lvu-result-title">✅ LV N° 01446 générée</div>
+            <div style="font-size:13px;color:#1E293B;margin-bottom:14px;" id="lvu-result-info"></div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <button onclick="App.lvuPrint()"
+                style="flex:1;min-width:120px;background:#1D4ED8;color:white;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;">
+                🖨️ Imprimer / PDF
+              </button>
+              <button onclick="App.lvuSaveToDrive()"
+                style="flex:1;min-width:120px;background:white;color:#1D4ED8;border:2px solid #1D4ED8;border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;">
+                ☁️ Enregistrer Drive
+              </button>
+            </div>
+            <div id="lvu-save-status" style="margin-top:10px;font-size:12px;color:#64748B;"></div>
+          </div>
+          <button onclick="App.lvuNew()"
+            style="width:100%;background:#E2E8F0;color:#1E293B;border:none;border-radius:10px;padding:12px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px;">
+            + Nouvelle lettre de voiture
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── VIEW : LVU — HISTORIQUE ────────────────────────────────────────── -->
+    <div class="view" id="view-lvu-history">
+      <div style="padding:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <h2 style="font-size:18px;font-weight:700;color:#1E293B;margin:0;">Historique LV / CMR</h2>
+          <button onclick="App.lvuLoadHistory(true)"
+            style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;">
+            ↻ Actualiser
+          </button>
+        </div>
+        <div id="lvu-history-list">
+          <div style="text-align:center;padding:40px;color:#94A3B8;font-size:14px;">Chargement…</div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── VIEW : SETTINGS ──────────────────────────────────────────────── -->
     <div class="view" id="view-settings">
       <h2 style="font-size:20px;font-weight:700;color:#1E293B;margin-bottom:18px;">Réglages</h2>
@@ -1596,6 +1979,8 @@ const S = {
   depDateFrom:     '',      // 'YYYY-MM-DD' ou vide
   depDateTo:       '',      // 'YYYY-MM-DD' ou vide
   depFiltersOpen:  false,   // panneau filtres détaillés ouvert/fermé
+  depSelectMode:   false,   // mode sélection multi-modules pour créer LV
+  depSelected:     new Set(),
   // Arrivals (depuis serveur)
   arrivalsData:    [],
   arrivalsSummary: {},
@@ -1639,6 +2024,24 @@ const S = {
   _xlsConfig:      null,   // { sheetName, headerRowIdx, dataRowIdx, colMap }
   _xlsParsed:      null,   // données parsées prêtes à envoyer
   _xlsFileName:    null,
+  // ── BCB ──────────────────────────────────────────────────────────────────
+  bcbLang:         null,   // langue sélectionnée pour les consignes
+  // ── LVU ──────────────────────────────────────────────────────────────────
+  lvu: {
+    source:        'manual',
+    type:          'LV',
+    numero:        null,
+    display:       null,
+    loxamItems:    [],
+    selectedItems: new Set(),
+    bcbArrivals:   [],
+    selectedBcb:   new Set(),
+    generating:    false,
+    lastDoc:       null,
+    lastData:      null,
+    transporteur:  null,
+    agencies:      [],
+  },
 };
 // ── APP ──────────────────────────────────────────────────────────────────────
 const App = {
@@ -1657,6 +2060,9 @@ const App = {
     if (view === 'stock-detail') this._renderStockDetail();
     if (view === 'stock-batch')  this._renderBatchList();
     if (view === 'stock-sync')   this.loadStockSync();
+    if (view === 'bcb-consignes') this.bcbInitLangGrid();
+    if (view === 'lvu-form')      this._lvuRenderMarchandises();
+    if (view === 'lvu-history')   this.lvuLoadHistory();
   },
   goBack() {
     if (S.view === 'admin')        { this.goHome(); return; }
@@ -1672,7 +2078,7 @@ const App = {
     this._render();
   },
   selectActivity(name) {
-    const ready = { loxam: true, stockage: true };
+    const ready = { loxam: true, stockage: true, bcb: true, lvu: true };
     if (!ready[name]) {
       this.toast('Cette activité est en cours de développement 🚧');
       return;
@@ -1686,6 +2092,8 @@ const App = {
     S.activity = name;
     if (name === 'loxam')    this.go('departures');
     if (name === 'stockage') this.go('stock-dashboard');
+    if (name === 'bcb')      this.go('bcb-menu');
+    if (name === 'lvu')      this.lvuInit();
   },
   _render() {
     const v      = S.view;
@@ -1702,6 +2110,12 @@ const App = {
       const isSynchro = el.dataset.stab === 'stock-sync';
       el.style.display = (S.activity === 'stockage' && (!isSynchro || isAdmin)) ? '' : 'none';
     });
+    document.querySelectorAll('#main-nav .nav-tab[data-bcbtab]').forEach(el => {
+      el.style.display = (S.activity === 'bcb') ? '' : 'none';
+    });
+    document.querySelectorAll('#main-nav .nav-tab[data-lvutab]').forEach(el => {
+      el.style.display = (S.activity === 'lvu') ? '' : 'none';
+    });
 
     // ── Views : affiche la vue active ────────────────────────────────────
     document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
@@ -1710,10 +2124,15 @@ const App = {
     const el     = document.getElementById(viewId);
     if (el) el.classList.add('active');
 
-    // ── Nav tabs : onglet actif (LOXAM + Stockage) ──────────────────────
+    // ── Nav tabs : onglet actif (LOXAM + Stockage + BCB) ───────────────
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-    const tab = document.querySelector(`[data-tab="${v}"]`) || document.querySelector(`[data-stab="${v}"]`);
+    const tab = document.querySelector(`[data-tab="${v}"]`) || document.querySelector(`[data-stab="${v}"]`) || document.querySelector(`[data-bcbtab="${v}"]`) || document.querySelector(`[data-lvutab="${v}"]`);
     if (tab) tab.classList.add('active');
+    // BCB consignes → tab "Consignes" reste actif sur toutes les étapes
+    if (v === 'bcb-consignes') {
+      const t2 = document.querySelector('[data-bcbtab="bcb-consignes"]');
+      if (t2) t2.classList.add('active');
+    }
     // Tableau de bord stockage = tab "Tableau"
     if (['stock-dashboard'].includes(v)) {
       const t2 = document.querySelector('[data-stab="stock-dashboard"]');
@@ -1741,10 +2160,11 @@ const App = {
 
     // Titre + sous-titre du header selon l'activité
     const activityMeta = {
-      loxam:    { icon: '🏗️', title: 'LOXAM',      sub: 'Arrivées & Départs' },
-      bcb:      { icon: '🚛', title: 'BCB',         sub: 'Vente & Logistique' },
-      agora:    { icon: '🏷️', title: 'Agorastore',  sub: 'Ventes en ligne'    },
-      stockage: { icon: '📦', title: 'Stockage',    sub: 'Gestion des pièces'  },
+      loxam:    { icon: '🏗️', title: 'LOXAM',         sub: 'Arrivées & Départs'  },
+      bcb:      { icon: '🚛', title: 'BCB',            sub: 'Vente & Logistique'  },
+      agora:    { icon: '🏷️', title: 'Agorastore',     sub: 'Ventes en ligne'     },
+      stockage: { icon: '📦', title: 'Stockage Pidem', sub: 'Gestion des pièces'  },
+      lvu:      { icon: '📄', title: 'LV / CMR',       sub: 'Lettres de voiture'  },
     };
     const titleEl    = document.getElementById('header-title');
     const subtitleEl = document.getElementById('header-subtitle');
@@ -2022,7 +2442,7 @@ const App = {
           <div style="margin-bottom:8px;padding:8px 10px;background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:8px;">
             <div style="font-size:11px;font-weight:600;color:#94A3B8;margin-bottom:6px;">ACTIVITÉS</div>
             <div style="display:flex;flex-wrap:wrap;gap:8px;">
-              ${['loxam','bcb','agorastore','stockage'].map(a => `
+              ${['loxam','bcb','agorastore','stockage','lvu'].map(a => `
                 <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">
                   <input type="checkbox" id="uact-${u.prenom}-${u.nom}-${a}" value="${a}"
                     ${u.activites.includes(a)?'checked':''}
@@ -2069,7 +2489,7 @@ const App = {
   _hideCreateUserForm() {
     document.getElementById('admin-create-form').style.display = 'none';
     ['nu-prenom','nu-nom','nu-pin'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-    ['loxam','bcb','agorastore','stockage'].forEach(a => {
+    ['loxam','bcb','agorastore','stockage','lvu'].forEach(a => {
       const el = document.getElementById('nu-act-' + a);
       if (el) el.checked = (a === 'loxam'); // reset : loxam coché par défaut
     });
@@ -2083,7 +2503,7 @@ const App = {
     const nom    = document.getElementById('nu-nom').value.trim();
     const role   = document.getElementById('nu-role').value;
     const pin    = document.getElementById('nu-pin').value.trim();
-    const activites = ['loxam','bcb','agorastore','stockage'].filter(a => {
+    const activites = ['loxam','bcb','agorastore','stockage','lvu'].filter(a => {
       const el = document.getElementById('nu-act-' + a); return el && el.checked;
     });
 
@@ -2157,7 +2577,7 @@ const App = {
   },
 
   async _updateUserActivites(prenom, nom) {
-    const activites = ['loxam','bcb','agorastore','stockage'].filter(a => {
+    const activites = ['loxam','bcb','agorastore','stockage','lvu'].filter(a => {
       const el = document.getElementById(`uact-${prenom}-${nom}-${a}`);
       return el && el.checked;
     });
@@ -3809,29 +4229,42 @@ const App = {
     this._renderPhotoGrid('photo-grid-2', S.arr.photos, 'arrival');
   },
   async _genCode() {
-    const dispEl  = document.getElementById('code-display');
-    const statEl  = document.getElementById('code-status');
+    const dispEl = document.getElementById('code-display');
+    const statEl = document.getElementById('code-status');
     dispEl.textContent = '· · · · · ·';
-    statEl.textContent = '';
-    // Refresh codes if stale
-    if (S.apiUrl && Date.now() - S.codesTs > CODES_TTL) {
-      statEl.textContent = 'Vérification des codes existants...';
-      await this._fetchCodes();
+    statEl.textContent = 'Génération…';
+
+    let code = null;
+    let countMsg = '';
+
+    if (S.apiUrl) {
+      try {
+        const r = await _fetchWithTimeout(S.apiUrl + '?action=generate_code', {}, 15000);
+        const d = await r.json();
+        if (d.status === 'ok' && d.code) {
+          code = d.code;
+          countMsg = d.count > 1 ? `✓ Unique parmi ${d.count} codes connus` : '';
+        }
+      } catch(_) { /* fallback local */ }
     }
-    let code, tries = 0;
-    do { code = _randCode(); tries++; } while (S.codes.has(code) && tries < 50000);
+
+    if (!code) {
+      // Fallback : génération locale si API indisponible
+      if (S.codes.size === 0 && S.apiUrl) await this._fetchCodes();
+      let tries = 0;
+      do { code = _randCode(); tries++; } while (S.codes.has(code) && tries < 50000);
+      S.codes.add(code);
+      countMsg = S.codes.size > 1 ? `✓ Unique parmi ${S.codes.size} codes (mode local)` : '';
+    }
+
     S.arr.code = code;
-    S.codes.add(code);   // reserve
     dispEl.textContent = code;
     dispEl.style.transition = 'transform 0.15s';
     dispEl.style.transform = 'scale(1.06)';
     setTimeout(() => { dispEl.style.transform = ''; }, 180);
-    statEl.textContent = S.codes.size > 1 ? `✓ Unique parmi ${S.codes.size} codes connus` : '';
+    statEl.textContent = countMsg;
   },
-  regenerateCode() {
-    if (S.arr.code) S.codes.delete(S.arr.code);
-    this._genCode();
-  },
+  regenerateCode() { this._genCode(); },
   /* ─ Photos (shared) ─ */
   triggerInput(id) { document.getElementById(id).click(); },
   async handlePhotos(evt, target) {
@@ -4179,38 +4612,45 @@ const App = {
       return S.depSortAsc ? ra - rb : rb - ra;
     });
     list.innerHTML = filtered.map((d, i) => {
-      const realIdx = S.deps.indexOf(d);
-      const code  = d.code || '------';
-      const titre = d.module || code;
-      const cur   = this._depCurrentStatus(d);
-      const chipMap = {
+      const realIdx  = S.deps.indexOf(d);
+      const code     = d.code || '------';
+      const titre    = d.module || code;
+      const cur      = this._depCurrentStatus(d);
+      const selected = S.depSelectMode && S.depSelected.has(code);
+      const chipMap  = {
         enCours:    '<span class="chip chip-blue">En cours</span>',
         aControler: '<span class="chip chip-yellow">À contrôler</span>',
         termine:    '<span class="chip chip-green">Terminé</span>',
         deCote:     '<span class="chip" style="background:#F3E8FF;color:#6B21A8;">De côté</span>',
       };
-      const chips = cur ? chipMap[cur] : '';
-      const dur   = _duration(d.debut, d.status && d.status.termine ? d.fin : null);
+      const chips   = cur ? chipMap[cur] : '';
+      const dur     = _duration(d.debut, d.status && d.status.termine ? d.fin : null);
+      const onclick = S.depSelectMode ? `App.toggleDepSelect('${code}')` : `App.openDep(${realIdx})`;
+      const cbHtml  = S.depSelectMode
+        ? `<div style="width:22px;height:22px;border-radius:6px;border:2px solid ${selected?'#1D4ED8':'#CBD5E1'};background:${selected?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;color:white;">${selected?'✓':''}</div>`
+        : '';
       return `
-        <div class="dep-card" onclick="App.openDep(${realIdx})">
+        <div class="dep-card${selected?' dep-selected':''}" onclick="${onclick}">
+          ${cbHtml}
           <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;width:38px;">
             <div style="width:34px;height:34px;background:#EBF5FB;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;">📤</div>
             <div style="font-family:'Courier New',monospace;font-size:9px;color:#94A3B8;text-align:center;line-height:1.1;max-width:38px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${code}</div>
           </div>
           <div class="dep-card-left">
-            <div class="code-mono" style="font-size:14px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.codeModule || '\u00A0'}</div>
-            <div style="font-size:10px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titre !== code ? titre : '\u00A0'}</div>
+            <div class="code-mono" style="font-size:14px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.codeModule || '&nbsp;'}</div>
+            <div style="font-size:10px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titre !== code ? titre : '&nbsp;'}</div>
           </div>
           <div class="dep-card-right">
-            <div style="font-size:13px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${d.chantier || '\u00A0'}</div>
+            <div style="font-size:13px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${d.chantier || '&nbsp;'}</div>
             ${d.description ? `<div style="font-size:11px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${d.description.length > 55 ? d.description.substring(0,53)+'…' : d.description}</div>` : ''}
-            <div style="display:flex;align-items:center;gap:4px;overflow:hidden;">
+            <div style="display:flex;align-items:center;gap:4px;overflow:hidden;flex-wrap:wrap;">
               ${chips}
               ${dur ? `<span style="font-size:10px;color:#94A3B8;white-space:nowrap;flex-shrink:0;">⏱ ${dur}</span>` : ''}
               ${S.depPhotosLog[code] ? `<span style="font-size:10px;background:#F0FDF4;color:#166534;border-radius:6px;padding:1px 5px;white-space:nowrap;flex-shrink:0;">📷 ${S.depPhotosLog[code].count}</span>` : ''}
             </div>
           </div>
-          <span style="color:#CBD5E1;font-size:16px;flex-shrink:0;">›</span>
+          ${(d.lv || d.commande) ? `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;min-width:52px;">${d.lv ? `<span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;border-radius:4px;padding:1px 5px;font-weight:600;white-space:nowrap;">📄 ${d.lv}</span>` : ''}${d.commande ? `<span style="font-size:10px;background:#F1F5F9;color:#475569;border-radius:4px;padding:1px 5px;white-space:nowrap;">${d.commande}</span>` : ''}</div>` : ''}
+          ${S.depSelectMode ? '' : '<span style="color:#CBD5E1;font-size:16px;flex-shrink:0;">›</span>'}
         </div>`;
     }).join('');
     // ── Section Partis ────────────────────────────────────────────────────
@@ -4248,6 +4688,98 @@ const App = {
       }
     }
   },
+  toggleDepSelectMode() {
+    S.depSelectMode = !S.depSelectMode;
+    S.depSelected.clear();
+    const btn = document.getElementById('dep-lv-toggle-btn');
+    if (btn) {
+      btn.style.background   = S.depSelectMode ? '#EFF6FF' : 'white';
+      btn.style.borderColor  = S.depSelectMode ? '#1D4ED8' : '#E2E8F0';
+      btn.style.color        = S.depSelectMode ? '#1D4ED8' : '#64748B';
+    }
+    this._updateDepLvBar();
+    this._renderDepList();
+  },
+  toggleDepSelect(code) {
+    if (S.depSelected.has(code)) S.depSelected.delete(code);
+    else S.depSelected.add(code);
+    this._updateDepLvBar();
+    this._renderDepList();
+  },
+  _updateDepLvBar() {
+    const bar   = document.getElementById('dep-lv-bar');
+    const count = document.getElementById('dep-lv-count');
+    if (!bar) return;
+    const n = S.depSelected.size;
+    bar.style.display = (S.depSelectMode && n > 0) ? '' : 'none';
+    if (count) count.textContent = `${n} module${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''}`;
+  },
+  async depCreateLv() {
+    if (!S.depSelected.size) return;
+    const selectedDeps = S.deps.filter(d => S.depSelected.has(d.code));
+    if (!selectedDeps.length) return;
+    const userActs = S.currentUser?.activites || [];
+    if (!userActs.includes('lvu')) { this.toast('⛔ Accès LV non autorisé'); return; }
+
+    // Vérifier que tous les modules ont la même destination (code agence)
+    if (selectedDeps.length > 1) {
+      const agCodes = [...new Set(selectedDeps.map(d =>
+        (d.ag || ((d.chantier || '').match(/^(\d{3,6})/)||[])[1] || '').trim()
+      ).filter(Boolean))];
+      if (agCodes.length > 1) {
+        const ok = window.confirm(
+          `⚠️ Destinations différentes détectées (agences : ${agCodes.join(', ')}).\n` +
+          `Une LV est normalement par destination.\nContinuer quand même ?`
+        );
+        if (!ok) return;
+      }
+    }
+
+    // Réinitialiser la sélection
+    S.depSelectMode = false;
+    S.depSelected.clear();
+    // Pré-remplir les items LOXAM avec les modules sélectionnés
+    S.lvu.loxamItems    = selectedDeps;
+    S.lvu.selectedItems = new Set(selectedDeps.map(d => d.code));
+    // Basculer vers l'activité LVU
+    S.activity = 'lvu';
+    await this.lvuInit();
+    // Charger les agences en premier (await) pour que lvuApplyLoxam puisse pré-remplir le destinataire
+    await this.lvuLoadAgencies();
+    // Appliquer les modules (source loxam + marchandises + destinataire)
+    this.lvuSetSource('loxam');
+    this.lvuApplyLoxam();
+  },
+  async depMarkParti() {
+    if (!S.depSelected.size) return;
+    const codes = [...S.depSelected];
+    const n = codes.length;
+    const ok = window.confirm(`Marquer ${n} module${n > 1 ? 's' : ''} comme parti${n > 1 ? 's' : ''} ?\n\n${codes.join(', ')}`);
+    if (!ok) return;
+    this.toast('Mise à jour en cours…');
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ action:'dep_mark_parti', codes })
+      }, 30000);
+      const res = await r.json();
+      if (res.status === 'ok') {
+        const updatedSet = new Set((res.updated || []).map(c => c.toUpperCase()));
+        S.deps = S.deps.filter(d => !updatedSet.has((d.code || '').toUpperCase()));
+        S.depSelectMode = false;
+        S.depSelected.clear();
+        const btn = document.getElementById('dep-lv-toggle-btn');
+        if (btn) { btn.style.background = 'white'; btn.style.borderColor = '#E2E8F0'; btn.style.color = '#64748B'; }
+        this._updateDepLvBar();
+        this._renderDepList();
+        this.toast(`✅ ${res.count} module${res.count > 1 ? 's' : ''} marqué${res.count > 1 ? 's' : ''} parti${res.count > 1 ? 's' : ''}`);
+      } else {
+        this.toast('❌ ' + (res.error || 'Erreur inconnue'));
+      }
+    } catch(e) {
+      this.toast('❌ Erreur réseau : ' + e.message);
+    }
+  },
   openDep(idx) {
     S.selDep        = S.deps[idx];
     S.depFromArchive = false;
@@ -4279,6 +4811,7 @@ const App = {
           ${d.fin ? ' → ' + _fmtDate(d.fin) : (d.debut ? ' → auj.' : '')}
           ${(() => { const finCalc = S.depFromArchive ? d.fin : (d.status && d.status.termine ? d.fin : null); const dur = _duration(d.debut, finCalc); return dur ? `<span style="margin-left:6px;background:#F1F5F9;border-radius:4px;padding:1px 6px;font-weight:600;">⏱ ${dur}</span>` : ''; })()}
         </div>` : ''}
+        ${d.lv ? `<div style="font-size:12px;color:#1D4ED8;font-weight:600;margin-top:4px;">📄 LV N° ${d.lv}</div>` : ''}
         ${d.commande ? `<div style="font-size:12px;color:#64748B;margin-top:2px;">🔖 Commande : ${d.commande}</div>` : ''}
         <div id="dep-drive-section" style="margin-top:12px;">
           <p style="font-size:12px;color:#94A3B8;">🔄 Vérification du dossier Drive…</p>
@@ -4935,6 +5468,641 @@ const App = {
     } catch(e) { log('❌ POST FormData → ' + e.message); }
     log('─── Fin des tests ───');
   },
+  /* ─ BCB Consignes ─ */
+  BCB_LANGS: [
+    { code:'fr', flag:'🇫🇷', name:'Français', dir:'ltr',
+      rulesTitle:'Consignes de sécurité obligatoires',
+      formTitle:'Informations du conducteur',
+      fields:{ nom:'Nom', prenom:'Prénom', tracteur:'Immatriculation tracteur', remorque:'Immatriculation remorque', client:'Client de destination', refs:'Références à charger' },
+      valider:'Valider l\'entrée', confirmTitle:'Entrée enregistrée', nouveau:'Nouveau chauffeur',
+      rules:['Limitation de vitesse : 10 km/h sur l\'ensemble du site.','Arrêt obligatoire à chaque panneau STOP.','Les piétons sont toujours prioritaires.','Port du gilet de sécurité haute visibilité obligatoire.','Chaussures de sécurité obligatoires sur tout le site.','Utilisation du téléphone portable interdite lors des manœuvres.','Interdit de fumer sur l\'ensemble du site.','Respectez les consignes du personnel à tout moment.','Ne laissez pas votre véhicule sans surveillance dans les zones de circulation.','Tout accident ou incident doit être signalé immédiatement au personnel.'] },
+    { code:'en', flag:'🇬🇧', name:'English', dir:'ltr',
+      rulesTitle:'Mandatory safety instructions',
+      formTitle:'Driver information',
+      fields:{ nom:'Last name', prenom:'First name', tracteur:'Tractor plate', remorque:'Trailer plate', client:'Destination client', refs:'References to collect' },
+      valider:'Validate entry', confirmTitle:'Entry recorded', nouveau:'New driver',
+      rules:['Speed limit: 10 km/h throughout the site.','Mandatory stop at all STOP signs.','Pedestrians always have right of way.','High-visibility safety vest is mandatory.','Safety footwear is required throughout the site.','Mobile phone use is prohibited during maneuvers.','Smoking is strictly prohibited on the entire site.','Follow all instructions from staff at all times.','Do not leave your vehicle unattended in traffic areas.','Any accident or incident must be reported immediately to staff.'] },
+    { code:'es', flag:'🇪🇸', name:'Español', dir:'ltr',
+      rulesTitle:'Instrucciones de seguridad obligatorias',
+      formTitle:'Información del conductor',
+      fields:{ nom:'Apellido', prenom:'Nombre', tracteur:'Matrícula tractora', remorque:'Matrícula remolque', client:'Cliente de destino', refs:'Referencias a recoger' },
+      valider:'Validar entrada', confirmTitle:'Entrada registrada', nuevo:'Nuevo conductor',
+      rules:['Límite de velocidad: 10 km/h en todo el recinto.','Parada obligatoria en todas las señales de STOP.','Los peatones tienen prioridad en todo momento.','El uso del chaleco de seguridad de alta visibilidad es obligatorio.','Se requiere calzado de seguridad en todo el recinto.','Se prohíbe el uso del teléfono móvil durante las maniobras.','Está prohibido fumar en todo el recinto.','Siga las instrucciones del personal en todo momento.','No deje su vehículo sin vigilancia en zonas de circulación.','Todo accidente o incidente debe comunicarse inmediatamente al personal.'] },
+    { code:'pt', flag:'🇵🇹', name:'Português', dir:'ltr',
+      rulesTitle:'Instruções de segurança obrigatórias',
+      formTitle:'Informações do condutor',
+      fields:{ nom:'Apelido', prenom:'Nome próprio', tracteur:'Matrícula do tractor', remorque:'Matrícula do reboque', client:'Cliente de destino', refs:'Referências a carregar' },
+      valider:'Validar entrada', confirmTitle:'Entrada registada', novo:'Novo condutor',
+      rules:['Limite de velocidade: 10 km/h em todo o local.','Paragem obrigatória em todos os sinais de STOP.','Os peões têm sempre prioridade.','O uso de colete de segurança de alta visibilidade é obrigatório.','Calçado de segurança obrigatório em todo o local.','É proibido utilizar o telemóvel durante as manobras.','É proibido fumar em todo o local.','Siga as instruções do pessoal em todo momento.','Não deixe o seu veículo sem vigilância nas zonas de circulação.','Qualquer acidente ou incidente deve ser comunicado imediatamente ao pessoal.'] },
+    { code:'ro', flag:'🇷🇴', name:'Română', dir:'ltr',
+      rulesTitle:'Instrucțiuni de securitate obligatorii',
+      formTitle:'Informații despre șofer',
+      fields:{ nom:'Nume', prenom:'Prenume', tracteur:'Nr. înmatriculare cap tractor', remorque:'Nr. înmatriculare remorcă', client:'Client de destinație', refs:'Referințe de ridicat' },
+      valider:'Validare intrare', confirmTitle:'Intrare înregistrată', nou:'Șofer nou',
+      rules:['Limita de viteză: 10 km/h pe întreg amplasamentul.','Oprire obligatorie la toate semnele STOP.','Pietonii au întotdeauna prioritate.','Purtarea vestei de siguranță cu vizibilitate ridicată este obligatorie.','Încălțămintea de protecție este obligatorie pe întreg amplasamentul.','Este interzisă utilizarea telefonului mobil în timpul manevrelor.','Fumatul este strict interzis pe întreg amplasamentul.','Respectați instrucțiunile personalului în orice moment.','Nu lăsați vehiculul nesupravegheat în zonele de circulație.','Orice accident sau incident trebuie raportat imediat personalului.'] },
+    { code:'pl', flag:'🇵🇱', name:'Polski', dir:'ltr',
+      rulesTitle:'Obowiązkowe instrukcje bezpieczeństwa',
+      formTitle:'Dane kierowcy',
+      fields:{ nom:'Nazwisko', prenom:'Imię', tracteur:'Nr rej. ciągnika', remorque:'Nr rej. naczepy', client:'Klient docelowy', refs:'Referencje do odbioru' },
+      valider:'Zatwierdź wjazd', confirmTitle:'Wjazd zarejestrowany', nowy:'Nowy kierowca',
+      rules:['Ograniczenie prędkości: 10 km/h na terenie obiektu.','Obowiązkowe zatrzymanie przy wszystkich znakach STOP.','Piesi mają zawsze pierwszeństwo.','Obowiązkowe noszenie kamizelki odblaskowej.','Obuwie ochronne wymagane na terenie całego obiektu.','Używanie telefonu komórkowego podczas manewrów jest zabronione.','Palenie jest surowo zabronione na terenie całego obiektu.','Stosuj się do poleceń personelu w każdej chwili.','Nie pozostawiaj pojazdu bez nadzoru w strefach ruchu.','Każdy wypadek lub incydent należy niezwłocznie zgłosić personelowi.'] },
+    { code:'tr', flag:'🇹🇷', name:'Türkçe', dir:'ltr',
+      rulesTitle:'Zorunlu güvenlik talimatları',
+      formTitle:'Sürücü bilgileri',
+      fields:{ nom:'Soyadı', prenom:'Adı', tracteur:'Çekici plakası', remorque:'Dorse plakası', client:'Varış müşterisi', refs:'Teslim alınacak referanslar' },
+      valider:'Girişi onayla', confirmTitle:'Giriş kaydedildi', yeni:'Yeni sürücü',
+      rules:['Hız sınırı: tüm tesis genelinde 10 km/sa.','Tüm STOP işaretlerinde zorunlu duruş.','Yayaların her zaman önceliği vardır.','Yüksek görünürlüklü güvenlik yeleği takmak zorunludur.','Tesisin tamamında güvenlik ayakkabısı zorunludur.','Manevra sırasında cep telefonu kullanımı yasaktır.','Tesisin tamamında sigara içmek kesinlikle yasaktır.','Personelin talimatlarına her zaman uyun.','Araçınızı trafik alanlarında gözetimsiz bırakmayın.','Her kaza veya olay derhal personele bildirilmelidir.'] },
+    { code:'de', flag:'🇩🇪', name:'Deutsch', dir:'ltr',
+      rulesTitle:'Obligatorische Sicherheitsanweisungen',
+      formTitle:'Fahrerinformationen',
+      fields:{ nom:'Nachname', prenom:'Vorname', tracteur:'Kennzeichen Zugmaschine', remorque:'Kennzeichen Anhänger', client:'Zielkunde', refs:'Abzuholende Referenzen' },
+      valider:'Einfahrt bestätigen', confirmTitle:'Einfahrt erfasst', neu:'Neuer Fahrer',
+      rules:['Geschwindigkeitsbegrenzung: 10 km/h auf dem gesamten Gelände.','Obligatorischer Halt an allen STOP-Schildern.','Fußgänger haben stets Vorrang.','Das Tragen einer Warnweste ist Pflicht.','Sicherheitsschuhe sind auf dem gesamten Gelände vorgeschrieben.','Die Nutzung von Mobiltelefonen ist beim Rangieren verboten.','Das Rauchen ist auf dem gesamten Gelände streng verboten.','Folgen Sie jederzeit den Anweisungen des Personals.','Lassen Sie Ihr Fahrzeug in Verkehrsbereichen nicht unbeaufsichtigt.','Jeder Unfall oder Vorfall muss sofort dem Personal gemeldet werden.'] },
+    { code:'nl', flag:'🇳🇱', name:'Nederlands', dir:'ltr',
+      rulesTitle:'Verplichte veiligheidsinstructies',
+      formTitle:'Gegevens chauffeur',
+      fields:{ nom:'Achternaam', prenom:'Voornaam', tracteur:'Kenteken trekker', remorque:'Kenteken oplegger', client:'Bestemmingsklant', refs:'Te laden referenties' },
+      valider:'Inrit bevestigen', confirmTitle:'Inrit geregistreerd', nieuw:'Nieuwe chauffeur',
+      rules:['Snelheidslimiet: 10 km/u op het hele terrein.','Verplicht stoppen bij alle STOP-borden.','Voetgangers hebben altijd voorrang.','Het dragen van een veiligheidshesje met hoge zichtbaarheid is verplicht.','Veiligheidsschoenen zijn vereist op het hele terrein.','Het gebruik van een mobiele telefoon tijdens manoeuvres is verboden.','Roken is streng verboden op het hele terrein.','Volg altijd de instructies van het personeel op.','Laat uw voertuig niet onbeheerd achter in rijgebieden.','Elk ongeluk of incident moet onmiddellijk aan het personeel worden gemeld.'] },
+    { code:'bg', flag:'🇧🇬', name:'Български', dir:'ltr',
+      rulesTitle:'Задължителни инструкции за безопасност',
+      formTitle:'Данни за шофьора',
+      fields:{ nom:'Фамилия', prenom:'Ime', tracteur:'Рег. номер влекач', remorque:'Рег. номер ремарке', client:'Клиент дестинация', refs:'Референции за вземане' },
+      valider:'Потвърди влизане', confirmTitle:'Влизането е регистрирано', nov:'Нов шофьор',
+      rules:['Ограничение на скоростта: 10 км/ч на целия обект.','Задължително спиране при всички знаци СТОП.','Пешеходците винаги имат предимство.','Носенето на светлоотразителна жилетка е задължително.','Предпазни обувки са задължителни на целия обект.','Използването на мобилен телефон по време на маневри е забранено.','Пушенето е строго забранено на целия обект.','Спазвайте указанията на персонала по всяко време.','Не оставяйте превозното средство без надзор в зоните за движение.','Всеки инцидент трябва незабавно да се докладва на персонала.'] },
+    { code:'sq', flag:'🇦🇱', name:'Shqip', dir:'ltr',
+      rulesTitle:'Udhëzime të detyrueshme sigurie',
+      formTitle:'Të dhëna të shoferit',
+      fields:{ nom:'Mbiemri', prenom:'Emri', tracteur:'Targa traktori', remorque:'Targa rimorkio', client:'Klienti i destinacionit', refs:'Referencat për ngarkesë' },
+      valider:'Konfirmo hyrjen', confirmTitle:'Hyrja është regjistruar', ri:'Shofer i ri',
+      rules:['Kufiri i shpejtësisë: 10 km/orë në të gjithë territorin.','Ndalim i detyrueshëm në të gjitha shenjat STOP.','Këmbësorët kanë gjithmonë përparësi.','Veshja e jelekut të sigurisë me dukshmëri të lartë është e detyrueshme.','Këpucët e sigurisë janë të detyrueshme në të gjithë territorin.','Përdorimi i telefonit celular gjatë manovrimit është i ndaluar.','Pirja e duhanit është rreptësisht e ndaluar në të gjithë territorin.','Ndiqni gjithmonë udhëzimet e personelit.','Mos e lini automjetin tuaj pa mbikëqyrje në zonat e qarkullimit.','Çdo aksident ose incident duhet të raportohet menjëherë tek personeli.'] },
+    { code:'ar', flag:'🇸🇦', name:'العربية', dir:'rtl',
+      rulesTitle:'تعليمات السلامة الإلزامية',
+      formTitle:'معلومات السائق',
+      fields:{ nom:'اللقب', prenom:'الاسم', tracteur:'لوحة الجرار', remorque:'لوحة المقطورة', client:'العميل المقصود', refs:'المراجع المراد تحميلها' },
+      valider:'تأكيد الدخول', confirmTitle:'تم تسجيل الدخول', jadid:'سائق جديد',
+      rules:['الحد الأقصى للسرعة: 10 كم/ساعة في جميع أنحاء الموقع.','التوقف إلزامي عند جميع إشارات STOP.','المشاة لهم الأولوية في جميع الأوقات.','ارتداء سترة السلامة عالية الوضوح إلزامي.','حذاء السلامة إلزامي في جميع أنحاء الموقع.','يُحظر استخدام الهاتف المحمول أثناء المناورات.','يُحظر التدخين بشكل صارم في جميع أنحاء الموقع.','اتبع تعليمات الموظفين في جميع الأوقات.','لا تترك مركبتك دون مراقبة في مناطق الحركة.','يجب الإبلاغ فوراً عن أي حادث أو واقعة للموظفين.'] },
+  ],
+  bcbInitLangGrid() {
+    const grid = document.getElementById('bcb-lang-grid');
+    if (!grid || grid.dataset.built) return;
+    grid.dataset.built = '1';
+    this.BCB_LANGS.forEach(l => {
+      const btn = document.createElement('button');
+      btn.style.cssText = 'background:white;border:1.5px solid #E2E8F0;border-radius:12px;padding:14px 10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:inherit;transition:border-color .15s,transform .12s;';
+      btn.innerHTML = `<span style="font-size:28px;">${l.flag}</span><span style="font-size:12px;font-weight:600;color:#1E293B;">${l.name}</span>`;
+      btn.addEventListener('click', () => this.bcbSelectLang(l.code));
+      btn.addEventListener('mouseenter', () => { btn.style.borderColor='#1D4ED8'; btn.style.transform='translateY(-2px)'; });
+      btn.addEventListener('mouseleave', () => { btn.style.borderColor='#E2E8F0'; btn.style.transform=''; });
+      grid.appendChild(btn);
+    });
+  },
+  bcbSelectLang(code) {
+    const l = this.BCB_LANGS.find(x => x.code === code);
+    if (!l) return;
+    S.bcbLang = l;
+    // Populate rules
+    document.getElementById('bcb-lang-title').textContent = `${l.flag} ${l.name}`;
+    document.getElementById('bcb-rules-title').textContent = l.rulesTitle;
+    const ol = document.getElementById('bcb-rules-list');
+    ol.innerHTML = l.rules.map(r => `<li>${r}</li>`).join('');
+    // Labels form
+    document.getElementById('bcb-form-title').textContent = l.formTitle;
+    document.getElementById('bcb-lbl-nom').textContent = l.fields.nom;
+    document.getElementById('bcb-lbl-prenom').textContent = l.fields.prenom;
+    document.getElementById('bcb-lbl-tracteur').textContent = l.fields.tracteur;
+    document.getElementById('bcb-lbl-remorque').textContent = l.fields.remorque;
+    document.getElementById('bcb-lbl-client').textContent = l.fields.client;
+    document.getElementById('bcb-lbl-refs').textContent = l.fields.refs;
+    document.getElementById('bcb-btn-valider').textContent = l.valider;
+    // Direction RTL/LTR
+    const wrapper = document.getElementById('bcb-form-wrapper');
+    wrapper.style.direction = l.dir;
+    ol.style.direction = l.dir;
+    // Clear form
+    ['bcb-f-nom','bcb-f-prenom','bcb-f-tracteur','bcb-f-remorque','bcb-f-client','bcb-f-refs'].forEach(id => { document.getElementById(id).value = ''; });
+    // Show step 2
+    document.getElementById('bcb-step-lang').style.display = 'none';
+    document.getElementById('bcb-step-consignes').style.display = '';
+    document.getElementById('bcb-step-confirm').style.display = 'none';
+    // Scroll to top of view
+    document.getElementById('view-bcb-consignes').scrollTop = 0;
+  },
+  bcbBackToLang() {
+    document.getElementById('bcb-step-lang').style.display = '';
+    document.getElementById('bcb-step-consignes').style.display = 'none';
+    document.getElementById('bcb-step-confirm').style.display = 'none';
+    document.getElementById('view-bcb-consignes').scrollTop = 0;
+  },
+  bcbSubmitConsigne() {
+    const l = S.bcbLang;
+    if (!l) return;
+    const nom      = document.getElementById('bcb-f-nom').value.trim();
+    const prenom   = document.getElementById('bcb-f-prenom').value.trim();
+    const tracteur = document.getElementById('bcb-f-tracteur').value.trim().toUpperCase();
+    const remorque = document.getElementById('bcb-f-remorque').value.trim().toUpperCase();
+    const client   = document.getElementById('bcb-f-client').value.trim();
+    const refs     = document.getElementById('bcb-f-refs').value.trim();
+    if (!nom || !tracteur || !client) {
+      this.toast('⚠️ Veuillez remplir au moins le nom, le tracteur et le client.');
+      return;
+    }
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('fr-FR') + ' ' + now.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+    // Save to localStorage log
+    const entry = { ts: now.toISOString(), lang: l.code, nom, prenom, tracteur, remorque, client, refs };
+    const log = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+    log.unshift(entry);
+    if (log.length > 200) log.length = 200;
+    localStorage.setItem('snt_bcb_consignes', JSON.stringify(log));
+    // Confirmation
+    const f = l.fields;
+    document.getElementById('bcb-confirm-title').textContent = l.confirmTitle;
+    const btnNouv = document.getElementById('bcb-btn-nouveau');
+    btnNouv.textContent = l.nouveau || l.nowy || l.nov || l.ri || l.jadid || l.nieuw || l.neu || l.yeni || l.novo || 'Nouveau';
+    document.getElementById('bcb-confirm-summary').innerHTML =
+      `<b>🗓 ${dateStr}</b><br>` +
+      `${f.nom} : <b>${nom}${prenom ? ' ' + prenom : ''}</b><br>` +
+      `${f.tracteur} : <b>${tracteur}</b><br>` +
+      (remorque ? `${f.remorque} : <b>${remorque}</b><br>` : '') +
+      `${f.client} : <b>${client}</b><br>` +
+      (refs ? `${f.refs} : <b>${refs}</b>` : '');
+    document.getElementById('bcb-step-consignes').style.display = 'none';
+    document.getElementById('bcb-step-confirm').style.display = '';
+    document.getElementById('view-bcb-consignes').scrollTop = 0;
+  },
+  bcbNewConsigne() {
+    document.getElementById('bcb-step-lang').style.display = '';
+    document.getElementById('bcb-step-consignes').style.display = 'none';
+    document.getElementById('bcb-step-confirm').style.display = 'none';
+    document.getElementById('view-bcb-consignes').scrollTop = 0;
+  },
+
+  /* ─ LVU ─ */
+  async lvuInit() {
+    this.go('lvu-form');
+    if (!S.lvu.transporteur) S.lvu.transporteur = LVU_TRANSPORTEURS[0];
+    this._lvuRenderTransporteurUI();
+    // Fetch next number (non-bloquant)
+    if (S.apiUrl && !S.lvu.numero) {
+      try {
+        const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_next_number', {}, 10000);
+        const d = await r.json();
+        if (d.status === 'ok') { S.lvu.numero = d.numero; S.lvu.display = d.display; }
+      } catch (_) {}
+    }
+  },
+
+  lvuSetType(type) {
+    S.lvu.type = type;
+    document.getElementById('lvu-btn-lv').style.cssText  += `;background:${type==='LV' ?'#1D4ED8':'white'};color:${type==='LV'?'white':'#64748B'};border-color:${type==='LV'?'#1D4ED8':'#E2E8F0'}`;
+    document.getElementById('lvu-btn-cmr').style.cssText += `;background:${type==='CMR'?'#1D4ED8':'white'};color:${type==='CMR'?'white':'#64748B'};border-color:${type==='CMR'?'#1D4ED8':'#E2E8F0'}`;
+  },
+
+  lvuSetSource(src) {
+    S.lvu.source = src;
+    ['manual','loxam','bcb','stock'].forEach(s => {
+      const btn = document.getElementById('lvu-src-' + s);
+      if (!btn) return;
+      btn.style.borderColor = s === src ? '#1D4ED8' : '#E2E8F0';
+      btn.style.background  = s === src ? '#EFF6FF' : 'white';
+      btn.style.color       = s === src ? '#1D4ED8' : '#64748B';
+    });
+    document.getElementById('lvu-loxam-picker').style.display = src === 'loxam' ? '' : 'none';
+    document.getElementById('lvu-bcb-picker').style.display   = src === 'bcb'   ? '' : 'none';
+    document.getElementById('lvu-stock-picker').style.display = src === 'stock' ? '' : 'none';
+    if (src === 'loxam') { this.lvuLoadLoxam(); this.lvuLoadAgencies(); }
+    if (src === 'bcb'   && S.lvu.bcbArrivals.length === 0) this.lvuLoadBcb();
+    if (src === 'stock') this._lvuRenderStockList();
+  },
+
+  lvuLoadLoxam() {
+    const el = document.getElementById('lvu-loxam-list');
+    if (!el) return;
+    // Réutilise si déjà chargé dans cette session
+    if (S.lvu.loxamItems.length > 0) { this._lvuRenderLoxamList(); return; }
+    if (!S.apiUrl) { el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">URL API non configurée</div>'; return; }
+    el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">Chargement…</div>';
+    // Source : Planning (modules à expédier), pas Arrivées
+    _fetchWithTimeout(S.apiUrl + '?action=lv_loxam_planning', {}, 30000)
+      .then(r => r.json())
+      .then(d => {
+        S.lvu.loxamItems = d.data || [];
+        this._lvuRenderLoxamList();
+      })
+      .catch(err => { el.innerHTML = `<div style="padding:12px;color:#EF4444;font-size:13px;">Erreur : ${err.message}</div>`; });
+  },
+
+  _lvuRenderLoxamList() {
+    const el = document.getElementById('lvu-loxam-list');
+    if (!el) return;
+    const q = (document.getElementById('lvu-loxam-search')?.value || '').toLowerCase();
+    const items = S.lvu.loxamItems.filter(i => {
+      if (!q) return true;
+      return (i.codeModule  || '').toLowerCase().includes(q)
+          || (i.code        || '').toLowerCase().includes(q)
+          || (i.chantier    || '').toLowerCase().includes(q)
+          || (i.ag          || '').toLowerCase().includes(q)
+          || (i.module      || '').toLowerCase().includes(q)
+          || (i.description || '').toLowerCase().includes(q)
+          || (i.numModule   || '').toLowerCase().includes(q);
+    });
+    if (!items.length) {
+      el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">'
+        + (S.lvu.loxamItems.length === 0 ? 'Aucun module présent' : 'Aucun résultat pour cette recherche') + '</div>';
+      return;
+    }
+    el.innerHTML = items.map(i => {
+      const key = i.code || i.codeModule || i.module || '';
+      const sel = S.lvu.selectedItems.has(key);
+      const numM  = i.codeModule || i.numModule || '';
+      const label = numM ? `Module N° ${numM}` : (i.description || i.module || key || '—');
+      const sub   = [key, i.module, i.chantier].filter(Boolean).join(' · ');
+      return `<div onclick="App.lvuToggleLoxam('${key.replace(/'/g,"&#39;")}')"
+        style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #F1F5F9;cursor:pointer;background:${sel?'#EFF6FF':'white'}">
+        <div style="width:20px;height:20px;border-radius:4px;border:2px solid ${sel?'#1D4ED8':'#CBD5E1'};background:${sel?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          ${sel?'<span style="color:white;font-size:12px;">✓</span>':''}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:#1E293B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
+          <div style="font-size:11px;color:#64748B;">${sub}</div>
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  lvuToggleLoxam(key) {
+    if (S.lvu.selectedItems.has(key)) S.lvu.selectedItems.delete(key);
+    else S.lvu.selectedItems.add(key);
+    this._lvuRenderLoxamList();
+  },
+
+  lvuApplyLoxam() {
+    const rows = [];
+    let firstAgence = null;
+    S.lvu.loxamItems.forEach(i => {
+      const key = i.code || i.codeModule || i.module || '';
+      if (!S.lvu.selectedItems.has(key)) return;
+      const numM = i.codeModule || i.numModule || '';
+      const desc = numM ? `Module N° ${numM}` : (i.description || i.module || key);
+      rows.push({ qte: 1, description: desc, poids: '2.5', note: key, ml: i.ml || '' });
+      // Code agence : col "ag" (D) du Planning, sinon parse depuis "1043 - 72 ARNAGE Cedex"
+      const agCode = i.ag || ((i.chantier || '').match(/^(\d{3,6})/)||[])[1] || '';
+      if (agCode && !firstAgence) firstAgence = agCode;
+    });
+    if (rows.length) {
+      S.lvu.marchandises = rows;
+      this._lvuRenderMarchandises();
+      if (firstAgence && S.lvu.agencies.length > 0) {
+        const ag = S.lvu.agencies.find(a => a.code === firstAgence || a.code === firstAgence.padStart(4,'0') || a.code.replace(/^0+/,'') === firstAgence.replace(/^0+/,''));
+        if (ag) {
+          const fn = document.getElementById('lvu-f-dest-nom');
+          const fa = document.getElementById('lvu-f-dest-adresse');
+          const fv = document.getElementById('lvu-f-dest-ville');
+          if (fn && !fn.value)   fn.value = ag.nom;
+          if (fa && !fa.value)   fa.value = ag.adresse;
+          if (fv && !fv.value)   fv.value = `${ag.cp} ${ag.ville}`.trim();
+        }
+      }
+    }
+    document.getElementById('lvu-loxam-picker').style.display = 'none';
+    this.toast(`${rows.length} module(s) importé(s)`);
+  },
+
+  async lvuLoadBcb() {
+    if (!S.apiUrl) return;
+    const el = document.getElementById('lvu-bcb-list');
+    el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">Chargement…</div>';
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=bcb_arrivals&user=' + encodeURIComponent(S.currentUser?.login || ''), {}, 15000);
+      const d = await r.json();
+      S.lvu.bcbArrivals = d.arrivals || [];
+      this._lvuRenderBcbList();
+    } catch (_) {
+      el.innerHTML = '<div style="padding:12px;color:#EF4444;font-size:13px;">Erreur de chargement</div>';
+    }
+  },
+
+  _lvuRenderBcbList() {
+    const el = document.getElementById('lvu-bcb-list');
+    if (!el) return;
+    const items = S.lvu.bcbArrivals;
+    if (!items.length) { el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">Aucune arrivée disponible</div>'; return; }
+    el.innerHTML = items.map((i, idx) => {
+      const sel   = S.lvu.selectedBcb.has(idx);
+      const label = i.client || i.ref || `Arrivée ${idx + 1}`;
+      return `<div onclick="App.lvuToggleBcb(${idx})"
+        style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #F1F5F9;cursor:pointer;background:${sel?'#EFF6FF':'white'}">
+        <div style="width:20px;height:20px;border-radius:4px;border:2px solid ${sel?'#1D4ED8':'#CBD5E1'};background:${sel?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          ${sel?'<span style="color:white;font-size:12px;">✓</span>':''}
+        </div>
+        <div style="font-size:13px;color:#1E293B;">${label}</div>
+      </div>`;
+    }).join('');
+  },
+
+  lvuToggleBcb(idx) {
+    if (S.lvu.selectedBcb.has(idx)) S.lvu.selectedBcb.delete(idx);
+    else S.lvu.selectedBcb.add(idx);
+    this._lvuRenderBcbList();
+  },
+
+  lvuApplyBcb() {
+    const rows = [];
+    [...S.lvu.selectedBcb].forEach(idx => {
+      const i = S.lvu.bcbArrivals[idx];
+      if (i) rows.push({ qte: 1, description: i.client || i.ref || '', poids: '', note: '' });
+    });
+    if (rows.length) { S.lvu.marchandises = rows; this._lvuRenderMarchandises(); }
+    document.getElementById('lvu-bcb-picker').style.display = 'none';
+    this.toast(`${rows.length} article(s) importé(s)`);
+  },
+
+  _lvuRenderStockList() {
+    const el = document.getElementById('lvu-stock-list');
+    if (!el) return;
+    const q     = (document.getElementById('lvu-stock-search')?.value || '').toLowerCase();
+    const items = (S.stockData || []).filter(i =>
+      !q || (i.ref || '').toLowerCase().includes(q) || (i.designation || '').toLowerCase().includes(q)
+    ).slice(0, 80);
+    if (!S.stockData || !S.stockData.length) {
+      el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">Catalogue Stockage non chargé — accédez d\'abord à l\'activité Stockage</div>';
+      return;
+    }
+    if (!items.length) { el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">Aucun résultat</div>'; return; }
+    el.innerHTML = items.map(i => {
+      const key = i.ref || '';
+      const sel = (S.lvu.selectedStock || new Set()).has(key);
+      return `<div onclick="App.lvuToggleStock('${key.replace(/'/g,"&#39;")}')"
+        style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid #F1F5F9;cursor:pointer;background:${sel?'#EFF6FF':'white'}">
+        <div style="width:20px;height:20px;border-radius:4px;border:2px solid ${sel?'#1D4ED8':'#CBD5E1'};background:${sel?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          ${sel?'<span style="color:white;font-size:12px;">✓</span>':''}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:#1E293B;">${i.ref || '—'}</div>
+          <div style="font-size:11px;color:#64748B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${i.description || ''}</div>
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  lvuToggleStock(key) {
+    if (!S.lvu.selectedStock) S.lvu.selectedStock = new Set();
+    if (S.lvu.selectedStock.has(key)) S.lvu.selectedStock.delete(key);
+    else S.lvu.selectedStock.add(key);
+    this._lvuRenderStockList();
+  },
+
+  lvuApplyStock() {
+    if (!S.lvu.selectedStock) return;
+    const rows = [];
+    (S.stockData || []).forEach(i => {
+      if (!S.lvu.selectedStock.has(i.ref)) return;
+      rows.push({ qte: 1, description: (i.ref ? i.ref + ' - ' : '') + (i.designation || ''), poids: '', note: i.ref || '' });
+    });
+    if (rows.length) { S.lvu.marchandises = rows; this._lvuRenderMarchandises(); }
+    document.getElementById('lvu-stock-picker').style.display = 'none';
+    this.toast(`${rows.length} référence(s) importée(s)`);
+  },
+
+  _lvuSyncFromDom() {
+    // Lit les valeurs actuelles des inputs dans le state avant tout re-rendu
+    const tbody = document.getElementById('lvu-marchandises-body');
+    if (!tbody) return;
+    tbody.querySelectorAll('tr').forEach((tr, i) => {
+      if (!S.lvu.marchandises[i]) return;
+      const inputs = tr.querySelectorAll('input[type="number"], input[type="text"]');
+      if (inputs[0]) S.lvu.marchandises[i].qte          = inputs[0].value;
+      if (inputs[1]) S.lvu.marchandises[i].description  = inputs[1].value;
+      if (inputs[2]) S.lvu.marchandises[i].poids        = inputs[2].value;
+    });
+  },
+
+  _lvuRenderMarchandises() {
+    const tbody = document.getElementById('lvu-marchandises-body');
+    if (!tbody) return;
+    if (!S.lvu.marchandises || !S.lvu.marchandises.length) {
+      S.lvu.marchandises = [{ qte: '', description: '', poids: '', note: '' }];
+    }
+    tbody.innerHTML = S.lvu.marchandises.map((r, i) => {
+      const canRemove = S.lvu.marchandises.length > 1;
+      return `<tr>
+        <td style="padding:3px 2px;"><input type="number" min="1" value="${r.qte||''}"
+          style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:5px 4px;font-size:12px;outline:none;box-sizing:border-box;"></td>
+        <td style="padding:3px 2px;"><input type="text" value="${(r.description||'').replace(/"/g,'&quot;')}"
+          style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:5px 4px;font-size:12px;outline:none;box-sizing:border-box;"></td>
+        <td style="padding:3px 2px;"><input type="number" min="0" step="0.001" value="${r.poids||''}"
+          style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:5px 4px;font-size:12px;outline:none;box-sizing:border-box;"></td>
+        <td style="padding:3px 2px;text-align:center;width:28px;">
+          ${canRemove ? `<button onclick="App.lvuRemoveRow(${i})" style="background:none;border:none;color:#EF4444;font-size:16px;cursor:pointer;padding:0 4px;line-height:1;">✕</button>` : ''}
+        </td>
+      </tr>`;
+    }).join('');
+  },
+
+  lvuAddRow() {
+    if ((S.lvu.marchandises || []).length >= 10) { this.toast('Maximum 10 lignes'); return; }
+    this._lvuSyncFromDom();
+    if (!S.lvu.marchandises) S.lvu.marchandises = [];
+    S.lvu.marchandises.push({ qte: '', description: '', poids: '', note: '' });
+    this._lvuRenderMarchandises();
+  },
+
+  lvuRemoveRow(i) {
+    this._lvuSyncFromDom();
+    S.lvu.marchandises.splice(i, 1);
+    this._lvuRenderMarchandises();
+  },
+
+  _lvuCollectFormData() {
+    this._lvuSyncFromDom(); // lit les valeurs DOM avant tout
+    const v = id => (document.getElementById(id)?.value || '').trim();
+    const today = new Date();
+    const dateStr = `${String(today.getDate()).padStart(2,'0')}/${String(today.getMonth()+1).padStart(2,'0')}/${today.getFullYear()}`;
+    const marchandises = (S.lvu.marchandises || [])
+      .filter(r => (r.description || '').trim() || (r.qte || '').toString().trim())
+      .map(r => ({ qte: r.qte || 1, description: r.description || '', poids: r.poids || '', note: r.note || '', ml: r.ml || '' }));
+    let totalPoidsNum = 0, totalML = 0;
+    marchandises.forEach(r => {
+      const p = parseFloat(r.poids);
+      if (!isNaN(p)) totalPoidsNum += p * (Number(r.qte) || 1);
+      const m = parseFloat(r.ml);
+      if (!isNaN(m)) totalML += m;
+    });
+    const total = {};
+    if (totalPoidsNum > 0) total.poids = parseFloat(totalPoidsNum.toFixed(2)) + ' t';
+    if (totalML > 0) total.ml = parseFloat(totalML.toFixed(2)) + ' ml';
+    return {
+      type:         S.lvu.type || 'LV',
+      display:      S.lvu.display || '00000',
+      date:         dateStr,
+      conducteur:   v('lvu-f-conducteur'),
+      immat_moteur: v('lvu-f-immat-moteur').toUpperCase(),
+      immat_semi:   v('lvu-f-immat-semi').toUpperCase(),
+      donneur_ordre: v('lvu-f-donneur'),
+      transporteur: S.lvu.transporteur || LVU_TRANSPORTEURS[0],
+      expediteur:   { nom: v('lvu-f-exp-nom'), adresse: v('lvu-f-exp-adresse'), ville: v('lvu-f-exp-ville') },
+      destinataire: { nom: v('lvu-f-dest-nom'), adresse: v('lvu-f-dest-adresse'), ville: v('lvu-f-dest-ville') },
+      marchandises,
+      total,
+      doc_annexe:   v('lvu-f-doc'),
+      commande:     v('lvu-f-commande'),
+      note:         v('lvu-f-note'),
+      convoi:       document.getElementById('lvu-convoi-oui')?.checked || false,
+    };
+  },
+
+  async lvuGenerate() {
+    if (S.lvu.generating) return;
+    S.lvu.generating = true;
+    const btnText = document.getElementById('lvu-btn-generate-text');
+    if (btnText) btnText.textContent = '⏳ Génération…';
+    try {
+      if (!S.lvu.numero && S.apiUrl) {
+        try {
+          const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_next_number', {}, 10000);
+          const d = await r.json();
+          if (d.status === 'ok') { S.lvu.numero = d.numero; S.lvu.display = d.display; }
+        } catch (_) {}
+      }
+      const data = this._lvuCollectFormData();
+      const doc  = _generateLvu(data);
+      S.lvu.lastDoc  = doc;
+      S.lvu.lastData = data;
+      const res   = document.getElementById('lvu-result');
+      const title = document.getElementById('lvu-result-title');
+      const info  = document.getElementById('lvu-result-info');
+      if (res)   res.style.display = '';
+      if (title) title.textContent = `✅ ${data.type} N° ${data.display} générée`;
+      if (info)  info.textContent  = `${data.date} · ${data.destinataire?.nom || '—'} · ${data.marchandises?.length || 0} ligne(s)`;
+      if (document.getElementById('lvu-save-status')) document.getElementById('lvu-save-status').textContent = '';
+      res?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e) {
+      this.toast('Erreur génération : ' + e.message);
+    } finally {
+      S.lvu.generating = false;
+      if (btnText) btnText.textContent = '📄 Générer la lettre de voiture';
+    }
+  },
+
+  lvuPrint() {
+    if (!S.lvu.lastDoc || !S.lvu.lastData) return;
+    const d = S.lvu.lastData;
+    S.lvu.lastDoc.save(`LV_${d.display}_${(d.destinataire?.nom || 'transport').replace(/[^a-zA-Z0-9]/g,'_')}.pdf`);
+  },
+
+  async lvuSaveToDrive() {
+    if (!S.lvu.lastDoc || !S.lvu.lastData) return;
+    if (!S.apiUrl) { this.toast('URL API non configurée'); return; }
+    const statusEl = document.getElementById('lvu-save-status');
+    if (statusEl) statusEl.textContent = '⏳ Enregistrement…';
+    try {
+      const d   = S.lvu.lastData;
+      const b64 = S.lvu.lastDoc.output('datauristring').split(',')[1];
+      const payload = {
+        action: 'lv_save',
+        pdf_b64: b64,
+        type: d.type, conducteur: d.conducteur,
+        immat_moteur: d.immat_moteur, immat_semi: d.immat_semi,
+        expediteur: d.expediteur?.nom || '', destinataire: d.destinataire?.nom || '',
+        doc_annexe: d.doc_annexe || '', commande: d.commande || '',
+        note: d.note || '', convoi: d.convoi ? 'Oui' : 'Non',
+        poids: (d.marchandises || []).reduce((s, r) => s + (parseFloat(r.poids) || 0), 0).toFixed(3),
+        ml: parseFloat(d.total?.ml) || '',
+        planning_codes: (d.marchandises || []).map(m => m.note).filter(Boolean),
+        marchandises_desc: (d.marchandises || []).map(m => m.description).filter(Boolean).join(', '),
+      };
+      const r   = await _fetchWithTimeout(S.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) }, 30000);
+      const res = await r.json();
+      if (res.status === 'ok' || res.status === 'partial') {
+        const savedDisplay = res.numero || d.display;
+        if (statusEl) statusEl.textContent = `✅ N° ${savedDisplay} enregistré sur Drive`;
+        S.lvu.numero = null; S.lvu.display = null;
+        if (document.getElementById('lvu-result-title')) document.getElementById('lvu-result-title').textContent = `✅ ${d.type} N° ${savedDisplay} enregistrée`;
+        this.toast(`LV N° ${savedDisplay} enregistrée !`);
+        if (res.status === 'partial' && statusEl) statusEl.textContent += ' ⚠️ archivage partiel';
+      } else {
+        if (statusEl) statusEl.textContent = '❌ ' + (res.error || 'erreur inconnue');
+      }
+    } catch (e) { if (statusEl) statusEl.textContent = '❌ ' + e.message; }
+  },
+
+  lvuSelectTransporteur(idx) {
+    S.lvu.transporteur = LVU_TRANSPORTEURS[idx] || null;
+    this._lvuRenderTransporteurUI();
+  },
+
+  _lvuRenderTransporteurUI() {
+    const el = document.getElementById('lvu-transporteur-btns');
+    if (!el) return;
+    const selId = S.lvu.transporteur?.id;
+    el.innerHTML = LVU_TRANSPORTEURS.map((t, i) => `
+      <button onclick="App.lvuSelectTransporteur(${i})"
+        style="text-align:left;width:100%;padding:10px 12px;border-radius:10px;border:2px solid ${selId===t.id?'#1D4ED8':'#E2E8F0'};background:${selId===t.id?'#EFF6FF':'white'};cursor:pointer;margin-bottom:4px;">
+        <div style="font-size:13px;font-weight:700;color:${selId===t.id?'#1D4ED8':'#1E293B'};">${t.nom}</div>
+        <div style="font-size:11px;color:#64748B;margin-top:2px;">${t.adresse} · ${t.ville}</div>
+      </button>`).join('');
+  },
+
+  async lvuLoadAgencies() {
+    if (S.lvu.agencies.length > 0 || !S.apiUrl) return;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_agencies', {}, 10000);
+      const d = await r.json();
+      if (d.status === 'ok') S.lvu.agencies = d.agencies || [];
+    } catch (_) {}
+  },
+
+  lvuNew() {
+    S.lvu.lastDoc = null; S.lvu.lastData = null;
+    S.lvu.marchandises = [];
+    S.lvu.selectedItems.clear(); S.lvu.selectedBcb.clear();
+    if (S.lvu.selectedStock) S.lvu.selectedStock.clear();
+    const res = document.getElementById('lvu-result');
+    if (res) res.style.display = 'none';
+    ['lvu-f-conducteur','lvu-f-immat-moteur','lvu-f-immat-semi','lvu-f-donneur',
+     'lvu-f-exp-nom','lvu-f-exp-adresse','lvu-f-exp-ville',
+     'lvu-f-dest-nom','lvu-f-dest-adresse','lvu-f-dest-ville',
+     'lvu-f-doc','lvu-f-commande','lvu-f-note'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    const nonEl = document.getElementById('lvu-convoi-non');
+    if (nonEl) nonEl.checked = true;
+    this._lvuRenderMarchandises();
+    const v = document.getElementById('view-lvu-form'); if (v) v.scrollTop = 0;
+  },
+
+  async lvuLoadHistory() {
+    if (!S.apiUrl) {
+      document.getElementById('lvu-history-list').innerHTML =
+        '<div style="padding:20px;color:#94A3B8;text-align:center;">URL API non configurée</div>';
+      return;
+    }
+    const el = document.getElementById('lvu-history-list');
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:#94A3B8;font-size:14px;">Chargement…</div>';
+    try {
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=lv_history', {}, 15000);
+      const d    = await r.json();
+      const rows = d.history || d.rows || [];
+      if (!rows.length) {
+        el.innerHTML = '<div style="text-align:center;padding:40px;color:#94A3B8;font-size:14px;">Aucun document trouvé</div>';
+        return;
+      }
+      el.innerHTML = rows.map(row => `
+        <div style="background:white;border-radius:10px;padding:12px 14px;margin-bottom:8px;border:1px solid #E2E8F0;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
+            <span style="font-size:14px;font-weight:700;color:#1E293B;">${row.type||'LV'} N° ${row.numero||'—'}</span>
+            <span style="font-size:12px;color:#64748B;">${row.date||''}</span>
+          </div>
+          <div style="font-size:13px;color:#475569;">${row.destinataire||'—'}</div>
+          ${row.conducteur?`<div style="font-size:12px;color:#94A3B8;margin-top:2px;">${row.conducteur} · ${row.immat_moteur||''}</div>`:''}
+          ${row.commande?`<div style="font-size:12px;color:#94A3B8;">Cde : ${row.commande}</div>`:''}
+        </div>`).join('');
+    } catch (e) {
+      el.innerHTML = `<div style="text-align:center;padding:40px;color:#EF4444;font-size:13px;">Erreur : ${e.message}</div>`;
+    }
+  },
+
   /* ─ Toast ─ */
   toast(msg, ms = 2800) {
     const el = document.getElementById('toast');
@@ -4948,6 +6116,506 @@ function _randCode() {
   const C = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   return Array.from({ length: 6 }, () => C[Math.floor(Math.random() * 26)]).join('');
 }
+// ── LVU — Transporteurs pré-enregistrés ──────────────────────────────────────
+const LVU_TRANSPORTEURS = [
+  { id: 'mesnager', nom: 'TRANSPORTS MESNAGER', adresse: 'ZA Renardière - B.P 10', ville: '53250 JAVRON-LES-CHAPELLES', info: 'SAS au capital de 500 000 €, Tél. 02.43.03.43.41', rcs: 'RCS LAVAL 314 901 869 - N° TVA FR 18 314 901 869' },
+];
+
+// ── LVU — Lettre de Voiture Unique (jsPDF) ───────────────────────────────────
+// data = { type:'LV'|'CMR', display:'01446', date:'24/04/2026',
+//   conducteur, immat_moteur, immat_semi, donneur_ordre,
+//   transporteur:{nom,adresse,ville,info,tel,rcs},
+//   expediteur:{nom,adresse,ville}, destinataire:{nom,adresse,ville},
+//   marchandises:[{qte,description,poids,note}],
+//   doc_annexe, commande, note, convoi:bool }
+function _generateLvu(data) {
+  const { jsPDF } = window.jspdf;
+  const isCMR = (data.type || 'LV').toUpperCase() === 'CMR';
+  const BANDS = [
+    { rgb: [192, 57, 43],  label: 'ORIGINAL 1 - EXPÉDITEUR / SENDER' },
+    { rgb: [39, 174, 96],  label: 'ORIGINAL 2 - ACCOMPAGNE LA MARCHANDISE / WITH THE GOODS' },
+    { rgb: [41, 128, 185], label: 'ORIGINAL 3 - TRANSPORTEUR / CARRIER' },
+  ];
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  for (let c = 0; c < 3; c++) {
+    if (c > 0) doc.addPage();
+    _lvuRecto(doc, data, isCMR, BANDS[c]);
+    doc.addPage();
+    _lvuVerso(doc);
+  }
+  return doc;
+}
+
+function _lvuRecto(doc, d, isCMR, band) {
+  const x0 = LV.MARGIN;
+  const CW = LV.CONTENT_W;
+  const rx = x0 + LV.TOP_LEFT_W;   // X colonne droite (N° + DATE)
+
+  const sf  = (s, z) => { doc.setFont('helvetica', s); doc.setFontSize(z); };
+  const fc  = (...c) => doc.setFillColor(...c);
+  const tc  = (...c) => doc.setTextColor(...c);
+  const dc  = (...c) => doc.setDrawColor(...c);
+  const lw  = w  => doc.setLineWidth(w);
+  const bx  = (x, y, w, h, s = 'S') => doc.rect(x, y, w, h, s);
+  const ln  = (x1, y1, x2, y2) => doc.line(x1, y1, x2, y2);
+  const tx  = (t, x, y, a = 'left') => doc.text(String(t ?? ''), x, y, { align: a });
+  const sp  = (t, w) => doc.splitTextToSize(String(t ?? ''), w);
+  const vc  = (y, h, s) => y + h / 2 + s * 0.176;
+  const chk = (x, cy, sz, on) => {
+    bx(x, cy, sz, sz);
+    if (on) { ln(x + .5, cy + .5, x + sz - .5, cy + sz - .5); ln(x + sz - .5, cy + .5, x + .5, cy + sz - .5); }
+  };
+  dc(0, 0, 0); tc(0, 0, 0); lw(LV.STROKE_INTRA);
+  let y = LV.Y_TITLE;
+
+  // ── Bande CMR colorée (exemplaires multiples) ────────────────────────────
+  if (band) {
+    fc(...band.rgb); bx(x0, y, CW, 6, 'F');
+    tc(...LV.COLOR_WHITE); sf('bold', LV.FONT_MARC_ROW);
+    tx(band.label, x0 + CW / 2, y + 4.3, 'center');
+    tc(0, 0, 0); y += 7;
+  }
+
+  // ═══ ZONE SUPÉRIEURE : col. gauche (TOP_LEFT_W) + col. droite (TOP_RIGHT_W)
+
+  // ── Section 1 : Titre (zone gauche) ─────────────────────────────────────
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  fc(...LV.COLOR_PRIMARY); bx(x0, y, LV.TOP_LEFT_W, LV.H_TITLE, 'FD');
+  tc(...LV.COLOR_WHITE); sf('bold', LV.FONT_TITLE_MAIN);
+  tx('LETTRE DE VOITURE UNIQUE', x0 + LV.TOP_LEFT_W / 2, vc(y, LV.H_TITLE, LV.FONT_TITLE_MAIN), 'center');
+
+  // ── Section 4a : Bloc N° (colonne droite) ────────────────────────────────
+  bx(rx, y, LV.TOP_RIGHT_W, LV.H_NUM_BLOCK);
+  tc(...LV.COLOR_PRIMARY);
+  sf('bold', LV.FONT_NUM_LABEL);
+  tx('N°', rx + 5, vc(y, LV.H_NUM_BLOCK, LV.FONT_NUM_LABEL));
+  sf('bold', LV.FONT_NUM_VALUE);
+  tx(String(d.numero ?? d.display ?? ''), rx + 13, vc(y, LV.H_NUM_BLOCK, LV.FONT_NUM_VALUE));
+  tc(0, 0, 0); lw(LV.STROKE_INTRA);
+
+  // ── Section 2 : NATIONALE / INTERNATIONALE (zone gauche) ─────────────────
+  const y2 = y + LV.H_TITLE;
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y2, LV.W_NATCMR_HALF, LV.H_NATCMR);
+  bx(x0 + LV.W_NATCMR_HALF, y2, LV.W_NATCMR_HALF, LV.H_NATCMR);
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  sf('bold', LV.FONT_NATCMR); tc(0, 0, 0);
+  const chkY  = y2 + (LV.H_NATCMR - LV.CHECKBOX_SIZE) / 2;
+  const txtVY = vc(y2, LV.H_NATCMR, LV.FONT_NATCMR);
+  chk(x0 + LV.CELL_PAD_X, chkY, LV.CHECKBOX_SIZE, !isCMR);
+  tx('NATIONALE', x0 + LV.CELL_PAD_X + LV.CHECKBOX_SIZE + 2, txtVY);
+  const intlX = x0 + LV.W_NATCMR_HALF;
+  chk(intlX + LV.CELL_PAD_X, chkY, LV.CHECKBOX_SIZE, isCMR);
+  tx('INTERNATIONALE', intlX + LV.CELL_PAD_X + LV.CHECKBOX_SIZE + 2, txtVY);
+  // Étiquette CMR (toujours visible)
+  const cmrLogoX = intlX + LV.W_NATCMR_HALF - LV.CMR_LOGO_W - LV.CELL_PAD_X;
+  const cmrLogoY = y2 + (LV.H_NATCMR - LV.CMR_LOGO_H) / 2;
+  dc(...LV.COLOR_PRIMARY); lw(0.8);
+  doc.roundedRect(cmrLogoX, cmrLogoY, LV.CMR_LOGO_W, LV.CMR_LOGO_H, LV.CMR_LOGO_RADIUS, LV.CMR_LOGO_RADIUS, 'S');
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_CMR_LOGO);
+  doc.setCharSpace(0.3);
+  tx('CMR', cmrLogoX + LV.CMR_LOGO_W / 2, vc(cmrLogoY, LV.CMR_LOGO_H, LV.FONT_CMR_LOGO), 'center');
+  doc.setCharSpace(0);
+
+  // ── Section 4b : Bandeau DATE (colonne droite) ────────────────────────────
+  const dateHdrY = y + LV.H_NUM_BLOCK;
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  fc(...LV.COLOR_PRIMARY); bx(rx, dateHdrY, LV.TOP_RIGHT_W, LV.H_DATE_HEADER, 'FD');
+  tc(...LV.COLOR_WHITE); sf('bold', LV.FONT_DATE_HEADER);
+  doc.setCharSpace(1);
+  tx('DATE', rx + LV.TOP_RIGHT_W / 2, vc(dateHdrY, LV.H_DATE_HEADER, LV.FONT_DATE_HEADER), 'center');
+  doc.setCharSpace(0);
+
+  // ── Section 3 : Mentions légales (zone gauche) ────────────────────────────
+  const y3 = y2 + LV.H_NATCMR;
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y3, LV.W_LEGAL_HALF, LV.H_LEGAL);
+  bx(x0 + LV.W_LEGAL_HALF, y3, LV.W_LEGAL_HALF, LV.H_LEGAL);
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  sf('italic', LV.FONT_LEGAL); tc(0, 0, 0);
+  doc.text(sp("À défaut de convention écrite entre les parties au contrat de transport ou de déclaration de valeur spécifiée par le donneur d'ordre, la responsabilité du transporteur, en cas de perte ou avarie survenue aux marchandises ou en cas de retard à la livraison, est limitée au montant de l'indemnité prévue par le contrat type concernant le transport.", LV.W_LEGAL_HALF - LV.CELL_PAD_X * 2), x0 + LV.CELL_PAD_X, y3 + LV.CELL_PAD_Y * 2);
+  doc.text(sp("Ce transport est soumis, nonobstant toute clause contraire, à la Convention relative au contrat de transport international de marchandises par route (CMR).\nThis carriage is subject, notwithstanding any clause to the contrary, to the Convention on the Contract for the international Carriage of goods by road (CMR).", LV.W_LEGAL_HALF - LV.CELL_PAD_X * 2), x0 + LV.W_LEGAL_HALF + LV.CELL_PAD_X, y3 + LV.CELL_PAD_Y * 2);
+
+  // ── Section 4c : Valeur de la date (colonne droite) ──────────────────────
+  const dateValY = dateHdrY + LV.H_DATE_HEADER;
+  const dateValH = (y3 + LV.H_LEGAL) - dateValY;  // reste jusqu'à Y_TRANSPORTEUR
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(rx, dateValY, LV.TOP_RIGHT_W, dateValH);
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_DATE_VALUE);
+  tx(d.date ?? '', rx + LV.TOP_RIGHT_W / 2, vc(dateValY, dateValH, LV.FONT_DATE_VALUE), 'center');
+  tc(0, 0, 0); dc(0, 0, 0); lw(LV.STROKE_INTRA);
+
+  // ═══ ZONE PLEINE LARGEUR
+  y = y3 + LV.H_LEGAL;   // = LV.Y_TRANSPORTEUR (+ décalage bande si CMR)
+
+  // ── Section 5 : Transporteur + Conducteurs / Immatriculations ─────────────
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y, CW, LV.H_TRANSPORTEUR);
+  lw(LV.STROKE_DOC_BORDER); ln(x0 + LV.W_TRANS_LEFT, y, x0 + LV.W_TRANS_LEFT, y + LV.H_TRANSPORTEUR);
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_LABEL);
+  tx('Transporteur / Carrier (nom, adresse, pays / name, address, country)', x0 + LV.CELL_PAD_X, y + 3.2);
+  const tl = d.transporteur ?? {};
+  tc(0, 0, 0); sf('bold', LV.FONT_TRANS_NAME);
+  let ty = y + 8;
+  tx(tl.nom ?? 'TRANSPORTS MESNAGER', x0 + LV.CELL_PAD_X, ty); ty += 4.2;
+  sf('normal', LV.FONT_BODY);
+  for (const l of [
+    tl.adresse ?? 'Z.A. des Renardières - B.P 10',
+    tl.cp_ville ?? tl.ville ?? '53250 JAVRON LES CHAPELLES',
+    tl.siret
+      ? 'SIRET : ' + tl.siret + (tl.telephone ? ' · ' + tl.telephone : '')
+      : (tl.info ?? 'SAS au capital de 500 000 €'),
+    tl.rcs || 'RCS LAVAL 314 901 869',
+  ].filter(Boolean)) { tx(l, x0 + LV.CELL_PAD_X, ty); ty += 3.7; }
+  const cx2 = x0 + LV.W_TRANS_LEFT;
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_LABEL);
+  tx('CONDUCTEURS / Drivers', cx2 + LV.CELL_PAD_X, y + 3.2);
+  tc(0, 0, 0); sf('normal', LV.FONT_BODY);
+  tx(d.conducteur ?? '', cx2 + LV.CELL_PAD_X, y + LV.H_COND / 2 + 2.5);
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_INTRA);
+  ln(cx2 + 1, y + LV.H_COND, x0 + CW - 1, y + LV.H_COND);
+  const imY = y + LV.H_COND;
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_LABEL);
+  tx('IMMATRICULATIONS / Plate N°', cx2 + LV.CELL_PAD_X, imY + 4);
+  tc(0, 0, 0); sf('normal', LV.FONT_LABEL);
+  tx('Véhicule moteur :', cx2 + LV.CELL_PAD_X, imY + 9);
+  sf('normal', LV.FONT_BODY);
+  tx(d.vehicule ?? d.immat_moteur ?? '', cx2 + LV.CELL_PAD_X + 23, imY + 9);
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_INTRA);
+  ln(cx2 + 1, imY + 10.5, x0 + CW - 1, imY + 10.5);
+  sf('normal', LV.FONT_LABEL); tx('(Semi-)remorque :', cx2 + LV.CELL_PAD_X, imY + 16);
+  sf('normal', LV.FONT_BODY);  tx(d.remorque ?? d.immat_semi ?? '', cx2 + LV.CELL_PAD_X + 23, imY + 16);
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_TRANSPORTEUR;
+
+  // ── Section 6 : Donneur d'ordre ───────────────────────────────────────────
+  fc(...LV.COLOR_SOFT_BG); bx(x0, y, CW, LV.H_DONNEUR, 'F');
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y, CW, LV.H_DONNEUR);
+  ln(x0 + LV.W_DONNEUR_LABEL, y, x0 + LV.W_DONNEUR_LABEL, y + LV.H_DONNEUR);
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_BODY);
+  tx("Donneur d'ordre :", x0 + LV.CELL_PAD_X, vc(y, LV.H_DONNEUR, LV.FONT_BODY));
+  tc(0, 0, 0); sf('normal', LV.FONT_BODY + 1.5);
+  const doVal = sp(String(d.donneurOrdre ?? d.donneur_ordre ?? ''), CW - LV.W_DONNEUR_LABEL - LV.CELL_PAD_X * 2);
+  if (doVal[0]) tx(doVal[0], x0 + LV.W_DONNEUR_LABEL + LV.CELL_PAD_X, vc(y, LV.H_DONNEUR, LV.FONT_BODY + 1.5));
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_DONNEUR;
+
+  // ── Section 7 : Header MARCHANDISES / GOODS ──────────────────────────────
+  fc(...LV.COLOR_PRIMARY); bx(x0, y, CW, LV.H_MARC_HEADER, 'F');
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y, CW, LV.H_MARC_HEADER, 'S');
+  tc(...LV.COLOR_WHITE); sf('bold', LV.FONT_SECTION);
+  doc.setCharSpace(0.5);
+  tx('MARCHANDISES / GOODS', x0 + CW / 2, vc(y, LV.H_MARC_HEADER, LV.FONT_SECTION), 'center');
+  doc.setCharSpace(0);
+  tc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_MARC_HEADER;
+
+  // ── Section 8 : En-têtes colonnes ─────────────────────────────────────────
+  const W_NAT   = CW - LV.W_MARC_NOMBRE - LV.W_MARC_POIDS - LV.W_MARC_NOTE;
+  const X_NAT   = x0 + LV.W_MARC_NOMBRE;
+  const X_POIDS = X_NAT + W_NAT;
+  const X_NOTE  = X_POIDS + LV.W_MARC_POIDS;
+  fc(...LV.COLOR_LIGHT_BLUE); bx(x0, y, CW, LV.H_MARC_COLS, 'F');
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0,     y, LV.W_MARC_NOMBRE, LV.H_MARC_COLS);
+  bx(X_NAT,  y, W_NAT,            LV.H_MARC_COLS);
+  bx(X_POIDS,y, LV.W_MARC_POIDS,  LV.H_MARC_COLS);
+  bx(X_NOTE, y, LV.W_MARC_NOTE,   LV.H_MARC_COLS);
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_MARC_COL);
+  doc.setCharSpace(0.3);
+  doc.text(sp('NOMBRE\nNumber', LV.W_MARC_NOMBRE - 2), x0 + LV.W_MARC_NOMBRE / 2, y + LV.CELL_PAD_Y + 1, { align: 'center' });
+  doc.text(sp('NATURE DE LA MARCHANDISE / Nature of the goods', W_NAT - 4), X_NAT + W_NAT / 2, y + LV.CELL_PAD_Y + 1, { align: 'center' });
+  doc.text(sp('POIDS / M.L.\nWeight / Lin. m.', LV.W_MARC_POIDS - 2), X_POIDS + LV.W_MARC_POIDS / 2, y + LV.CELL_PAD_Y + 1, { align: 'center' });
+  tx('NOTE', X_NOTE + LV.W_MARC_NOTE / 2, vc(y, LV.H_MARC_COLS, LV.FONT_MARC_COL), 'center');
+  doc.setCharSpace(0);
+  tc(0, 0, 0); dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_MARC_COLS;
+
+  // ── Section 9 : Lignes marchandises + ligne TOTAL ─────────────────────────
+  const marchs = Array.isArray(d.marchandises) ? d.marchandises : [];
+  for (let i = 0; i < LV.N_MARC_ROWS; i++) {
+    const r = marchs[i] ?? {};
+    if (i % 2 === 0) { fc(...LV.COLOR_ALT_ROW); bx(x0, y, CW, LV.H_MARC_ROW, 'F'); }
+    dc(...LV.COLOR_GREY_BLUE); lw(LV.STROKE_INTRA);
+    bx(x0,     y, LV.W_MARC_NOMBRE, LV.H_MARC_ROW);
+    bx(X_NAT,  y, W_NAT,            LV.H_MARC_ROW);
+    bx(X_POIDS,y, LV.W_MARC_POIDS,  LV.H_MARC_ROW);
+    bx(X_NOTE, y, LV.W_MARC_NOTE,   LV.H_MARC_ROW);
+    tc(0, 0, 0);
+    const rowY  = vc(y, LV.H_MARC_ROW, LV.FONT_MARC_ROW);
+    const nombre = String(r.nombre ?? r.qte ?? '');
+    const nature = String(r.nature ?? r.description ?? '');
+    const poids  = String(r.poids ?? '');
+    const note   = String(r.note ?? '');
+    sf('normal', LV.FONT_MARC_ROW);
+    if (nombre) tx(nombre, x0 + LV.CELL_PAD_X, rowY);
+    if (nature) tx((sp(nature, W_NAT - LV.CELL_PAD_X * 2))[0] ?? '', X_NAT + LV.CELL_PAD_X, rowY);
+    if (poids)  tx(poids + (poids.match(/[tT]\s*$/) ? '' : ' t'), X_POIDS + LV.W_MARC_POIDS / 2, rowY, 'center');
+    if (note)   { sf('normal', LV.FONT_MARC_COL); tx(note, X_NOTE + LV.CELL_PAD_X, rowY); }
+    y += LV.H_MARC_ROW;
+  }
+  // Ligne TOTAL
+  const tot = d.total ?? {};
+  fc(...LV.COLOR_LIGHT_BLUE); bx(x0, y, CW, LV.H_MARC_ROW, 'F');
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_TOTAL); ln(x0, y, x0 + CW, y);
+  lw(LV.STROKE_INTRA);
+  bx(x0,     y, LV.W_MARC_NOMBRE, LV.H_MARC_ROW);
+  bx(X_NAT,  y, W_NAT,            LV.H_MARC_ROW);
+  bx(X_POIDS,y, LV.W_MARC_POIDS,  LV.H_MARC_ROW);
+  bx(X_NOTE, y, LV.W_MARC_NOTE,   LV.H_MARC_ROW);
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_MARC_TOTAL);
+  const totY = vc(y, LV.H_MARC_ROW, LV.FONT_MARC_TOTAL);
+  tx('TOTAL / Total', X_NAT + W_NAT - LV.CELL_PAD_X, totY, 'right');
+  if (tot.poids) tx(String(tot.poids), X_POIDS + LV.W_MARC_POIDS / 2, totY, 'center');
+  if (tot.ml) { sf('normal', LV.FONT_MARC_TOTAL); tx(String(tot.ml), X_NOTE + LV.CELL_PAD_X, totY); }
+  // Convoi exceptionnel dans la cellule NOMBRE (ligne TOTAL)
+  const cv2 = d.convoiExceptionnel === true || d.convoi === true || d.convoi === 'Oui';
+  sf('bold', 5); tc(...LV.COLOR_PRIMARY);
+  tx('Convoi except.', x0 + LV.CELL_PAD_X, y + 3.2);
+  tc(0, 0, 0); dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  chk(x0 + LV.CELL_PAD_X,      y + 4.3, 3.0, cv2);
+  sf('normal', 5.5); tx('OUI', x0 + LV.CELL_PAD_X + 4.2, y + 7.0);
+  chk(x0 + LV.CELL_PAD_X + 12, y + 4.3, 3.0, !cv2);
+  tx('NON', x0 + LV.CELL_PAD_X + 16.2, y + 7.0);
+  tc(0, 0, 0); dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_MARC_ROW;
+
+  // ── Section 10 : Refus de signature ──────────────────────────────────────
+  fc(...LV.COLOR_SOFT_BG); bx(x0, y, CW, LV.H_REFUS, 'F');
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y, CW / 2, LV.H_REFUS);
+  bx(x0 + CW / 2, y, CW / 2, LV.H_REFUS);
+  sf('italic', LV.FONT_REFUS); tc(0, 0, 0);
+  const refusExp  = "Le refus non motivé de signature engage la responsabilité de l'expéditeur-remettant.";
+  const refusDest = "Le refus non motivé de signature engage la responsabilité du destinataire.";
+  doc.text(sp(refusExp,  CW / 2 - LV.CELL_PAD_X * 2), x0 +           LV.CELL_PAD_X, y + LV.CELL_PAD_Y * 2);
+  doc.text(sp(refusDest, CW / 2 - LV.CELL_PAD_X * 2), x0 + CW / 2 + LV.CELL_PAD_X, y + LV.CELL_PAD_Y * 2);
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_REFUS;
+
+  // ── Section 11 : Réserves Chargement / Déchargement ──────────────────────
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y, CW / 2, LV.H_RESERVES);
+  bx(x0 + CW / 2, y, CW / 2, LV.H_RESERVES);
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_BODY);
+  tx('Réserves AU CHARGEMENT',   x0 + LV.CELL_PAD_X,           y + 3.5);
+  tx('Réserves AU DÉCHARGEMENT', x0 + CW / 2 + LV.CELL_PAD_X, y + 3.5);
+  tc(0, 0, 0); sf('normal', LV.FONT_BODY);
+  const resC = String(d.reservesChargement ?? d.reserves_chargement ?? '');
+  const resD = String(d.reservesDechargement ?? d.reserves_dechargement ?? '');
+  if (resC) { const ls = sp(resC, CW / 2 - LV.CELL_PAD_X * 2); doc.text(ls.slice(0, 2), x0 + LV.CELL_PAD_X, y + 9); }
+  if (resD) { const ls = sp(resD, CW / 2 - LV.CELL_PAD_X * 2); doc.text(ls.slice(0, 2), x0 + CW / 2 + LV.CELL_PAD_X, y + 9); }
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_RESERVES;
+
+  // ── Section 12 : Documents annexes + Commande / Note de livraison ─────────
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y, CW / 2, LV.H_DOCS);
+  bx(x0 + CW / 2, y, CW / 2, LV.H_DOCS);
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_BODY);
+  tx('Documents annexes / Documents attached', x0 + LV.CELL_PAD_X,           y + 3.2);
+  tx('Note de livraison',                      x0 + CW / 2 + LV.CELL_PAD_X, y + 3.2);
+  tc(0, 0, 0); sf('normal', LV.FONT_BODY);
+  const docStr = String(d.documentsAnnexes ?? d.doc_annexe ?? '');
+  const cmdStr = d.commande ? 'Cde : ' + d.commande : '';
+  if (docStr) tx(docStr, x0 + LV.CELL_PAD_X, y + 7.0);
+  if (cmdStr) tx(cmdStr, x0 + LV.CELL_PAD_X, y + (docStr ? 9.5 : 7.0));
+  if (d.note) tx(String(d.note), x0 + CW / 2 + LV.CELL_PAD_X, y + 7.0);
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_DOCS;
+
+  // ── Section 13 : Expéditeur / Destinataire ────────────────────────────────
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y, CW / 2, LV.H_ADDR);
+  bx(x0 + CW / 2, y, CW / 2, LV.H_ADDR);
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_BODY);
+  tx('EXPÉDITEUR / Sender - Chargement',    x0 + LV.CELL_PAD_X,           y + 3.5);
+  tx('DESTINATAIRE / Consignee - Livraison', x0 + CW / 2 + LV.CELL_PAD_X, y + 3.5);
+  tc(0, 0, 0); sf('normal', LV.FONT_BODY);
+  const exp = d.expediteur ?? {}, dst = d.destinataire ?? {};
+  let ey = y + 9.5, dy2 = y + 9.5;
+  for (const l of [exp.nom ?? 'SONOTRAD', exp.adresse, exp.cp_ville ?? exp.ville].filter(Boolean)) { tx(l, x0 + LV.CELL_PAD_X, ey); ey += 4; }
+  for (const l of [dst.nom, dst.adresse, dst.cp_ville ?? dst.ville].filter(Boolean))              { tx(l, x0 + CW / 2 + LV.CELL_PAD_X, dy2); dy2 += 4; }
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_ADDR;
+
+  // ── Section 14 : Signatures (3 colonnes) ─────────────────────────────────
+  const SW = CW / LV.N_SIG_COLS;
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  for (let i = 0; i < LV.N_SIG_COLS; i++) bx(x0 + SW * i, y, SW, LV.H_SIG);
+  fc(...LV.COLOR_LIGHT_BLUE);
+  for (let i = 0; i < LV.N_SIG_COLS; i++) bx(x0 + SW * i, y, SW, LV.H_SIG_HEADER, 'F');
+  const sigLabels = [
+    ["CACHET EXPÉDITEUR", "Sender's stamp"],
+    ["NOM & SIGNATURE CONDUCTEUR", "Driver's name and signature"],
+    ["CACHET DESTINATAIRE", "Consignee's stamp"],
+  ];
+  for (let i = 0; i < LV.N_SIG_COLS; i++) {
+    const sx = x0 + SW * i + SW / 2;
+    tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_SIG_HEADER);
+    tx(sigLabels[i][0], sx, y + LV.H_SIG_HEADER * 0.55, 'center');
+    tc(...LV.COLOR_TEXT_MUTED); sf('italic', LV.FONT_SIG_SUB);
+    tx(sigLabels[i][1], sx, y + LV.H_SIG_HEADER * 0.92, 'center');
+  }
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SIG_LINE);
+  doc.setLineDash([1.5, 1]);
+  const sigLineY = y + LV.H_SIG - LV.SIG_LINE_BOTTOM;
+  for (let i = 0; i < LV.N_SIG_COLS; i++) {
+    ln(x0 + SW * i + LV.SIG_LINE_MARGIN, sigLineY, x0 + SW * (i + 1) - LV.SIG_LINE_MARGIN, sigLineY);
+  }
+  doc.setLineDash([]);
+  // Bordure externe du document (par-dessus toutes les sections)
+  const docTopY = LV.Y_TITLE + (band ? 7 : 0);
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_DOC_BORDER);
+  bx(x0, docTopY, CW, y + LV.H_SIG - docTopY, 'S');
+  lw(LV.STROKE_INTRA);
+}
+
+function _lvuVerso(doc) {
+  const x0 = LV.MARGIN;
+  const CW = LV.CONTENT_W;
+  const HW = (CW - LV.V_COL_GAP) / 2;   // 96mm par colonne
+  const c2x = x0 + HW + LV.V_COL_GAP;
+
+  const sf  = (s, z) => { doc.setFont('helvetica', s); doc.setFontSize(z); };
+  const fc  = (...c) => doc.setFillColor(...c);
+  const tc  = (...c) => doc.setTextColor(...c);
+  const dc  = (...c) => doc.setDrawColor(...c);
+  const lw  = w  => doc.setLineWidth(w);
+  const bx  = (x, y, w, h, s = 'S') => doc.rect(x, y, w, h, s);
+  const ln  = (x1, y1, x2, y2) => doc.line(x1, y1, x2, y2);
+  const tx  = (t, x, y, a = 'left') => doc.text(String(t ?? ''), x, y, { align: a });
+  const sp  = (t, w) => doc.splitTextToSize(String(t ?? ''), w);
+  const lh  = s => s * 0.353 * 1.55;   // hauteur de ligne pour fonte s (pt)
+
+  // ── En-tête ──────────────────────────────────────────────────────────────
+  let y = LV.MARGIN;
+  tc(...LV.V_TITLE_MAIN); sf('bold', LV.V_HEADER_TITLE_FONT);
+  doc.setCharSpace(0.2);
+  tx('CONDITIONS DE TRANSPORT - PLAFONDS DE RESPONSABILITÉ', x0 + CW / 2, y + 7, 'center');
+  doc.setCharSpace(0);
+  tc(...LV.V_SUBTITLE); sf('italic', LV.V_HEADER_SUB_FONT);
+  tx("Articles L.133-1 et suivants du Code de Commerce · Contrats types publiés par arrêtés ministériels", x0 + CW / 2, y + 13, 'center');
+  dc(...LV.V_BORDER); lw(LV.STROKE_VERSO);
+  ln(x0, y + 16, x0 + CW, y + 16);
+  y += 16 + LV.V_HEADER_MARGIN_BOTTOM;
+
+  // ── Calcul des hauteurs de blocs ─────────────────────────────────────────
+  const footerY = LV.PAGE_H - LV.MARGIN;
+  const blocksH = footerY - y - 2;
+  const BH_L = (blocksH - (LV.V_BLOCKS_LEFT  - 1) * LV.V_BLOCK_GAP) / LV.V_BLOCKS_LEFT;
+  const BH_R = (blocksH - (LV.V_BLOCKS_RIGHT - 1) * LV.V_BLOCK_GAP) / LV.V_BLOCKS_RIGHT;
+  const BLOCK_HDR_H = LV.V_BLOCK_TITLE_PAD_Y * 2 + LV.V_BLOCK_TITLE_FONT * 0.353;
+
+  // ── Rendu d'un bloc ───────────────────────────────────────────────────────
+  function drawBlock(col, blockY, bh, title, items) {
+    const bLeft = col === 0 ? x0 : c2x;
+    dc(...LV.V_BORDER); lw(LV.STROKE_VERSO);
+    bx(bLeft, blockY, HW, bh);
+    fc(...LV.V_BG_HEADER); bx(bLeft, blockY, HW, BLOCK_HDR_H, 'F');
+    dc(...LV.V_BORDER); lw(LV.STROKE_VERSO);
+    ln(bLeft, blockY + BLOCK_HDR_H, bLeft + HW, blockY + BLOCK_HDR_H);
+    tc(...LV.V_TITLE_BLOCK); sf('bold', LV.V_BLOCK_TITLE_FONT);
+    tx(title, bLeft + LV.V_BLOCK_TITLE_PAD_X, blockY + LV.V_BLOCK_TITLE_PAD_Y + LV.V_BLOCK_TITLE_FONT * 0.353);
+    let cy = blockY + BLOCK_HDR_H + LV.V_BLOCK_PAD_Y;
+    for (const item of items) {
+      if (item.t === 'sub') {
+        tc(...LV.V_TITLE_BLOCK); sf('bold', LV.V_BLOCK_BODY_FONT);
+        const lines = sp(item.v, HW - LV.V_BLOCK_PAD_X * 2);
+        doc.text(lines, bLeft + LV.V_BLOCK_PAD_X, cy);
+        cy += lines.length * lh(LV.V_BLOCK_BODY_FONT) + 1;
+      } else if (item.t === 'bullet') {
+        tc(...LV.V_BULLET); sf('normal', 13);
+        tx('·', bLeft + LV.V_BLOCK_PAD_X, cy);
+        tc(...LV.V_TEXT); sf('normal', LV.V_BLOCK_LIST_FONT);
+        const lines = sp(item.v, HW - LV.V_BLOCK_PAD_X * 2 - 4);
+        doc.text(lines, bLeft + LV.V_BLOCK_PAD_X + 3.5, cy);
+        cy += lines.length * lh(LV.V_BLOCK_LIST_FONT) + 0.8;
+      } else if (item.t === 'retard') {
+        cy += 2.0;
+        dc(...LV.V_BORDER_LIGHTER); lw(LV.STROKE_VERSO);
+        doc.setLineDash([0.8, 0.8]);
+        ln(bLeft + LV.V_BLOCK_PAD_X, cy, bLeft + HW - LV.V_BLOCK_PAD_X, cy);
+        doc.setLineDash([]);
+        cy += 2.5;
+        tc(...LV.V_SUBTITLE); sf('italic', LV.V_BLOCK_LIST_FONT);
+        const lines = sp(item.v, HW - LV.V_BLOCK_PAD_X * 2);
+        doc.text(lines, bLeft + LV.V_BLOCK_PAD_X, cy);
+        cy += lines.length * lh(LV.V_BLOCK_LIST_FONT) + 1;
+      } else {
+        tc(...LV.V_TEXT); sf('normal', LV.V_BLOCK_BODY_FONT);
+        const lines = sp(item.v, HW - LV.V_BLOCK_PAD_X * 2);
+        doc.text(lines, bLeft + LV.V_BLOCK_PAD_X, cy);
+        cy += lines.length * lh(LV.V_BLOCK_BODY_FONT) + 1.5;
+      }
+    }
+  }
+
+  // ── Blocs colonne gauche (5 blocs) ────────────────────────────────────────
+  const LEFT = [
+    { title: 'TRAFIC INTÉRIEUR · ENVOIS >= 3 TONNES', items: [
+      { t: 'body',   v: 'Réf. Décret 2017-461 du 31 mars 2017' },
+      { t: 'bullet', v: 'Perte ou avarie : 20 €/kg de poids brut manquant ou avarié' },
+      { t: 'bullet', v: 'Plafond global : nb de tonnes × 3 200 €' },
+      { t: 'body',   v: "La plus faible des deux limites s'applique." },
+      { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
+    ]},
+    { title: 'TRAFIC INTÉRIEUR · ENVOIS < 3 TONNES', items: [
+      { t: 'body',   v: 'Réf. Décret 2017-461 du 31 mars 2017' },
+      { t: 'bullet', v: 'Perte ou avarie : 33 €/kg, maximum 1 000 €/colis' },
+      { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
+    ]},
+    { title: 'TRANSPORT SOUS TEMPÉRATURE DIRIGÉE', items: [
+      { t: 'bullet', v: 'Envois >= 3 t : 14 EUR/kg - plafond : nb tonnes x 4 000 EUR' },
+      { t: 'bullet', v: 'Envois < 3 t : 23 EUR/kg - plafond : 750 EUR/colis' },
+      { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
+    ]},
+    { title: 'TRANSPORT EN CITERNES', items: [
+      { t: 'bullet', v: 'Marchandise : 3 €/kg ou litre - plafond55 000 €/envoi' },
+      { t: 'bullet', v: 'Autres dommages : plafond 300 000 €/envoi' },
+      { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
+    ]},
+    { title: "TRANSPORT D'ANIMAUX VIVANTS", items: [
+      { t: 'body',   v: 'Indemnisation selon plafond par animal (art. D3222-4 Code des transports).' },
+      { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
+    ]},
+  ];
+
+  // ── Blocs colonne droite (4 blocs) ───────────────────────────────────────
+  const RIGHT = [
+    { title: 'TRANSPORT DE MASSES INDIVISIBLES', items: [
+      { t: 'bullet', v: 'Dommages directs : 60 000 €/envoi' },
+      { t: 'bullet', v: 'Autres dommages : double du prix du transport' },
+      { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
+    ]},
+    { title: 'TRANSPORT DE VÉHICULES ROULANTS', items: [
+      { t: 'bullet', v: 'Véhicule neuf : valeur de remplacement HT au tarif constructeur' },
+      { t: 'bullet', v: 'Occasion coté Argus : valeur Argus' },
+      { t: 'bullet', v: 'Occasion non coté : 800 €' },
+      { t: 'bullet', v: 'Autres dommages : 500 €/véhicule' },
+      { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
+    ]},
+    { title: 'TRAFIC INTERNATIONAL · CONVENTION CMR', items: [
+      { t: 'body',   v: "Sauf déclaration de valeur, intérêt spécial, vol ou faute lourde :" },
+      { t: 'bullet', v: 'Indemnisation limitée à 8,33 DTS/kg de poids brut manquant ou avarié' },
+      { t: 'body',   v: 'Remboursement : prix du transport, droits de douane et frais liés.' },
+      { t: 'retard', v: "Retard : prix du transport sauf déclaration d'intérêt spécial (CMR art. 23 et 29)." },
+    ]},
+    { title: 'LITIGES · COMPÉTENCE JURIDICTIONNELLE', items: [
+      { t: 'body',   v: "Tout litige relatif à l'exécution du contrat de transport relève de la compétence exclusive des tribunaux du siège social du transporteur, même en cas de pluralité de défendeurs ou d'appel en garantie." },
+    ]},
+    { title: 'DÉCLARATIONS DE VALEUR', items: [
+      { t: 'body',   v: "Les limites ci-dessus ne s'appliquent pas en cas de déclaration de valeur (pertes et avaries) ou de déclaration d'intérêt spécial à la livraison (retard), établies par le donneur d'ordre préalablement au transport." },
+    ]},
+  ];
+
+  for (let i = 0; i < LEFT.length;  i++) drawBlock(0, y + i * (BH_L + LV.V_BLOCK_GAP), BH_L, LEFT[i].title,  LEFT[i].items);
+  for (let i = 0; i < RIGHT.length; i++) drawBlock(1, y + i * (BH_R + LV.V_BLOCK_GAP), BH_R, RIGHT[i].title, RIGHT[i].items);
+
+}
+
 function todayStr() { return new Date().toISOString().split('T')[0]; }
 function _timeStr()  { return new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
 // Date au format français court : "2 jan. 2025"
@@ -5028,10 +6696,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Vérifie la session → affiche login ou accueil
   App._initAuth();
   _updateOnline();
-  // Pré-chargement des codes en arrière-plan si le cache est périmé
-  if (S.apiUrl && Date.now() - S.codesTs > CODES_TTL) {
-    App._fetchCodes();
-  }
   // ── Drag-and-drop sur la dropzone XLS ────────────────────────────────────
   const dz = document.getElementById('xls-dropzone');
   if (dz) {
