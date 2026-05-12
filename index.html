@@ -6471,7 +6471,19 @@ function _lvuRecto(doc, d, isCMR, band) {
   const cmdStr = d.commande ? 'Cde : ' + d.commande : '';
   if (docStr) tx(docStr, x0 + LV.CELL_PAD_X, y + 7.0);
   if (cmdStr) tx(cmdStr, x0 + LV.CELL_PAD_X, y + (docStr ? 9.5 : 7.0));
-  if (d.note) tx(String(d.note), x0 + CW / 2 + LV.CELL_PAD_X, y + 7.0);
+  if (d.note) {
+    const noteStr = String(d.note);
+    const isGrutage = noteStr.startsWith('!!!');
+    if (isGrutage) {
+      doc.setFillColor(255, 230, 0);
+      doc.rect(x0 + CW / 2 + 0.5, y + 4.5, CW / 2 - 1, 5.5, 'F');
+      tc(185, 28, 28); sf('bold', LV.FONT_BODY);
+      tx(noteStr, x0 + CW / 2 + LV.CELL_PAD_X, y + 7.0);
+      tc(0, 0, 0); sf('normal', LV.FONT_BODY);
+    } else {
+      tx(noteStr, x0 + CW / 2 + LV.CELL_PAD_X, y + 7.0);
+    }
+  }
   dc(0, 0, 0); lw(LV.STROKE_INTRA);
   y += LV.H_DOCS;
 
