@@ -16,6 +16,11 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     :root { --brand: #1A5276; --accent: #2E86C1; }
+    /* Mode TEST : header rouge + badge visible (voir ADR-007 dans sonotrad-api) */
+    body.env-test { --brand: #b91c1c; --accent: #dc2626; }
+    #env-test-badge { display: none; background: #dc2626; color: white; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; letter-spacing: 0.5px; border: 1px solid rgba(255,255,255,0.4); animation: pulse-test 2s ease-in-out infinite; }
+    body.env-test #env-test-badge { display: inline-flex; align-items: center; gap: 3px; }
+    @keyframes pulse-test { 0%,100% { opacity:1; } 50% { opacity:0.7; } }
     * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
     html, body { height: 100%; background: white; }
     body {
@@ -824,7 +829,10 @@
       </button>
       <div id="header-logo" style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="App.goHome()" title="Accueil">
         <div>
-          <div id="header-title" style="font-size:17px;font-weight:700;line-height:1.1;">SONOTRAD</div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div id="header-title" style="font-size:17px;font-weight:700;line-height:1.1;">SONOTRAD</div>
+            <span id="env-test-badge">⚠ TEST</span>
+          </div>
           <div id="header-subtitle" style="font-size:10px;opacity:0.6;font-weight:400;line-height:1;"></div>
         </div>
       </div>
@@ -2375,6 +2383,29 @@ const App = {
     document.getElementById('login-setup-panel').style.display = 'none';
     document.getElementById('pin-error-msg').textContent = '';
     this.toast('✓ URL enregistrée');
+    this._applyEnvMode();
+  },
+
+  /**
+   * Détecte si l'API connectée est en mode TEST et applique l'indicateur visuel.
+   * ADR-007 : header rouge + badge "⚠ TEST" si env=test.
+   * Non-breaking : le GAS actuel ne répond pas à ?action=env → catch silencieux.
+   */
+  async _applyEnvMode() {
+    if (!S.apiUrl) return;
+    try {
+      const resp = await fetch(S.apiUrl + '?action=env',
+        { signal: AbortSignal.timeout(3000) });
+      const data = await resp.json();
+      if (data.env === 'test') {
+        document.body.classList.add('env-test');
+      } else {
+        document.body.classList.remove('env-test');
+      }
+    } catch(e) {
+      // GAS ne connaît pas ?action=env → silencieux, pas de changement visuel
+      document.body.classList.remove('env-test');
+    }
   },
 
   /* ─ Admin ─ */
@@ -4645,6 +4676,7 @@ const App = {
             ${d.description ? `<div style="font-size:11px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${d.description.length > 55 ? d.description.substring(0,53)+'…' : d.description}</div>` : ''}
             <div style="display:flex;align-items:center;gap:4px;overflow:hidden;flex-wrap:wrap;">
               ${chips}
+              ${d.status && d.status.grutage ? `<span class="chip" style="background:#FEF2F2;color:#991B1B;flex-shrink:0;">🏗 Grutage</span>` : ''}
               ${dur ? `<span style="font-size:10px;color:#94A3B8;white-space:nowrap;flex-shrink:0;">⏱ ${dur}</span>` : ''}
               ${S.depPhotosLog[code] ? `<span style="font-size:10px;background:#F0FDF4;color:#166534;border-radius:6px;padding:1px 5px;white-space:nowrap;flex-shrink:0;">📷 ${S.depPhotosLog[code].count}</span>` : ''}
             </div>
@@ -4802,6 +4834,7 @@ const App = {
     document.getElementById('dep-detail-body').innerHTML = `
       <div class="card" style="margin-bottom:12px;">
         ${d.codeModule ? `<div class="code-mono" style="font-size:28px;letter-spacing:3px;margin-bottom:4px;">${d.codeModule}</div>` : ''}
+        ${d.status && d.status.grutage ? `<div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:8px 12px;margin-bottom:8px;display:flex;align-items:center;gap:8px;"><span style="font-size:18px;">🏗</span><span style="font-size:13px;font-weight:700;color:#991B1B;">GRUTAGE À LA LIVRAISON</span></div>` : ''}
         <div style="font-size:16px;font-weight:600;color:#1E293B;margin-bottom:4px;">${d.chantier || '—'}${d.ag ? ' — Ag. ' + d.ag : ''}</div>
         <div style="font-size:12px;color:#94A3B8;">📋 ${code}</div>
         <div style="font-size:13px;color:#64748B;margin-top:2px;">${titre}</div>
@@ -5408,6 +5441,7 @@ const App = {
     localStorage.setItem(SK.API, url);
     this.toast('✓ Réglages sauvegardés');
     if (url) this._fetchCodes();
+    this._applyEnvMode();
   },
   /* ─ Diagnostic ─ */
   async runDiag() {
@@ -5727,6 +5761,7 @@ const App = {
           <div style="font-size:13px;font-weight:600;color:#1E293B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
           <div style="font-size:11px;color:#64748B;">${sub}</div>
         </div>
+        ${i.status && i.status.grutage ? `<span style="font-size:10px;background:#FEF2F2;color:#991B1B;border-radius:4px;padding:2px 6px;white-space:nowrap;flex-shrink:0;font-weight:600;">🏗 Grutage</span>` : ''}
       </div>`;
     }).join('');
   },
@@ -5765,8 +5800,18 @@ const App = {
         }
       }
     }
+    // Pré-remplir la note si un module nécessite un grutage à la livraison
+    const anyGrutage = [...S.lvu.selectedItems].some(key => {
+      const item = S.lvu.loxamItems.find(i => (i.code || i.codeModule || i.module || '') === key);
+      return item && item.status && item.status.grutage;
+    });
+    if (anyGrutage) {
+      const fn = document.getElementById('lvu-f-note');
+      if (fn && !fn.value.includes('GRUTAGE'))
+        fn.value = '!!! GRUTAGE A LA LIVRAISON !!!' + (fn.value ? '\n' + fn.value : '');
+    }
     document.getElementById('lvu-loxam-picker').style.display = 'none';
-    this.toast(`${rows.length} module(s) importé(s)`);
+    this.toast(`${rows.length} module(s) importé(s)${anyGrutage ? ' — ⚠️ Grutage' : ''}`);
   },
 
   async lvuLoadBcb() {
@@ -6011,6 +6056,10 @@ const App = {
         ml: parseFloat(d.total?.ml) || '',
         planning_codes: (d.marchandises || []).map(m => m.note).filter(Boolean),
         marchandises_desc: (d.marchandises || []).map(m => m.description).filter(Boolean).join(', '),
+        grutage: (S.lvu.loxamItems || []).some(i => {
+          const key = i.code || i.codeModule || i.module || '';
+          return (d.marchandises || []).some(m => m.note === key) && i.status && i.status.grutage;
+        }),
       };
       const r   = await _fetchWithTimeout(S.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) }, 30000);
       const res = await r.json();
@@ -6695,6 +6744,8 @@ if ('serviceWorker' in navigator) {
 document.addEventListener('DOMContentLoaded', () => {
   // Vérifie la session → affiche login ou accueil
   App._initAuth();
+  // Détecte le mode TEST via l'API (ADR-007 — non-breaking si GAS actuel)
+  App._applyEnvMode();
   _updateOnline();
   // ── Drag-and-drop sur la dropzone XLS ────────────────────────────────────
   const dz = document.getElementById('xls-dropzone');
