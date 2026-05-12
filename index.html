@@ -6499,11 +6499,18 @@ function _lvuRecto(doc, d, isCMR, band) {
   tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_BODY);
   tx('EXPÉDITEUR / Sender - Chargement',    x0 + LV.CELL_PAD_X,           y + 3.5);
   tx('DESTINATAIRE / Consignee - Livraison', x0 + CW / 2 + LV.CELL_PAD_X, y + 3.5);
-  tc(0, 0, 0); sf('normal', LV.FONT_BODY);
-  const exp = d.expediteur ?? {}, dst = d.destinataire ?? {};
-  let ey = y + 9.5, dy2 = y + 9.5;
-  for (const l of [exp.nom ?? 'SONOTRAD', exp.adresse, exp.cp_ville ?? exp.ville].filter(Boolean)) { tx(l, x0 + LV.CELL_PAD_X, ey); ey += 4; }
-  for (const l of [dst.nom, dst.adresse, dst.cp_ville ?? dst.ville].filter(Boolean))              { tx(l, x0 + CW / 2 + LV.CELL_PAD_X, dy2); dy2 += 4; }
+  tc(0, 0, 0);
+  const stampX = x0 + CW / 4;
+  sf('bold', 10);             tx('SONOTRAD',                         stampX, y + 10.5, 'center');
+  sf('normal', 5.5);          tx('S.a.R.L au capital de 100 000 €', stampX, y + 13.5, 'center');
+  sf('normal', LV.FONT_BODY); tx('9 Z.A. des Renardières',          stampX, y + 16.5, 'center');
+                               tx('53250 JAVRON-LES-CHAPELLES',      stampX, y + 19.5, 'center');
+                               tx('Tél. 02.49.66.10.42',             stampX, y + 22.5, 'center');
+  sf('normal', 5.5);          tx('R.C.S LAVAL 409 002 326',          stampX, y + 25.2, 'center');
+  sf('normal', LV.FONT_BODY);
+  const dst = d.destinataire ?? {};
+  let dy2 = y + 9.5;
+  for (const l of [dst.nom, dst.adresse, dst.cp_ville ?? dst.ville].filter(Boolean)) { tx(l, x0 + CW / 2 + LV.CELL_PAD_X, dy2); dy2 += 4; }
   dc(0, 0, 0); lw(LV.STROKE_INTRA);
   y += LV.H_ADDR;
 
