@@ -2055,6 +2055,7 @@ const S = {
 const App = {
   /* ─ Navigation ─ */
   go(view) {
+    if (S.view === 'lvu-form' && view !== 'lvu-form' && S.lvu.lastDoc) this.lvuNew();
     S.prevView = S.view;
     S.view = view;
     this._render();
@@ -5779,7 +5780,11 @@ const App = {
       const key = i.code || i.codeModule || i.module || '';
       if (!S.lvu.selectedItems.has(key)) return;
       const numM = i.codeModule || i.numModule || '';
-      const desc = numM ? `Module N° ${numM}` : (i.description || i.module || key);
+      const modele = (i.module || '').trim();
+      const isContainer = /^LC/i.test(modele) || /^(container|conteneur)$/i.test(modele);
+      const desc = isContainer
+        ? `Container n° ${numM || key}`
+        : (numM ? `Module N° ${numM}` : (i.description || modele || key));
       rows.push({ qte: 1, description: desc, poids: '2.5', note: key, ml: i.ml || '' });
       // Code agence : col "ag" (D) du Planning, sinon parse depuis "1043 - 72 ARNAGE Cedex"
       const agCode = i.ag || ((i.chantier || '').match(/^(\d{3,6})/)||[])[1] || '';
