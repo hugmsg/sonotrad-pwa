@@ -6,8 +6,8 @@ PWA Sonotrad — Application web progressive de gestion des transports pour SONO
 La PWA permet de créer, remplir et exporter des Lettres de Voiture Uniques (LV nationales) et des CMR (transport international).
 
 **Fichier principal :** `index.html`
-**Fonction de rendu recto :** `_lvuRecto()` — environ ligne 5960
-**Fonction de rendu verso :** `_lvuVerso()` — à créer
+**Fonction de rendu recto :** `_lvuRecto()` — ligne 6203
+**Fonction de rendu verso :** `_lvuVerso()` — ✅ Implémentée — ligne 6551
 **Librairie PDF :** jsPDF (coordonnées en mm, origine en haut à gauche)
 **Format :** A4 portrait, 210 × 297 mm
 
@@ -296,6 +296,16 @@ lvData = {
 
 ---
 
+## Contraintes d'encodage jsPDF (Helvetica Latin-1)
+
+jsPDF avec la police Helvetica (Latin-1) ne supporte pas certains caractères Unicode :
+- `≥` (U+2265) → utiliser `>=`
+- `—` (U+2014) → utiliser `-`
+
+Ces remplacements sont à faire dans le **code de rendu PDF uniquement** (pas dans l'UI).
+
+---
+
 ## Règles de rendu jsPDF
 
 ```javascript
@@ -373,9 +383,9 @@ Même si la case INTERNATIONALE n'est pas cochée, l'étiquette "CMR" doit appar
 
 ```
 sonotrad-pwa/
-├── index.html                           ← _lvuRecto() ~ligne 5960, _lvuVerso() à créer
+├── index.html                           ← _lvuRecto() ligne 6203, _lvuVerso() ligne 6551
 ├── lv-layout-constants.js               ← source de vérité du layout
 ├── LV_REFERENCE.pdf                     ← PDF modèle validé à reproduire
 ├── lv_modele_corrige.html               ← source HTML du modèle (référence)
-└── CLAUDE.md (ce fichier)
+└── CLAUDE_LV.md (ce fichier)
 ```
