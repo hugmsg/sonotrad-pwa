@@ -1180,10 +1180,6 @@
             style="background:none;border:1px solid #E2E8F0;border-radius:16px;padding:4px 10px;font-size:11px;color:#64748B;cursor:pointer;display:flex;align-items:center;gap:3px;">
             <span id="dep-sort-icon">↑</span><span id="dep-sort-label">En cours → Terminé</span>
           </button>
-          <button id="dep-lv-toggle-btn" onclick="App.toggleDepSelectMode()"
-            style="background:white;border:1.5px solid #E2E8F0;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;color:#64748B;cursor:pointer;">
-            📄 LV
-          </button>
           <button onclick="App.loadDepartures(true)" style="background:#EBF5FB;color:var(--brand);border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻</button>
         </div>
       </div>
@@ -1918,6 +1914,13 @@
   </div><!-- /main-wrapper -->
   <!-- FAB -->
   <button class="fab" id="fab" onclick="App.startNewArrival()">+</button>
+  <button class="fab" id="fab-dep" onclick="App.toggleDepSelectMode()" style="display:none;">
+    <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="2" width="14" height="14" rx="2.5" stroke="currentColor" stroke-width="2.2"/>
+      <polyline points="5.5 9 8.5 12 13 6.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M15 15 L15 24 L18 21 L21 24.5 L23 22.5 L20 19 L23.5 17 Z" fill="currentColor"/>
+    </svg>
+  </button>
   <!-- Toast -->
   <div id="toast"></div>
 </div><!-- /app -->
@@ -2056,6 +2059,10 @@ const App = {
   /* ─ Navigation ─ */
   go(view) {
     if (S.view === 'lvu-form' && view !== 'lvu-form' && S.lvu.lastDoc) this.lvuNew();
+    if (S.view === 'departures' && view !== 'departures' && S.depSelectMode) {
+      S.depSelectMode = false;
+      S.depSelected.clear();
+    }
     S.prevView = S.view;
     S.view = view;
     this._render();
@@ -2148,9 +2155,11 @@ const App = {
       if (t2) t2.classList.add('active');
     }
 
-    // ── FAB : visible uniquement sur la liste des arrivées ───────────────
+    // ── FAB : visible selon la vue ───────────────────────────────────────
     const fab = document.getElementById('fab');
     if (fab) fab.style.display = (v === 'arrivals') ? 'flex' : 'none';
+    const fabDep = document.getElementById('fab-dep');
+    if (fabDep) fabDep.style.display = (v === 'departures') ? 'flex' : 'none';
 
     // ── Header : back button / logo / titre ──────────────────────────────
     const inForm = ['new-arrival','settings','dep-detail','arr-detail','stock-detail'].includes(v);
@@ -4724,11 +4733,12 @@ const App = {
   toggleDepSelectMode() {
     S.depSelectMode = !S.depSelectMode;
     S.depSelected.clear();
-    const btn = document.getElementById('dep-lv-toggle-btn');
-    if (btn) {
-      btn.style.background   = S.depSelectMode ? '#EFF6FF' : 'white';
-      btn.style.borderColor  = S.depSelectMode ? '#1D4ED8' : '#E2E8F0';
-      btn.style.color        = S.depSelectMode ? '#1D4ED8' : '#64748B';
+    const fab = document.getElementById('fab-dep');
+    if (fab) {
+      fab.style.background = S.depSelectMode ? '#1D4ED8' : 'var(--brand)';
+      fab.style.boxShadow  = S.depSelectMode
+        ? '0 4px 16px rgba(29,78,216,0.5)'
+        : '0 4px 16px rgba(26,82,118,0.45)';
     }
     this._updateDepLvBar();
     this._renderDepList();
@@ -4801,8 +4811,8 @@ const App = {
         S.deps = S.deps.filter(d => !updatedSet.has((d.code || '').toUpperCase()));
         S.depSelectMode = false;
         S.depSelected.clear();
-        const btn = document.getElementById('dep-lv-toggle-btn');
-        if (btn) { btn.style.background = 'white'; btn.style.borderColor = '#E2E8F0'; btn.style.color = '#64748B'; }
+        const fab = document.getElementById('fab-dep');
+        if (fab) { fab.style.background = 'var(--brand)'; fab.style.boxShadow = '0 4px 16px rgba(26,82,118,0.45)'; }
         this._updateDepLvBar();
         this._renderDepList();
         this.toast(`✅ ${res.count} module${res.count > 1 ? 's' : ''} marqué${res.count > 1 ? 's' : ''} parti${res.count > 1 ? 's' : ''}`);
