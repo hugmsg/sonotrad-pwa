@@ -315,6 +315,9 @@
     .sc-rupture  { font-size:9px; font-weight:600; padding:1px 4px; border-radius:8px;
                    background:#FEF2F2; color:#DC2626; white-space:nowrap; }
     .sc-rupture.ok { background:#F0FDF4; color:#15803D; }
+    .stock-card.in-entrée     { border-left-color:#15803D; background:#F0FDF4; }
+    .stock-card.in-sortie     { border-left-color:#DC2626; background:#FEF2F2; }
+    .stock-card.in-inventaire { border-left-color:#2563EB; background:#EFF6FF; }
     /* ── Dashboard stockage ── */
     .dash-kpi-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
     .dash-kpi { background:white; border-radius:10px; padding:12px 14px;
@@ -786,9 +789,7 @@
     <button class="nav-tab" data-stab="stock" onclick="App.go('stock')" style="display:none">
       <span class="icon">📦</span><span>Catalogue</span>
     </button>
-    <button class="nav-tab" data-stab="stock-batch" onclick="App.go('stock-batch')" style="display:none">
-      <span class="icon">📋</span><span>Saisie</span>
-    </button>
+
     <button class="nav-tab" data-stab="stock-sync" onclick="App.go('stock-sync')" style="display:none">
       <span class="icon">🔄</span><span>Synchro</span>
     </button>
@@ -1324,7 +1325,7 @@
         <div id="dash-mvt-list">
           <div style="text-align:center;padding:16px;color:#94A3B8;font-size:13px;">Chargement…</div>
         </div>
-        <button onclick="App.go('stock-batch')" style="width:100%;margin-top:4px;background:transparent;border:1.5px solid #E2E8F0;color:#475569;padding:7px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
+        <button onclick="App.go('stock')" style="width:100%;margin-top:4px;background:transparent;border:1.5px solid #E2E8F0;color:#475569;padding:7px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
           Nouvelle saisie groupée →
         </button>
       </div>
@@ -1362,6 +1363,29 @@
           <div id="stock-famille-filters" style="display:flex;gap:5px;flex-wrap:wrap;"></div>
         </div>
         <div style="margin-top:6px;font-size:11px;color:#94A3B8;" id="stock-count-label"></div>
+
+        <!-- Barre saisie groupée -->
+        <div style="display:flex;gap:5px;align-items:center;margin-top:8px;flex-wrap:wrap;">
+          <button id="batch-btn-entrée" onclick="App.setBatchType('entrée')"
+            style="padding:6px 10px;border-radius:8px;border:1.5px solid #E2E8F0;background:#F8FAFC;font-size:11px;font-weight:700;cursor:pointer;color:#64748B;">
+            ➕ Entrée
+          </button>
+          <button id="batch-btn-sortie" onclick="App.setBatchType('sortie')"
+            style="padding:6px 10px;border-radius:8px;border:1.5px solid #E2E8F0;background:#F8FAFC;font-size:11px;font-weight:700;cursor:pointer;color:#64748B;">
+            ➖ Sortie
+          </button>
+          <button id="batch-btn-inventaire" onclick="App.setBatchType('inventaire')"
+            style="padding:6px 10px;border-radius:8px;border:1.5px solid #E2E8F0;background:#F8FAFC;font-size:11px;font-weight:700;cursor:pointer;color:#64748B;">
+            📋 Inventaire
+          </button>
+          <input type="text" id="batch-note-input" placeholder="Note…"
+            style="flex:1;min-width:80px;padding:6px 9px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:12px;background:white;">
+          <span id="batch-count-label" style="font-size:11px;color:#94A3B8;white-space:nowrap;"></span>
+          <button id="batch-submit-btn" onclick="App.submitBatchMv()"
+            style="display:none;background:var(--brand);color:white;border:none;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;align-items:center;gap:4px;">
+            ✓ Valider <span id="batch-count-chip">0</span>
+          </button>
+        </div>
       </div>
 
       <!-- Loading -->
@@ -1378,57 +1402,6 @@
     <div class="view" id="view-stock-detail">
       <div id="stock-detail-body"></div>
     </div>
-    <!-- ── VIEW : SAISIE GROUPÉE ─────────────────────────────────────────── -->
-    <div class="view" id="view-stock-batch">
-
-      <!-- En-tête sticky -->
-      <div style="position:sticky;top:0;z-index:10;background:#F0F4F8;padding:10px 0 8px;margin:-16px -16px 10px;padding-left:16px;padding-right:16px;">
-
-        <!-- Bouton retour + titre -->
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-          <button onclick="App.go('stock')" style="background:none;border:none;color:var(--brand);font-size:14px;font-weight:600;cursor:pointer;padding:0;display:flex;align-items:center;gap:4px;">
-            ← Retour
-          </button>
-          <span style="font-size:14px;font-weight:700;color:#1E293B;flex:1;">Saisie groupée</span>
-          <button id="batch-submit-btn" onclick="App.submitBatchMv()"
-            style="display:none;background:var(--brand);color:white;border:none;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
-            ✓ Valider <span id="batch-count-chip">0</span>
-          </button>
-        </div>
-
-        <!-- Sélecteur de type -->
-        <div style="display:flex;gap:6px;margin-bottom:8px;">
-          <button id="batch-btn-entrée" onclick="App.setBatchType('entrée')"
-            style="flex:1;padding:8px 4px;border-radius:8px;border:1.5px solid #E2E8F0;background:#F8FAFC;font-size:11px;font-weight:700;cursor:pointer;color:#64748B;">
-            ➕ Entrée
-          </button>
-          <button id="batch-btn-sortie" onclick="App.setBatchType('sortie')"
-            style="flex:1;padding:8px 4px;border-radius:8px;border:1.5px solid #E2E8F0;background:#F8FAFC;font-size:11px;font-weight:700;cursor:pointer;color:#64748B;">
-            ➖ Sortie
-          </button>
-          <button id="batch-btn-inventaire" onclick="App.setBatchType('inventaire')"
-            style="flex:1;padding:8px 4px;border-radius:8px;border:1.5px solid #E2E8F0;background:#F8FAFC;font-size:11px;font-weight:700;cursor:pointer;color:#64748B;">
-            📋 Inventaire
-          </button>
-        </div>
-
-        <!-- Recherche -->
-        <input id="batch-search-input" type="search" class="input-field" placeholder="🔍 Rechercher une référence…"
-          oninput="App.setBatchSearch(this.value)" style="font-size:14px;">
-
-        <!-- Note globale + compteur -->
-        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
-          <input type="text" id="batch-note-input" placeholder="Note (fournisseur, commande, chantier…)"
-            style="flex:1;padding:7px 10px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:12px;background:white;">
-          <span id="batch-count-label" style="font-size:11px;color:#94A3B8;white-space:nowrap;">0 réf.</span>
-        </div>
-      </div>
-
-      <!-- Liste des références avec steppers -->
-      <div id="batch-list"></div>
-
-    </div>
-
     <!-- ── VIEW : STOCK SYNC ────────────────────────────────────────────── -->
     <div class="view" id="view-stock-sync">
       <h2 style="font-size:20px;font-weight:700;color:#1E293B;margin-bottom:14px;">Synchro catalogue</h2>
@@ -2019,7 +1992,7 @@ const S = {
   // ── Saisie groupée ────────────────────────────────────────────────────
   batchMvType:    null,    // type actif du batch
   batchItems:     {},      // { ref: qty } — quantités saisies
-  batchSearch:    '',      // filtre de recherche dans la vue batch
+
   // ── Layer 2 — Intelligence ────────────────────────────────────────────
   stockAnalytics:  {},     // { ref: { avgPerWeek, trend, exits30d, entries30d, lastDate } }
   analyticsLoaded: false,
@@ -2074,7 +2047,6 @@ const App = {
     if (view === 'stock-dashboard') this.loadStockDashboard();
     if (view === 'stock') { if (!S.stockLoaded) this.loadStockCatalog(); else this._renderStockList(); }
     if (view === 'stock-detail') this._renderStockDetail();
-    if (view === 'stock-batch')  this._renderBatchList();
     if (view === 'stock-sync')   this.loadStockSync();
     if (view === 'bcb-consignes') this.bcbInitLangGrid();
     if (view === 'lvu-form')      this._lvuRenderMarchandises();
@@ -2828,6 +2800,7 @@ const App = {
 
       const desc     = d.description.length > 90 ? d.description.substring(0,88)+'…' : d.description;
       const refSafe  = d.ref.replace(/'/g, "\\'");
+      const refEsc   = CSS.escape(d.ref);
 
       // Analytics Layer 2
       const ana      = S.stockAnalytics[d.ref];
@@ -2850,7 +2823,11 @@ const App = {
         }
       }
 
-      return `<div class="${cardCls}" onclick="App.openStockDetail('${refSafe}')">
+      const batchQty = S.batchItems[d.ref] || 0;
+      const batchCls = batchQty > 0 && S.batchMvType ? ' in-' + S.batchMvType : '';
+      const fullCardCls = cardCls + batchCls;
+
+      return `<div class="${fullCardCls}" id="scard-${refEsc}" onclick="App.openStockDetail('${refSafe}')">
         <div class="sc-main">
           ${S.stockShowThumbs ? `<div style="flex-shrink:0;">${thumbHtml}</div>` : ''}
           <div class="sc-body">
@@ -2861,11 +2838,23 @@ const App = {
               <span class="sc-qty ${qtyClass}">${qtyTxt}</span>
             </div>
             <div class="sc-desc">${desc}</div>
-            <div class="sc-foot">
-              ${d.famille     ? `<span class="sc-bdg fam">${d.famille}</span>` : ''}
-              ${d.fournisseur ? `<span class="sc-bdg fou">${d.fournisseur}</span>` : ''}
-              ${d.refFourn    ? `<span class="sc-rfourn">${d.refFourn}</span>` : ''}
-              ${ruptureHtml}
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;gap:6px;">
+              <div class="sc-foot" style="margin-top:0;flex:1;min-width:0;">
+                ${d.famille     ? `<span class="sc-bdg fam">${d.famille}</span>` : ''}
+                ${d.fournisseur ? `<span class="sc-bdg fou">${d.fournisseur}</span>` : ''}
+                ${d.refFourn    ? `<span class="sc-rfourn">${d.refFourn}</span>` : ''}
+                ${ruptureHtml}
+              </div>
+              <div onclick="event.stopPropagation()" style="flex-shrink:0;">
+                <div class="batch-stepper">
+                  <button class="batch-minus" onclick="App.stepBatchQty('${refSafe}',-1)">−</button>
+                  <input class="batch-qty-input" type="number" id="bqi-${refEsc}" min="0"
+                    value="${batchQty || ''}" placeholder="0"
+                    oninput="App.setBatchQtyInput('${refSafe}',this.value)"
+                    onclick="this.select()">
+                  <button class="batch-plus" onclick="App.stepBatchQty('${refSafe}',1)">+</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -2881,8 +2870,7 @@ const App = {
 
   // Ouvre la vue saisie groupée (reset du batch si on repart de zéro)
   openBatchMv() {
-    // On conserve le batch en cours si on y retourne, sinon reset
-    this.go('stock-batch');
+    this.go('stock');
   },
 
   // Définit le type de mouvement du batch
@@ -2897,13 +2885,7 @@ const App = {
       btn.style.borderColor = active ? colors[t] : '#E2E8F0';
       btn.style.color       = active ? 'white'   : '#64748B';
     });
-    this._renderBatchList();
-  },
-
-  // Filtre de recherche dans le batch
-  setBatchSearch(val) {
-    S.batchSearch = val.toLowerCase();
-    this._renderBatchList();
+    this._renderStockList();
   },
 
   // Incrément / décrément du stepper
@@ -2912,13 +2894,12 @@ const App = {
     const next = Math.max(0, cur + delta);
     if (next === 0) delete S.batchItems[ref];
     else S.batchItems[ref] = next;
-    // MAJ visuelle du stepper sans re-rendre toute la liste
     const input = document.getElementById('bqi-' + CSS.escape(ref));
     if (input) input.value = next || '';
-    const card = document.getElementById('bcard-' + CSS.escape(ref));
+    const card = document.getElementById('scard-' + CSS.escape(ref));
     if (card) {
-      const cls = S.batchMvType ? 'in-' + S.batchMvType : '';
-      card.className = 'batch-card' + (next > 0 && cls ? ' ' + cls : '');
+      ['in-entrée','in-sortie','in-inventaire'].forEach(c => card.classList.remove(c));
+      if (next > 0 && S.batchMvType) card.classList.add('in-' + S.batchMvType);
     }
     this._updateBatchHeader();
   },
@@ -2928,10 +2909,10 @@ const App = {
     const qty = parseFloat(val);
     if (!isNaN(qty) && qty > 0) S.batchItems[ref] = qty;
     else delete S.batchItems[ref];
-    const card = document.getElementById('bcard-' + CSS.escape(ref));
+    const card = document.getElementById('scard-' + CSS.escape(ref));
     if (card) {
-      const cls = S.batchMvType ? 'in-' + S.batchMvType : '';
-      card.className = 'batch-card' + (S.batchItems[ref] ? ' ' + cls : '');
+      ['in-entrée','in-sortie','in-inventaire'].forEach(c => card.classList.remove(c));
+      if (S.batchItems[ref] && S.batchMvType) card.classList.add('in-' + S.batchMvType);
     }
     this._updateBatchHeader();
   },
@@ -2945,66 +2926,6 @@ const App = {
     if (lbl)  lbl.textContent  = n ? `${n} réf. saisie${n>1?'s':''}` : '0 réf.';
     if (chip) chip.textContent = n;
     if (btn)  btn.style.display = (n > 0 && S.batchMvType) ? 'inline-flex' : 'none';
-  },
-
-  // Rendu de la liste catalogue avec steppers
-  _renderBatchList() {
-    const list = document.getElementById('batch-list');
-    if (!list) return;
-
-    const search = S.batchSearch;
-    let items = S.stockData;
-    if (search) items = items.filter(d =>
-      d.ref.toLowerCase().includes(search) ||
-      d.description.toLowerCase().includes(search) ||
-      d.fournisseur.toLowerCase().includes(search)
-    );
-
-    // Refs dans le batch en premier
-    items = [...items].sort((a, b) => {
-      const aIn = S.batchItems[a.ref] != null ? 1 : 0;
-      const bIn = S.batchItems[b.ref] != null ? 1 : 0;
-      return bIn - aIn;
-    });
-
-    const typeClass = S.batchMvType ? 'in-' + S.batchMvType : '';
-    const calcStockTxt = (d) => {
-      const q = this._calcStockActuel(d.ref, d.qte);
-      return q !== null ? `Stock : ${q}` : '';
-    };
-
-    if (!items.length) {
-      list.innerHTML = '<div style="text-align:center;padding:40px;color:#94A3B8;font-size:13px;">Aucune référence trouvée</div>';
-      return;
-    }
-
-    list.innerHTML = items.map(d => {
-      const qty     = S.batchItems[d.ref] || 0;
-      const inBatch = qty > 0;
-      const refEsc  = CSS.escape(d.ref);
-      const refSafe = d.ref.replace(/'/g, "\\'");
-      const desc    = d.description.length > 70 ? d.description.substring(0,68)+'…' : d.description;
-      const stk     = calcStockTxt(d);
-      return `<div class="batch-card${inBatch && typeClass ? ' '+typeClass : ''}" id="bcard-${refEsc}">
-        <div class="batch-row">
-          <div class="batch-info">
-            <div class="batch-ref">${d.ref}${d.famille ? ` <span style="font-size:9px;font-weight:600;padding:1px 4px;border-radius:8px;background:#EDE9FE;color:#5B21B6;">${d.famille}</span>` : ''}</div>
-            <div class="batch-desc">${desc}</div>
-            ${stk ? `<div style="font-size:10px;color:#94A3B8;margin-top:1px;">${stk}</div>` : ''}
-          </div>
-          <div class="batch-stepper">
-            <button class="batch-minus" onclick="App.stepBatchQty('${refSafe}',-1)">−</button>
-            <input class="batch-qty-input" type="number" id="bqi-${refEsc}" min="0"
-              value="${qty || ''}" placeholder="0"
-              oninput="App.setBatchQtyInput('${refSafe}',this.value)"
-              onclick="this.select()">
-            <button class="batch-plus" onclick="App.stepBatchQty('${refSafe}',1)">+</button>
-          </div>
-        </div>
-      </div>`;
-    }).join('');
-
-    this._updateBatchHeader();
   },
 
   // Soumet tout le batch
@@ -3066,7 +2987,11 @@ const App = {
         // Reset batch
         S.batchItems  = {};
         S.batchMvType = null;
-        S.batchSearch = '';
+        ['entrée','sortie','inventaire'].forEach(t => {
+          const b = document.getElementById('batch-btn-' + t);
+          if (b) { b.style.background='#F8FAFC'; b.style.borderColor='#E2E8F0'; b.style.color='#64748B'; }
+        });
+        this._updateBatchHeader();
         // Retour au tableau de bord
         this.go('stock-dashboard');
       } else {
