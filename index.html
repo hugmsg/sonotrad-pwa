@@ -2827,35 +2827,31 @@ const App = {
       const batchCls = batchQty > 0 && S.batchMvType ? ' in-' + S.batchMvType : '';
       const fullCardCls = cardCls + batchCls;
 
-      return `<div class="${fullCardCls}" id="scard-${refEsc}" onclick="App.openStockDetail('${refSafe}')">
-        <div class="sc-main">
-          ${S.stockShowThumbs ? `<div style="flex-shrink:0;">${thumbHtml}</div>` : ''}
-          <div class="sc-body">
-            <div class="sc-head">
-              <span class="sc-star${isRel?' on':''}" onclick="event.stopPropagation();App.toggleStockPref('${refSafe}')">${isRel?'★':'☆'}</span>
-              <span class="sc-ref">${d.ref}</span>
-              ${trendArrow ? `<span class="sc-trend ${trendCls}">${trendArrow}</span>` : ''}
-              <span class="sc-qty ${qtyClass}">${qtyTxt}</span>
-            </div>
-            <div class="sc-desc">${desc}</div>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;gap:6px;">
-              <div class="sc-foot" style="margin-top:0;flex:1;min-width:0;">
-                ${d.famille     ? `<span class="sc-bdg fam">${d.famille}</span>` : ''}
-                ${d.fournisseur ? `<span class="sc-bdg fou">${d.fournisseur}</span>` : ''}
-                ${d.refFourn    ? `<span class="sc-rfourn">${d.refFourn}</span>` : ''}
-                ${ruptureHtml}
-              </div>
-              <div onclick="event.stopPropagation()" style="flex-shrink:0;">
-                <div class="batch-stepper">
-                  <button class="batch-minus" onclick="App.stepBatchQty('${refSafe}',-1)">−</button>
-                  <input class="batch-qty-input" type="number" id="bqi-${refEsc}" min="0"
-                    value="${batchQty || ''}" placeholder="0"
-                    oninput="App.setBatchQtyInput('${refSafe}',this.value)"
-                    onclick="this.select()">
-                  <button class="batch-plus" onclick="App.stepBatchQty('${refSafe}',1)">+</button>
-                </div>
-              </div>
-            </div>
+      return `<div class="${fullCardCls}" id="scard-${refEsc}" style="padding:0;display:flex;align-items:stretch;">
+        <div onclick="App.openStockDetail('${refSafe}')" style="flex:1;min-width:0;cursor:pointer;padding:8px 6px 8px 10px;">
+          ${S.stockShowThumbs ? `<div style="float:left;margin-right:8px;">${thumbHtml}</div>` : ''}
+          <div class="sc-head">
+            <span class="sc-star${isRel?' on':''}" onclick="event.stopPropagation();App.toggleStockPref('${refSafe}')">${isRel?'★':'☆'}</span>
+            <span class="sc-ref">${d.ref}</span>
+            ${trendArrow ? `<span class="sc-trend ${trendCls}">${trendArrow}</span>` : ''}
+            <span class="sc-qty ${qtyClass}">${qtyTxt}</span>
+          </div>
+          <div class="sc-desc">${desc}</div>
+          <div class="sc-foot">
+            ${d.famille     ? `<span class="sc-bdg fam">${d.famille}</span>` : ''}
+            ${d.fournisseur ? `<span class="sc-bdg fou">${d.fournisseur}</span>` : ''}
+            ${d.refFourn    ? `<span class="sc-rfourn">${d.refFourn}</span>` : ''}
+            ${ruptureHtml}
+          </div>
+        </div>
+        <div style="flex-shrink:0;display:flex;align-items:center;padding:8px 10px 8px 8px;border-left:1.5px solid #F1F5F9;">
+          <div class="batch-stepper">
+            <button class="batch-minus" onclick="App.stepBatchQty('${refSafe}',-1)">−</button>
+            <input class="batch-qty-input" type="number" id="bqi-${refEsc}" min="0"
+              value="${batchQty || ''}" placeholder="0"
+              oninput="App.setBatchQtyInput('${refSafe}',this.value)"
+              onclick="this.select()">
+            <button class="batch-plus" onclick="App.stepBatchQty('${refSafe}',1)">+</button>
           </div>
         </div>
       </div>`;
