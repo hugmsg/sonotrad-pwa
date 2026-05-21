@@ -387,6 +387,51 @@
     .xls-row-tag.new { background:#DCFCE7; color:#15803D; }
     .xls-row-tag.mod { background:#FEF3C7; color:#D97706; }
     .xls-row-tag.del { background:#FEE2E2; color:#DC2626; }
+    /* ── Historique mouvements ── */
+    .hist-op-card { background:white; border-radius:8px; margin-bottom:5px; box-shadow:0 1px 2px rgba(0,0,0,0.06); border-left:3px solid #E2E8F0; overflow:hidden; }
+    .hist-op-card.t-entrée     { border-left-color:#15803D; }
+    .hist-op-card.t-sortie     { border-left-color:#DC2626; }
+    .hist-op-card.t-pose       { border-left-color:#7C3AED; }
+    .hist-op-card.t-inventaire { border-left-color:#2563EB; }
+    .hist-op-header { display:flex; align-items:center; gap:8px; padding:9px 10px; cursor:pointer; user-select:none; }
+    .hist-op-header:active { background:#F8FAFC; }
+    .hist-op-body { padding:0 10px 10px; display:none; }
+    .hist-op-body.open { display:block; }
+    .hist-badge { font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px; white-space:nowrap; flex-shrink:0; }
+    .hist-badge.entrée     { background:#DCFCE7; color:#15803D; }
+    .hist-badge.sortie     { background:#FEE2E2; color:#DC2626; }
+    .hist-badge.pose       { background:#F3E8FF; color:#6B21A8; }
+    .hist-badge.inventaire { background:#DBEAFE; color:#1D4ED8; }
+    .hist-op-ref  { font-family:'Courier New',monospace; font-size:12px; font-weight:700; color:var(--brand); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .hist-op-date { font-size:10px; color:#94A3B8; white-space:nowrap; flex-shrink:0; }
+    .hist-op-meta { font-size:10px; color:#94A3B8; white-space:nowrap; flex-shrink:0; }
+    .hist-op-chevron { font-size:12px; color:#CBD5E1; flex-shrink:0; transition:transform .15s; }
+    .hist-op-chevron.open { transform:rotate(90deg); }
+    .hist-detail-table { width:100%; border-collapse:collapse; font-size:11px; margin-top:6px; }
+    .hist-detail-table th { text-align:left; font-weight:600; color:#94A3B8; text-transform:uppercase; letter-spacing:.3px; font-size:10px; padding:4px 6px; border-bottom:1px solid #F1F5F9; }
+    .hist-detail-table td { padding:5px 6px; border-bottom:1px solid #F8FAFC; color:#334155; vertical-align:top; }
+    .hist-detail-table tr:last-child td { border-bottom:none; }
+    .hist-detail-ref { font-family:'Courier New',monospace; font-weight:700; color:var(--brand); font-size:11px; }
+    .hist-kpi-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-bottom:12px; }
+    .hist-kpi { background:white; border-radius:8px; padding:10px; text-align:center; box-shadow:0 1px 2px rgba(0,0,0,0.05); }
+    .hist-kpi-val { font-size:20px; font-weight:800; color:#1E293B; line-height:1; }
+    .hist-kpi-lbl { font-size:9px; color:#64748B; margin-top:2px; text-transform:uppercase; letter-spacing:.3px; }
+    /* ── Pose depuis LOXAM ── */
+    .pose-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:200; display:flex; flex-direction:column; justify-content:flex-end; }
+    .pose-sheet { background:white; border-radius:16px 16px 0 0; padding:16px 16px 24px; max-height:88vh; display:flex; flex-direction:column; gap:0; }
+    .pose-header { display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-shrink:0; }
+    .pose-search-results { max-height:180px; overflow-y:auto; border:1px solid #E2E8F0; border-radius:8px; margin-bottom:10px; display:none; }
+    .pose-result-row { padding:8px 12px; cursor:pointer; border-bottom:1px solid #F8FAFC; display:flex; align-items:center; gap:8px; }
+    .pose-result-row:last-child { border-bottom:none; }
+    .pose-result-row:active { background:#F8FAFC; }
+    .pose-result-ref { font-family:'Courier New',monospace; font-size:12px; font-weight:700; color:var(--brand); flex-shrink:0; }
+    .pose-result-desc { font-size:11px; color:#475569; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .pose-items-list { overflow-y:auto; flex:1; margin-bottom:10px; }
+    .pose-item-row { display:flex; align-items:center; gap:8px; background:#F8FAFC; border-radius:8px; padding:7px 10px; margin-bottom:5px; }
+    .pose-item-ref  { font-family:'Courier New',monospace; font-size:12px; font-weight:700; color:var(--brand); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .pose-item-desc { font-size:10px; color:#64748B; display:block; }
+    .pose-item-del  { background:none; border:none; color:#DC2626; font-size:18px; cursor:pointer; padding:2px 4px; flex-shrink:0; line-height:1; }
+    .dep-pose-dot { width:7px; height:7px; border-radius:50%; background:#15803D; display:inline-block; margin-left:1px; vertical-align:middle; }
     /* ── Analytics section dans detail ── */
     .analytics-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin:10px 0; }
     .analytics-box  { background:#F8FAFC; border-radius:8px; padding:8px 10px; text-align:center; }
@@ -789,7 +834,9 @@
     <button class="nav-tab" data-stab="stock" onclick="App.go('stock')" style="display:none">
       <span class="icon">📦</span><span>Catalogue</span>
     </button>
-
+    <button class="nav-tab" data-stab="stock-history" onclick="App.go('stock-history')" style="display:none">
+      <span class="icon">📋</span><span>Historique</span>
+    </button>
     <button class="nav-tab" data-stab="stock-sync" onclick="App.go('stock-sync')" style="display:none">
       <span class="icon">🔄</span><span>Synchro</span>
     </button>
@@ -1402,6 +1449,42 @@
     <div class="view" id="view-stock-detail">
       <div id="stock-detail-body"></div>
     </div>
+    <!-- ── VIEW : STOCK HISTORY ─────────────────────────────────────────── -->
+    <div class="view" id="view-stock-history">
+      <!-- Sticky header -->
+      <div style="position:sticky;top:0;z-index:10;background:#F0F4F8;padding:10px 0 8px;margin:-16px -16px 12px;padding-left:16px;padding-right:16px;">
+        <!-- Filtres type -->
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;">
+          <button class="hist-type-btn active" data-htype="" onclick="App.setHistFilter('')"
+            style="padding:5px 10px;border-radius:16px;border:1.5px solid var(--brand);background:var(--brand);color:white;font-size:11px;font-weight:600;cursor:pointer;">Tous</button>
+          <button class="hist-type-btn" data-htype="entrée" onclick="App.setHistFilter('entrée')"
+            style="padding:5px 10px;border-radius:16px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:11px;font-weight:600;cursor:pointer;">➕ Entrées</button>
+          <button class="hist-type-btn" data-htype="sortie" onclick="App.setHistFilter('sortie')"
+            style="padding:5px 10px;border-radius:16px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:11px;font-weight:600;cursor:pointer;">➖ Sorties</button>
+          <button class="hist-type-btn" data-htype="pose" onclick="App.setHistFilter('pose')"
+            style="padding:5px 10px;border-radius:16px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:11px;font-weight:600;cursor:pointer;">🔧 Poses</button>
+          <button class="hist-type-btn" data-htype="inventaire" onclick="App.setHistFilter('inventaire')"
+            style="padding:5px 10px;border-radius:16px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:11px;font-weight:600;cursor:pointer;">📋 Inventaires</button>
+        </div>
+        <input id="hist-search" type="search" class="input-field" placeholder="🔍 N° BL, module, référence produit…"
+          oninput="App.setHistSearch(this.value)" style="font-size:13px;">
+        <div id="hist-count-label" style="margin-top:5px;font-size:11px;color:#94A3B8;"></div>
+      </div>
+      <!-- KPIs -->
+      <div class="hist-kpi-row" id="hist-kpi-row">
+        <div class="hist-kpi"><div class="hist-kpi-val" id="hist-kpi-ops">—</div><div class="hist-kpi-lbl">Opérations</div></div>
+        <div class="hist-kpi"><div class="hist-kpi-val" id="hist-kpi-lines">—</div><div class="hist-kpi-lbl">Lignes</div></div>
+        <div class="hist-kpi"><div class="hist-kpi-val" id="hist-kpi-lastliv">—</div><div class="hist-kpi-lbl">Dernière livraison</div></div>
+      </div>
+      <!-- Loading -->
+      <div id="hist-loading" style="text-align:center;padding:40px 0;display:none;">
+        <div class="spinner"></div>
+        <p style="color:#94A3B8;font-size:13px;margin-top:10px;">Chargement de l'historique…</p>
+      </div>
+      <!-- Liste opérations -->
+      <div id="shist-list"></div>
+    </div>
+
     <!-- ── VIEW : STOCK SYNC ────────────────────────────────────────────── -->
     <div class="view" id="view-stock-sync">
       <h2 style="font-size:20px;font-weight:700;color:#1E293B;margin-bottom:14px;">Synchro catalogue</h2>
@@ -1993,6 +2076,16 @@ const S = {
   batchMvType:    null,    // type actif du batch
   batchItems:     {},      // { ref: qty } — quantités saisies
 
+  // ── Historique ────────────────────────────────────────────────────────
+  historyData:    [],      // mouvements bruts ({ date, ref, type, qty, user, note })
+  historyOps:     [],      // opérations groupées (calculé côté client)
+  historyLoaded:  false,
+  histFilter:     { type: '', search: '' },
+  poseHistory:    new Set(), // codes modules ayant au moins une pose enregistrée
+  // ── Saisie pose depuis LOXAM ─────────────────────────────────────────
+  poseItems:      {},      // { ref: qty } — pose en cours de saisie
+  poseModuleCode: null,    // code du module (ex: 'PRGYGB')
+  poseModuleLabel:'',      // label affiché dans la modale
   // ── Layer 2 — Intelligence ────────────────────────────────────────────
   stockAnalytics:  {},     // { ref: { avgPerWeek, trend, exits30d, entries30d, lastDate } }
   analyticsLoaded: false,
@@ -2047,6 +2140,7 @@ const App = {
     if (view === 'stock-dashboard') this.loadStockDashboard();
     if (view === 'stock') { if (!S.stockLoaded) this.loadStockCatalog(); else this._renderStockList(); }
     if (view === 'stock-detail') this._renderStockDetail();
+    if (view === 'stock-history') { if (!S.historyLoaded) this.loadStockHistory(); else this._renderHistoryList(); }
     if (view === 'stock-sync')   this.loadStockSync();
     if (view === 'bcb-consignes') this.bcbInitLangGrid();
     if (view === 'lvu-form')      this._lvuRenderMarchandises();
@@ -2858,6 +2952,329 @@ const App = {
     }).join('');
 
     if (S.stockShowThumbs) this._loadVisibleThumbnails();
+  },
+
+  /* ─ Historique mouvements ─ */
+
+  async loadStockHistory(force = false) {
+    if (!force && S.historyLoaded) { this._renderHistoryList(); return; }
+    if (!S.apiUrl) return;
+    const loading = document.getElementById('hist-loading');
+    const list    = document.getElementById('shist-list');
+    if (loading) loading.style.display = 'block';
+    if (list)    list.innerHTML = '';
+    try {
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=stock_recent_movements&limit=9999', {}, 30000);
+      const data = await r.json();
+      S.historyData   = (data.status === 'ok' ? data.movements : []) || [];
+      S.historyOps    = this._groupMovements(S.historyData);
+      S.historyLoaded = true;
+      this._buildPoseHistory();
+      this._renderHistoryList();
+      if (S.depsLoaded) this._renderDepList();
+    } catch(e) {
+      if (list) list.innerHTML = `<div class="card" style="border-left:4px solid #F87171;color:#991B1B;font-size:13px;">Impossible de charger l'historique : ${e.message}</div>`;
+    } finally {
+      if (loading) loading.style.display = 'none';
+    }
+  },
+
+  _groupMovements(movs) {
+    const map = new Map();
+    movs.forEach(m => {
+      const ts  = Math.floor(new Date(m.date).getTime() / 2000); // fenêtre 2s
+      const key = ts + '|' + m.type + '|' + (m.note || '');
+      if (!map.has(key)) map.set(key, { key, date: m.date, type: m.type, note: m.note || '', items: [] });
+      map.get(key).items.push(m);
+    });
+    return [...map.values()]
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
+  },
+
+  _opDisplayType(type, note) {
+    if (type === 'sortie' && note.startsWith('[Pose ')) return 'pose';
+    return type;
+  },
+
+  _opRef(note, displayType) {
+    if (displayType === 'pose') return note.replace(/^\[Pose\s+/, '').replace(/\]$/, '');
+    return note || '—';
+  },
+
+  _buildPoseHistory() {
+    S.poseHistory = new Set();
+    S.historyData.forEach(m => {
+      if (m.type === 'sortie' && m.note && m.note.startsWith('[Pose ')) {
+        const code = m.note.replace(/^\[Pose\s+/, '').replace(/\]$/, '');
+        if (code) S.poseHistory.add(code);
+      }
+    });
+  },
+
+  setHistFilter(type) {
+    S.histFilter.type = type;
+    document.querySelectorAll('.hist-type-btn').forEach(btn => {
+      const active = btn.dataset.htype === type;
+      btn.style.background  = active ? 'var(--brand)' : '#F8FAFC';
+      btn.style.borderColor = active ? 'var(--brand)' : '#E2E8F0';
+      btn.style.color       = active ? 'white'        : '#64748B';
+    });
+    this._renderHistoryList();
+  },
+
+  setHistSearch(val) {
+    S.histFilter.search = val.toLowerCase().trim();
+    this._renderHistoryList();
+  },
+
+  _renderHistoryList() {
+    const list = document.getElementById('shist-list');
+    if (!list) return;
+    const { type: fType, search } = S.histFilter;
+
+    let ops = S.historyOps;
+
+    if (fType) {
+      ops = ops.filter(op => this._opDisplayType(op.type, op.note) === fType);
+    }
+    if (search) {
+      ops = ops.filter(op => {
+        const dt = this._opDisplayType(op.type, op.note);
+        if (this._opRef(op.note, dt).toLowerCase().includes(search)) return true;
+        return op.items.some(m =>
+          m.ref.toLowerCase().includes(search) ||
+          (S.stockData.find(d => d.ref === m.ref)?.description || '').toLowerCase().includes(search)
+        );
+      });
+    }
+
+    // KPIs
+    const totalOps   = ops.length;
+    const totalLines = ops.reduce((s, op) => s + op.items.length, 0);
+    const lastLiv    = S.historyOps.find(op => op.type === 'entrée');
+    const lastLivStr = lastLiv ? new Date(lastLiv.date).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit' }) : '—';
+    const kpiOps   = document.getElementById('hist-kpi-ops');
+    const kpiLines = document.getElementById('hist-kpi-lines');
+    const kpiLiv   = document.getElementById('hist-kpi-lastliv');
+    if (kpiOps)   kpiOps.textContent   = totalOps;
+    if (kpiLines) kpiLines.textContent = totalLines;
+    if (kpiLiv)   kpiLiv.textContent   = lastLivStr;
+
+    const lbl = document.getElementById('hist-count-label');
+    if (lbl) lbl.textContent = `${ops.length} opération${ops.length !== 1 ? 's' : ''}${S.historyOps.length ? ' sur ' + S.historyOps.length : ''}`;
+
+    if (!ops.length) {
+      list.innerHTML = `<div style="text-align:center;padding:40px 0;color:#94A3B8;"><div style="font-size:32px;margin-bottom:8px;">📭</div><p style="font-size:13px;">Aucune opération trouvée</p></div>`;
+      return;
+    }
+
+    list.innerHTML = ops.map((op, idx) => {
+      const dt       = this._opDisplayType(op.type, op.note);
+      const ref      = this._opRef(op.note, dt);
+      const dateStr  = new Date(op.date).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'2-digit' });
+      const timeStr  = new Date(op.date).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+      const nRefs    = op.items.length;
+      const nUnits   = op.items.reduce((s, m) => s + (Number(m.qty) || 0), 0);
+      const typeLabels = { entrée:'Entrée', sortie:'Sortie', pose:'Pose', inventaire:'Inventaire' };
+      return `<div class="hist-op-card t-${dt}">
+        <div class="hist-op-header" onclick="App.toggleHistOp(${idx})">
+          <span class="hist-badge ${dt}">${typeLabels[dt] || dt}</span>
+          <span class="hist-op-ref">${ref}</span>
+          <span class="hist-op-date">${dateStr} ${timeStr}</span>
+          <span class="hist-op-meta">${nRefs}r · ${nUnits}u</span>
+          <span class="hist-op-chevron" id="hist-chev-${idx}">›</span>
+        </div>
+        <div class="hist-op-body" id="hist-body-${idx}">
+          <table class="hist-detail-table">
+            <thead><tr><th>Réf.</th><th>Désignation</th><th style="text-align:right;">Qté</th></tr></thead>
+            <tbody>${op.items.map(m => {
+              const desc = S.stockData.find(d => d.ref === m.ref)?.description || '';
+              return `<tr><td><span class="hist-detail-ref">${m.ref}</span></td><td>${desc}</td><td style="text-align:right;font-weight:700;color:#1E293B;">${m.qty}</td></tr>`;
+            }).join('')}</tbody>
+          </table>
+          ${op.note && dt !== 'pose' ? `<div style="margin-top:6px;font-size:10px;color:#94A3B8;">Note : ${op.note}</div>` : ''}
+          ${op.items[0]?.user ? `<div style="margin-top:2px;font-size:10px;color:#94A3B8;">Par : ${op.items[0].user}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  toggleHistOp(idx) {
+    const body = document.getElementById('hist-body-' + idx);
+    const chev = document.getElementById('hist-chev-' + idx);
+    if (!body) return;
+    const open = body.classList.toggle('open');
+    if (chev) chev.classList.toggle('open', open);
+  },
+
+  /* ─ Saisie pose depuis LOXAM ─ */
+
+  openPoseModal(code, codeModule, chantier) {
+    S.poseModuleCode  = code;
+    S.poseModuleLabel = [codeModule, chantier].filter(Boolean).join(' — ') || code;
+    S.poseItems       = {};
+    const modal = document.getElementById('pose-modal');
+    const lbl   = document.getElementById('pose-module-label');
+    const inp   = document.getElementById('pose-search-input');
+    const res   = document.getElementById('pose-search-results');
+    if (lbl) lbl.textContent = S.poseModuleLabel;
+    if (inp) { inp.value = ''; }
+    if (res) { res.style.display = 'none'; res.innerHTML = ''; }
+    this._renderPoseItems();
+    if (modal) modal.style.display = 'flex';
+    setTimeout(() => inp?.focus(), 100);
+  },
+
+  closePoseModal() {
+    const modal = document.getElementById('pose-modal');
+    if (modal) modal.style.display = 'none';
+  },
+
+  poseSearch(val) {
+    const q   = val.toLowerCase().trim();
+    const res = document.getElementById('pose-search-results');
+    if (!res) return;
+    if (!q) { res.style.display = 'none'; res.innerHTML = ''; return; }
+    const hits = S.stockData.filter(d =>
+      d.ref.toLowerCase().includes(q) || d.description.toLowerCase().includes(q)
+    ).slice(0, 20);
+    if (!hits.length) {
+      res.style.display = 'block';
+      res.innerHTML = '<div style="padding:10px 12px;color:#94A3B8;font-size:12px;">Aucun résultat</div>';
+      return;
+    }
+    res.style.display = 'block';
+    res.innerHTML = hits.map(d => {
+      const refSafe = d.ref.replace(/'/g, "\\'");
+      return `<div class="pose-result-row" onclick="App.addPoseRef('${refSafe}')">
+        <span class="pose-result-ref">${d.ref}</span>
+        <span class="pose-result-desc">${d.description}</span>
+      </div>`;
+    }).join('');
+  },
+
+  addPoseRef(ref) {
+    if (!S.poseItems[ref]) S.poseItems[ref] = 1;
+    const inp = document.getElementById('pose-search-input');
+    const res = document.getElementById('pose-search-results');
+    if (inp) inp.value = '';
+    if (res) { res.style.display = 'none'; res.innerHTML = ''; }
+    this._renderPoseItems();
+    // Focus sur l'input de qty de la ref ajoutée
+    setTimeout(() => document.getElementById('pqi-' + CSS.escape(ref))?.focus(), 50);
+  },
+
+  stepPoseQty(ref, delta) {
+    const cur  = S.poseItems[ref] || 0;
+    const next = Math.max(0, cur + delta);
+    if (next === 0) delete S.poseItems[ref];
+    else S.poseItems[ref] = next;
+    const inp = document.getElementById('pqi-' + CSS.escape(ref));
+    if (inp) inp.value = next || '';
+    this._updatePoseSubmitBtn();
+  },
+
+  setPoseQtyInput(ref, val) {
+    const qty = parseFloat(val);
+    if (!isNaN(qty) && qty > 0) S.poseItems[ref] = qty;
+    else delete S.poseItems[ref];
+    this._updatePoseSubmitBtn();
+  },
+
+  removePoseRef(ref) {
+    delete S.poseItems[ref];
+    this._renderPoseItems();
+  },
+
+  _updatePoseSubmitBtn() {
+    const btn = document.getElementById('pose-submit-btn');
+    if (btn) btn.style.display = Object.keys(S.poseItems).length > 0 ? 'inline-block' : 'none';
+  },
+
+  _renderPoseItems() {
+    const list = document.getElementById('pose-items-list');
+    const empty = document.getElementById('pose-empty-msg');
+    if (!list) return;
+    const refs = Object.keys(S.poseItems);
+    if (!refs.length) {
+      if (empty) empty.style.display = 'block';
+      list.innerHTML = '';
+      list.appendChild(empty || document.createElement('div'));
+      this._updatePoseSubmitBtn();
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+    list.innerHTML = refs.map(ref => {
+      const refEsc  = CSS.escape(ref);
+      const refSafe = ref.replace(/'/g, "\\'");
+      const qty     = S.poseItems[ref] || 1;
+      const desc    = S.stockData.find(d => d.ref === ref)?.description || '';
+      return `<div class="pose-item-row">
+        <div style="flex:1;min-width:0;">
+          <span class="pose-item-ref">${ref}</span>
+          ${desc ? `<span class="pose-item-desc">${desc.length > 45 ? desc.substring(0,43)+'…' : desc}</span>` : ''}
+        </div>
+        <div class="batch-stepper">
+          <button class="batch-minus" onclick="App.stepPoseQty('${refSafe}',-1)">−</button>
+          <input class="batch-qty-input" type="number" id="pqi-${refEsc}" min="1"
+            value="${qty}"
+            oninput="App.setPoseQtyInput('${refSafe}',this.value)"
+            onclick="this.select()">
+          <button class="batch-plus" onclick="App.stepPoseQty('${refSafe}',1)">+</button>
+        </div>
+        <button class="pose-item-del" onclick="App.removePoseRef('${refSafe}')">×</button>
+      </div>`;
+    }).join('');
+    this._updatePoseSubmitBtn();
+  },
+
+  async submitPose() {
+    const code  = S.poseModuleCode;
+    const items = Object.entries(S.poseItems);
+    if (!items.length) { this.toast('Aucune pièce saisie'); return; }
+    if (!code)         { this.toast('Code module manquant'); return; }
+
+    const u    = S.currentUser;
+    const user = u ? `${u.prenom} ${u.nom}` : 'inconnu';
+    const note = `[Pose ${code}]`;
+
+    const btn = document.getElementById('pose-submit-btn');
+    if (btn) btn.disabled = true;
+    this.toast(`⏳ Enregistrement de ${items.length} pièce${items.length > 1 ? 's' : ''}…`);
+
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({
+        action: 'add_mouvements_batch',
+        type:   'sortie',
+        user,
+        note,
+        items:  items.map(([ref, qty]) => ({ ref, qty })),
+      }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method: 'POST', body: fd }, 30000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast(`✓ ${data.count} pièce${data.count > 1 ? 's' : ''} enregistrée${data.count > 1 ? 's' : ''}`);
+        // Mise à jour locale des stocks
+        items.forEach(([ref, qty]) => {
+          const item = S.stockData.find(i => i.ref === ref);
+          if (item && item.qte !== null) item.qte = item.qte - qty;
+        });
+        // Marquer la pose dans l'historique en mémoire
+        S.poseHistory.add(code);
+        S.historyLoaded = false; // forcer reload historique à la prochaine ouverture
+        S.analyticsLoaded = false;
+        S.dashboardLoaded = false;
+        this.closePoseModal();
+        if (S.depsLoaded) this._renderDepList();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+      }
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   },
 
   /* ─ Stock photos & detail ─ */
@@ -4613,7 +5030,19 @@ const App = {
             </div>
           </div>
           ${(d.lv || d.commande) ? `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;min-width:52px;">${d.lv ? `<span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;border-radius:4px;padding:1px 5px;font-weight:600;white-space:nowrap;">📄 ${d.lv}</span>` : ''}${d.commande ? `<span style="font-size:10px;background:#F1F5F9;color:#475569;border-radius:4px;padding:1px 5px;white-space:nowrap;">${d.commande}</span>` : ''}</div>` : ''}
-          ${S.depSelectMode ? '' : '<span style="color:#CBD5E1;font-size:16px;flex-shrink:0;">›</span>'}
+          ${S.depSelectMode ? '' : (() => {
+            const codeSafe   = code.replace(/'/g, "\\'");
+            const modSafe    = (d.codeModule || '').replace(/'/g, "\\'");
+            const chantSafe  = (d.chantier   || '').replace(/'/g, "\\'");
+            const hasPose    = S.poseHistory.has(code);
+            return `<button onclick="event.stopPropagation();App.openPoseModal('${codeSafe}','${modSafe}','${chantSafe}')"
+              title="Saisir pièces posées"
+              style="background:none;border:none;cursor:pointer;padding:5px 4px;display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0;opacity:${hasPose?'1':'0.4'};">
+              <span style="font-size:17px;line-height:1;">🔧</span>
+              ${hasPose ? '<span class="dep-pose-dot"></span>' : '<span style="width:7px;height:4px;display:block;"></span>'}
+            </button>
+            <span style="color:#CBD5E1;font-size:16px;flex-shrink:0;">›</span>`;
+          })()}
         </div>`;
     }).join('');
     // ── Section Partis ────────────────────────────────────────────────────
@@ -6718,5 +7147,34 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 </script>
+
+<!-- ── MODAL : SAISIE POSE ─────────────────────────────────────────────── -->
+<div id="pose-modal" class="pose-overlay" style="display:none;" onclick="if(event.target===this)App.closePoseModal()">
+  <div class="pose-sheet">
+    <!-- Header -->
+    <div class="pose-header">
+      <button onclick="App.closePoseModal()" style="background:none;border:none;font-size:20px;cursor:pointer;padding:2px;line-height:1;color:#475569;">✕</button>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;color:#1E293B;">🔧 Pièces posées</div>
+        <div id="pose-module-label" style="font-size:11px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+      </div>
+      <button id="pose-submit-btn" onclick="App.submitPose()"
+        style="background:var(--brand);color:white;border:none;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:none;white-space:nowrap;">
+        ✓ Valider
+      </button>
+    </div>
+    <!-- Recherche référence -->
+    <input id="pose-search-input" type="search" class="input-field" placeholder="🔍 Rechercher une référence…"
+      oninput="App.poseSearch(this.value)" style="font-size:13px;margin-bottom:6px;flex-shrink:0;">
+    <!-- Résultats de recherche -->
+    <div id="pose-search-results" class="pose-search-results"></div>
+    <!-- Items sélectionnés -->
+    <div id="pose-items-list" class="pose-items-list">
+      <div id="pose-empty-msg" style="text-align:center;padding:24px 0;color:#94A3B8;font-size:13px;">
+        Recherchez et ajoutez des références ci-dessus
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
