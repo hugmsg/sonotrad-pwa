@@ -416,6 +416,23 @@
     .hist-kpi { background:white; border-radius:8px; padding:10px; text-align:center; box-shadow:0 1px 2px rgba(0,0,0,0.05); }
     .hist-kpi-val { font-size:20px; font-weight:800; color:#1E293B; line-height:1; }
     .hist-kpi-lbl { font-size:9px; color:#64748B; margin-top:2px; text-transform:uppercase; letter-spacing:.3px; }
+    /* ── Historique sous-onglets ── */
+    .shist-tabs { display:flex; border-bottom:1.5px solid #E2E8F0; margin-bottom:0; }
+    .shist-tab-btn { flex:1; padding:9px 4px; font-size:12px; font-weight:500; background:none; border:none; border-bottom:2px solid transparent; color:#64748B; cursor:pointer; margin-bottom:-1.5px; transition:color .12s,border-color .12s; }
+    .shist-tab-btn.active { color:var(--brand); border-bottom-color:var(--brand); font-weight:700; }
+    .shist-section-lbl { font-size:10px; font-weight:600; color:#94A3B8; text-transform:uppercase; letter-spacing:.5px; margin:0 0 8px; }
+    .shist-top-row { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:.5px solid #F1F5F9; cursor:pointer; }
+    .shist-top-row:last-child { border-bottom:none; }
+    .shist-top-row:active { background:#F8FAFC; border-radius:6px; }
+    .shist-bar-bg { flex:1; background:#F1F5F9; border-radius:3px; height:6px; overflow:hidden; }
+    .shist-bar-fill { height:6px; border-radius:3px; }
+    .shist-chip { display:inline-flex; align-items:center; padding:4px 10px; border:1.5px solid #E2E8F0; border-radius:20px; font-size:11px; cursor:pointer; background:#F8FAFC; font-family:'Courier New',monospace; font-weight:700; color:#475569; }
+    .shist-chip.sel { border-color:var(--brand); background:#EBF5FB; color:var(--brand); }
+    .shist-chip:active { background:#E2E8F0; }
+    .shist-prod-detail { background:white; border:1px solid #E2E8F0; border-radius:10px; padding:12px 14px; margin-top:12px; }
+    .shist-bilan-card { background:white; border:1px solid #E2E8F0; border-radius:10px; padding:14px 14px 10px; margin-bottom:10px; }
+    .shist-bilan-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:6px; margin-top:10px; }
+    .shist-bilan-cell { background:#F8FAFC; border-radius:8px; padding:8px 6px; text-align:center; }
     /* ── Pose depuis LOXAM ── */
     .pose-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:200; display:flex; flex-direction:column; justify-content:flex-end; }
     .pose-sheet { background:white; border-radius:16px 16px 0 0; padding:16px 16px 24px; max-height:88vh; display:flex; flex-direction:column; gap:0; }
@@ -1451,27 +1468,8 @@
     </div>
     <!-- ── VIEW : STOCK HISTORY ─────────────────────────────────────────── -->
     <div class="view" id="view-stock-history">
-      <!-- Sticky header -->
-      <div style="position:sticky;top:0;z-index:10;background:#F0F4F8;padding:10px 0 8px;margin:-16px -16px 12px;padding-left:16px;padding-right:16px;">
-        <!-- Filtres type -->
-        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;">
-          <button class="hist-type-btn active" data-htype="" onclick="App.setHistFilter('')"
-            style="padding:5px 10px;border-radius:16px;border:1.5px solid var(--brand);background:var(--brand);color:white;font-size:11px;font-weight:600;cursor:pointer;">Tous</button>
-          <button class="hist-type-btn" data-htype="entrée" onclick="App.setHistFilter('entrée')"
-            style="padding:5px 10px;border-radius:16px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:11px;font-weight:600;cursor:pointer;">➕ Entrées</button>
-          <button class="hist-type-btn" data-htype="sortie" onclick="App.setHistFilter('sortie')"
-            style="padding:5px 10px;border-radius:16px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:11px;font-weight:600;cursor:pointer;">➖ Sorties</button>
-          <button class="hist-type-btn" data-htype="pose" onclick="App.setHistFilter('pose')"
-            style="padding:5px 10px;border-radius:16px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:11px;font-weight:600;cursor:pointer;">🔧 Poses</button>
-          <button class="hist-type-btn" data-htype="inventaire" onclick="App.setHistFilter('inventaire')"
-            style="padding:5px 10px;border-radius:16px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:11px;font-weight:600;cursor:pointer;">📋 Inventaires</button>
-        </div>
-        <input id="hist-search" type="search" class="input-field" placeholder="🔍 N° BL, module, référence produit…"
-          oninput="App.setHistSearch(this.value)" style="font-size:13px;">
-        <div id="hist-count-label" style="margin-top:5px;font-size:11px;color:#94A3B8;"></div>
-      </div>
       <!-- KPIs -->
-      <div class="hist-kpi-row" id="hist-kpi-row">
+      <div class="hist-kpi-row" id="hist-kpi-row" style="margin-bottom:12px;">
         <div class="hist-kpi"><div class="hist-kpi-val" id="hist-kpi-ops">—</div><div class="hist-kpi-lbl">Opérations</div></div>
         <div class="hist-kpi"><div class="hist-kpi-val" id="hist-kpi-lines">—</div><div class="hist-kpi-lbl">Lignes</div></div>
         <div class="hist-kpi"><div class="hist-kpi-val" id="hist-kpi-lastliv">—</div><div class="hist-kpi-lbl">Dernière livraison</div></div>
@@ -1481,8 +1479,75 @@
         <div class="spinner"></div>
         <p style="color:#94A3B8;font-size:13px;margin-top:10px;">Chargement de l'historique…</p>
       </div>
-      <!-- Liste opérations -->
-      <div id="shist-list"></div>
+      <!-- Sticky: sous-onglets + filtres opérations -->
+      <div style="position:sticky;top:0;z-index:10;background:#F0F4F8;margin:0 -16px 12px;padding:0 16px 6px;">
+        <div class="shist-tabs">
+          <button class="shist-tab-btn active" id="shtab-ops"   onclick="App.switchHistTab('ops')">Opérations</button>
+          <button class="shist-tab-btn"        id="shtab-prod"  onclick="App.switchHistTab('prod')">Par produit</button>
+          <button class="shist-tab-btn"        id="shtab-bilan" onclick="App.switchHistTab('bilan')">Bilan</button>
+        </div>
+        <!-- Filtres opérations (masqués sur les autres onglets) -->
+        <div id="shist-ops-filters" style="margin-top:8px;">
+          <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px;">
+            <button class="hist-type-btn active" data-htype="" onclick="App.setHistFilter('')"
+              style="padding:5px 10px;border-radius:16px;border:1.5px solid var(--brand);background:var(--brand);color:white;font-size:11px;font-weight:600;cursor:pointer;">Tous</button>
+            <button class="hist-type-btn" data-htype="entrée" onclick="App.setHistFilter('entrée')"
+              style="padding:5px 10px;border-radius:16px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:11px;font-weight:600;cursor:pointer;">➕ Entrées</button>
+            <button class="hist-type-btn" data-htype="sortie" onclick="App.setHistFilter('sortie')"
+              style="padding:5px 10px;border-radius:16px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:11px;font-weight:600;cursor:pointer;">➖ Sorties</button>
+            <button class="hist-type-btn" data-htype="pose" onclick="App.setHistFilter('pose')"
+              style="padding:5px 10px;border-radius:16px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:11px;font-weight:600;cursor:pointer;">🔧 Poses</button>
+            <button class="hist-type-btn" data-htype="inventaire" onclick="App.setHistFilter('inventaire')"
+              style="padding:5px 10px;border-radius:16px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:11px;font-weight:600;cursor:pointer;">📋 Inventaires</button>
+          </div>
+          <input id="hist-search" type="search" class="input-field" placeholder="🔍 N° BL, module, référence produit…"
+            oninput="App.setHistSearch(this.value)" style="font-size:13px;">
+          <div id="hist-count-label" style="margin-top:5px;font-size:11px;color:#94A3B8;"></div>
+        </div>
+      </div>
+      <!-- Pane : Opérations -->
+      <div id="shist-pane-ops">
+        <div id="shist-list"></div>
+      </div>
+      <!-- Pane : Par produit -->
+      <div id="shist-pane-prod" style="display:none;">
+        <p class="shist-section-lbl">Références les plus consommées</p>
+        <div id="shist-top-list" style="background:white;border:1px solid #E2E8F0;border-radius:10px;padding:4px 10px;margin-bottom:16px;"></div>
+        <p class="shist-section-lbl">Toutes les références</p>
+        <input id="shist-prod-search" type="search" class="input-field" placeholder="Filtrer par référence…"
+          oninput="App._renderProdChips(this.value)" style="font-size:13px;margin-bottom:8px;">
+        <div id="shist-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px;"></div>
+        <!-- Détail produit -->
+        <div id="shist-prod-detail" class="shist-prod-detail" style="display:none;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">
+            <div style="min-width:0;flex:1;margin-right:10px;">
+              <p style="font-size:10px;font-family:'Courier New',monospace;color:#94A3B8;margin:0 0 2px;" id="spd-ref"></p>
+              <p style="font-size:15px;font-weight:600;margin:0;color:#1E293B;line-height:1.3;" id="spd-des"></p>
+            </div>
+            <div style="text-align:right;flex-shrink:0;">
+              <p style="font-size:10px;color:#94A3B8;margin:0 0 1px;">Stock actuel</p>
+              <p style="font-size:22px;font-weight:800;margin:0;color:#1E293B;line-height:1;" id="spd-stock"></p>
+              <p style="font-size:10px;color:#94A3B8;margin:3px 0 0;" id="spd-conso"></p>
+            </div>
+          </div>
+          <div id="spd-spark" style="margin:4px 0 10px;"></div>
+          <div style="border-top:1px solid #F1F5F9;padding-top:10px;">
+            <table style="width:100%;font-size:12px;border-collapse:collapse;">
+              <thead><tr style="color:#94A3B8;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;">
+                <th style="text-align:left;padding:3px 0;">Date</th>
+                <th style="text-align:left;padding:3px 6px;">Opération</th>
+                <th style="text-align:right;padding:3px 0;">Mvt</th>
+                <th style="text-align:right;padding:3px 0;">Solde</th>
+              </tr></thead>
+              <tbody id="spd-rows"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <!-- Pane : Bilan mensuel -->
+      <div id="shist-pane-bilan" style="display:none;">
+        <div id="shist-bilan-cnt"></div>
+      </div>
     </div>
 
     <!-- ── VIEW : STOCK SYNC ────────────────────────────────────────────── -->
@@ -2081,6 +2146,7 @@ const S = {
   historyOps:     [],      // opérations groupées (calculé côté client)
   historyLoaded:  false,
   histFilter:     { type: '', search: '' },
+  selHistProd:    null,      // référence produit sélectionnée dans "Par produit"
   poseHistory:    new Set(), // codes modules ayant au moins une pose enregistrée
   // ── Saisie pose depuis LOXAM ─────────────────────────────────────────
   poseItems:      {},      // { ref: qty } — pose en cours de saisie
@@ -3107,6 +3173,206 @@ const App = {
     if (chev) chev.classList.toggle('open', open);
   },
 
+  /* ─ Historique : sous-onglets ─ */
+
+  switchHistTab(tab) {
+    ['ops', 'prod', 'bilan'].forEach(t => {
+      document.getElementById('shtab-' + t)?.classList.toggle('active', t === tab);
+      const pane = document.getElementById('shist-pane-' + t);
+      if (pane) pane.style.display = t === tab ? 'block' : 'none';
+    });
+    const opsFilters = document.getElementById('shist-ops-filters');
+    if (opsFilters) opsFilters.style.display = tab === 'ops' ? '' : 'none';
+    if (tab === 'prod'  && S.historyLoaded) { this._renderHistProd(); }
+    if (tab === 'bilan' && S.historyLoaded) { this._renderHistBilan(); }
+  },
+
+  /* ─ Historique : onglet "Par produit" ─ */
+
+  _renderHistProd() {
+    this._renderTopConsumed();
+    this._renderProdChips('');
+    const det = document.getElementById('shist-prod-detail');
+    if (det) det.style.display = 'none';
+    S.selHistProd = null;
+  },
+
+  _renderTopConsumed() {
+    const cmap = {}, dmap = {};
+    S.historyOps.forEach(op => {
+      if (op.type === 'sortie') {
+        op.items.forEach(m => {
+          cmap[m.ref] = (cmap[m.ref] || 0) + (Number(m.qty) || 0);
+          dmap[m.ref] = S.stockData.find(d => d.ref === m.ref)?.description || m.ref;
+        });
+      }
+    });
+    const top = Object.entries(cmap)
+      .map(([ref, qty]) => ({ ref, des: dmap[ref], qty }))
+      .sort((a, b) => b.qty - a.qty).slice(0, 7);
+    const maxQ = top[0]?.qty || 1;
+    const barColors = ['#1A5276','#1D9E75','#D85A30','#3266AD','#BA7517','#0F6E56','#993C1D'];
+    const el = document.getElementById('shist-top-list');
+    if (!el) return;
+    if (!top.length) {
+      el.innerHTML = '<p style="text-align:center;padding:14px 0;color:#94A3B8;font-size:12px;">Aucune sortie enregistrée</p>';
+      return;
+    }
+    el.innerHTML = top.map((p, i) => {
+      const refSafe = p.ref.replace(/'/g, "\\'");
+      const pct = Math.round(p.qty / maxQ * 100);
+      return `<div class="shist-top-row" onclick="App.selectHistProd('${refSafe}')">
+        <span style="font-size:10px;color:#94A3B8;min-width:14px;text-align:right;font-weight:600;">${i + 1}</span>
+        <span style="font-family:'Courier New',monospace;font-size:11px;min-width:80px;white-space:nowrap;color:var(--brand);">${p.ref}</span>
+        <div class="shist-bar-bg"><div class="shist-bar-fill" style="width:${pct}%;background:${barColors[i % barColors.length]};"></div></div>
+        <span style="font-size:11px;color:#64748B;min-width:36px;text-align:right;">${p.qty}&nbsp;u.</span>
+      </div>`;
+    }).join('');
+  },
+
+  _renderProdChips(q) {
+    const query = (q || '').toLowerCase();
+    const refs = new Set();
+    S.historyOps.forEach(op => op.items.forEach(m => refs.add(m.ref)));
+    let prods = [...refs].map(ref => ({
+      ref,
+      des: S.stockData.find(d => d.ref === ref)?.description || ''
+    })).sort((a, b) => a.ref.localeCompare(b.ref));
+    if (query) prods = prods.filter(p =>
+      p.ref.toLowerCase().includes(query) || p.des.toLowerCase().includes(query)
+    );
+    const el = document.getElementById('shist-chips');
+    if (!el) return;
+    el.innerHTML = prods.map(p => {
+      const refSafe = p.ref.replace(/'/g, "\\'");
+      const sel = S.selHistProd === p.ref ? ' sel' : '';
+      return `<div class="shist-chip${sel}" onclick="App.selectHistProd('${refSafe}')">${p.ref}</div>`;
+    }).join('');
+  },
+
+  selectHistProd(ref) {
+    S.selHistProd = ref;
+    this._renderProdChips(document.getElementById('shist-prod-search')?.value || '');
+    const sd  = S.stockData.find(d => d.ref === ref);
+    const des = sd?.description || ref;
+    const tl  = this._prodTimeline(ref);
+    const stock = sd?.stock ?? (tl.length ? tl[tl.length - 1].run : '—');
+    const conso = this._prodConso(ref);
+    const vals  = tl.map(t => t.run);
+    const dates = tl.map(t => t.date);
+    const typeLabels = { entrée:'Entrée', sortie:'Sortie', pose:'Pose', inventaire:'Inventaire' };
+    document.getElementById('spd-ref').textContent   = ref;
+    document.getElementById('spd-des').textContent   = des;
+    document.getElementById('spd-stock').textContent = stock + ' u.';
+    document.getElementById('spd-conso').textContent = conso + ' u. consommées';
+    document.getElementById('spd-spark').innerHTML   = vals.length >= 2 ? this._makeSpark(vals, dates)
+      : '<p style="color:#94A3B8;font-size:11px;text-align:center;padding:8px 0;">Pas assez de points pour le graphique</p>';
+    document.getElementById('spd-rows').innerHTML = [...tl].reverse().map(t => {
+      const d = new Date(t.date).toLocaleDateString('fr-FR', { day:'numeric', month:'short', year:'2-digit' });
+      const dStr  = t.delta === null ? '= ' + t.qty : (t.delta >= 0 ? '+' + t.delta : '' + t.delta);
+      const dCol  = t.delta === null ? '#64748B' : t.delta > 0 ? '#15803D' : '#DC2626';
+      return `<tr style="border-top:1px solid #F1F5F9;">
+        <td style="padding:5px 0;color:#94A3B8;white-space:nowrap;font-size:11px;">${d}</td>
+        <td style="padding:5px 6px;"><span class="hist-badge ${t.dt}" style="font-size:9px;">${typeLabels[t.dt] || t.dt}</span></td>
+        <td style="padding:5px 0;text-align:right;font-weight:700;color:${dCol};font-size:12px;">${dStr}</td>
+        <td style="padding:5px 0;text-align:right;font-weight:800;color:#1E293B;font-size:12px;">${t.run}</td>
+      </tr>`;
+    }).join('');
+    const det = document.getElementById('shist-prod-detail');
+    if (det) { det.style.display = 'block'; setTimeout(() => det.scrollIntoView({ behavior:'smooth', block:'nearest' }), 50); }
+  },
+
+  _prodTimeline(ref) {
+    const sorted = [...S.historyOps]
+      .filter(op => op.items.some(m => m.ref === ref))
+      .sort((a, b) => a.date < b.date ? -1 : 1);
+    let run = 0;
+    return sorted.flatMap(op => {
+      const item = op.items.find(m => m.ref === ref);
+      if (!item) return [];
+      const qty = Number(item.qty) || 0;
+      const dt  = this._opDisplayType(op.type, op.note);
+      if (op.type === 'inventaire') { run = qty; }
+      else if (op.type === 'entrée') { run += qty; }
+      else { run -= qty; }
+      const delta = op.type === 'inventaire' ? null : (op.type === 'entrée' ? qty : -qty);
+      return [{ date: op.date, dt, delta, qty, run }];
+    });
+  },
+
+  _prodConso(ref) {
+    let c = 0;
+    S.historyOps.forEach(op => {
+      if (op.type === 'sortie') {
+        const item = op.items.find(m => m.ref === ref);
+        if (item) c += Number(item.qty) || 0;
+      }
+    });
+    return c;
+  },
+
+  _makeSpark(vals, dates) {
+    if (vals.length < 2) return '';
+    const W = 400, H = 56, pad = 6;
+    const mn = Math.min(...vals), mx = Math.max(...vals), rng = mx - mn || 1;
+    const px = vals.map((v, i) => ({
+      x: +(pad + (i / (vals.length - 1)) * (W - pad * 2)).toFixed(1),
+      y: +(pad + (1 - (v - mn) / rng) * (H - pad * 2)).toFixed(1)
+    }));
+    const pts  = px.map(p => p.x + ',' + p.y).join(' ');
+    const area = `M${px[0].x},${H - pad} ` + px.map(p => `L${p.x},${p.y}`).join(' ') + ` L${px[px.length - 1].x},${H - pad}Z`;
+    const stroke = '#1A5276', fill = 'rgba(26,82,118,0.07)';
+    const dots = px.filter((_, i) => i === 0 || i === px.length - 1 || vals[i] !== vals[i - 1])
+      .map(p => `<circle cx="${p.x}" cy="${p.y}" r="3" fill="${stroke}"/>`).join('');
+    return `<svg viewBox="0 0 ${W} ${H + 10}" style="width:100%;height:52px;" preserveAspectRatio="none">
+      <path d="${area}" fill="${fill}"/>
+      <polyline points="${pts}" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      ${dots}
+    </svg>`;
+  },
+
+  /* ─ Historique : onglet "Bilan" ─ */
+
+  _renderHistBilan() {
+    const md = {};
+    S.historyOps.forEach(op => {
+      const mo = op.date.slice(0, 7);
+      if (!md[mo]) md[mo] = { e:0, eL:0, eU:0, s:0, sL:0, sU:0, p:0, pL:0, pU:0, i:0, iL:0 };
+      const nb = op.items.length;
+      const tq = op.items.reduce((a, m) => a + (Number(m.qty) || 0), 0);
+      const dt = this._opDisplayType(op.type, op.note);
+      if (op.type === 'entrée')       { md[mo].e++; md[mo].eL += nb; md[mo].eU += tq; }
+      else if (dt === 'pose')         { md[mo].p++; md[mo].pL += nb; md[mo].pU += tq; }
+      else if (op.type === 'sortie')  { md[mo].s++; md[mo].sL += nb; md[mo].sU += tq; }
+      else if (op.type === 'inventaire') { md[mo].i++; md[mo].iL += nb; }
+    });
+    const mos = Object.keys(md).sort().reverse();
+    const cnt = document.getElementById('shist-bilan-cnt');
+    if (!cnt) return;
+    if (!mos.length) {
+      cnt.innerHTML = '<p style="text-align:center;padding:32px 0;color:#94A3B8;font-size:13px;">Aucune donnée</p>';
+      return;
+    }
+    const cell = (label, n, sub, color) => `<div class="shist-bilan-cell">
+      <p style="color:#94A3B8;margin:0 0 4px;font-size:10px;">${label}</p>
+      <p style="font-size:18px;font-weight:800;margin:0;${color ? 'color:' + color : ''}">${n}</p>
+      <p style="font-size:9px;color:#94A3B8;margin:3px 0 0;">${sub}</p>
+    </div>`;
+    cnt.innerHTML = mos.map(mo => {
+      const dl = new Date(mo + '-01T00:00:00').toLocaleDateString('fr-FR', { month:'long', year:'numeric' });
+      const v  = md[mo];
+      return `<div class="shist-bilan-card">
+        <p style="font-weight:700;font-size:14px;margin:0 0 2px;text-transform:capitalize;color:#1E293B;">${dl}</p>
+        <div class="shist-bilan-grid">
+          ${cell('Livraisons', v.e, v.eL + ' réf · ' + v.eU + ' u.', '#15803D')}
+          ${cell('Sorties', v.s, v.sL + ' réf · ' + v.sU + ' u.', '#DC2626')}
+          ${cell('Poses', v.p, v.pL + ' réf · ' + v.pU + ' u.', '#6B21A8')}
+          ${cell('Inventaires', v.i, v.iL + ' réf vérif.', '')}
+        </div>
+      </div>`;
+    }).join('');
+  },
+
   /* ─ Saisie pose depuis LOXAM ─ */
 
   openPoseModal(code, codeModule, chantier) {
@@ -3160,8 +3426,27 @@ const App = {
     if (inp) inp.value = '';
     if (res) { res.style.display = 'none'; res.innerHTML = ''; }
     this._renderPoseItems();
-    // Focus sur l'input de qty de la ref ajoutée
-    setTimeout(() => document.getElementById('pqi-' + CSS.escape(ref))?.focus(), 50);
+    setTimeout(() => {
+      const qi = document.getElementById('pqi-' + CSS.escape(ref));
+      if (qi) { qi.focus(); qi.select(); }
+    }, 50);
+  },
+
+  _poseSearchKey(e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const res   = document.getElementById('pose-search-results');
+    if (!res || res.style.display === 'none') return;
+    const first = res.querySelector('.pose-result-row');
+    if (first) first.click();
+  },
+
+  _poseQtyKey(e, ref) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    this.setPoseQtyInput(ref, e.target.value);
+    const si = document.getElementById('pose-search-input');
+    if (si) { si.value = ''; this.poseSearch(''); si.focus(); }
   },
 
   stepPoseQty(ref, delta) {
@@ -3219,6 +3504,7 @@ const App = {
           <input class="batch-qty-input" type="number" id="pqi-${refEsc}" min="1"
             value="${qty}"
             oninput="App.setPoseQtyInput('${refSafe}',this.value)"
+            onkeydown="App._poseQtyKey(event,'${refSafe}')"
             onclick="this.select()">
           <button class="batch-plus" onclick="App.stepPoseQty('${refSafe}',1)">+</button>
         </div>
@@ -7165,7 +7451,8 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
     <!-- Recherche référence -->
     <input id="pose-search-input" type="search" class="input-field" placeholder="🔍 Rechercher une référence…"
-      oninput="App.poseSearch(this.value)" style="font-size:13px;margin-bottom:6px;flex-shrink:0;">
+      oninput="App.poseSearch(this.value)" onkeydown="App._poseSearchKey(event)"
+      style="font-size:13px;margin-bottom:6px;flex-shrink:0;">
     <!-- Résultats de recherche -->
     <div id="pose-search-results" class="pose-search-results"></div>
     <!-- Items sélectionnés -->
