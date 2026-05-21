@@ -315,6 +315,9 @@
     .sc-rupture  { font-size:9px; font-weight:600; padding:1px 4px; border-radius:8px;
                    background:#FEF2F2; color:#DC2626; white-space:nowrap; }
     .sc-rupture.ok { background:#F0FDF4; color:#15803D; }
+    .stock-card.in-entrée     { border-left-color:#15803D; background:#F0FDF4; }
+    .stock-card.in-sortie     { border-left-color:#DC2626; background:#FEF2F2; }
+    .stock-card.in-inventaire { border-left-color:#2563EB; background:#EFF6FF; }
     /* ── Dashboard stockage ── */
     .dash-kpi-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
     .dash-kpi { background:white; border-radius:10px; padding:12px 14px;
@@ -384,6 +387,68 @@
     .xls-row-tag.new { background:#DCFCE7; color:#15803D; }
     .xls-row-tag.mod { background:#FEF3C7; color:#D97706; }
     .xls-row-tag.del { background:#FEE2E2; color:#DC2626; }
+    /* ── Historique mouvements ── */
+    .hist-op-card { background:white; border-radius:8px; margin-bottom:5px; box-shadow:0 1px 2px rgba(0,0,0,0.06); border-left:3px solid #E2E8F0; overflow:hidden; }
+    .hist-op-card.t-entrée     { border-left-color:#15803D; }
+    .hist-op-card.t-sortie     { border-left-color:#DC2626; }
+    .hist-op-card.t-pose       { border-left-color:#7C3AED; }
+    .hist-op-card.t-inventaire { border-left-color:#2563EB; }
+    .hist-op-header { display:flex; align-items:center; gap:8px; padding:9px 10px; cursor:pointer; user-select:none; }
+    .hist-op-header:active { background:#F8FAFC; }
+    .hist-op-body { padding:0 10px 10px; display:none; }
+    .hist-op-body.open { display:block; }
+    .hist-badge { font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px; white-space:nowrap; flex-shrink:0; }
+    .hist-badge.entrée     { background:#DCFCE7; color:#15803D; }
+    .hist-badge.sortie     { background:#FEE2E2; color:#DC2626; }
+    .hist-badge.pose       { background:#F3E8FF; color:#6B21A8; }
+    .hist-badge.inventaire { background:#DBEAFE; color:#1D4ED8; }
+    .hist-op-ref  { font-family:'Courier New',monospace; font-size:12px; font-weight:700; color:var(--brand); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .hist-op-date { font-size:10px; color:#94A3B8; white-space:nowrap; flex-shrink:0; }
+    .hist-op-meta { font-size:10px; color:#94A3B8; white-space:nowrap; flex-shrink:0; }
+    .hist-op-chevron { font-size:12px; color:#CBD5E1; flex-shrink:0; transition:transform .15s; }
+    .hist-op-chevron.open { transform:rotate(90deg); }
+    .hist-detail-table { width:100%; border-collapse:collapse; font-size:11px; margin-top:6px; }
+    .hist-detail-table th { text-align:left; font-weight:600; color:#94A3B8; text-transform:uppercase; letter-spacing:.3px; font-size:10px; padding:4px 6px; border-bottom:1px solid #F1F5F9; }
+    .hist-detail-table td { padding:5px 6px; border-bottom:1px solid #F8FAFC; color:#334155; vertical-align:top; }
+    .hist-detail-table tr:last-child td { border-bottom:none; }
+    .hist-detail-ref { font-family:'Courier New',monospace; font-weight:700; color:var(--brand); font-size:11px; }
+    .hist-kpi-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-bottom:12px; }
+    .hist-kpi { background:white; border-radius:8px; padding:10px; text-align:center; box-shadow:0 1px 2px rgba(0,0,0,0.05); }
+    .hist-kpi-val { font-size:20px; font-weight:800; color:#1E293B; line-height:1; }
+    .hist-kpi-lbl { font-size:9px; color:#64748B; margin-top:2px; text-transform:uppercase; letter-spacing:.3px; }
+    /* ── Historique sous-onglets ── */
+    .shist-tabs { display:flex; border-bottom:1.5px solid #E2E8F0; margin-bottom:0; }
+    .shist-tab-btn { flex:1; padding:9px 4px; font-size:12px; font-weight:500; background:none; border:none; border-bottom:2px solid transparent; color:#64748B; cursor:pointer; margin-bottom:-1.5px; transition:color .12s,border-color .12s; }
+    .shist-tab-btn.active { color:var(--brand); border-bottom-color:var(--brand); font-weight:700; }
+    .shist-section-lbl { font-size:10px; font-weight:600; color:#94A3B8; text-transform:uppercase; letter-spacing:.5px; margin:0 0 8px; }
+    .shist-top-row { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:.5px solid #F1F5F9; cursor:pointer; }
+    .shist-top-row:last-child { border-bottom:none; }
+    .shist-top-row:active { background:#F8FAFC; border-radius:6px; }
+    .shist-bar-bg { flex:1; background:#F1F5F9; border-radius:3px; height:6px; overflow:hidden; }
+    .shist-bar-fill { height:6px; border-radius:3px; }
+    .shist-chip { display:inline-flex; align-items:center; padding:4px 10px; border:1.5px solid #E2E8F0; border-radius:20px; font-size:11px; cursor:pointer; background:#F8FAFC; font-family:'Courier New',monospace; font-weight:700; color:#475569; }
+    .shist-chip.sel { border-color:var(--brand); background:#EBF5FB; color:var(--brand); }
+    .shist-chip:active { background:#E2E8F0; }
+    .shist-prod-detail { background:white; border:1px solid #E2E8F0; border-radius:10px; padding:12px 14px; margin-top:12px; }
+    .shist-bilan-card { background:white; border:1px solid #E2E8F0; border-radius:10px; padding:14px 14px 10px; margin-bottom:10px; }
+    .shist-bilan-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:6px; margin-top:10px; }
+    .shist-bilan-cell { background:#F8FAFC; border-radius:8px; padding:8px 6px; text-align:center; }
+    /* ── Pose depuis LOXAM ── */
+    .pose-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:200; display:flex; flex-direction:column; justify-content:flex-end; }
+    .pose-sheet { background:white; border-radius:16px 16px 0 0; padding:16px 16px 24px; max-height:88vh; display:flex; flex-direction:column; gap:0; }
+    .pose-header { display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-shrink:0; }
+    .pose-search-results { max-height:180px; overflow-y:auto; border:1px solid #E2E8F0; border-radius:8px; margin-bottom:10px; display:none; }
+    .pose-result-row { padding:8px 12px; cursor:pointer; border-bottom:1px solid #F8FAFC; display:flex; align-items:center; gap:8px; }
+    .pose-result-row:last-child { border-bottom:none; }
+    .pose-result-row:active { background:#F8FAFC; }
+    .pose-result-ref { font-family:'Courier New',monospace; font-size:12px; font-weight:700; color:var(--brand); flex-shrink:0; }
+    .pose-result-desc { font-size:11px; color:#475569; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .pose-items-list { overflow-y:auto; flex:1; margin-bottom:10px; }
+    .pose-item-row { display:flex; align-items:center; gap:8px; background:#F8FAFC; border-radius:8px; padding:7px 10px; margin-bottom:5px; }
+    .pose-item-ref  { font-family:'Courier New',monospace; font-size:12px; font-weight:700; color:var(--brand); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .pose-item-desc { font-size:10px; color:#64748B; display:block; }
+    .pose-item-del  { background:none; border:none; color:#DC2626; font-size:18px; cursor:pointer; padding:2px 4px; flex-shrink:0; line-height:1; }
+    .dep-pose-dot { width:7px; height:7px; border-radius:50%; background:#15803D; display:inline-block; margin-left:1px; vertical-align:middle; }
     /* ── Analytics section dans detail ── */
     .analytics-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin:10px 0; }
     .analytics-box  { background:#F8FAFC; border-radius:8px; padding:8px 10px; text-align:center; }
@@ -786,8 +851,8 @@
     <button class="nav-tab" data-stab="stock" onclick="App.go('stock')" style="display:none">
       <span class="icon">📦</span><span>Catalogue</span>
     </button>
-    <button class="nav-tab" data-stab="stock-batch" onclick="App.go('stock-batch')" style="display:none">
-      <span class="icon">📋</span><span>Saisie</span>
+    <button class="nav-tab" data-stab="stock-history" onclick="App.go('stock-history')" style="display:none">
+      <span class="icon">📋</span><span>Historique</span>
     </button>
     <button class="nav-tab" data-stab="stock-sync" onclick="App.go('stock-sync')" style="display:none">
       <span class="icon">🔄</span><span>Synchro</span>
@@ -1324,7 +1389,7 @@
         <div id="dash-mvt-list">
           <div style="text-align:center;padding:16px;color:#94A3B8;font-size:13px;">Chargement…</div>
         </div>
-        <button onclick="App.go('stock-batch')" style="width:100%;margin-top:4px;background:transparent;border:1.5px solid #E2E8F0;color:#475569;padding:7px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
+        <button onclick="App.go('stock')" style="width:100%;margin-top:4px;background:transparent;border:1.5px solid #E2E8F0;color:#475569;padding:7px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
           Nouvelle saisie groupée →
         </button>
       </div>
@@ -1362,6 +1427,29 @@
           <div id="stock-famille-filters" style="display:flex;gap:5px;flex-wrap:wrap;"></div>
         </div>
         <div style="margin-top:6px;font-size:11px;color:#94A3B8;" id="stock-count-label"></div>
+
+        <!-- Barre saisie groupée -->
+        <div style="display:flex;gap:5px;align-items:center;margin-top:8px;flex-wrap:wrap;">
+          <button id="batch-btn-entrée" onclick="App.setBatchType('entrée')"
+            style="padding:6px 10px;border-radius:8px;border:1.5px solid #E2E8F0;background:#F8FAFC;font-size:11px;font-weight:700;cursor:pointer;color:#64748B;">
+            ➕ Entrée
+          </button>
+          <button id="batch-btn-sortie" onclick="App.setBatchType('sortie')"
+            style="padding:6px 10px;border-radius:8px;border:1.5px solid #E2E8F0;background:#F8FAFC;font-size:11px;font-weight:700;cursor:pointer;color:#64748B;">
+            ➖ Sortie
+          </button>
+          <button id="batch-btn-inventaire" onclick="App.setBatchType('inventaire')"
+            style="padding:6px 10px;border-radius:8px;border:1.5px solid #E2E8F0;background:#F8FAFC;font-size:11px;font-weight:700;cursor:pointer;color:#64748B;">
+            📋 Inventaire
+          </button>
+          <input type="text" id="batch-note-input" placeholder="Note…"
+            style="flex:1;min-width:80px;padding:6px 9px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:12px;background:white;">
+          <span id="batch-count-label" style="font-size:11px;color:#94A3B8;white-space:nowrap;"></span>
+          <button id="batch-submit-btn" onclick="App.submitBatchMv()"
+            style="display:none;background:var(--brand);color:white;border:none;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;align-items:center;gap:4px;">
+            ✓ Valider <span id="batch-count-chip">0</span>
+          </button>
+        </div>
       </div>
 
       <!-- Loading -->
@@ -1378,55 +1466,88 @@
     <div class="view" id="view-stock-detail">
       <div id="stock-detail-body"></div>
     </div>
-    <!-- ── VIEW : SAISIE GROUPÉE ─────────────────────────────────────────── -->
-    <div class="view" id="view-stock-batch">
-
-      <!-- En-tête sticky -->
-      <div style="position:sticky;top:0;z-index:10;background:#F0F4F8;padding:10px 0 8px;margin:-16px -16px 10px;padding-left:16px;padding-right:16px;">
-
-        <!-- Bouton retour + titre -->
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-          <button onclick="App.go('stock')" style="background:none;border:none;color:var(--brand);font-size:14px;font-weight:600;cursor:pointer;padding:0;display:flex;align-items:center;gap:4px;">
-            ← Retour
-          </button>
-          <span style="font-size:14px;font-weight:700;color:#1E293B;flex:1;">Saisie groupée</span>
-          <button id="batch-submit-btn" onclick="App.submitBatchMv()"
-            style="display:none;background:var(--brand);color:white;border:none;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">
-            ✓ Valider <span id="batch-count-chip">0</span>
-          </button>
+    <!-- ── VIEW : STOCK HISTORY ─────────────────────────────────────────── -->
+    <div class="view" id="view-stock-history">
+      <!-- KPIs -->
+      <div class="hist-kpi-row" id="hist-kpi-row" style="margin-bottom:12px;">
+        <div class="hist-kpi"><div class="hist-kpi-val" id="hist-kpi-ops">—</div><div class="hist-kpi-lbl">Opérations</div></div>
+        <div class="hist-kpi"><div class="hist-kpi-val" id="hist-kpi-lines">—</div><div class="hist-kpi-lbl">Lignes</div></div>
+        <div class="hist-kpi"><div class="hist-kpi-val" id="hist-kpi-lastliv">—</div><div class="hist-kpi-lbl">Dernière livraison</div></div>
+      </div>
+      <!-- Loading -->
+      <div id="hist-loading" style="text-align:center;padding:40px 0;display:none;">
+        <div class="spinner"></div>
+        <p style="color:#94A3B8;font-size:13px;margin-top:10px;">Chargement de l'historique…</p>
+      </div>
+      <!-- Sticky: sous-onglets + filtres opérations -->
+      <div style="position:sticky;top:0;z-index:10;background:#F0F4F8;margin:0 -16px 12px;padding:0 16px 6px;">
+        <div class="shist-tabs">
+          <button class="shist-tab-btn active" id="shtab-ops"   onclick="App.switchHistTab('ops')">Opérations</button>
+          <button class="shist-tab-btn"        id="shtab-prod"  onclick="App.switchHistTab('prod')">Par produit</button>
+          <button class="shist-tab-btn"        id="shtab-bilan" onclick="App.switchHistTab('bilan')">Bilan</button>
         </div>
-
-        <!-- Sélecteur de type -->
-        <div style="display:flex;gap:6px;margin-bottom:8px;">
-          <button id="batch-btn-entrée" onclick="App.setBatchType('entrée')"
-            style="flex:1;padding:8px 4px;border-radius:8px;border:1.5px solid #E2E8F0;background:#F8FAFC;font-size:11px;font-weight:700;cursor:pointer;color:#64748B;">
-            ➕ Entrée
-          </button>
-          <button id="batch-btn-sortie" onclick="App.setBatchType('sortie')"
-            style="flex:1;padding:8px 4px;border-radius:8px;border:1.5px solid #E2E8F0;background:#F8FAFC;font-size:11px;font-weight:700;cursor:pointer;color:#64748B;">
-            ➖ Sortie
-          </button>
-          <button id="batch-btn-inventaire" onclick="App.setBatchType('inventaire')"
-            style="flex:1;padding:8px 4px;border-radius:8px;border:1.5px solid #E2E8F0;background:#F8FAFC;font-size:11px;font-weight:700;cursor:pointer;color:#64748B;">
-            📋 Inventaire
-          </button>
-        </div>
-
-        <!-- Recherche -->
-        <input id="batch-search-input" type="search" class="input-field" placeholder="🔍 Rechercher une référence…"
-          oninput="App.setBatchSearch(this.value)" style="font-size:14px;">
-
-        <!-- Note globale + compteur -->
-        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
-          <input type="text" id="batch-note-input" placeholder="Note (fournisseur, commande, chantier…)"
-            style="flex:1;padding:7px 10px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:12px;background:white;">
-          <span id="batch-count-label" style="font-size:11px;color:#94A3B8;white-space:nowrap;">0 réf.</span>
+        <!-- Filtres opérations (masqués sur les autres onglets) -->
+        <div id="shist-ops-filters" style="margin-top:8px;">
+          <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px;">
+            <button class="hist-type-btn active" data-htype="" onclick="App.setHistFilter('')"
+              style="padding:5px 10px;border-radius:16px;border:1.5px solid var(--brand);background:var(--brand);color:white;font-size:11px;font-weight:600;cursor:pointer;">Tous</button>
+            <button class="hist-type-btn" data-htype="entrée" onclick="App.setHistFilter('entrée')"
+              style="padding:5px 10px;border-radius:16px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:11px;font-weight:600;cursor:pointer;">➕ Entrées</button>
+            <button class="hist-type-btn" data-htype="sortie" onclick="App.setHistFilter('sortie')"
+              style="padding:5px 10px;border-radius:16px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:11px;font-weight:600;cursor:pointer;">➖ Sorties</button>
+            <button class="hist-type-btn" data-htype="pose" onclick="App.setHistFilter('pose')"
+              style="padding:5px 10px;border-radius:16px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:11px;font-weight:600;cursor:pointer;">🔧 Poses</button>
+            <button class="hist-type-btn" data-htype="inventaire" onclick="App.setHistFilter('inventaire')"
+              style="padding:5px 10px;border-radius:16px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:11px;font-weight:600;cursor:pointer;">📋 Inventaires</button>
+          </div>
+          <input id="hist-search" type="search" class="input-field" placeholder="🔍 N° BL, module, référence produit…"
+            oninput="App.setHistSearch(this.value)" style="font-size:13px;">
+          <div id="hist-count-label" style="margin-top:5px;font-size:11px;color:#94A3B8;"></div>
         </div>
       </div>
-
-      <!-- Liste des références avec steppers -->
-      <div id="batch-list"></div>
-
+      <!-- Pane : Opérations -->
+      <div id="shist-pane-ops">
+        <div id="shist-list"></div>
+      </div>
+      <!-- Pane : Par produit -->
+      <div id="shist-pane-prod" style="display:none;">
+        <p class="shist-section-lbl">Références les plus consommées</p>
+        <div id="shist-top-list" style="background:white;border:1px solid #E2E8F0;border-radius:10px;padding:4px 10px;margin-bottom:16px;"></div>
+        <p class="shist-section-lbl">Toutes les références</p>
+        <input id="shist-prod-search" type="search" class="input-field" placeholder="Filtrer par référence…"
+          oninput="App._renderProdChips(this.value)" style="font-size:13px;margin-bottom:8px;">
+        <div id="shist-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px;"></div>
+        <!-- Détail produit -->
+        <div id="shist-prod-detail" class="shist-prod-detail" style="display:none;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">
+            <div style="min-width:0;flex:1;margin-right:10px;">
+              <p style="font-size:10px;font-family:'Courier New',monospace;color:#94A3B8;margin:0 0 2px;" id="spd-ref"></p>
+              <p style="font-size:15px;font-weight:600;margin:0;color:#1E293B;line-height:1.3;" id="spd-des"></p>
+            </div>
+            <div style="text-align:right;flex-shrink:0;">
+              <p style="font-size:10px;color:#94A3B8;margin:0 0 1px;">Stock actuel</p>
+              <p style="font-size:22px;font-weight:800;margin:0;color:#1E293B;line-height:1;" id="spd-stock"></p>
+              <p style="font-size:10px;color:#94A3B8;margin:3px 0 0;" id="spd-conso"></p>
+            </div>
+          </div>
+          <div id="spd-spark" style="margin:4px 0 10px;"></div>
+          <div style="border-top:1px solid #F1F5F9;padding-top:10px;">
+            <table style="width:100%;font-size:12px;border-collapse:collapse;">
+              <thead><tr style="color:#94A3B8;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;">
+                <th style="text-align:left;padding:3px 0;">Date</th>
+                <th style="text-align:left;padding:3px 6px;">Opération</th>
+                <th style="text-align:right;padding:3px 0;">Mvt</th>
+                <th style="text-align:right;padding:3px 0;">Solde</th>
+              </tr></thead>
+              <tbody id="spd-rows"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <!-- Pane : Bilan mensuel -->
+      <div id="shist-pane-bilan" style="display:none;">
+        <div id="shist-bilan-cnt"></div>
+      </div>
     </div>
 
     <!-- ── VIEW : STOCK SYNC ────────────────────────────────────────────── -->
@@ -2019,7 +2140,18 @@ const S = {
   // ── Saisie groupée ────────────────────────────────────────────────────
   batchMvType:    null,    // type actif du batch
   batchItems:     {},      // { ref: qty } — quantités saisies
-  batchSearch:    '',      // filtre de recherche dans la vue batch
+
+  // ── Historique ────────────────────────────────────────────────────────
+  historyData:    [],      // mouvements bruts ({ date, ref, type, qty, user, note })
+  historyOps:     [],      // opérations groupées (calculé côté client)
+  historyLoaded:  false,
+  histFilter:     { type: '', search: '' },
+  selHistProd:    null,      // référence produit sélectionnée dans "Par produit"
+  poseHistory:    new Set(), // codes modules ayant au moins une pose enregistrée
+  // ── Saisie pose depuis LOXAM ─────────────────────────────────────────
+  poseItems:      {},      // { ref: qty } — pose en cours de saisie
+  poseModuleCode: null,    // code du module (ex: 'PRGYGB')
+  poseModuleLabel:'',      // label affiché dans la modale
   // ── Layer 2 — Intelligence ────────────────────────────────────────────
   stockAnalytics:  {},     // { ref: { avgPerWeek, trend, exits30d, entries30d, lastDate } }
   analyticsLoaded: false,
@@ -2074,7 +2206,7 @@ const App = {
     if (view === 'stock-dashboard') this.loadStockDashboard();
     if (view === 'stock') { if (!S.stockLoaded) this.loadStockCatalog(); else this._renderStockList(); }
     if (view === 'stock-detail') this._renderStockDetail();
-    if (view === 'stock-batch')  this._renderBatchList();
+    if (view === 'stock-history') { if (!S.historyLoaded) this.loadStockHistory(); else this._renderHistoryList(); }
     if (view === 'stock-sync')   this.loadStockSync();
     if (view === 'bcb-consignes') this.bcbInitLangGrid();
     if (view === 'lvu-form')      this._lvuRenderMarchandises();
@@ -2828,6 +2960,7 @@ const App = {
 
       const desc     = d.description.length > 90 ? d.description.substring(0,88)+'…' : d.description;
       const refSafe  = d.ref.replace(/'/g, "\\'");
+      const refEsc   = CSS.escape(d.ref);
 
       // Analytics Layer 2
       const ana      = S.stockAnalytics[d.ref];
@@ -2850,23 +2983,35 @@ const App = {
         }
       }
 
-      return `<div class="${cardCls}" onclick="App.openStockDetail('${refSafe}')">
-        <div class="sc-main">
-          ${S.stockShowThumbs ? `<div style="flex-shrink:0;">${thumbHtml}</div>` : ''}
-          <div class="sc-body">
-            <div class="sc-head">
-              <span class="sc-star${isRel?' on':''}" onclick="event.stopPropagation();App.toggleStockPref('${refSafe}')">${isRel?'★':'☆'}</span>
-              <span class="sc-ref">${d.ref}</span>
-              ${trendArrow ? `<span class="sc-trend ${trendCls}">${trendArrow}</span>` : ''}
-              <span class="sc-qty ${qtyClass}">${qtyTxt}</span>
-            </div>
-            <div class="sc-desc">${desc}</div>
-            <div class="sc-foot">
-              ${d.famille     ? `<span class="sc-bdg fam">${d.famille}</span>` : ''}
-              ${d.fournisseur ? `<span class="sc-bdg fou">${d.fournisseur}</span>` : ''}
-              ${d.refFourn    ? `<span class="sc-rfourn">${d.refFourn}</span>` : ''}
-              ${ruptureHtml}
-            </div>
+      const batchQty = S.batchItems[d.ref] || 0;
+      const batchCls = batchQty > 0 && S.batchMvType ? ' in-' + S.batchMvType : '';
+      const fullCardCls = cardCls + batchCls;
+
+      return `<div class="${fullCardCls}" id="scard-${refEsc}" style="padding:0;display:flex;align-items:stretch;">
+        <div onclick="App.openStockDetail('${refSafe}')" style="flex:1;min-width:0;cursor:pointer;padding:8px 6px 8px 10px;">
+          ${S.stockShowThumbs ? `<div style="float:left;margin-right:8px;">${thumbHtml}</div>` : ''}
+          <div class="sc-head">
+            <span class="sc-star${isRel?' on':''}" onclick="event.stopPropagation();App.toggleStockPref('${refSafe}')">${isRel?'★':'☆'}</span>
+            <span class="sc-ref">${d.ref}</span>
+            ${trendArrow ? `<span class="sc-trend ${trendCls}">${trendArrow}</span>` : ''}
+            <span class="sc-qty ${qtyClass}">${qtyTxt}</span>
+          </div>
+          <div class="sc-desc">${desc}</div>
+          <div class="sc-foot">
+            ${d.famille     ? `<span class="sc-bdg fam">${d.famille}</span>` : ''}
+            ${d.fournisseur ? `<span class="sc-bdg fou">${d.fournisseur}</span>` : ''}
+            ${d.refFourn    ? `<span class="sc-rfourn">${d.refFourn}</span>` : ''}
+            ${ruptureHtml}
+          </div>
+        </div>
+        <div style="flex-shrink:0;display:flex;align-items:center;padding:8px 10px 8px 8px;border-left:1.5px solid #F1F5F9;">
+          <div class="batch-stepper">
+            <button class="batch-minus" onclick="App.stepBatchQty('${refSafe}',-1)">−</button>
+            <input class="batch-qty-input" type="number" id="bqi-${refEsc}" min="0"
+              value="${batchQty || ''}" placeholder="0"
+              oninput="App.setBatchQtyInput('${refSafe}',this.value)"
+              onclick="this.select()">
+            <button class="batch-plus" onclick="App.stepBatchQty('${refSafe}',1)">+</button>
           </div>
         </div>
       </div>`;
@@ -2875,14 +3020,556 @@ const App = {
     if (S.stockShowThumbs) this._loadVisibleThumbnails();
   },
 
+  /* ─ Historique mouvements ─ */
+
+  async loadStockHistory(force = false) {
+    if (!force && S.historyLoaded) { this._renderHistoryList(); return; }
+    if (!S.apiUrl) return;
+    const loading = document.getElementById('hist-loading');
+    const list    = document.getElementById('shist-list');
+    if (loading) loading.style.display = 'block';
+    if (list)    list.innerHTML = '';
+    try {
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=stock_recent_movements&limit=9999', {}, 30000);
+      const data = await r.json();
+      S.historyData   = (data.status === 'ok' ? data.movements : []) || [];
+      S.historyOps    = this._groupMovements(S.historyData);
+      S.historyLoaded = true;
+      this._buildPoseHistory();
+      this._renderHistoryList();
+      if (S.depsLoaded) this._renderDepList();
+    } catch(e) {
+      if (list) list.innerHTML = `<div class="card" style="border-left:4px solid #F87171;color:#991B1B;font-size:13px;">Impossible de charger l'historique : ${e.message}</div>`;
+    } finally {
+      if (loading) loading.style.display = 'none';
+    }
+  },
+
+  _groupMovements(movs) {
+    const map = new Map();
+    movs.forEach(m => {
+      const ts  = Math.floor(new Date(m.date).getTime() / 2000); // fenêtre 2s
+      const key = ts + '|' + m.type + '|' + (m.note || '');
+      if (!map.has(key)) map.set(key, { key, date: m.date, type: m.type, note: m.note || '', items: [] });
+      map.get(key).items.push(m);
+    });
+    return [...map.values()]
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
+  },
+
+  _opDisplayType(type, note) {
+    if (type === 'sortie' && note.startsWith('[Pose ')) return 'pose';
+    return type;
+  },
+
+  _opRef(note, displayType) {
+    if (displayType === 'pose') return note.replace(/^\[Pose\s+/, '').replace(/\]$/, '');
+    return note || '—';
+  },
+
+  _buildPoseHistory() {
+    S.poseHistory = new Set();
+    S.historyData.forEach(m => {
+      if (m.type === 'sortie' && m.note && m.note.startsWith('[Pose ')) {
+        const code = m.note.replace(/^\[Pose\s+/, '').replace(/\]$/, '');
+        if (code) S.poseHistory.add(code);
+      }
+    });
+  },
+
+  setHistFilter(type) {
+    S.histFilter.type = type;
+    document.querySelectorAll('.hist-type-btn').forEach(btn => {
+      const active = btn.dataset.htype === type;
+      btn.style.background  = active ? 'var(--brand)' : '#F8FAFC';
+      btn.style.borderColor = active ? 'var(--brand)' : '#E2E8F0';
+      btn.style.color       = active ? 'white'        : '#64748B';
+    });
+    this._renderHistoryList();
+  },
+
+  setHistSearch(val) {
+    S.histFilter.search = val.toLowerCase().trim();
+    this._renderHistoryList();
+  },
+
+  _renderHistoryList() {
+    const list = document.getElementById('shist-list');
+    if (!list) return;
+    const { type: fType, search } = S.histFilter;
+
+    let ops = S.historyOps;
+
+    if (fType) {
+      ops = ops.filter(op => this._opDisplayType(op.type, op.note) === fType);
+    }
+    if (search) {
+      ops = ops.filter(op => {
+        const dt = this._opDisplayType(op.type, op.note);
+        if (this._opRef(op.note, dt).toLowerCase().includes(search)) return true;
+        return op.items.some(m =>
+          m.ref.toLowerCase().includes(search) ||
+          (S.stockData.find(d => d.ref === m.ref)?.description || '').toLowerCase().includes(search)
+        );
+      });
+    }
+
+    // KPIs
+    const totalOps   = ops.length;
+    const totalLines = ops.reduce((s, op) => s + op.items.length, 0);
+    const lastLiv    = S.historyOps.find(op => op.type === 'entrée');
+    const lastLivStr = lastLiv ? new Date(lastLiv.date).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit' }) : '—';
+    const kpiOps   = document.getElementById('hist-kpi-ops');
+    const kpiLines = document.getElementById('hist-kpi-lines');
+    const kpiLiv   = document.getElementById('hist-kpi-lastliv');
+    if (kpiOps)   kpiOps.textContent   = totalOps;
+    if (kpiLines) kpiLines.textContent = totalLines;
+    if (kpiLiv)   kpiLiv.textContent   = lastLivStr;
+
+    const lbl = document.getElementById('hist-count-label');
+    if (lbl) lbl.textContent = `${ops.length} opération${ops.length !== 1 ? 's' : ''}${S.historyOps.length ? ' sur ' + S.historyOps.length : ''}`;
+
+    if (!ops.length) {
+      list.innerHTML = `<div style="text-align:center;padding:40px 0;color:#94A3B8;"><div style="font-size:32px;margin-bottom:8px;">📭</div><p style="font-size:13px;">Aucune opération trouvée</p></div>`;
+      return;
+    }
+
+    list.innerHTML = ops.map((op, idx) => {
+      const dt       = this._opDisplayType(op.type, op.note);
+      const ref      = this._opRef(op.note, dt);
+      const dateStr  = new Date(op.date).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'2-digit' });
+      const timeStr  = new Date(op.date).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+      const nRefs    = op.items.length;
+      const nUnits   = op.items.reduce((s, m) => s + (Number(m.qty) || 0), 0);
+      const typeLabels = { entrée:'Entrée', sortie:'Sortie', pose:'Pose', inventaire:'Inventaire' };
+      return `<div class="hist-op-card t-${dt}">
+        <div class="hist-op-header" onclick="App.toggleHistOp(${idx})">
+          <span class="hist-badge ${dt}">${typeLabels[dt] || dt}</span>
+          <span class="hist-op-ref">${ref}</span>
+          <span class="hist-op-date">${dateStr} ${timeStr}</span>
+          <span class="hist-op-meta">${nRefs}r · ${nUnits}u</span>
+          <span class="hist-op-chevron" id="hist-chev-${idx}">›</span>
+        </div>
+        <div class="hist-op-body" id="hist-body-${idx}">
+          <table class="hist-detail-table">
+            <thead><tr><th>Réf.</th><th>Désignation</th><th style="text-align:right;">Qté</th></tr></thead>
+            <tbody>${op.items.map(m => {
+              const desc = S.stockData.find(d => d.ref === m.ref)?.description || '';
+              return `<tr><td><span class="hist-detail-ref">${m.ref}</span></td><td>${desc}</td><td style="text-align:right;font-weight:700;color:#1E293B;">${m.qty}</td></tr>`;
+            }).join('')}</tbody>
+          </table>
+          ${op.note && dt !== 'pose' ? `<div style="margin-top:6px;font-size:10px;color:#94A3B8;">Note : ${op.note}</div>` : ''}
+          ${op.items[0]?.user ? `<div style="margin-top:2px;font-size:10px;color:#94A3B8;">Par : ${op.items[0].user}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  toggleHistOp(idx) {
+    const body = document.getElementById('hist-body-' + idx);
+    const chev = document.getElementById('hist-chev-' + idx);
+    if (!body) return;
+    const open = body.classList.toggle('open');
+    if (chev) chev.classList.toggle('open', open);
+  },
+
+  /* ─ Historique : sous-onglets ─ */
+
+  switchHistTab(tab) {
+    ['ops', 'prod', 'bilan'].forEach(t => {
+      document.getElementById('shtab-' + t)?.classList.toggle('active', t === tab);
+      const pane = document.getElementById('shist-pane-' + t);
+      if (pane) pane.style.display = t === tab ? 'block' : 'none';
+    });
+    const opsFilters = document.getElementById('shist-ops-filters');
+    if (opsFilters) opsFilters.style.display = tab === 'ops' ? '' : 'none';
+    if (tab === 'prod'  && S.historyLoaded) { this._renderHistProd(); }
+    if (tab === 'bilan' && S.historyLoaded) { this._renderHistBilan(); }
+  },
+
+  /* ─ Historique : onglet "Par produit" ─ */
+
+  _renderHistProd() {
+    this._renderTopConsumed();
+    this._renderProdChips('');
+    const det = document.getElementById('shist-prod-detail');
+    if (det) det.style.display = 'none';
+    S.selHistProd = null;
+  },
+
+  _renderTopConsumed() {
+    const cmap = {}, dmap = {};
+    S.historyOps.forEach(op => {
+      if (op.type === 'sortie') {
+        op.items.forEach(m => {
+          cmap[m.ref] = (cmap[m.ref] || 0) + (Number(m.qty) || 0);
+          dmap[m.ref] = S.stockData.find(d => d.ref === m.ref)?.description || m.ref;
+        });
+      }
+    });
+    const top = Object.entries(cmap)
+      .map(([ref, qty]) => ({ ref, des: dmap[ref], qty }))
+      .sort((a, b) => b.qty - a.qty).slice(0, 7);
+    const maxQ = top[0]?.qty || 1;
+    const barColors = ['#1A5276','#1D9E75','#D85A30','#3266AD','#BA7517','#0F6E56','#993C1D'];
+    const el = document.getElementById('shist-top-list');
+    if (!el) return;
+    if (!top.length) {
+      el.innerHTML = '<p style="text-align:center;padding:14px 0;color:#94A3B8;font-size:12px;">Aucune sortie enregistrée</p>';
+      return;
+    }
+    el.innerHTML = top.map((p, i) => {
+      const refSafe = p.ref.replace(/'/g, "\\'");
+      const pct = Math.round(p.qty / maxQ * 100);
+      return `<div class="shist-top-row" onclick="App.selectHistProd('${refSafe}')">
+        <span style="font-size:10px;color:#94A3B8;min-width:14px;text-align:right;font-weight:600;">${i + 1}</span>
+        <span style="font-family:'Courier New',monospace;font-size:11px;min-width:80px;white-space:nowrap;color:var(--brand);">${p.ref}</span>
+        <div class="shist-bar-bg"><div class="shist-bar-fill" style="width:${pct}%;background:${barColors[i % barColors.length]};"></div></div>
+        <span style="font-size:11px;color:#64748B;min-width:36px;text-align:right;">${p.qty}&nbsp;u.</span>
+      </div>`;
+    }).join('');
+  },
+
+  _renderProdChips(q) {
+    const query = (q || '').toLowerCase();
+    const refs = new Set();
+    S.historyOps.forEach(op => op.items.forEach(m => refs.add(m.ref)));
+    let prods = [...refs].map(ref => ({
+      ref,
+      des: S.stockData.find(d => d.ref === ref)?.description || ''
+    })).sort((a, b) => a.ref.localeCompare(b.ref));
+    if (query) prods = prods.filter(p =>
+      p.ref.toLowerCase().includes(query) || p.des.toLowerCase().includes(query)
+    );
+    const el = document.getElementById('shist-chips');
+    if (!el) return;
+    el.innerHTML = prods.map(p => {
+      const refSafe = p.ref.replace(/'/g, "\\'");
+      const sel = S.selHistProd === p.ref ? ' sel' : '';
+      return `<div class="shist-chip${sel}" onclick="App.selectHistProd('${refSafe}')">${p.ref}</div>`;
+    }).join('');
+  },
+
+  selectHistProd(ref) {
+    S.selHistProd = ref;
+    this._renderProdChips(document.getElementById('shist-prod-search')?.value || '');
+    const sd  = S.stockData.find(d => d.ref === ref);
+    const des = sd?.description || ref;
+    const tl  = this._prodTimeline(ref);
+    const stock = sd?.stock ?? (tl.length ? tl[tl.length - 1].run : '—');
+    const conso = this._prodConso(ref);
+    const vals  = tl.map(t => t.run);
+    const dates = tl.map(t => t.date);
+    const typeLabels = { entrée:'Entrée', sortie:'Sortie', pose:'Pose', inventaire:'Inventaire' };
+    document.getElementById('spd-ref').textContent   = ref;
+    document.getElementById('spd-des').textContent   = des;
+    document.getElementById('spd-stock').textContent = stock + ' u.';
+    document.getElementById('spd-conso').textContent = conso + ' u. consommées';
+    document.getElementById('spd-spark').innerHTML   = vals.length >= 2 ? this._makeSpark(vals, dates)
+      : '<p style="color:#94A3B8;font-size:11px;text-align:center;padding:8px 0;">Pas assez de points pour le graphique</p>';
+    document.getElementById('spd-rows').innerHTML = [...tl].reverse().map(t => {
+      const d = new Date(t.date).toLocaleDateString('fr-FR', { day:'numeric', month:'short', year:'2-digit' });
+      const dStr  = t.delta === null ? '= ' + t.qty : (t.delta >= 0 ? '+' + t.delta : '' + t.delta);
+      const dCol  = t.delta === null ? '#64748B' : t.delta > 0 ? '#15803D' : '#DC2626';
+      return `<tr style="border-top:1px solid #F1F5F9;">
+        <td style="padding:5px 0;color:#94A3B8;white-space:nowrap;font-size:11px;">${d}</td>
+        <td style="padding:5px 6px;"><span class="hist-badge ${t.dt}" style="font-size:9px;">${typeLabels[t.dt] || t.dt}</span></td>
+        <td style="padding:5px 0;text-align:right;font-weight:700;color:${dCol};font-size:12px;">${dStr}</td>
+        <td style="padding:5px 0;text-align:right;font-weight:800;color:#1E293B;font-size:12px;">${t.run}</td>
+      </tr>`;
+    }).join('');
+    const det = document.getElementById('shist-prod-detail');
+    if (det) { det.style.display = 'block'; setTimeout(() => det.scrollIntoView({ behavior:'smooth', block:'nearest' }), 50); }
+  },
+
+  _prodTimeline(ref) {
+    const sorted = [...S.historyOps]
+      .filter(op => op.items.some(m => m.ref === ref))
+      .sort((a, b) => a.date < b.date ? -1 : 1);
+    let run = 0;
+    return sorted.flatMap(op => {
+      const item = op.items.find(m => m.ref === ref);
+      if (!item) return [];
+      const qty = Number(item.qty) || 0;
+      const dt  = this._opDisplayType(op.type, op.note);
+      if (op.type === 'inventaire') { run = qty; }
+      else if (op.type === 'entrée') { run += qty; }
+      else { run -= qty; }
+      const delta = op.type === 'inventaire' ? null : (op.type === 'entrée' ? qty : -qty);
+      return [{ date: op.date, dt, delta, qty, run }];
+    });
+  },
+
+  _prodConso(ref) {
+    let c = 0;
+    S.historyOps.forEach(op => {
+      if (op.type === 'sortie') {
+        const item = op.items.find(m => m.ref === ref);
+        if (item) c += Number(item.qty) || 0;
+      }
+    });
+    return c;
+  },
+
+  _makeSpark(vals, dates) {
+    if (vals.length < 2) return '';
+    const W = 400, H = 56, pad = 6;
+    const mn = Math.min(...vals), mx = Math.max(...vals), rng = mx - mn || 1;
+    const px = vals.map((v, i) => ({
+      x: +(pad + (i / (vals.length - 1)) * (W - pad * 2)).toFixed(1),
+      y: +(pad + (1 - (v - mn) / rng) * (H - pad * 2)).toFixed(1)
+    }));
+    const pts  = px.map(p => p.x + ',' + p.y).join(' ');
+    const area = `M${px[0].x},${H - pad} ` + px.map(p => `L${p.x},${p.y}`).join(' ') + ` L${px[px.length - 1].x},${H - pad}Z`;
+    const stroke = '#1A5276', fill = 'rgba(26,82,118,0.07)';
+    const dots = px.filter((_, i) => i === 0 || i === px.length - 1 || vals[i] !== vals[i - 1])
+      .map(p => `<circle cx="${p.x}" cy="${p.y}" r="3" fill="${stroke}"/>`).join('');
+    return `<svg viewBox="0 0 ${W} ${H + 10}" style="width:100%;height:52px;" preserveAspectRatio="none">
+      <path d="${area}" fill="${fill}"/>
+      <polyline points="${pts}" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      ${dots}
+    </svg>`;
+  },
+
+  /* ─ Historique : onglet "Bilan" ─ */
+
+  _renderHistBilan() {
+    const md = {};
+    S.historyOps.forEach(op => {
+      const mo = op.date.slice(0, 7);
+      if (!md[mo]) md[mo] = { e:0, eL:0, eU:0, s:0, sL:0, sU:0, p:0, pL:0, pU:0, i:0, iL:0 };
+      const nb = op.items.length;
+      const tq = op.items.reduce((a, m) => a + (Number(m.qty) || 0), 0);
+      const dt = this._opDisplayType(op.type, op.note);
+      if (op.type === 'entrée')       { md[mo].e++; md[mo].eL += nb; md[mo].eU += tq; }
+      else if (dt === 'pose')         { md[mo].p++; md[mo].pL += nb; md[mo].pU += tq; }
+      else if (op.type === 'sortie')  { md[mo].s++; md[mo].sL += nb; md[mo].sU += tq; }
+      else if (op.type === 'inventaire') { md[mo].i++; md[mo].iL += nb; }
+    });
+    const mos = Object.keys(md).sort().reverse();
+    const cnt = document.getElementById('shist-bilan-cnt');
+    if (!cnt) return;
+    if (!mos.length) {
+      cnt.innerHTML = '<p style="text-align:center;padding:32px 0;color:#94A3B8;font-size:13px;">Aucune donnée</p>';
+      return;
+    }
+    const cell = (label, n, sub, color) => `<div class="shist-bilan-cell">
+      <p style="color:#94A3B8;margin:0 0 4px;font-size:10px;">${label}</p>
+      <p style="font-size:18px;font-weight:800;margin:0;${color ? 'color:' + color : ''}">${n}</p>
+      <p style="font-size:9px;color:#94A3B8;margin:3px 0 0;">${sub}</p>
+    </div>`;
+    cnt.innerHTML = mos.map(mo => {
+      const dl = new Date(mo + '-01T00:00:00').toLocaleDateString('fr-FR', { month:'long', year:'numeric' });
+      const v  = md[mo];
+      return `<div class="shist-bilan-card">
+        <p style="font-weight:700;font-size:14px;margin:0 0 2px;text-transform:capitalize;color:#1E293B;">${dl}</p>
+        <div class="shist-bilan-grid">
+          ${cell('Livraisons', v.e, v.eL + ' réf · ' + v.eU + ' u.', '#15803D')}
+          ${cell('Sorties', v.s, v.sL + ' réf · ' + v.sU + ' u.', '#DC2626')}
+          ${cell('Poses', v.p, v.pL + ' réf · ' + v.pU + ' u.', '#6B21A8')}
+          ${cell('Inventaires', v.i, v.iL + ' réf vérif.', '')}
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  /* ─ Saisie pose depuis LOXAM ─ */
+
+  openPoseModal(code, codeModule, chantier) {
+    S.poseModuleCode  = code;
+    S.poseModuleLabel = [codeModule, chantier].filter(Boolean).join(' — ') || code;
+    S.poseItems       = {};
+    const modal = document.getElementById('pose-modal');
+    const lbl   = document.getElementById('pose-module-label');
+    const inp   = document.getElementById('pose-search-input');
+    const res   = document.getElementById('pose-search-results');
+    if (lbl) lbl.textContent = S.poseModuleLabel;
+    if (inp) { inp.value = ''; }
+    if (res) { res.style.display = 'none'; res.innerHTML = ''; }
+    this._renderPoseItems();
+    if (modal) modal.style.display = 'flex';
+    setTimeout(() => inp?.focus(), 100);
+  },
+
+  closePoseModal() {
+    const modal = document.getElementById('pose-modal');
+    if (modal) modal.style.display = 'none';
+  },
+
+  poseSearch(val) {
+    const q   = val.toLowerCase().trim();
+    const res = document.getElementById('pose-search-results');
+    if (!res) return;
+    if (!q) { res.style.display = 'none'; res.innerHTML = ''; return; }
+    const hits = S.stockData.filter(d =>
+      d.ref.toLowerCase().includes(q) || d.description.toLowerCase().includes(q)
+    ).slice(0, 20);
+    if (!hits.length) {
+      res.style.display = 'block';
+      res.innerHTML = '<div style="padding:10px 12px;color:#94A3B8;font-size:12px;">Aucun résultat</div>';
+      return;
+    }
+    res.style.display = 'block';
+    res.innerHTML = hits.map(d => {
+      const refSafe = d.ref.replace(/'/g, "\\'");
+      return `<div class="pose-result-row" onclick="App.addPoseRef('${refSafe}')">
+        <span class="pose-result-ref">${d.ref}</span>
+        <span class="pose-result-desc">${d.description}</span>
+      </div>`;
+    }).join('');
+  },
+
+  addPoseRef(ref) {
+    if (!S.poseItems[ref]) S.poseItems[ref] = 1;
+    const inp = document.getElementById('pose-search-input');
+    const res = document.getElementById('pose-search-results');
+    if (inp) inp.value = '';
+    if (res) { res.style.display = 'none'; res.innerHTML = ''; }
+    this._renderPoseItems();
+    setTimeout(() => {
+      const qi = document.getElementById('pqi-' + CSS.escape(ref));
+      if (qi) { qi.focus(); qi.select(); }
+    }, 50);
+  },
+
+  _poseSearchKey(e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const res   = document.getElementById('pose-search-results');
+    if (!res || res.style.display === 'none') return;
+    const first = res.querySelector('.pose-result-row');
+    if (first) first.click();
+  },
+
+  _poseQtyKey(e, ref) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    this.setPoseQtyInput(ref, e.target.value);
+    const si = document.getElementById('pose-search-input');
+    if (si) { si.value = ''; this.poseSearch(''); si.focus(); }
+  },
+
+  stepPoseQty(ref, delta) {
+    const cur  = S.poseItems[ref] || 0;
+    const next = Math.max(0, cur + delta);
+    if (next === 0) delete S.poseItems[ref];
+    else S.poseItems[ref] = next;
+    const inp = document.getElementById('pqi-' + CSS.escape(ref));
+    if (inp) inp.value = next || '';
+    this._updatePoseSubmitBtn();
+  },
+
+  setPoseQtyInput(ref, val) {
+    const qty = parseFloat(val);
+    if (!isNaN(qty) && qty > 0) S.poseItems[ref] = qty;
+    else delete S.poseItems[ref];
+    this._updatePoseSubmitBtn();
+  },
+
+  removePoseRef(ref) {
+    delete S.poseItems[ref];
+    this._renderPoseItems();
+  },
+
+  _updatePoseSubmitBtn() {
+    const btn = document.getElementById('pose-submit-btn');
+    if (btn) btn.style.display = Object.keys(S.poseItems).length > 0 ? 'inline-block' : 'none';
+  },
+
+  _renderPoseItems() {
+    const list = document.getElementById('pose-items-list');
+    const empty = document.getElementById('pose-empty-msg');
+    if (!list) return;
+    const refs = Object.keys(S.poseItems);
+    if (!refs.length) {
+      if (empty) empty.style.display = 'block';
+      list.innerHTML = '';
+      list.appendChild(empty || document.createElement('div'));
+      this._updatePoseSubmitBtn();
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+    list.innerHTML = refs.map(ref => {
+      const refEsc  = CSS.escape(ref);
+      const refSafe = ref.replace(/'/g, "\\'");
+      const qty     = S.poseItems[ref] || 1;
+      const desc    = S.stockData.find(d => d.ref === ref)?.description || '';
+      return `<div class="pose-item-row">
+        <div style="flex:1;min-width:0;">
+          <span class="pose-item-ref">${ref}</span>
+          ${desc ? `<span class="pose-item-desc">${desc.length > 45 ? desc.substring(0,43)+'…' : desc}</span>` : ''}
+        </div>
+        <div class="batch-stepper">
+          <button class="batch-minus" onclick="App.stepPoseQty('${refSafe}',-1)">−</button>
+          <input class="batch-qty-input" type="number" id="pqi-${refEsc}" min="1"
+            value="${qty}"
+            oninput="App.setPoseQtyInput('${refSafe}',this.value)"
+            onkeydown="App._poseQtyKey(event,'${refSafe}')"
+            onclick="this.select()">
+          <button class="batch-plus" onclick="App.stepPoseQty('${refSafe}',1)">+</button>
+        </div>
+        <button class="pose-item-del" onclick="App.removePoseRef('${refSafe}')">×</button>
+      </div>`;
+    }).join('');
+    this._updatePoseSubmitBtn();
+  },
+
+  async submitPose() {
+    const code  = S.poseModuleCode;
+    const items = Object.entries(S.poseItems);
+    if (!items.length) { this.toast('Aucune pièce saisie'); return; }
+    if (!code)         { this.toast('Code module manquant'); return; }
+
+    const u    = S.currentUser;
+    const user = u ? `${u.prenom} ${u.nom}` : 'inconnu';
+    const note = `[Pose ${code}]`;
+
+    const btn = document.getElementById('pose-submit-btn');
+    if (btn) btn.disabled = true;
+    this.toast(`⏳ Enregistrement de ${items.length} pièce${items.length > 1 ? 's' : ''}…`);
+
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({
+        action: 'add_mouvements_batch',
+        type:   'sortie',
+        user,
+        note,
+        items:  items.map(([ref, qty]) => ({ ref, qty })),
+      }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method: 'POST', body: fd }, 30000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast(`✓ ${data.count} pièce${data.count > 1 ? 's' : ''} enregistrée${data.count > 1 ? 's' : ''}`);
+        // Mise à jour locale des stocks
+        items.forEach(([ref, qty]) => {
+          const item = S.stockData.find(i => i.ref === ref);
+          if (item && item.qte !== null) item.qte = item.qte - qty;
+        });
+        // Marquer la pose dans l'historique en mémoire
+        S.poseHistory.add(code);
+        S.historyLoaded = false; // forcer reload historique à la prochaine ouverture
+        S.analyticsLoaded = false;
+        S.dashboardLoaded = false;
+        this.closePoseModal();
+        if (S.depsLoaded) this._renderDepList();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+      }
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  },
+
   /* ─ Stock photos & detail ─ */
 
   /* ─ Saisie groupée ─ */
 
   // Ouvre la vue saisie groupée (reset du batch si on repart de zéro)
   openBatchMv() {
-    // On conserve le batch en cours si on y retourne, sinon reset
-    this.go('stock-batch');
+    this.go('stock');
   },
 
   // Définit le type de mouvement du batch
@@ -2897,13 +3584,7 @@ const App = {
       btn.style.borderColor = active ? colors[t] : '#E2E8F0';
       btn.style.color       = active ? 'white'   : '#64748B';
     });
-    this._renderBatchList();
-  },
-
-  // Filtre de recherche dans le batch
-  setBatchSearch(val) {
-    S.batchSearch = val.toLowerCase();
-    this._renderBatchList();
+    this._renderStockList();
   },
 
   // Incrément / décrément du stepper
@@ -2912,13 +3593,12 @@ const App = {
     const next = Math.max(0, cur + delta);
     if (next === 0) delete S.batchItems[ref];
     else S.batchItems[ref] = next;
-    // MAJ visuelle du stepper sans re-rendre toute la liste
     const input = document.getElementById('bqi-' + CSS.escape(ref));
     if (input) input.value = next || '';
-    const card = document.getElementById('bcard-' + CSS.escape(ref));
+    const card = document.getElementById('scard-' + CSS.escape(ref));
     if (card) {
-      const cls = S.batchMvType ? 'in-' + S.batchMvType : '';
-      card.className = 'batch-card' + (next > 0 && cls ? ' ' + cls : '');
+      ['in-entrée','in-sortie','in-inventaire'].forEach(c => card.classList.remove(c));
+      if (next > 0 && S.batchMvType) card.classList.add('in-' + S.batchMvType);
     }
     this._updateBatchHeader();
   },
@@ -2928,10 +3608,10 @@ const App = {
     const qty = parseFloat(val);
     if (!isNaN(qty) && qty > 0) S.batchItems[ref] = qty;
     else delete S.batchItems[ref];
-    const card = document.getElementById('bcard-' + CSS.escape(ref));
+    const card = document.getElementById('scard-' + CSS.escape(ref));
     if (card) {
-      const cls = S.batchMvType ? 'in-' + S.batchMvType : '';
-      card.className = 'batch-card' + (S.batchItems[ref] ? ' ' + cls : '');
+      ['in-entrée','in-sortie','in-inventaire'].forEach(c => card.classList.remove(c));
+      if (S.batchItems[ref] && S.batchMvType) card.classList.add('in-' + S.batchMvType);
     }
     this._updateBatchHeader();
   },
@@ -2945,66 +3625,6 @@ const App = {
     if (lbl)  lbl.textContent  = n ? `${n} réf. saisie${n>1?'s':''}` : '0 réf.';
     if (chip) chip.textContent = n;
     if (btn)  btn.style.display = (n > 0 && S.batchMvType) ? 'inline-flex' : 'none';
-  },
-
-  // Rendu de la liste catalogue avec steppers
-  _renderBatchList() {
-    const list = document.getElementById('batch-list');
-    if (!list) return;
-
-    const search = S.batchSearch;
-    let items = S.stockData;
-    if (search) items = items.filter(d =>
-      d.ref.toLowerCase().includes(search) ||
-      d.description.toLowerCase().includes(search) ||
-      d.fournisseur.toLowerCase().includes(search)
-    );
-
-    // Refs dans le batch en premier
-    items = [...items].sort((a, b) => {
-      const aIn = S.batchItems[a.ref] != null ? 1 : 0;
-      const bIn = S.batchItems[b.ref] != null ? 1 : 0;
-      return bIn - aIn;
-    });
-
-    const typeClass = S.batchMvType ? 'in-' + S.batchMvType : '';
-    const calcStockTxt = (d) => {
-      const q = this._calcStockActuel(d.ref, d.qte);
-      return q !== null ? `Stock : ${q}` : '';
-    };
-
-    if (!items.length) {
-      list.innerHTML = '<div style="text-align:center;padding:40px;color:#94A3B8;font-size:13px;">Aucune référence trouvée</div>';
-      return;
-    }
-
-    list.innerHTML = items.map(d => {
-      const qty     = S.batchItems[d.ref] || 0;
-      const inBatch = qty > 0;
-      const refEsc  = CSS.escape(d.ref);
-      const refSafe = d.ref.replace(/'/g, "\\'");
-      const desc    = d.description.length > 70 ? d.description.substring(0,68)+'…' : d.description;
-      const stk     = calcStockTxt(d);
-      return `<div class="batch-card${inBatch && typeClass ? ' '+typeClass : ''}" id="bcard-${refEsc}">
-        <div class="batch-row">
-          <div class="batch-info">
-            <div class="batch-ref">${d.ref}${d.famille ? ` <span style="font-size:9px;font-weight:600;padding:1px 4px;border-radius:8px;background:#EDE9FE;color:#5B21B6;">${d.famille}</span>` : ''}</div>
-            <div class="batch-desc">${desc}</div>
-            ${stk ? `<div style="font-size:10px;color:#94A3B8;margin-top:1px;">${stk}</div>` : ''}
-          </div>
-          <div class="batch-stepper">
-            <button class="batch-minus" onclick="App.stepBatchQty('${refSafe}',-1)">−</button>
-            <input class="batch-qty-input" type="number" id="bqi-${refEsc}" min="0"
-              value="${qty || ''}" placeholder="0"
-              oninput="App.setBatchQtyInput('${refSafe}',this.value)"
-              onclick="this.select()">
-            <button class="batch-plus" onclick="App.stepBatchQty('${refSafe}',1)">+</button>
-          </div>
-        </div>
-      </div>`;
-    }).join('');
-
-    this._updateBatchHeader();
   },
 
   // Soumet tout le batch
@@ -3066,7 +3686,11 @@ const App = {
         // Reset batch
         S.batchItems  = {};
         S.batchMvType = null;
-        S.batchSearch = '';
+        ['entrée','sortie','inventaire'].forEach(t => {
+          const b = document.getElementById('batch-btn-' + t);
+          if (b) { b.style.background='#F8FAFC'; b.style.borderColor='#E2E8F0'; b.style.color='#64748B'; }
+        });
+        this._updateBatchHeader();
         // Retour au tableau de bord
         this.go('stock-dashboard');
       } else {
@@ -4692,7 +5316,19 @@ const App = {
             </div>
           </div>
           ${(d.lv || d.commande) ? `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;min-width:52px;">${d.lv ? `<span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;border-radius:4px;padding:1px 5px;font-weight:600;white-space:nowrap;">📄 ${d.lv}</span>` : ''}${d.commande ? `<span style="font-size:10px;background:#F1F5F9;color:#475569;border-radius:4px;padding:1px 5px;white-space:nowrap;">${d.commande}</span>` : ''}</div>` : ''}
-          ${S.depSelectMode ? '' : '<span style="color:#CBD5E1;font-size:16px;flex-shrink:0;">›</span>'}
+          ${S.depSelectMode ? '' : (() => {
+            const codeSafe   = code.replace(/'/g, "\\'");
+            const modSafe    = (d.codeModule || '').replace(/'/g, "\\'");
+            const chantSafe  = (d.chantier   || '').replace(/'/g, "\\'");
+            const hasPose    = S.poseHistory.has(code);
+            return `<button onclick="event.stopPropagation();App.openPoseModal('${codeSafe}','${modSafe}','${chantSafe}')"
+              title="Saisir pièces posées"
+              style="background:none;border:none;cursor:pointer;padding:5px 4px;display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0;opacity:${hasPose?'1':'0.4'};">
+              <span style="font-size:17px;line-height:1;">🔧</span>
+              ${hasPose ? '<span class="dep-pose-dot"></span>' : '<span style="width:7px;height:4px;display:block;"></span>'}
+            </button>
+            <span style="color:#CBD5E1;font-size:16px;flex-shrink:0;">›</span>`;
+          })()}
         </div>`;
     }).join('');
     // ── Section Partis ────────────────────────────────────────────────────
@@ -6797,5 +7433,35 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 </script>
+
+<!-- ── MODAL : SAISIE POSE ─────────────────────────────────────────────── -->
+<div id="pose-modal" class="pose-overlay" style="display:none;" onclick="if(event.target===this)App.closePoseModal()">
+  <div class="pose-sheet">
+    <!-- Header -->
+    <div class="pose-header">
+      <button onclick="App.closePoseModal()" style="background:none;border:none;font-size:20px;cursor:pointer;padding:2px;line-height:1;color:#475569;">✕</button>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;color:#1E293B;">🔧 Pièces posées</div>
+        <div id="pose-module-label" style="font-size:11px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+      </div>
+      <button id="pose-submit-btn" onclick="App.submitPose()"
+        style="background:var(--brand);color:white;border:none;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:none;white-space:nowrap;">
+        ✓ Valider
+      </button>
+    </div>
+    <!-- Recherche référence -->
+    <input id="pose-search-input" type="search" class="input-field" placeholder="🔍 Rechercher une référence…"
+      oninput="App.poseSearch(this.value)" onkeydown="App._poseSearchKey(event)"
+      style="font-size:13px;margin-bottom:6px;flex-shrink:0;">
+    <!-- Résultats de recherche -->
+    <div id="pose-search-results" class="pose-search-results"></div>
+    <!-- Items sélectionnés -->
+    <div id="pose-items-list" class="pose-items-list">
+      <div id="pose-empty-msg" style="text-align:center;padding:24px 0;color:#94A3B8;font-size:13px;">
+        Recherchez et ajoutez des références ci-dessus
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
