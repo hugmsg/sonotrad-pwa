@@ -2115,7 +2115,9 @@ const S = {
   },
   // Departure / Production
   deps:       [],
-  depsLoaded: false,
+  depsLoaded:    false,
+  depsLoading:   false,
+  historyLoading:false,
   selDep:     null,
   depPhotos:  [],      // [{dataUrl}]
   arrPhotos:  [],      // [{dataUrl}] photos arrivée supplémentaires
@@ -2221,7 +2223,7 @@ const App = {
     this._render();
     if (view === 'arrivals' && !S.arrivalsLoaded) this.loadArrivalsData();
     if (view === 'history')    this._renderHistory();
-    if (view === 'departures' && !S.depsLoaded) this.loadDepartures();
+    if (view === 'departures') { if (S.depsLoaded) this._renderDepList(); else if (!S.depsLoading) this.loadDepartures(); }
     if (view === 'archive'    && !S.archiveLoaded) this.loadArchive();
     if (view === 'settings')   this._fillSettings();
     if (view === 'stock-dashboard') this.loadStockDashboard();
@@ -2383,12 +2385,57 @@ const App = {
         S.currentUser = JSON.parse(stored);
         document.getElementById('login-overlay').style.display = 'none';
         this._render();
+        this._prefetch();
         return;
       } catch(e) { localStorage.removeItem('snt_user'); }
     }
     // Pré-remplir l'URL si déjà connue
     if (S.apiUrl) document.getElementById('login-url-input').value = S.apiUrl;
     document.getElementById('login-overlay').style.display = 'flex';
+  },
+
+  /** Précharge départs + historique stock en arrière-plan après connexion. */
+  _prefetch() {
+    if (!S.apiUrl) return;
+    // Léger délai pour laisser le rendu initial se terminer d'abord
+    setTimeout(() => {
+      this._prefetchDeps();
+      this._prefetchHistory();
+    }, 600);
+  },
+
+  async _prefetchDeps() {
+    if (S.depsLoaded || S.depsLoading) return;
+    S.depsLoading = true;
+    try {
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=production', {}, 90000);
+      const data = await r.json();
+      S.deps       = Array.isArray(data) ? data : (data.data || []);
+      S.depsLoaded = true;
+      this._buildModuleFilterBar();
+      this._buildPoseHistory();
+      // Rendre si la vue concernée est déjà active
+      if (S.view === 'departures')                                  this._renderDepList();
+      else if (S.view === 'stock-dashboard' || S.view === 'stock-history') this._renderDashboard?.();
+    } catch(e) { /* échec silencieux — l'utilisateur chargera en navigant */ }
+    finally { S.depsLoading = false; }
+  },
+
+  async _prefetchHistory() {
+    if (S.historyLoaded || S.historyLoading) return;
+    S.historyLoading = true;
+    try {
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=stock_recent_movements&limit=9999', {}, 30000);
+      const data = await r.json();
+      S.historyData   = (data.status === 'ok' ? data.movements : []) || [];
+      S.historyOps    = this._groupMovements(S.historyData);
+      S.historyLoaded = true;
+      this._buildPoseHistory();
+      if (S.view === 'stock-history')                              this._renderHistoryList();
+      else if (S.view === 'departures' && S.depsLoaded)           this._renderDepList();
+      else if (S.view === 'stock-dashboard')                       this._renderDashboard();
+    } catch(e) { /* échec silencieux */ }
+    finally { S.historyLoading = false; }
   },
 
   /** Hash SHA-256 côté client via Web Crypto API. */
@@ -2456,6 +2503,7 @@ const App = {
           S.view = 'home'; S.activity = null; // ← toujours démarrer à l'accueil
           document.getElementById('login-overlay').style.display = 'none';
           this._render();
+          this._prefetch();
         } else {
           this._pinError(data.error || 'Code PIN incorrect');
         }
@@ -3045,7 +3093,9 @@ const App = {
 
   async loadStockHistory(force = false) {
     if (!force && S.historyLoaded) { this._renderHistoryList(); return; }
+    if (!force && S.historyLoading) return;
     if (!S.apiUrl) return;
+    S.historyLoading = true;
     const loading = document.getElementById('hist-loading');
     const list    = document.getElementById('shist-list');
     if (loading) loading.style.display = 'block';
@@ -3057,11 +3107,12 @@ const App = {
       S.historyOps    = this._groupMovements(S.historyData);
       S.historyLoaded = true;
       this._buildPoseHistory();
-      this._renderHistoryList();
-      if (S.depsLoaded) this._renderDepList();
+      if (S.view === 'stock-history') this._renderHistoryList();
+      if (S.depsLoaded && S.view === 'departures') this._renderDepList();
     } catch(e) {
       if (list) list.innerHTML = `<div class="card" style="border-left:4px solid #F87171;color:#991B1B;font-size:13px;">Impossible de charger l'historique : ${e.message}</div>`;
     } finally {
+      S.historyLoading = false;
       if (loading) loading.style.display = 'none';
     }
   },
@@ -5322,8 +5373,9 @@ const App = {
   },
   /* ─ Departures ─ */
   async loadDepartures(force = false) {
-    if (!force && S.depsLoaded) return;
+    if (!force && (S.depsLoaded || S.depsLoading)) return;
     if (force) { S.depsLoaded = false; S.depModuleFilter = 'all'; S.depDateFrom = ''; S.depDateTo = ''; }
+    S.depsLoading = true;
     document.getElementById('dep-loading').style.display   = 'block';
     document.getElementById('no-departures').style.display = 'none';
     document.getElementById('dep-list').innerHTML          = '';
@@ -5350,6 +5402,7 @@ const App = {
           <button onclick="App.loadDepsFromServer(true)" style="margin-top:10px;background:#FEE2E2;color:#991B1B;border:none;padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻ Réessayer</button>
         </div>`;
     } finally {
+      S.depsLoading = false;
       document.getElementById('dep-loading').style.display = 'none';
     }
   },
