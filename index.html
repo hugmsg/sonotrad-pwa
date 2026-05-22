@@ -340,13 +340,24 @@
     .dash-alert-badge { font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px; white-space:nowrap; }
     .dash-alert-badge.rupture { background:#FEF2F2; color:#DC2626; }
     .dash-alert-badge.low     { background:#FEF3C7; color:#D97706; }
-    .dash-mvt-row { background:white; border-radius:8px; padding:7px 10px; margin-bottom:4px;
-                    display:flex; align-items:center; gap:8px;
-                    box-shadow:0 1px 2px rgba(0,0,0,0.05); }
+    .dash-mvt-row { background:white; border-radius:8px; padding:0; margin-bottom:5px;
+                    box-shadow:0 1px 2px rgba(0,0,0,0.05); overflow:hidden; }
+    .dash-mvt-header { display:flex; align-items:center; gap:8px; padding:8px 10px; cursor:pointer; }
+    .dash-mvt-header:active { background:#F8FAFC; }
+    .dash-mvt-body { display:none; border-top:1px solid #F1F5F9; padding:6px 10px 8px; font-size:11px; }
+    .dash-mvt-body.open { display:block; }
     .dash-mvt-type { font-size:10px; font-weight:700; padding:2px 6px; border-radius:8px; white-space:nowrap; flex-shrink:0; }
     .dash-mvt-type.entrée     { background:#DCFCE7; color:#15803D; }
     .dash-mvt-type.sortie     { background:#FEE2E2; color:#DC2626; }
+    .dash-mvt-type.pose       { background:#F3E8FF; color:#6B21A8; }
     .dash-mvt-type.inventaire { background:#DBEAFE; color:#1D4ED8; }
+    /* ── Saisie rapide ── */
+    .saisie-type-bar { display:flex; gap:5px; margin-bottom:10px; }
+    .saisie-type-btn { flex:1; padding:8px 4px; border-radius:8px; border:1.5px solid #E2E8F0;
+                       background:#F8FAFC; font-size:12px; font-weight:600; cursor:pointer; color:#64748B; }
+    .saisie-type-btn.active.entree  { background:#DCFCE7; border-color:#15803D; color:#15803D; }
+    .saisie-type-btn.active.sortie  { background:#FEE2E2; border-color:#DC2626; color:#DC2626; }
+    .saisie-type-btn.active.inventaire { background:#DBEAFE; border-color:#1D4ED8; color:#1D4ED8; }
     .dash-mvt-ref  { font-family:'Courier New',monospace; font-size:11px; font-weight:700;
                      color:var(--brand); flex:1; min-width:0; overflow:hidden;
                      text-overflow:ellipsis; white-space:nowrap; }
@@ -712,8 +723,10 @@
       padding: 3px 9px; border-radius: 20px;
       align-self: flex-start;
     }
-    .badge-active { background: #D1FAE5; color: #065F46; }
-    .badge-soon   { background: #F1F5F9; color: #94A3B8; }
+    .badge-active  { background: #D1FAE5; color: #065F46; }
+    .badge-soon    { background: #F1F5F9; color: #94A3B8; }
+    .badge-loading { background: #FEF9C3; color: #A16207; animation: badge-pulse 1.4s ease-in-out infinite; }
+    @keyframes badge-pulse { 0%,100% { opacity:1; } 50% { opacity:.45; } }
     #activity-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
   </style>
   <style>
@@ -933,7 +946,7 @@
           <div class="activity-icon">🏗️</div>
           <div class="activity-name">LOXAM</div>
           <div class="activity-desc">Arrivées &amp; Départs de modules</div>
-          <span class="activity-badge badge-active">● Actif</span>
+          <span id="badge-loxam" class="activity-badge badge-active">● Actif</span>
         </div>
 
         <!-- BCB — actif -->
@@ -965,7 +978,7 @@
           <div class="activity-icon">📦</div>
           <div class="activity-name">Stockage Pidem</div>
           <div class="activity-desc">Catalogue &amp; Inventaire PIDEM</div>
-          <span class="activity-badge badge-active">● Actif</span>
+          <span id="badge-stockage" class="activity-badge badge-active">● Actif</span>
         </div>
 
         <!-- Admin — visible uniquement pour role=admin -->
@@ -1375,6 +1388,13 @@
       <div class="dash-kpi-grid" id="dash-kpi-grid">
         <div style="text-align:center;padding:24px;color:#94A3B8;grid-column:1/-1;font-size:13px;">Chargement…</div>
       </div>
+      <!-- Saisie rapide -->
+      <button onclick="App.openSaisieModal()"
+        style="width:100%;padding:14px;border-radius:12px;border:none;background:var(--brand);color:white;
+               font-size:15px;font-weight:700;cursor:pointer;margin-bottom:14px;letter-spacing:.3px;
+               display:flex;align-items:center;justify-content:center;gap:8px;">
+        ⚡ Saisie rapide
+      </button>
       <!-- Alertes -->
       <div class="dash-section" id="dash-alerts-section" style="display:none">
         <div class="dash-section-title">⚠️ Alertes — Mes références</div>
@@ -1389,9 +1409,7 @@
         <div id="dash-mvt-list">
           <div style="text-align:center;padding:16px;color:#94A3B8;font-size:13px;">Chargement…</div>
         </div>
-        <button onclick="App.go('stock')" style="width:100%;margin-top:4px;background:transparent;border:1.5px solid #E2E8F0;color:#475569;padding:7px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
-          Nouvelle saisie groupée →
-        </button>
+        <div id="dash-mvt-more"></div>
       </div>
     </div>
     <!-- ── VIEW : STOCK ─────────────────────────────────────────────────── -->
@@ -2099,7 +2117,9 @@ const S = {
   },
   // Departure / Production
   deps:       [],
-  depsLoaded: false,
+  depsLoaded:    false,
+  depsLoading:   false,
+  historyLoading:false,
   selDep:     null,
   depPhotos:  [],      // [{dataUrl}]
   arrPhotos:  [],      // [{dataUrl}] photos arrivée supplémentaires
@@ -2129,6 +2149,8 @@ const S = {
   // ── Stockage ─────────────────────────────────────────────────────────────
   stockData:     [],       // catalogue complet
   stockLoaded:   false,
+  catalogLoaded:  false,   // true dès que stockData est peuplé (prefetch ou full load)
+  catalogLoading: false,
   stockPrefs:    new Set(),// refs marquées "mes références"
   stockFamilles: [],       // valeurs uniques pour le filtre
   stockFilter: { search: '', famille: '', myRefs: true },
@@ -2148,6 +2170,10 @@ const S = {
   histFilter:     { type: '', search: '' },
   selHistProd:    null,      // référence produit sélectionnée dans "Par produit"
   poseHistory:    new Set(), // codes modules ayant au moins une pose enregistrée
+  // ── Saisie rapide (dashboard) ─────────────────────────────────────────
+  saisieItems:    {},        // { ref: qty }
+  saisieType:     'entrée',
+  saisieNote:     '',
   // ── Saisie pose depuis LOXAM ─────────────────────────────────────────
   poseItems:      {},      // { ref: qty } — pose en cours de saisie
   poseModuleCode: null,    // code du module (ex: 'PRGYGB')
@@ -2158,6 +2184,7 @@ const S = {
   // ── Layer 3 — Dashboard ───────────────────────────────────────────────
   stockRecentMvs:  [],     // derniers N mouvements toutes refs confondues
   dashboardLoaded: false,
+  dashMvtLimit:    10,     // nb d'opérations affichées dans "mouvements récents"
   // ── Layer 1 — Sync ────────────────────────────────────────────────────
   stockSyncData:   null,   // { new, modified, deleted, unchangedCount, savedAt, isInitial }
   syncLoading:     false,
@@ -2200,7 +2227,7 @@ const App = {
     this._render();
     if (view === 'arrivals' && !S.arrivalsLoaded) this.loadArrivalsData();
     if (view === 'history')    this._renderHistory();
-    if (view === 'departures' && !S.depsLoaded) this.loadDepartures();
+    if (view === 'departures') { if (S.depsLoaded) this._renderDepList(); else if (!S.depsLoading) this.loadDepartures(); }
     if (view === 'archive'    && !S.archiveLoaded) this.loadArchive();
     if (view === 'settings')   this._fillSettings();
     if (view === 'stock-dashboard') this.loadStockDashboard();
@@ -2339,6 +2366,9 @@ const App = {
     const adminCard = document.getElementById('admin-home-card');
     if (adminCard) adminCard.style.display = (S.currentUser?.role === 'admin') ? '' : 'none';
 
+    // ── Pastilles de chargement sur les cartes d'accueil ─────────────────
+    this._updateHomeCards();
+
     // ── Back button : admin revient à l'accueil ───────────────────────────
     if (v === 'admin') {
       document.getElementById('btn-back').classList.remove('hidden');
@@ -2354,6 +2384,30 @@ const App = {
   },
   /* ─ Auth / PIN ─ */
 
+  /** Met à jour les pastilles de chargement sur les cartes d'accueil. */
+  _updateHomeCards() {
+    const loxam = document.getElementById('badge-loxam');
+    if (loxam) {
+      if (S.depsLoaded) {
+        loxam.className = 'activity-badge badge-active';
+        loxam.textContent = '● Actif';
+      } else if (S.depsLoading || S.apiUrl) {
+        loxam.className = 'activity-badge badge-loading';
+        loxam.textContent = '⟳ Chargement...';
+      }
+    }
+    const stock = document.getElementById('badge-stockage');
+    if (stock) {
+      if (S.historyLoaded) {
+        stock.className = 'activity-badge badge-active';
+        stock.textContent = '● Actif';
+      } else if (S.historyLoading || S.apiUrl) {
+        stock.className = 'activity-badge badge-loading';
+        stock.textContent = '⟳ Chargement...';
+      }
+    }
+  },
+
   /** Vérifie localStorage au démarrage — affiche ou masque l'overlay. */
   _initAuth() {
     const stored = localStorage.getItem('snt_user');
@@ -2362,12 +2416,75 @@ const App = {
         S.currentUser = JSON.parse(stored);
         document.getElementById('login-overlay').style.display = 'none';
         this._render();
+        this._prefetch();
         return;
       } catch(e) { localStorage.removeItem('snt_user'); }
     }
     // Pré-remplir l'URL si déjà connue
     if (S.apiUrl) document.getElementById('login-url-input').value = S.apiUrl;
     document.getElementById('login-overlay').style.display = 'flex';
+  },
+
+  /** Précharge départs + historique stock en arrière-plan après connexion. */
+  _prefetch() {
+    if (!S.apiUrl) return;
+    // Léger délai pour laisser le rendu initial se terminer d'abord
+    setTimeout(() => {
+      this._prefetchDeps();
+      this._prefetchHistory();
+      this._prefetchCatalog();
+    }, 600);
+  },
+
+  async _prefetchDeps() {
+    if (S.depsLoaded || S.depsLoading) return;
+    S.depsLoading = true;
+    this._updateHomeCards();
+    try {
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=production', {}, 90000);
+      const data = await r.json();
+      S.deps       = Array.isArray(data) ? data : (data.data || []);
+      S.depsLoaded = true;
+      this._buildModuleFilterBar();
+      this._buildPoseHistory();
+      // Rendre si la vue concernée est déjà active
+      if (S.view === 'departures')                                  this._renderDepList();
+      else if (S.view === 'stock-dashboard' || S.view === 'stock-history') this._renderDashboard?.();
+    } catch(e) { /* échec silencieux — l'utilisateur chargera en navigant */ }
+    finally { S.depsLoading = false; this._updateHomeCards(); }
+  },
+
+  async _prefetchHistory() {
+    if (S.historyLoaded || S.historyLoading) return;
+    S.historyLoading = true;
+    this._updateHomeCards();
+    try {
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=stock_recent_movements&limit=9999', {}, 30000);
+      const data = await r.json();
+      S.historyData   = (data.status === 'ok' ? data.movements : []) || [];
+      S.historyOps    = this._groupMovements(S.historyData);
+      S.historyLoaded = true;
+      this._buildPoseHistory();
+      if (S.view === 'stock-history')                              this._renderHistoryList();
+      else if (S.view === 'departures' && S.depsLoaded)           this._renderDepList();
+      else if (S.view === 'stock-dashboard')                       this._renderDashboard();
+    } catch(e) { /* échec silencieux */ }
+    finally { S.historyLoading = false; this._updateHomeCards(); }
+  },
+
+  async _prefetchCatalog() {
+    if (S.catalogLoaded || S.catalogLoading || S.stockLoaded) return;
+    S.catalogLoading = true;
+    try {
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=stock_catalog', {}, 40000);
+      const data = await r.json();
+      if (data.status === 'ok') {
+        S.stockData     = data.data     || [];
+        S.stockFamilles = data.familles || [];
+        S.catalogLoaded = true;
+      }
+    } catch(e) { /* échec silencieux */ }
+    finally { S.catalogLoading = false; }
   },
 
   /** Hash SHA-256 côté client via Web Crypto API. */
@@ -2435,6 +2552,7 @@ const App = {
           S.view = 'home'; S.activity = null; // ← toujours démarrer à l'accueil
           document.getElementById('login-overlay').style.display = 'none';
           this._render();
+          this._prefetch();
         } else {
           this._pinError(data.error || 'Code PIN incorrect');
         }
@@ -2826,6 +2944,7 @@ const App = {
         S.stockData     = cat.data || [];
         S.stockFamilles = cat.familles || [];
         S.stockLoaded   = true;
+        S.catalogLoaded = true;
       }
       if (prefs.status === 'ok') {
         S.stockPrefs = new Set(prefs.prefs?.relevant || []);
@@ -3024,7 +3143,9 @@ const App = {
 
   async loadStockHistory(force = false) {
     if (!force && S.historyLoaded) { this._renderHistoryList(); return; }
+    if (!force && S.historyLoading) return;
     if (!S.apiUrl) return;
+    S.historyLoading = true;
     const loading = document.getElementById('hist-loading');
     const list    = document.getElementById('shist-list');
     if (loading) loading.style.display = 'block';
@@ -3036,11 +3157,12 @@ const App = {
       S.historyOps    = this._groupMovements(S.historyData);
       S.historyLoaded = true;
       this._buildPoseHistory();
-      this._renderHistoryList();
-      if (S.depsLoaded) this._renderDepList();
+      if (S.view === 'stock-history') this._renderHistoryList();
+      if (S.depsLoaded && S.view === 'departures') this._renderDepList();
     } catch(e) {
       if (list) list.innerHTML = `<div class="card" style="border-left:4px solid #F87171;color:#991B1B;font-size:13px;">Impossible de charger l'historique : ${e.message}</div>`;
     } finally {
+      S.historyLoading = false;
       if (loading) loading.style.display = 'none';
     }
   },
@@ -3553,6 +3675,205 @@ const App = {
         S.dashboardLoaded = false;
         this.closePoseModal();
         if (S.depsLoaded) this._renderDepList();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+      }
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  },
+
+  /* ─ Saisie rapide (dashboard) ─ */
+
+  openSaisieModal() {
+    S.saisieItems = {};
+    S.saisieType  = 'entrée';
+    S.saisieNote  = '';
+    const modal = document.getElementById('saisie-modal');
+    const note  = document.getElementById('saisie-note-input');
+    const inp   = document.getElementById('saisie-search-input');
+    const res   = document.getElementById('saisie-search-results');
+    if (note) note.value = '';
+    if (inp)  inp.value  = '';
+    if (res)  { res.style.display = 'none'; res.innerHTML = ''; }
+    this.setSaisieType('entrée');
+    this._renderSaisieItems();
+    if (modal) modal.style.display = 'flex';
+    setTimeout(() => inp?.focus(), 100);
+  },
+
+  closeSaisieModal() {
+    const modal = document.getElementById('saisie-modal');
+    if (modal) modal.style.display = 'none';
+  },
+
+  setSaisieType(type) {
+    S.saisieType = type;
+    ['entrée','sortie','inventaire'].forEach(t => {
+      const btn = document.getElementById('saisie-btn-' + t);
+      if (!btn) return;
+      const cls = t === 'entrée' ? 'entree' : t;
+      btn.classList.toggle('active', t === type);
+    });
+  },
+
+  saisieSearch(val) {
+    const q   = val.toLowerCase().trim();
+    const res = document.getElementById('saisie-search-results');
+    if (!res) return;
+    if (!q) { res.style.display = 'none'; res.innerHTML = ''; return; }
+    const hits = S.stockData.filter(d =>
+      d.ref.toLowerCase().includes(q) || d.description.toLowerCase().includes(q)
+    ).slice(0, 20);
+    if (!hits.length) {
+      res.style.display = 'block';
+      res.innerHTML = '<div style="padding:10px 12px;color:#94A3B8;font-size:12px;">Aucun résultat</div>';
+      return;
+    }
+    res.style.display = 'block';
+    res.innerHTML = hits.map(d => {
+      const refSafe = d.ref.replace(/'/g, "\\'");
+      return `<div class="pose-result-row" onclick="App.addSaisieRef('${refSafe}')">
+        <span class="pose-result-ref">${d.ref}</span>
+        <span class="pose-result-desc">${d.description}</span>
+      </div>`;
+    }).join('');
+  },
+
+  _saisieSearchKey(e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const res   = document.getElementById('saisie-search-results');
+    if (!res || res.style.display === 'none') return;
+    const first = res.querySelector('.pose-result-row');
+    if (first) first.click();
+  },
+
+  addSaisieRef(ref) {
+    if (!S.saisieItems[ref]) S.saisieItems[ref] = 1;
+    const inp = document.getElementById('saisie-search-input');
+    const res = document.getElementById('saisie-search-results');
+    if (inp) inp.value = '';
+    if (res) { res.style.display = 'none'; res.innerHTML = ''; }
+    this._renderSaisieItems();
+    setTimeout(() => {
+      const qi = document.getElementById('sqi-' + CSS.escape(ref));
+      if (qi) { qi.focus(); qi.select(); }
+    }, 50);
+  },
+
+  stepSaisieQty(ref, delta) {
+    const cur  = S.saisieItems[ref] || 0;
+    const next = Math.max(0, cur + delta);
+    if (next === 0) delete S.saisieItems[ref];
+    else S.saisieItems[ref] = next;
+    const inp = document.getElementById('sqi-' + CSS.escape(ref));
+    if (inp) inp.value = next || '';
+    this._updateSaisieSubmitBtn();
+  },
+
+  setSaisieQtyInput(ref, val) {
+    const qty = parseFloat(val);
+    if (!isNaN(qty) && qty >= 0) S.saisieItems[ref] = qty;
+    else delete S.saisieItems[ref];
+    this._updateSaisieSubmitBtn();
+  },
+
+  _saisieQtyKey(e, ref) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    this.setSaisieQtyInput(ref, e.target.value);
+    const si = document.getElementById('saisie-search-input');
+    if (si) { si.value = ''; this.saisieSearch(''); si.focus(); }
+  },
+
+  removeSaisieRef(ref) {
+    delete S.saisieItems[ref];
+    this._renderSaisieItems();
+  },
+
+  _updateSaisieSubmitBtn() {
+    const btn = document.getElementById('saisie-submit-btn');
+    if (!btn) return;
+    const n = Object.keys(S.saisieItems).length;
+    btn.style.display = n > 0 ? 'inline-block' : 'none';
+    btn.textContent = n > 0 ? `✓ Valider (${n} réf.)` : '✓ Valider';
+  },
+
+  _renderSaisieItems() {
+    const list  = document.getElementById('saisie-items-list');
+    const empty = document.getElementById('saisie-empty-msg');
+    if (!list) return;
+    const refs = Object.keys(S.saisieItems);
+    if (!refs.length) {
+      if (empty) empty.style.display = 'block';
+      list.innerHTML = '';
+      list.appendChild(empty || document.createElement('div'));
+      this._updateSaisieSubmitBtn();
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+    list.innerHTML = refs.map(ref => {
+      const refEsc  = CSS.escape(ref);
+      const refSafe = ref.replace(/'/g, "\\'");
+      const qty     = S.saisieItems[ref] ?? 1;
+      const desc    = S.stockData.find(d => d.ref === ref)?.description || '';
+      return `<div class="pose-item-row">
+        <div style="flex:1;min-width:0;">
+          <span class="pose-item-ref">${ref}</span>
+          ${desc ? `<span class="pose-item-desc">${desc.length > 45 ? desc.substring(0,43)+'…' : desc}</span>` : ''}
+        </div>
+        <div class="batch-stepper">
+          <button class="batch-minus" onclick="App.stepSaisieQty('${refSafe}',-1)">−</button>
+          <input class="batch-qty-input" type="number" id="sqi-${refEsc}" min="0"
+            value="${qty}"
+            oninput="App.setSaisieQtyInput('${refSafe}',this.value)"
+            onkeydown="App._saisieQtyKey(event,'${refSafe}')"
+            onclick="this.select()">
+          <button class="batch-plus" onclick="App.stepSaisieQty('${refSafe}',1)">+</button>
+        </div>
+        <button class="pose-item-del" onclick="App.removeSaisieRef('${refSafe}')">×</button>
+      </div>`;
+    }).join('');
+    this._updateSaisieSubmitBtn();
+  },
+
+  async submitSaisie() {
+    const items = Object.entries(S.saisieItems).filter(([, qty]) => Number(qty) > 0 || S.saisieType === 'inventaire');
+    if (!items.length) { this.toast('Aucune pièce saisie'); return; }
+    const user = S.user?.nom || '';
+    const note = S.saisieNote || '';
+    const btn  = document.getElementById('saisie-submit-btn');
+    if (btn) btn.disabled = true;
+    this.toast(`⏳ Enregistrement de ${items.length} référence${items.length > 1 ? 's' : ''}…`);
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({
+        action: 'add_mouvements_batch',
+        type:   S.saisieType,
+        user,
+        note,
+        items:  items.map(([ref, qty]) => ({ ref, qty: Number(qty) })),
+      }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 30000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast(`✓ ${data.count} mouvement${data.count > 1 ? 's' : ''} enregistré${data.count > 1 ? 's' : ''}`);
+        // Mise à jour locale du stock
+        const sign = S.saisieType === 'entrée' ? 1 : S.saisieType === 'sortie' ? -1 : 0;
+        items.forEach(([ref, qty]) => {
+          const item = S.stockData.find(i => i.ref === ref);
+          if (!item) return;
+          if (S.saisieType === 'inventaire') item.qte = Number(qty);
+          else if (item.qte !== null) item.qte = (item.qte || 0) + sign * Number(qty);
+        });
+        S.historyLoaded   = false;
+        S.analyticsLoaded = false;
+        S.dashboardLoaded = false;
+        this.closeSaisieModal();
+        if (S.view === 'stock') this._renderStockList();
       } else {
         this.toast('Erreur : ' + (data.error || 'inconnue'));
       }
@@ -4129,8 +4450,14 @@ const App = {
   },
 
   /* ─ Couche 3 — Dashboard ─ */
+  dashMvtMore() {
+    S.dashMvtLimit += 10;
+    this._renderDashboard();
+  },
+
   async loadStockDashboard(force = false) {
     if (!S.apiUrl) return;
+    if (force) S.dashMvtLimit = 10;
     if (S.dashboardLoaded && !force) { this._renderDashboard(); return; }
 
     document.getElementById('dash-kpi-grid').innerHTML =
@@ -4141,7 +4468,7 @@ const App = {
     try {
       // Charger catalogue si nécessaire + analytics + mouvements récents en parallèle
       const tasks = [
-        _fetchWithTimeout(S.apiUrl + '?action=stock_recent_movements&limit=20', {}, 15000),
+        _fetchWithTimeout(S.apiUrl + '?action=stock_recent_movements&limit=200', {}, 15000),
       ];
       if (!S.analyticsLoaded) {
         tasks.push(_fetchWithTimeout(S.apiUrl + '?action=stock_analytics', {}, 20000));
@@ -4243,21 +4570,63 @@ const App = {
       }).join('');
     }
 
-    // ── Mouvements récents ──
-    if (!S.stockRecentMvs.length) {
+    // ── Mouvements récents (groupés par opération) ──
+    // Priorité : historyData (complet) si déjà chargé, sinon stockRecentMvs
+    const srcMvs = S.historyLoaded ? S.historyData : S.stockRecentMvs;
+    const allOps     = this._groupMovements(srcMvs);
+    const visibleOps = allOps.slice(0, S.dashMvtLimit);
+    const moreEl     = document.getElementById('dash-mvt-more');
+    if (!visibleOps.length) {
       mvtEl.innerHTML = '<div style="text-align:center;padding:16px;color:#94A3B8;font-size:13px;">Aucun mouvement</div>';
+      if (moreEl) moreEl.innerHTML = '';
     } else {
-      mvtEl.innerHTML = S.stockRecentMvs.slice(0, 10).map(m => {
-        const dt = m.date ? new Date(m.date) : null;
-        const dtStr = dt ? dt.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit' }) + ' ' +
-                           dt.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' }) : '';
-        return `<div class="dash-mvt-row" onclick="App.openStockDetail('${m.ref.replace(/'/g,"\\'")}')">
-          <span class="dash-mvt-type ${m.type}">${m.type === 'entrée' ? '↑' : m.type === 'sortie' ? '↓' : '≡'} ${m.type}</span>
-          <span class="dash-mvt-ref">${m.ref}</span>
-          <span class="dash-mvt-qty">${m.type === 'sortie' ? '-' : '+'}${m.qty}</span>
-          <span class="dash-mvt-date">${dtStr}</span>
+      const typeIcons  = { entrée:'↑', sortie:'↓', pose:'🔧', inventaire:'≡' };
+      const typeLabels = { entrée:'Entrée', sortie:'Sortie', pose:'Pose', inventaire:'Inventaire' };
+      mvtEl.innerHTML = visibleOps.map((op) => {
+        const dt   = this._opDisplayType(op.type, op.note);
+        const code = this._opRef(op.note, dt);
+        // Sous-info contextuelle (pose → module + chantier)
+        let sub = '';
+        if (dt === 'pose' && code && S.depsLoaded) {
+          const dep = S.deps.find(d => (d.code || '').toUpperCase() === code.toUpperCase());
+          if (dep) sub = [dep.codeModule, dep.chantier].filter(Boolean).join('  ·  ');
+        }
+        const d      = new Date(op.date);
+        const dtStr  = d.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit' }) + ' ' +
+                       d.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+        const nRefs  = op.items.length;
+        const nUnits = op.items.reduce((s, m) => s + (Number(m.qty) || 0), 0);
+        return `<div class="dash-mvt-row">
+          <div class="dash-mvt-header" onclick="this.nextElementSibling.classList.toggle('open')">
+            <span class="dash-mvt-type ${dt}">${typeIcons[dt] || ''} ${typeLabels[dt] || dt}</span>
+            <span style="font-family:'Courier New',monospace;font-size:11px;font-weight:700;color:var(--brand);flex-shrink:0;margin:0 6px;">${code || '—'}</span>
+            <span style="flex:1;font-size:10px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sub}</span>
+            <span style="font-size:10px;color:#94A3B8;white-space:nowrap;flex-shrink:0;margin-left:6px;">${nRefs}r&nbsp;·&nbsp;${nUnits}u</span>
+            <span style="font-size:10px;color:#94A3B8;white-space:nowrap;flex-shrink:0;margin-left:8px;">${dtStr}</span>
+          </div>
+          <div class="dash-mvt-body">
+            ${op.items.map(m => {
+              const desc = S.stockData.find(d => d.ref === m.ref)?.description || '';
+              return `<div style="display:flex;align-items:baseline;gap:6px;padding:3px 0;border-bottom:.5px solid #F8FAFC;">
+                <span style="font-family:'Courier New',monospace;font-size:11px;font-weight:700;color:var(--brand);flex-shrink:0;">${m.ref}</span>
+                <span style="font-size:10px;color:#64748B;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${desc}</span>
+                <span style="font-size:11px;font-weight:700;color:#1E293B;flex-shrink:0;">×${m.qty}</span>
+              </div>`;
+            }).join('')}
+          </div>
         </div>`;
       }).join('');
+      // Bouton "Montrer plus"
+      if (moreEl) {
+        if (allOps.length > S.dashMvtLimit) {
+          moreEl.innerHTML = `<button onclick="App.dashMvtMore()"
+            style="width:100%;margin-top:4px;background:transparent;border:1.5px solid #E2E8F0;color:#475569;padding:7px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
+            ↓ Montrer plus (${allOps.length - S.dashMvtLimit} de plus)
+          </button>`;
+        } else {
+          moreEl.innerHTML = '';
+        }
+      }
     }
   },
 
@@ -5054,8 +5423,9 @@ const App = {
   },
   /* ─ Departures ─ */
   async loadDepartures(force = false) {
-    if (!force && S.depsLoaded) return;
+    if (!force && (S.depsLoaded || S.depsLoading)) return;
     if (force) { S.depsLoaded = false; S.depModuleFilter = 'all'; S.depDateFrom = ''; S.depDateTo = ''; }
+    S.depsLoading = true;
     document.getElementById('dep-loading').style.display   = 'block';
     document.getElementById('no-departures').style.display = 'none';
     document.getElementById('dep-list').innerHTML          = '';
@@ -5082,6 +5452,7 @@ const App = {
           <button onclick="App.loadDepsFromServer(true)" style="margin-top:10px;background:#FEE2E2;color:#991B1B;border:none;padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻ Réessayer</button>
         </div>`;
     } finally {
+      S.depsLoading = false;
       document.getElementById('dep-loading').style.display = 'none';
     }
   },
@@ -7433,6 +7804,44 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 </script>
+
+<!-- ── MODAL : SAISIE RAPIDE ──────────────────────────────────────────── -->
+<div id="saisie-modal" class="pose-overlay" style="display:none;" onclick="if(event.target===this)App.closeSaisieModal()">
+  <div class="pose-sheet">
+    <!-- Header -->
+    <div class="pose-header">
+      <button onclick="App.closeSaisieModal()" style="background:none;border:none;font-size:20px;cursor:pointer;padding:2px;line-height:1;color:#475569;">✕</button>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;color:#1E293B;">⚡ Saisie rapide</div>
+      </div>
+      <button id="saisie-submit-btn" onclick="App.submitSaisie()"
+        style="background:var(--brand);color:white;border:none;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:none;white-space:nowrap;">
+        ✓ Valider
+      </button>
+    </div>
+    <!-- Type -->
+    <div class="saisie-type-bar">
+      <button class="saisie-type-btn active entree" id="saisie-btn-entrée"   onclick="App.setSaisieType('entrée')">➕ Entrée</button>
+      <button class="saisie-type-btn sortie"        id="saisie-btn-sortie"   onclick="App.setSaisieType('sortie')">➖ Sortie</button>
+      <button class="saisie-type-btn inventaire"    id="saisie-btn-inventaire" onclick="App.setSaisieType('inventaire')">📋 Inventaire</button>
+    </div>
+    <!-- Note BL / fournisseur -->
+    <input id="saisie-note-input" type="text" class="input-field" placeholder="N° BL / Fournisseur (optionnel)"
+      oninput="S.saisieNote=this.value.trim()" style="font-size:13px;margin-bottom:8px;flex-shrink:0;">
+    <!-- Recherche référence -->
+    <input id="saisie-search-input" type="search" class="input-field" placeholder="🔍 Rechercher une référence…"
+      oninput="App.saisieSearch(this.value)" onkeydown="App._saisieSearchKey(event)"
+      style="font-size:13px;margin-bottom:6px;flex-shrink:0;">
+    <!-- Résultats de recherche -->
+    <div id="saisie-search-results" class="pose-search-results"></div>
+    <!-- Items sélectionnés -->
+    <div id="saisie-items-list" class="pose-items-list">
+      <div id="saisie-empty-msg" style="text-align:center;padding:24px 0;color:#94A3B8;font-size:13px;">
+        Recherchez et ajoutez des références ci-dessus
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ── MODAL : SAISIE POSE ─────────────────────────────────────────────── -->
 <div id="pose-modal" class="pose-overlay" style="display:none;" onclick="if(event.target===this)App.closePoseModal()">
