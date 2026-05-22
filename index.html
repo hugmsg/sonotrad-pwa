@@ -737,6 +737,10 @@
     .ann-code { font-size:11px; font-weight:700; color:#1D4ED8; background:#EFF6FF; padding:2px 7px; border-radius:10px; }
     .ann-src-loxam { font-size:10px; font-weight:600; color:#6B7280; background:#F3F4F6; padding:2px 6px; border-radius:8px; }
     .ann-src-custom { font-size:10px; font-weight:600; color:#059669; background:#D1FAE5; padding:2px 6px; border-radius:8px; }
+    .ann-geo-sugg { background:white; border:1.5px solid #BFDBFE; border-radius:8px; margin-top:2px; max-height:110px; overflow-y:auto; box-shadow:0 2px 8px rgba(0,0,0,.1); display:none; }
+    .ann-geo-row { padding:8px 10px; cursor:pointer; font-size:12px; color:#1E293B; border-bottom:1px solid #F1F5F9; }
+    .ann-geo-row:last-child { border-bottom:none; }
+    .ann-geo-row:active { background:#EFF6FF; }
     .ann-nom  { font-size:14px; font-weight:700; color:#1E293B; flex:1; }
     .ann-meta { font-size:11px; color:#64748B; margin-top:3px; }
     .ann-contact { font-size:11px; color:#475569; margin-top:4px; display:flex; gap:12px; flex-wrap:wrap; }
@@ -1070,18 +1074,48 @@
         <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-bottom:8px;">
           <div>
             <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">CP</label>
-            <input id="ann-f-cp" type="text" maxlength="10"
+            <input id="ann-f-cp" type="text" maxlength="10" inputmode="numeric"
+              oninput="App.annGeoCp(this.value)"
               style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+            <div id="ann-cp-sugg" class="ann-geo-sugg"></div>
           </div>
           <div>
             <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Ville</label>
             <input id="ann-f-ville" type="text" autocapitalize="words"
+              oninput="App.annGeoVille(this.value)"
               style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+            <div id="ann-ville-sugg" class="ann-geo-sugg"></div>
           </div>
         </div>
         <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Pays</label>
-        <input id="ann-f-pays" type="text" autocapitalize="words" placeholder="France"
+        <input id="ann-f-pays" type="text" autocapitalize="words" placeholder="ex : FR - France" list="ann-pays-list"
+          oninput="App.annGeoHideSugg()"
           style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;margin-bottom:8px;">
+        <datalist id="ann-pays-list">
+          <option value="FR - France"><option value="BE - Belgique"><option value="LU - Luxembourg">
+          <option value="CH - Suisse"><option value="DE - Allemagne"><option value="AT - Autriche">
+          <option value="IT - Italie"><option value="ES - Espagne"><option value="PT - Portugal">
+          <option value="NL - Pays-Bas"><option value="GB - Royaume-Uni"><option value="IE - Irlande">
+          <option value="DK - Danemark"><option value="SE - Suède"><option value="NO - Norvège">
+          <option value="FI - Finlande"><option value="IS - Islande"><option value="PL - Pologne">
+          <option value="CZ - Tchéquie"><option value="SK - Slovaquie"><option value="HU - Hongrie">
+          <option value="RO - Roumanie"><option value="BG - Bulgarie"><option value="HR - Croatie">
+          <option value="SI - Slovénie"><option value="GR - Grèce"><option value="CY - Chypre">
+          <option value="MT - Malte"><option value="EE - Estonie"><option value="LV - Lettonie">
+          <option value="LT - Lituanie"><option value="RS - Serbie"><option value="BA - Bosnie-Herzégovine">
+          <option value="ME - Monténégro"><option value="MK - Macédoine du Nord"><option value="AL - Albanie">
+          <option value="XK - Kosovo"><option value="MD - Moldavie"><option value="UA - Ukraine">
+          <option value="BY - Biélorussie"><option value="RU - Russie"><option value="TR - Turquie">
+          <option value="MA - Maroc"><option value="DZ - Algérie"><option value="TN - Tunisie">
+          <option value="LY - Libye"><option value="EG - Égypte"><option value="SN - Sénégal">
+          <option value="CI - Côte d'Ivoire"><option value="CM - Cameroun"><option value="NG - Nigéria">
+          <option value="ZA - Afrique du Sud"><option value="US - États-Unis"><option value="CA - Canada">
+          <option value="MX - Mexique"><option value="BR - Brésil"><option value="AR - Argentine">
+          <option value="CN - Chine"><option value="JP - Japon"><option value="KR - Corée du Sud">
+          <option value="IN - Inde"><option value="SG - Singapour"><option value="AU - Australie">
+          <option value="AE - Émirats Arabes Unis"><option value="SA - Arabie Saoudite">
+          <option value="QA - Qatar"><option value="IL - Israël">
+        </datalist>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
           <div>
             <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Email</label>
@@ -7510,6 +7544,61 @@ const App = {
   annuaireCloseModal() {
     const modal = document.getElementById('ann-modal');
     if (modal) modal.style.display = 'none';
+    this.annGeoHideSugg();
+  },
+
+  annGeoHideSugg() {
+    const s1 = document.getElementById('ann-cp-sugg');
+    const s2 = document.getElementById('ann-ville-sugg');
+    if (s1) s1.style.display = 'none';
+    if (s2) s2.style.display = 'none';
+  },
+
+  annGeoApply(cp, ville) {
+    const cpEl    = document.getElementById('ann-f-cp');
+    const villeEl = document.getElementById('ann-f-ville');
+    if (cpEl)    cpEl.value    = cp;
+    if (villeEl) villeEl.value = ville;
+    this.annGeoHideSugg();
+  },
+
+  annGeoCp(val) {
+    const sugg = document.getElementById('ann-cp-sugg');
+    if (!sugg) return;
+    const pays = document.getElementById('ann-f-pays')?.value || '';
+    if (!pays.startsWith('FR') || !/^\d{5}$/.test(val.trim())) { sugg.style.display = 'none'; return; }
+    clearTimeout(this._annGeoTimer);
+    this._annGeoTimer = setTimeout(async () => {
+      try {
+        const r    = await fetch(`https://geo.api.gouv.fr/communes?codePostal=${val.trim()}&fields=nom&limit=6`);
+        const data = await r.json();
+        if (!data.length) { sugg.style.display = 'none'; return; }
+        sugg.innerHTML = data.map(c =>
+          `<div class="ann-geo-row" onclick="App.annGeoApply('${val.trim()}','${c.nom.replace(/'/g,"\\'")}')">📍 ${c.nom}</div>`
+        ).join('');
+        sugg.style.display = 'block';
+      } catch(e) { sugg.style.display = 'none'; }
+    }, 250);
+  },
+
+  annGeoVille(val) {
+    const sugg = document.getElementById('ann-ville-sugg');
+    if (!sugg) return;
+    const pays = document.getElementById('ann-f-pays')?.value || '';
+    if (!pays.startsWith('FR') || val.trim().length < 3) { sugg.style.display = 'none'; return; }
+    clearTimeout(this._annGeoTimer);
+    this._annGeoTimer = setTimeout(async () => {
+      try {
+        const r    = await fetch(`https://geo.api.gouv.fr/communes?nom=${encodeURIComponent(val.trim())}&fields=codesPostaux&boost=population&limit=6`);
+        const data = await r.json();
+        if (!data.length) { sugg.style.display = 'none'; return; }
+        sugg.innerHTML = data.map(c => {
+          const cp = (c.codesPostaux || [])[0] || '';
+          return `<div class="ann-geo-row" onclick="App.annGeoApply('${cp}','${c.nom.replace(/'/g,"\\'")}')">📍 ${cp} — ${c.nom}</div>`;
+        }).join('');
+        sugg.style.display = 'block';
+      } catch(e) { sugg.style.display = 'none'; }
+    }, 400);
   },
 
   async annuaireSave() {
