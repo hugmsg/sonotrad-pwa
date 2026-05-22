@@ -2018,6 +2018,10 @@
             style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
           <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Ville / CP</label>
           <input id="lvu-f-exp-ville" type="text" autocapitalize="words"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Pays</label>
+          <input id="lvu-f-exp-pays" type="text" placeholder="ex : FR - France" list="ann-pays-list"
+            onblur="App.annPaysNormalize(this.id)"
             style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
         </div>
 
@@ -2037,6 +2041,10 @@
             style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
           <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Ville / CP</label>
           <input id="lvu-f-dest-ville" type="text" autocapitalize="words"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Pays</label>
+          <input id="lvu-f-dest-pays" type="text" placeholder="ex : FR - France" list="ann-pays-list"
+            onblur="App.annPaysNormalize(this.id)"
             style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
         </div>
 
@@ -7045,9 +7053,11 @@ const App = {
           const fn = document.getElementById('lvu-f-dest-nom');
           const fa = document.getElementById('lvu-f-dest-adresse');
           const fv = document.getElementById('lvu-f-dest-ville');
-          if (fn && !fn.value)   fn.value = ag.nom;
-          if (fa && !fa.value)   fa.value = ag.adresse;
-          if (fv && !fv.value)   fv.value = `${ag.cp} ${ag.ville}`.trim();
+          const fpAg = document.getElementById('lvu-f-dest-pays');
+          if (fn && !fn.value)     fn.value  = ag.nom;
+          if (fa && !fa.value)     fa.value  = ag.adresse;
+          if (fv && !fv.value)     fv.value  = `${ag.cp} ${ag.ville}`.trim();
+          if (fpAg && !fpAg.value) fpAg.value = ag.pays || 'FR - France';
         }
       }
     }
@@ -7237,8 +7247,8 @@ const App = {
       immat_semi:   v('lvu-f-immat-semi').toUpperCase(),
       donneur_ordre: v('lvu-f-donneur'),
       transporteur: S.lvu.transporteur || LVU_TRANSPORTEURS[0],
-      expediteur:   { nom: v('lvu-f-exp-nom'), adresse: v('lvu-f-exp-adresse'), ville: v('lvu-f-exp-ville') },
-      destinataire: { nom: v('lvu-f-dest-nom'), adresse: v('lvu-f-dest-adresse'), ville: v('lvu-f-dest-ville') },
+      expediteur:   { nom: v('lvu-f-exp-nom'), adresse: v('lvu-f-exp-adresse'), ville: v('lvu-f-exp-ville'), pays: v('lvu-f-exp-pays') || 'FR - France' },
+      destinataire: { nom: v('lvu-f-dest-nom'), adresse: v('lvu-f-dest-adresse'), ville: v('lvu-f-dest-ville'), pays: v('lvu-f-dest-pays') },
       marchandises,
       total,
       doc_annexe:   v('lvu-f-doc'),
@@ -7390,9 +7400,11 @@ const App = {
     const fv = document.getElementById('lvu-f-dest-ville');
     const fs = document.getElementById('lvu-dest-search');
     const fr = document.getElementById('lvu-dest-results');
+    const fp = document.getElementById('lvu-f-dest-pays');
     if (fn) fn.value = a.nom;
     if (fa) fa.value = a.adresse;
     if (fv) fv.value = `${a.cp} ${a.ville}`.trim();
+    if (fp) fp.value = a.pays || 'FR - France';
     if (fs) fs.value = '';
     if (fr) { fr.style.display = 'none'; fr.innerHTML = ''; }
   },
@@ -7408,8 +7420,8 @@ const App = {
     const ds = document.getElementById('lvu-dest-search'); if (ds) ds.value = '';
     const dr = document.getElementById('lvu-dest-results'); if (dr) { dr.style.display = 'none'; dr.innerHTML = ''; }
     ['lvu-f-conducteur','lvu-f-immat-moteur','lvu-f-immat-semi','lvu-f-donneur',
-     'lvu-f-exp-nom','lvu-f-exp-adresse','lvu-f-exp-ville',
-     'lvu-f-dest-nom','lvu-f-dest-adresse','lvu-f-dest-ville',
+     'lvu-f-exp-nom','lvu-f-exp-adresse','lvu-f-exp-ville','lvu-f-exp-pays',
+     'lvu-f-dest-nom','lvu-f-dest-adresse','lvu-f-dest-ville','lvu-f-dest-pays',
      'lvu-f-doc','lvu-f-commande','lvu-f-note'].forEach(id => {
       const el = document.getElementById(id); if (el) el.value = '';
     });
@@ -7444,6 +7456,8 @@ const App = {
           <div style="font-size:13px;color:#475569;">${row.destinataire||'—'}</div>
           ${row.conducteur?`<div style="font-size:12px;color:#94A3B8;margin-top:2px;">${row.conducteur} · ${row.immat_moteur||''}</div>`:''}
           ${row.commande?`<div style="font-size:12px;color:#94A3B8;">Cde : ${row.commande}</div>`:''}
+          ${row.pdfUrl?`<a href="${row.pdfUrl}" target="_blank" rel="noopener"
+            style="display:inline-block;margin-top:7px;background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:8px;padding:5px 11px;font-size:11px;font-weight:600;text-decoration:none;">📄 Ouvrir le PDF</a>`:''}
         </div>`).join('');
     } catch (e) {
       el.innerHTML = `<div style="text-align:center;padding:40px;color:#EF4444;font-size:13px;">Erreur : ${e.message}</div>`;
@@ -7567,12 +7581,12 @@ const App = {
     return p.startsWith('fr') || p === 'france';
   },
 
-  annPaysNormalize() {
-    const el = document.getElementById('ann-f-pays');
+  annPaysNormalize(fieldId = 'ann-f-pays') {
+    const el = document.getElementById(fieldId || 'ann-f-pays');
     if (!el || !el.value.trim()) return;
     const q       = el.value.trim().toLowerCase();
     const options = [...document.querySelectorAll('#ann-pays-list option')].map(o => o.value);
-    if (options.some(o => o.toLowerCase() === q)) return; // déjà exact
+    if (options.some(o => o.toLowerCase() === q)) return;
     const match = options.find(o => o.toLowerCase().startsWith(q))
                || options.find(o => o.toLowerCase().includes(q));
     if (match) el.value = match;
@@ -8016,11 +8030,14 @@ function _lvuRecto(doc, d, isCMR, band) {
   tx('EXPÉDITEUR / Sender - Chargement',    x0 + LV.CELL_PAD_X,           y + 3.5);
   tx('DESTINATAIRE / Consignee - Livraison', x0 + CW / 2 + LV.CELL_PAD_X, y + 3.5);
   tc(0, 0, 0); sf('normal', LV.FONT_BODY);
+  const _cname = p => String(p || '').replace(/^[A-Z]{2,3}\s*[-–]\s*/i, '').toUpperCase();
   let ey = y + 9.5;
-  for (const l of ['SONOTRAD', '9 Z.A. des Renardières', '53250 JAVRON-LES-CHAPELLES']) { tx(l, x0 + LV.CELL_PAD_X, ey); ey += 4; }
+  const expPays = _cname(d.expediteur?.pays || 'FR - France');
+  for (const l of ['SONOTRAD', '9 Z.A. des Renardières', '53250 JAVRON-LES-CHAPELLES', expPays]) { tx(l, x0 + LV.CELL_PAD_X, ey); ey += 4; }
   const dst = d.destinataire ?? {};
+  const dstPays = _cname(dst.pays);
   let dy2 = y + 9.5;
-  for (const l of [dst.nom, dst.adresse, dst.cp_ville ?? dst.ville].filter(Boolean)) { tx(l, x0 + CW / 2 + LV.CELL_PAD_X, dy2); dy2 += 4; }
+  for (const l of [dst.nom, dst.adresse, dst.cp_ville ?? dst.ville, dstPays].filter(Boolean)) { tx(l, x0 + CW / 2 + LV.CELL_PAD_X, dy2); dy2 += 4; }
   dc(0, 0, 0); lw(LV.STROKE_INTRA);
   y += LV.H_ADDR;
 
