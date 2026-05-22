@@ -2197,6 +2197,7 @@ const S = {
   // ── BCB ──────────────────────────────────────────────────────────────────
   bcbLang:         null,   // langue sélectionnée pour les consignes
   // ── LVU ──────────────────────────────────────────────────────────────────
+  lvLinks: {},   // { opKey: { numero, display, date } } — chargé au prefetch
   lvu: {
     source:        'manual',
     type:          'LV',
@@ -2211,6 +2212,8 @@ const S = {
     lastData:      null,
     transporteur:  null,
     agencies:      [],
+    fromOpKey:     null,  // clé de l'opération stock à l'origine de la LV
+    fromOpNote:    '',    // note/BL de cette opération
   },
 };
 // ── APP ──────────────────────────────────────────────────────────────────────
@@ -2433,6 +2436,7 @@ const App = {
       this._prefetchDeps();
       this._prefetchHistory();
       this._prefetchCatalog();
+      this._prefetchLvLinks();
     }, 600);
   },
 
@@ -2485,6 +2489,55 @@ const App = {
       }
     } catch(e) { /* échec silencieux */ }
     finally { S.catalogLoading = false; }
+  },
+
+  async _prefetchLvLinks() {
+    if (!S.apiUrl) return;
+    try {
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=stock_get_lv_links', {}, 10000);
+      const data = await r.json();
+      if (data.status === 'ok') S.lvLinks = data.links || {};
+    } catch(e) { /* échec silencieux */ }
+  },
+
+  /** Crée une LV pré-remplie à partir d'une opération de sortie stock. */
+  async createLvFromOp(encodedKey) {
+    const opKey = decodeURIComponent(encodedKey);
+    const op    = (S.historyOps || []).find(o => o.key === opKey);
+    if (!op) { this.toast('Opération introuvable'); return; }
+    const THRESHOLD = 10;
+    let rows;
+    if (op.items.length <= THRESHOLD) {
+      rows = op.items.map(m => {
+        const desc = S.stockData.find(d => d.ref === m.ref)?.description || '';
+        return { qte: String(m.qty), description: m.ref + (desc ? '  —  ' + desc : ''), poids: '', note: m.ref, ml: '' };
+      });
+    } else {
+      const totalQty = op.items.reduce((s, m) => s + (Number(m.qty) || 0), 0);
+      rows = [{ qte: String(totalQty), description: `Pièces PIDEM — ${op.items.length} références`, poids: '', note: '', ml: '' }];
+    }
+    S.lvu.fromOpKey  = opKey;
+    S.lvu.fromOpNote = op.note || '';
+    await this.lvuInit();
+    S.lvu.marchandises = rows;
+    this._lvuRenderMarchandises();
+    if (op.note) {
+      const docEl = document.getElementById('lvu-f-doc');
+      if (docEl && !docEl.value) docEl.value = op.note;
+    }
+  },
+
+  /** Enregistre le lien LV↔opération dans Drive (lv_links.json). */
+  async _saveLvLinkRemote(opKey, numero, display) {
+    if (!S.apiUrl) return;
+    try {
+      await _fetchWithTimeout(S.apiUrl, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ action: 'stock_save_lv_link', opKey, numero, display }),
+      }, 10000);
+      S.lvLinks[opKey] = { numero, display, date: new Date().toISOString() };
+    } catch(e) {}
   },
 
   /** Hash SHA-256 côté client via Web Crypto API. */
@@ -3264,10 +3317,20 @@ const App = {
       const nRefs    = op.items.length;
       const nUnits   = op.items.reduce((s, m) => s + (Number(m.qty) || 0), 0);
       const typeLabels = { entrée:'Entrée', sortie:'Sortie', pose:'Pose', inventaire:'Inventaire' };
+      const lvLink   = S.lvLinks[op.key];
+      const lvBadge  = lvLink
+        ? `<span style="margin-left:6px;font-size:10px;font-weight:600;background:#DBEAFE;color:#1D4ED8;padding:2px 7px;border-radius:10px;white-space:nowrap;">📄 LV N° ${lvLink.display || lvLink.numero}</span>`
+        : '';
+      const lvBtn    = (op.type === 'sortie' && dt !== 'pose' && !lvLink)
+        ? `<button onclick="App.createLvFromOp('${encodeURIComponent(op.key)}')"
+            style="margin-top:8px;padding:6px 12px;background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;width:100%;">
+            📄 Créer LV / CMR</button>`
+        : '';
       return `<div class="hist-op-card t-${dt}">
         <div class="hist-op-header" onclick="App.toggleHistOp(${idx})">
           <span class="hist-badge ${dt}">${typeLabels[dt] || dt}</span>
           <span class="hist-op-ref">${ref}</span>
+          ${lvBadge}
           <span class="hist-op-date">${dateStr} ${timeStr}</span>
           <span class="hist-op-meta">${nRefs}r · ${nUnits}u</span>
           <span class="hist-op-chevron" id="hist-chev-${idx}">›</span>
@@ -3282,6 +3345,7 @@ const App = {
           </table>
           ${op.note && dt !== 'pose' ? `<div style="margin-top:6px;font-size:10px;color:#94A3B8;">Note : ${op.note}</div>` : ''}
           ${op.items[0]?.user ? `<div style="margin-top:2px;font-size:10px;color:#94A3B8;">Par : ${op.items[0].user}</div>` : ''}
+          ${lvBtn}
         </div>
       </div>`;
     }).join('');
@@ -4596,11 +4660,21 @@ const App = {
                        d.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
         const nRefs  = op.items.length;
         const nUnits = op.items.reduce((s, m) => s + (Number(m.qty) || 0), 0);
+        const lvLink = S.lvLinks[op.key];
+        const lvBtn  = (op.type === 'sortie' && dt !== 'pose' && !lvLink)
+          ? `<button onclick="App.createLvFromOp('${encodeURIComponent(op.key)}')"
+              style="margin-top:6px;padding:5px 10px;background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;width:100%;">
+              📄 Créer LV / CMR</button>`
+          : '';
+        const lvBadgeDash = lvLink
+          ? `<span style="font-size:10px;font-weight:600;background:#DBEAFE;color:#1D4ED8;padding:2px 6px;border-radius:10px;flex-shrink:0;margin-left:4px;">📄 LV N° ${lvLink.display || lvLink.numero}</span>`
+          : '';
         return `<div class="dash-mvt-row">
           <div class="dash-mvt-header" onclick="this.nextElementSibling.classList.toggle('open')">
             <span class="dash-mvt-type ${dt}">${typeIcons[dt] || ''} ${typeLabels[dt] || dt}</span>
             <span style="font-family:'Courier New',monospace;font-size:11px;font-weight:700;color:var(--brand);flex-shrink:0;margin:0 6px;">${code || '—'}</span>
             <span style="flex:1;font-size:10px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sub}</span>
+            ${lvBadgeDash}
             <span style="font-size:10px;color:#94A3B8;white-space:nowrap;flex-shrink:0;margin-left:6px;">${nRefs}r&nbsp;·&nbsp;${nUnits}u</span>
             <span style="font-size:10px;color:#94A3B8;white-space:nowrap;flex-shrink:0;margin-left:8px;">${dtStr}</span>
           </div>
@@ -4613,6 +4687,7 @@ const App = {
                 <span style="font-size:11px;font-weight:700;color:#1E293B;flex-shrink:0;">×${m.qty}</span>
               </div>`;
             }).join('')}
+            ${lvBtn}
           </div>
         </div>`;
       }).join('');
@@ -7091,6 +7166,10 @@ const App = {
         S.lvu.numero = null; S.lvu.display = null;
         if (document.getElementById('lvu-result-title')) document.getElementById('lvu-result-title').textContent = `✅ ${d.type} N° ${savedDisplay} enregistrée`;
         this.toast(`LV N° ${savedDisplay} enregistrée !`);
+        if (S.lvu.fromOpKey) {
+          this._saveLvLinkRemote(S.lvu.fromOpKey, savedDisplay, savedDisplay);
+          S.lvu.fromOpKey = null; S.lvu.fromOpNote = '';
+        }
         if (res.status === 'partial' && statusEl) statusEl.textContent += ' ⚠️ archivage partiel';
       } else {
         if (statusEl) statusEl.textContent = '❌ ' + (res.error || 'erreur inconnue');
@@ -7127,6 +7206,7 @@ const App = {
   lvuNew() {
     S.lvu.lastDoc = null; S.lvu.lastData = null;
     S.lvu.marchandises = [];
+    S.lvu.fromOpKey = null; S.lvu.fromOpNote = '';
     S.lvu.selectedItems.clear(); S.lvu.selectedBcb.clear();
     if (S.lvu.selectedStock) S.lvu.selectedStock.clear();
     const res = document.getElementById('lvu-result');
