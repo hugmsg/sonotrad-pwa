@@ -731,6 +731,19 @@
     .badge-soon    { background: #F1F5F9; color: #94A3B8; }
     .badge-loading { background: #FEF9C3; color: #A16207; animation: badge-pulse 1.4s ease-in-out infinite; }
     @keyframes badge-pulse { 0%,100% { opacity:1; } 50% { opacity:.45; } }
+    /* ── Annuaire ── */
+    .ann-card { background:white; border-radius:12px; padding:14px 14px 10px; box-shadow:0 1px 4px rgba(0,0,0,.07); margin-bottom:8px; border:1.5px solid transparent; }
+    .ann-card:active { background:#F8FAFC; }
+    .ann-code { font-size:11px; font-weight:700; color:#1D4ED8; background:#EFF6FF; padding:2px 7px; border-radius:10px; }
+    .ann-nom  { font-size:14px; font-weight:700; color:#1E293B; flex:1; }
+    .ann-meta { font-size:11px; color:#64748B; margin-top:3px; }
+    .ann-contact { font-size:11px; color:#475569; margin-top:4px; display:flex; gap:12px; flex-wrap:wrap; }
+    .ann-note { font-size:11px; color:#94A3B8; margin-top:3px; font-style:italic; }
+    .ann-actions { display:flex; gap:6px; margin-top:8px; justify-content:flex-end; }
+    .ann-btn-edit { padding:5px 12px; background:#EFF6FF; color:#1D4ED8; border:1.5px solid #BFDBFE; border-radius:7px; font-size:12px; font-weight:600; cursor:pointer; }
+    .ann-btn-del  { padding:5px 12px; background:#FEF2F2; color:#DC2626; border:1.5px solid #FECACA; border-radius:7px; font-size:12px; font-weight:600; cursor:pointer; }
+    .ann-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:900; display:flex; align-items:flex-end; }
+    .ann-modal-sheet { background:white; border-radius:20px 20px 0 0; padding:20px 16px 32px; width:100%; max-height:92vh; overflow-y:auto; }
     #activity-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
   </style>
   <style>
@@ -985,6 +998,16 @@
           <span id="badge-stockage" class="activity-badge badge-active">● Actif</span>
         </div>
 
+        <!-- Annuaire — visible uniquement pour role=admin -->
+        <div class="activity-card" id="annuaire-home-card" data-ready="true"
+          onclick="App.selectActivity('annuaire')"
+          style="display:none;">
+          <div class="activity-icon">📋</div>
+          <div class="activity-name">Annuaire</div>
+          <div class="activity-desc">Destinations & agences</div>
+          <span class="activity-badge" style="background:#FEF3C7;color:#92400E;">Admin</span>
+        </div>
+
         <!-- Admin — visible uniquement pour role=admin -->
         <div class="activity-card" id="admin-home-card" data-ready="true"
           onclick="App.goAdmin()"
@@ -1004,6 +1027,77 @@
       <p style="text-align:center;font-size:11px;color:#CBD5E1;margin-top:28px;">
         SONOTRAD · Gestion multi-activités
       </p>
+    </div>
+
+    <!-- ── VIEW : ANNUAIRE ──────────────────────────────────────────────── -->
+    <div class="view" id="view-annuaire">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <h2 style="font-size:18px;font-weight:700;color:#1E293B;flex:1;margin:0;">📋 Annuaire destinations</h2>
+        <button onclick="App.annuaireOpenModal(null)"
+          style="background:#1D4ED8;color:white;border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;">+ Ajouter</button>
+      </div>
+      <input id="ann-search" type="text" placeholder="Rechercher par code, nom, ville…"
+        oninput="App.annuaireRender()"
+        style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:10px;padding:9px 12px;font-size:13px;outline:none;margin-bottom:12px;">
+      <div id="ann-loading" style="display:none;text-align:center;padding:24px;color:#94A3B8;font-size:13px;">Chargement…</div>
+      <div id="ann-list"></div>
+    </div>
+
+    <!-- Modal ajout/édition agence -->
+    <div id="ann-modal" class="ann-modal-overlay" style="display:none;" onclick="if(event.target===this)App.annuaireCloseModal()">
+      <div class="ann-modal-sheet">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <span id="ann-modal-title" style="font-size:16px;font-weight:700;color:#1E293B;">Nouvelle agence</span>
+          <button onclick="App.annuaireCloseModal()" style="background:none;border:none;font-size:20px;color:#64748B;cursor:pointer;">✕</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Code agence *</label>
+            <input id="ann-f-code" type="text" placeholder="ex : 0072"
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Nom / Société *</label>
+            <input id="ann-f-nom" type="text" autocapitalize="words"
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+          </div>
+        </div>
+        <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Adresse</label>
+        <input id="ann-f-adresse" type="text" autocapitalize="words"
+          style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;margin-bottom:8px;">
+        <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-bottom:8px;">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">CP</label>
+            <input id="ann-f-cp" type="text" maxlength="5"
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Ville</label>
+            <input id="ann-f-ville" type="text" autocapitalize="words"
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Email</label>
+            <input id="ann-f-email" type="email"
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Téléphone</label>
+            <input id="ann-f-tel" type="tel"
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+          </div>
+        </div>
+        <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Note / Info</label>
+        <textarea id="ann-f-note" rows="2" placeholder="Accès, horaires, contact…"
+          style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;resize:none;margin-bottom:14px;"></textarea>
+        <input type="hidden" id="ann-f-orig-code">
+        <button onclick="App.annuaireSave()"
+          style="width:100%;padding:12px;background:#1D4ED8;color:white;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;">
+          💾 Enregistrer
+        </button>
+      </div>
     </div>
 
     <!-- ── VIEW : ADMIN ─────────────────────────────────────────────────── -->
@@ -2206,7 +2300,9 @@ const S = {
   // ── BCB ──────────────────────────────────────────────────────────────────
   bcbLang:         null,   // langue sélectionnée pour les consignes
   // ── LVU ──────────────────────────────────────────────────────────────────
-  lvLinks: {},   // { opKey: { numero, display, date } } — chargé au prefetch
+  lvLinks: {},        // { opKey: { numero, display, date } } — chargé au prefetch
+  annuaireData: [],   // [{code,nom,adresse,cp,ville,email,tel,note}]
+  annuaireLoaded: false,
   lvu: {
     source:        'manual',
     type:          'LV',
@@ -2250,6 +2346,7 @@ const App = {
     if (view === 'bcb-consignes') this.bcbInitLangGrid();
     if (view === 'lvu-form')      this._lvuRenderMarchandises();
     if (view === 'lvu-history')   this.lvuLoadHistory();
+    if (view === 'annuaire')      this.annuaireLoad();
   },
   goBack() {
     if (S.view === 'admin')        { this.goHome(); return; }
@@ -2265,7 +2362,7 @@ const App = {
     this._render();
   },
   selectActivity(name) {
-    const ready = { loxam: true, stockage: true, bcb: true, lvu: true };
+    const ready = { loxam: true, stockage: true, bcb: true, lvu: true, annuaire: true };
     if (!ready[name]) {
       this.toast('Cette activité est en cours de développement 🚧');
       return;
@@ -2281,6 +2378,7 @@ const App = {
     if (name === 'stockage') this.go('stock-dashboard');
     if (name === 'bcb')      this.go('bcb-menu');
     if (name === 'lvu')      this.lvuInit();
+    if (name === 'annuaire') this.go('annuaire');
   },
   _render() {
     const v      = S.view;
@@ -2354,6 +2452,7 @@ const App = {
       agora:    { icon: '🏷️', title: 'Agorastore',     sub: 'Ventes en ligne'     },
       stockage: { icon: '📦', title: 'Stockage Pidem', sub: 'Gestion des pièces'  },
       lvu:      { icon: '📄', title: 'LV / CMR',       sub: 'Lettres de voiture'  },
+      annuaire: { icon: '📋', title: 'Annuaire',        sub: 'Destinations & agences' },
     };
     const titleEl    = document.getElementById('header-title');
     const subtitleEl = document.getElementById('header-subtitle');
@@ -2374,9 +2473,12 @@ const App = {
       greetEl.textContent = `Bonjour ${S.currentUser.prenom}`;
     }
 
-    // ── Carte admin (accueil) : visible uniquement pour les admins ───────
+    // ── Cartes admin (accueil) : visibles uniquement pour les admins ─────
+    const isAdmin = S.currentUser?.role === 'admin';
     const adminCard = document.getElementById('admin-home-card');
-    if (adminCard) adminCard.style.display = (S.currentUser?.role === 'admin') ? '' : 'none';
+    if (adminCard) adminCard.style.display = isAdmin ? '' : 'none';
+    const annCard = document.getElementById('annuaire-home-card');
+    if (annCard) annCard.style.display = isAdmin ? '' : 'none';
 
     // ── Pastilles de chargement sur les cartes d'accueil ─────────────────
     this._updateHomeCards();
@@ -7304,6 +7406,144 @@ const App = {
     } catch (e) {
       el.innerHTML = `<div style="text-align:center;padding:40px;color:#EF4444;font-size:13px;">Erreur : ${e.message}</div>`;
     }
+  },
+
+  /* ─ Annuaire ─ */
+
+  async annuaireLoad(force = false) {
+    if (!force && S.annuaireLoaded) { this.annuaireRender(); return; }
+    if (!S.apiUrl) return;
+    const loadEl = document.getElementById('ann-loading');
+    if (loadEl) loadEl.style.display = 'block';
+    document.getElementById('ann-list').innerHTML = '';
+    try {
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=lv_agencies', {}, 10000);
+      const data = await r.json();
+      if (data.status === 'ok') {
+        S.annuaireData  = data.agencies || [];
+        S.lvu.agencies  = S.annuaireData; // sync avec le pool LVU
+        S.annuaireLoaded = true;
+      }
+    } catch(e) { this.toast('Erreur chargement annuaire'); }
+    if (loadEl) loadEl.style.display = 'none';
+    this.annuaireRender();
+  },
+
+  annuaireRender() {
+    const list = document.getElementById('ann-list');
+    if (!list) return;
+    const q = (document.getElementById('ann-search')?.value || '').trim().toLowerCase();
+    let items = S.annuaireData;
+    if (q) items = items.filter(a =>
+      a.code.toLowerCase().includes(q) ||
+      a.nom.toLowerCase().includes(q)  ||
+      a.ville.toLowerCase().includes(q) ||
+      a.cp.includes(q)
+    );
+    if (!items.length) {
+      list.innerHTML = `<div style="text-align:center;padding:40px 0;color:#94A3B8;font-size:13px;">
+        ${S.annuaireData.length ? 'Aucune agence ne correspond.' : 'Annuaire vide — ajoutez une première agence.'}</div>`;
+      return;
+    }
+    list.innerHTML = items.map(a => {
+      const codeEsc = encodeURIComponent(a.code);
+      return `<div class="ann-card">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <span class="ann-code">${a.code}</span>
+          <span class="ann-nom">${a.nom}</span>
+        </div>
+        ${a.adresse || a.ville ? `<div class="ann-meta">${[a.adresse, a.cp+' '+a.ville].filter(x=>x.trim()).join(' · ')}</div>` : ''}
+        ${(a.email || a.tel) ? `<div class="ann-contact">
+          ${a.email ? `<span>✉ ${a.email}</span>` : ''}
+          ${a.tel   ? `<span>📞 ${a.tel}</span>`   : ''}
+        </div>` : ''}
+        ${a.note ? `<div class="ann-note">${a.note}</div>` : ''}
+        <div class="ann-actions">
+          <button class="ann-btn-edit" onclick="App.annuaireOpenModal('${codeEsc}')">✏️ Modifier</button>
+          <button class="ann-btn-del"  onclick="App.annuaireDelete('${codeEsc}')">🗑 Supprimer</button>
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  annuaireOpenModal(encodedCode) {
+    const modal = document.getElementById('ann-modal');
+    const title = document.getElementById('ann-modal-title');
+    const orig  = document.getElementById('ann-f-orig-code');
+    if (!modal) return;
+    const fields = { code:'', nom:'', adresse:'', cp:'', ville:'', email:'', tel:'', note:'' };
+    if (encodedCode) {
+      const code = decodeURIComponent(encodedCode);
+      const a    = S.annuaireData.find(x => x.code === code);
+      if (a) Object.assign(fields, a);
+      if (title) title.textContent = 'Modifier l\'agence';
+    } else {
+      if (title) title.textContent = 'Nouvelle agence';
+    }
+    ['code','nom','adresse','cp','ville','email','tel'].forEach(f => {
+      const el = document.getElementById('ann-f-' + f);
+      if (el) el.value = fields[f];
+    });
+    const noteEl = document.getElementById('ann-f-note');
+    if (noteEl) noteEl.value = fields.note;
+    if (orig) orig.value = fields.code;
+    modal.style.display = 'flex';
+  },
+
+  annuaireCloseModal() {
+    const modal = document.getElementById('ann-modal');
+    if (modal) modal.style.display = 'none';
+  },
+
+  async annuaireSave() {
+    const v = id => document.getElementById(id)?.value.trim() || '';
+    const payload = {
+      action:   'save_agency',
+      code:     v('ann-f-code'),
+      nom:      v('ann-f-nom'),
+      adresse:  v('ann-f-adresse'),
+      cp:       v('ann-f-cp'),
+      ville:    v('ann-f-ville'),
+      email:    v('ann-f-email'),
+      tel:      v('ann-f-tel'),
+      note:     document.getElementById('ann-f-note')?.value.trim() || '',
+    };
+    if (!payload.code || !payload.nom) { this.toast('Code et nom obligatoires'); return; }
+    if (!S.apiUrl) return;
+    try {
+      const r   = await _fetchWithTimeout(S.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) }, 15000);
+      const res = await r.json();
+      if (res.status === 'ok') {
+        // Mise à jour locale
+        const origCode = document.getElementById('ann-f-orig-code')?.value || payload.code;
+        const idx = S.annuaireData.findIndex(a => a.code === origCode);
+        const entry = { code:payload.code, nom:payload.nom, adresse:payload.adresse, cp:payload.cp, ville:payload.ville, email:payload.email, tel:payload.tel, note:payload.note };
+        if (idx > -1) S.annuaireData[idx] = entry; else S.annuaireData.push(entry);
+        S.annuaireData.sort((a,b) => a.code.localeCompare(b.code));
+        S.lvu.agencies = S.annuaireData;
+        this.annuaireCloseModal();
+        this.annuaireRender();
+        this.toast('✓ Agence enregistrée');
+      } else { this.toast('Erreur : ' + (res.error || 'inconnue')); }
+    } catch(e) { this.toast('Erreur réseau : ' + e.message); }
+  },
+
+  async annuaireDelete(encodedCode) {
+    const code = decodeURIComponent(encodedCode);
+    const a    = S.annuaireData.find(x => x.code === code);
+    if (!a) return;
+    if (!confirm(`Supprimer "${a.nom}" (${a.code}) ?`)) return;
+    if (!S.apiUrl) return;
+    try {
+      const r   = await _fetchWithTimeout(S.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ action:'delete_agency', code }) }, 15000);
+      const res = await r.json();
+      if (res.status === 'ok') {
+        S.annuaireData = S.annuaireData.filter(x => x.code !== code);
+        S.lvu.agencies = S.annuaireData;
+        this.annuaireRender();
+        this.toast('✓ Agence supprimée');
+      } else { this.toast('Erreur : ' + (res.error || 'inconnue')); }
+    } catch(e) { this.toast('Erreur réseau : ' + e.message); }
   },
 
   /* ─ Toast ─ */
