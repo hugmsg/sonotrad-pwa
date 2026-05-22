@@ -4367,7 +4367,7 @@ const App = {
     try {
       // Charger catalogue si nécessaire + analytics + mouvements récents en parallèle
       const tasks = [
-        _fetchWithTimeout(S.apiUrl + '?action=stock_recent_movements&limit=50', {}, 15000),
+        _fetchWithTimeout(S.apiUrl + '?action=stock_recent_movements&limit=200', {}, 15000),
       ];
       if (!S.analyticsLoaded) {
         tasks.push(_fetchWithTimeout(S.apiUrl + '?action=stock_analytics', {}, 20000));
@@ -4479,17 +4479,28 @@ const App = {
     } else {
       const typeIcons  = { entrée:'↑', sortie:'↓', pose:'🔧', inventaire:'≡' };
       const typeLabels = { entrée:'Entrée', sortie:'Sortie', pose:'Pose', inventaire:'Inventaire' };
-      mvtEl.innerHTML = visibleOps.map((op, idx) => {
-        const dt  = this._opDisplayType(op.type, op.note);
-        const code = this._opRef(op.note, dt); // code brut (ex: PRGYGB pour une pose)
-        // Libellé enrichi pour les poses : code + N° module + chantier
-        let label = code || '—';
+      mvtEl.innerHTML = visibleOps.map((op) => {
+        const dt   = this._opDisplayType(op.type, op.note);
+        const code = this._opRef(op.note, dt);
+        // Résolution des infos module pour les poses
+        let dep = null;
         if (dt === 'pose' && code && S.depsLoaded) {
-          const dep = S.deps.find(d => (d.code || '').toUpperCase() === code.toUpperCase());
-          if (dep) {
-            const parts = [code, dep.codeModule, dep.chantier].filter(Boolean);
-            label = parts.join(' · ');
-          }
+          dep = S.deps.find(d => (d.code || '').toUpperCase() === code.toUpperCase()) || null;
+        }
+        // Bloc libellé : 1 ou 2 lignes selon le type
+        let labelHtml;
+        if (dt === 'pose') {
+          const sub = dep ? [dep.codeModule, dep.chantier].filter(Boolean).join(' · ') : '';
+          labelHtml = `<div style="flex:1;min-width:0;overflow:hidden;">
+            <div style="font-family:'Courier New',monospace;font-size:11px;font-weight:700;color:var(--brand);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${code || '—'}</div>
+            ${sub ? `<div style="font-size:10px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sub}</div>` : ''}
+          </div>`;
+        } else {
+          const note = (dt !== 'pose' && op.note) ? op.note : '';
+          labelHtml = `<div style="flex:1;min-width:0;overflow:hidden;">
+            <div style="font-size:11px;font-weight:600;color:var(--brand);font-family:'Courier New',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${code || '—'}</div>
+            ${note ? `<div style="font-size:10px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${note}</div>` : ''}
+          </div>`;
         }
         const d   = new Date(op.date);
         const dtStr = d.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit' }) + ' ' +
@@ -4498,10 +4509,12 @@ const App = {
         const nUnits = op.items.reduce((s, m) => s + (Number(m.qty) || 0), 0);
         return `<div class="dash-mvt-row">
           <div class="dash-mvt-header" onclick="this.nextElementSibling.classList.toggle('open')">
-            <span class="dash-mvt-type ${dt}">${typeIcons[dt] || ''} ${typeLabels[dt] || dt}</span>
-            <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:600;color:var(--brand);">${label}</span>
-            <span style="font-size:10px;color:#94A3B8;white-space:nowrap;margin-right:4px;">${nRefs}r · ${nUnits}u</span>
-            <span style="font-size:10px;color:#94A3B8;white-space:nowrap;">${dtStr}</span>
+            <span class="dash-mvt-type ${dt}" style="align-self:flex-start;margin-top:2px;">${typeIcons[dt] || ''} ${typeLabels[dt] || dt}</span>
+            ${labelHtml}
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px;flex-shrink:0;">
+              <span style="font-size:10px;color:#94A3B8;white-space:nowrap;">${nRefs}r · ${nUnits}u</span>
+              <span style="font-size:10px;color:#94A3B8;white-space:nowrap;">${dtStr}</span>
+            </div>
           </div>
           <div class="dash-mvt-body">
             ${op.items.map(m => {
