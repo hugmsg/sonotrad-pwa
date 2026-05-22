@@ -723,8 +723,10 @@
       padding: 3px 9px; border-radius: 20px;
       align-self: flex-start;
     }
-    .badge-active { background: #D1FAE5; color: #065F46; }
-    .badge-soon   { background: #F1F5F9; color: #94A3B8; }
+    .badge-active  { background: #D1FAE5; color: #065F46; }
+    .badge-soon    { background: #F1F5F9; color: #94A3B8; }
+    .badge-loading { background: #FEF9C3; color: #A16207; animation: badge-pulse 1.4s ease-in-out infinite; }
+    @keyframes badge-pulse { 0%,100% { opacity:1; } 50% { opacity:.45; } }
     #activity-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
   </style>
   <style>
@@ -944,7 +946,7 @@
           <div class="activity-icon">🏗️</div>
           <div class="activity-name">LOXAM</div>
           <div class="activity-desc">Arrivées &amp; Départs de modules</div>
-          <span class="activity-badge badge-active">● Actif</span>
+          <span id="badge-loxam" class="activity-badge badge-active">● Actif</span>
         </div>
 
         <!-- BCB — actif -->
@@ -976,7 +978,7 @@
           <div class="activity-icon">📦</div>
           <div class="activity-name">Stockage Pidem</div>
           <div class="activity-desc">Catalogue &amp; Inventaire PIDEM</div>
-          <span class="activity-badge badge-active">● Actif</span>
+          <span id="badge-stockage" class="activity-badge badge-active">● Actif</span>
         </div>
 
         <!-- Admin — visible uniquement pour role=admin -->
@@ -2362,6 +2364,9 @@ const App = {
     const adminCard = document.getElementById('admin-home-card');
     if (adminCard) adminCard.style.display = (S.currentUser?.role === 'admin') ? '' : 'none';
 
+    // ── Pastilles de chargement sur les cartes d'accueil ─────────────────
+    this._updateHomeCards();
+
     // ── Back button : admin revient à l'accueil ───────────────────────────
     if (v === 'admin') {
       document.getElementById('btn-back').classList.remove('hidden');
@@ -2376,6 +2381,30 @@ const App = {
     if (w) w.style.display = (!S.apiUrl && v === 'arrivals') ? 'block' : 'none';
   },
   /* ─ Auth / PIN ─ */
+
+  /** Met à jour les pastilles de chargement sur les cartes d'accueil. */
+  _updateHomeCards() {
+    const loxam = document.getElementById('badge-loxam');
+    if (loxam) {
+      if (S.depsLoaded) {
+        loxam.className = 'activity-badge badge-active';
+        loxam.textContent = '● Actif';
+      } else if (S.depsLoading || S.apiUrl) {
+        loxam.className = 'activity-badge badge-loading';
+        loxam.textContent = '⟳ Chargement...';
+      }
+    }
+    const stock = document.getElementById('badge-stockage');
+    if (stock) {
+      if (S.historyLoaded) {
+        stock.className = 'activity-badge badge-active';
+        stock.textContent = '● Actif';
+      } else if (S.historyLoading || S.apiUrl) {
+        stock.className = 'activity-badge badge-loading';
+        stock.textContent = '⟳ Chargement...';
+      }
+    }
+  },
 
   /** Vérifie localStorage au démarrage — affiche ou masque l'overlay. */
   _initAuth() {
@@ -2407,6 +2436,7 @@ const App = {
   async _prefetchDeps() {
     if (S.depsLoaded || S.depsLoading) return;
     S.depsLoading = true;
+    this._updateHomeCards();
     try {
       const r    = await _fetchWithTimeout(S.apiUrl + '?action=production', {}, 90000);
       const data = await r.json();
@@ -2418,12 +2448,13 @@ const App = {
       if (S.view === 'departures')                                  this._renderDepList();
       else if (S.view === 'stock-dashboard' || S.view === 'stock-history') this._renderDashboard?.();
     } catch(e) { /* échec silencieux — l'utilisateur chargera en navigant */ }
-    finally { S.depsLoading = false; }
+    finally { S.depsLoading = false; this._updateHomeCards(); }
   },
 
   async _prefetchHistory() {
     if (S.historyLoaded || S.historyLoading) return;
     S.historyLoading = true;
+    this._updateHomeCards();
     try {
       const r    = await _fetchWithTimeout(S.apiUrl + '?action=stock_recent_movements&limit=9999', {}, 30000);
       const data = await r.json();
@@ -2435,7 +2466,7 @@ const App = {
       else if (S.view === 'departures' && S.depsLoaded)           this._renderDepList();
       else if (S.view === 'stock-dashboard')                       this._renderDashboard();
     } catch(e) { /* échec silencieux */ }
-    finally { S.historyLoading = false; }
+    finally { S.historyLoading = false; this._updateHomeCards(); }
   },
 
   /** Hash SHA-256 côté client via Web Crypto API. */
