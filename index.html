@@ -3406,15 +3406,23 @@ const App = {
   },
 
   _opRef(note, displayType) {
-    if (displayType === 'pose') return note.replace(/^\[Pose\s+/, '').replace(/\]$/, '');
+    if (displayType === 'pose') {
+      const code  = (note.match(/\[Pose\s+(\S+)\]/) || [])[1] || '';
+      const extra = note.replace(/^\[Pose\s+\S+\]\s*/, '').trim();
+      return extra || code;
+    }
     return note || '—';
+  },
+
+  _poseCode(note) {
+    return (note.match(/\[Pose\s+(\S+)\]/) || [])[1] || '';
   },
 
   _buildPoseHistory() {
     S.poseHistory = new Set();
     S.historyData.forEach(m => {
       if (m.type === 'sortie' && m.note && m.note.startsWith('[Pose ')) {
-        const code = m.note.replace(/^\[Pose\s+/, '').replace(/\]$/, '');
+        const code = (m.note.match(/\[Pose\s+(\S+)\]/) || [])[1] || '';
         if (code) S.poseHistory.add(code);
       }
     });
@@ -3513,6 +3521,7 @@ const App = {
             }).join('')}</tbody>
           </table>
           ${op.note && dt !== 'pose' ? `<div style="margin-top:6px;font-size:10px;color:#94A3B8;">Note : ${op.note}</div>` : ''}
+          ${dt === 'pose' ? (() => { const pc = this._poseCode(op.note); return pc ? `<div style="margin-top:6px;font-size:10px;color:#94A3B8;">Code module : ${pc}</div>` : ''; })() : ''}
           ${op.items[0]?.user ? `<div style="margin-top:2px;font-size:10px;color:#94A3B8;">Par : ${op.items[0].user}</div>` : ''}
         </div>
       </div>`;
@@ -3765,8 +3774,7 @@ const App = {
   _renderPoseExisting(code) {
     const section = document.getElementById('pose-existing-section');
     if (!section) return;
-    const expectedNote = `[Pose ${code}]`;
-    const poses = S.historyData.filter(m => m.type === 'sortie' && m.note === expectedNote);
+    const poses = S.historyData.filter(m => m.type === 'sortie' && this._poseCode(m.note) === code);
     S.poseViewItems = poses;
     if (!poses.length) {
       section.style.display = 'none';
@@ -3971,7 +3979,7 @@ const App = {
 
     const u    = S.currentUser;
     const user = u ? `${u.prenom} ${u.nom}` : 'inconnu';
-    const note = `[Pose ${code}]`;
+    const note = `[Pose ${code}]${S.poseModuleLabel && S.poseModuleLabel !== code ? ' ' + S.poseModuleLabel : ''}`;
 
     const btn = document.getElementById('pose-submit-btn');
     if (btn) btn.disabled = true;
@@ -6054,24 +6062,37 @@ const App = {
       } else if (filteredPartis.length) {
         list.innerHTML += `<div class="partis-separator">Partis · ${filteredPartis.length}</div>`;
         list.innerHTML += filteredPartis.map((d) => {
-          const realIdx = S.archive.indexOf(d);
-          const code  = d.code || '------';
-          const titre = d.module || code;
-          const dur   = _duration(d.debut, d.fin);
+          const realIdx  = S.archive.indexOf(d);
+          const code     = d.code || '------';
+          const titre    = d.module || code;
+          const dur      = _duration(d.debut, d.fin);
+          const codeSafe  = code.replace(/'/g, "\\'");
+          const modSafe   = (d.codeModule || '').replace(/'/g, "\\'");
+          const chantSafe = (d.chantier   || '').replace(/'/g, "\\'");
+          const hasPose   = S.poseHistory.has(code);
           return `
-            <div class="dep-card" style="opacity:0.75;" onclick="App.openArchiveDep(${realIdx})">
+            <div class="dep-card" style="opacity:0.8;" onclick="App.openArchiveDep(${realIdx})">
               <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;width:38px;">
                 <div style="width:34px;height:34px;background:#F1F5F9;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;">📦</div>
                 <div style="font-family:'Courier New',monospace;font-size:9px;color:#94A3B8;text-align:center;line-height:1.1;max-width:38px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${code}</div>
               </div>
               <div class="dep-card-left">
-                <div class="code-mono" style="font-size:14px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.codeModule || '\u00A0'}</div>
-                <div style="font-size:10px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titre !== code ? titre : '\u00A0'}</div>
+                <div class="code-mono" style="font-size:14px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.codeModule || ' '}</div>
+                <div style="font-size:10px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titre !== code ? titre : ' '}</div>
               </div>
               <div class="dep-card-right">
-                <div style="font-size:13px;font-weight:600;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${d.chantier || '\u00A0'}</div>
-                ${dur ? `<span style="font-size:10px;color:#94A3B8;">⏱ ${dur}</span>` : ''}
+                <div style="font-size:13px;font-weight:600;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${d.chantier || ' '}</div>
+                <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+                  ${dur ? `<span style="font-size:10px;color:#94A3B8;white-space:nowrap;">⏱ ${dur}</span>` : ''}
+                  ${d.lv ? `<span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;border-radius:4px;padding:1px 5px;font-weight:600;white-space:nowrap;">📄 ${d.lv}</span>` : ''}
+                </div>
               </div>
+              <button onclick="event.stopPropagation();App.openPoseModal('${codeSafe}','${modSafe}','${chantSafe}')"
+                title="Voir / ajouter pièces posées"
+                style="background:none;border:none;cursor:pointer;padding:5px 4px;display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0;opacity:${hasPose?'1':'0.4'};">
+                <span style="font-size:17px;line-height:1;">🔧</span>
+                ${hasPose ? '<span class="dep-pose-dot"></span>' : '<span style="width:7px;height:4px;display:block;"></span>'}
+              </button>
               <span style="color:#CBD5E1;font-size:16px;flex-shrink:0;">›</span>
             </div>`;
         }).join('');
