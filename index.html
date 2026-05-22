@@ -735,6 +735,8 @@
     .ann-card { background:white; border-radius:12px; padding:14px 14px 10px; box-shadow:0 1px 4px rgba(0,0,0,.07); margin-bottom:8px; border:1.5px solid transparent; }
     .ann-card:active { background:#F8FAFC; }
     .ann-code { font-size:11px; font-weight:700; color:#1D4ED8; background:#EFF6FF; padding:2px 7px; border-radius:10px; }
+    .ann-src-loxam { font-size:10px; font-weight:600; color:#6B7280; background:#F3F4F6; padding:2px 6px; border-radius:8px; }
+    .ann-src-custom { font-size:10px; font-weight:600; color:#059669; background:#D1FAE5; padding:2px 6px; border-radius:8px; }
     .ann-nom  { font-size:14px; font-weight:700; color:#1E293B; flex:1; }
     .ann-meta { font-size:11px; color:#64748B; margin-top:3px; }
     .ann-contact { font-size:11px; color:#475569; margin-top:4px; display:flex; gap:12px; flex-wrap:wrap; }
@@ -7446,11 +7448,19 @@ const App = {
       return;
     }
     list.innerHTML = items.map(a => {
-      const codeEsc = encodeURIComponent(a.code);
+      const codeEsc  = encodeURIComponent(a.code);
+      const isLoxam  = a.source === 'loxam';
+      const srcBadge = isLoxam
+        ? `<span class="ann-src-loxam">LOXAM</span>`
+        : `<span class="ann-src-custom">Personnalisé</span>`;
+      const delBtn = isLoxam
+        ? `<button class="ann-btn-del" style="opacity:.4" onclick="App.toast('Les agences LOXAM ne peuvent pas être supprimées. Modifiez-les pour créer une entrée personnalisée.')">🗑 Supprimer</button>`
+        : `<button class="ann-btn-del" onclick="App.annuaireDelete('${codeEsc}')">🗑 Supprimer</button>`;
       return `<div class="ann-card">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
           <span class="ann-code">${a.code}</span>
           <span class="ann-nom">${a.nom}</span>
+          ${srcBadge}
         </div>
         ${a.adresse || a.ville ? `<div class="ann-meta">${[a.adresse, a.cp+' '+a.ville].filter(x=>x.trim()).join(' · ')}</div>` : ''}
         ${(a.email || a.tel) ? `<div class="ann-contact">
@@ -7460,7 +7470,7 @@ const App = {
         ${a.note ? `<div class="ann-note">${a.note}</div>` : ''}
         <div class="ann-actions">
           <button class="ann-btn-edit" onclick="App.annuaireOpenModal('${codeEsc}')">✏️ Modifier</button>
-          <button class="ann-btn-del"  onclick="App.annuaireDelete('${codeEsc}')">🗑 Supprimer</button>
+          ${delBtn}
         </div>
       </div>`;
     }).join('');
@@ -7517,7 +7527,7 @@ const App = {
         // Mise à jour locale
         const origCode = document.getElementById('ann-f-orig-code')?.value || payload.code;
         const idx = S.annuaireData.findIndex(a => a.code === origCode);
-        const entry = { code:payload.code, nom:payload.nom, adresse:payload.adresse, cp:payload.cp, ville:payload.ville, email:payload.email, tel:payload.tel, note:payload.note };
+        const entry = { code:payload.code, nom:payload.nom, adresse:payload.adresse, cp:payload.cp, ville:payload.ville, email:payload.email, tel:payload.tel, note:payload.note, source:'custom' };
         if (idx > -1) S.annuaireData[idx] = entry; else S.annuaireData.push(entry);
         S.annuaireData.sort((a,b) => a.code.localeCompare(b.code));
         S.lvu.agencies = S.annuaireData;
