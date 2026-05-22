@@ -2369,11 +2369,14 @@ const App = {
       this.toast('Cette activité est en cours de développement 🚧');
       return;
     }
-    // Contrôle d'accès : vérifier que l'utilisateur a bien cette activité
-    const userActs = S.currentUser?.activites || [];
-    if (!userActs.includes(name)) {
-      this.toast('⛔ Vous n\'avez pas accès à cette activité');
-      return;
+    // Contrôle d'accès : les admins ont accès à tout, sinon vérifier activites[]
+    const isAdmin = S.currentUser?.role === 'admin';
+    if (!isAdmin) {
+      const userActs = S.currentUser?.activites || [];
+      if (!userActs.includes(name)) {
+        this.toast('⛔ Vous n\'avez pas accès à cette activité');
+        return;
+      }
     }
     S.activity = name;
     if (name === 'loxam')    this.go('departures');
