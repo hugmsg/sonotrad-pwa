@@ -1089,7 +1089,7 @@
         </div>
         <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Pays</label>
         <input id="ann-f-pays" type="text" autocapitalize="words" placeholder="ex : FR - France" list="ann-pays-list"
-          oninput="App.annGeoHideSugg()"
+          oninput="App.annGeoHideSugg()" onblur="App.annPaysNormalize()"
           style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;margin-bottom:8px;">
         <datalist id="ann-pays-list">
           <option value="FR - France"><option value="BE - Belgique"><option value="LU - Luxembourg">
@@ -7521,12 +7521,12 @@ const App = {
     const title = document.getElementById('ann-modal-title');
     const orig  = document.getElementById('ann-f-orig-code');
     if (!modal) return;
-    const fields = { code:'', nom:'', adresse:'', cp:'', ville:'', pays:'France', email:'', tel:'', note:'' };
+    const fields = { code:'', nom:'', adresse:'', cp:'', ville:'', pays:'FR - France', email:'', tel:'', note:'' };
     if (encodedCode) {
       const code = decodeURIComponent(encodedCode);
       const a    = S.annuaireData.find(x => x.code === code);
       if (a) Object.assign(fields, a);
-      if (!fields.pays) fields.pays = 'France';
+      if (!fields.pays) fields.pays = 'FR - France';
       if (title) title.textContent = 'Modifier l\'agence';
     } else {
       if (title) title.textContent = 'Nouvelle agence';
@@ -7562,11 +7562,26 @@ const App = {
     this.annGeoHideSugg();
   },
 
+  _isFrance() {
+    const p = (document.getElementById('ann-f-pays')?.value || '').toLowerCase().trim();
+    return p.startsWith('fr') || p === 'france';
+  },
+
+  annPaysNormalize() {
+    const el = document.getElementById('ann-f-pays');
+    if (!el || !el.value.trim()) return;
+    const q       = el.value.trim().toLowerCase();
+    const options = [...document.querySelectorAll('#ann-pays-list option')].map(o => o.value);
+    if (options.some(o => o.toLowerCase() === q)) return; // déjà exact
+    const match = options.find(o => o.toLowerCase().startsWith(q))
+               || options.find(o => o.toLowerCase().includes(q));
+    if (match) el.value = match;
+  },
+
   annGeoCp(val) {
     const sugg = document.getElementById('ann-cp-sugg');
     if (!sugg) return;
-    const pays = document.getElementById('ann-f-pays')?.value || '';
-    if (!pays.startsWith('FR') || !/^\d{5}$/.test(val.trim())) { sugg.style.display = 'none'; return; }
+    if (!this._isFrance() || !/^\d{5}$/.test(val.trim())) { sugg.style.display = 'none'; return; }
     clearTimeout(this._annGeoTimer);
     this._annGeoTimer = setTimeout(async () => {
       try {
@@ -7584,8 +7599,7 @@ const App = {
   annGeoVille(val) {
     const sugg = document.getElementById('ann-ville-sugg');
     if (!sugg) return;
-    const pays = document.getElementById('ann-f-pays')?.value || '';
-    if (!pays.startsWith('FR') || val.trim().length < 3) { sugg.style.display = 'none'; return; }
+    if (!this._isFrance() || val.trim().length < 3) { sugg.style.display = 'none'; return; }
     clearTimeout(this._annGeoTimer);
     this._annGeoTimer = setTimeout(async () => {
       try {
