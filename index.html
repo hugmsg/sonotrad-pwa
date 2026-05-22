@@ -464,6 +464,11 @@
     .pose-item-desc { font-size:10px; color:#64748B; display:block; }
     .pose-item-del  { background:none; border:none; color:#DC2626; font-size:18px; cursor:pointer; padding:2px 4px; flex-shrink:0; line-height:1; }
     .dep-pose-dot { width:7px; height:7px; border-radius:50%; background:#15803D; display:inline-block; margin-left:1px; vertical-align:middle; }
+    .pose-existing-section { margin-bottom:8px; flex-shrink:0; }
+    .pose-existing-list { border:1px solid #E2E8F0; border-radius:8px; overflow:hidden; }
+    .pose-existing-row { display:flex; align-items:center; gap:8px; padding:7px 10px; border-bottom:1px solid #F1F5F9; background:#FAFBFC; }
+    .pose-existing-row:last-child { border-bottom:none; }
+    .pose-existing-label { font-size:11px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:.4px; margin-bottom:5px; }
     /* ── Analytics section dans detail ── */
     .analytics-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin:10px 0; }
     .analytics-box  { background:#F8FAFC; border-radius:8px; padding:8px 10px; text-align:center; }
@@ -2320,6 +2325,7 @@ const S = {
   histFilter:     { type: '', search: '' },
   selHistProd:    null,      // référence produit sélectionnée dans "Par produit"
   poseHistory:    new Set(), // codes modules ayant au moins une pose enregistrée
+  poseViewItems:  [],        // cache des mouvements de pose affichés dans le modal (pour suppression par index)
   // ── Saisie rapide (dashboard) ─────────────────────────────────────────
   saisieItems:    {},        // { ref: qty }
   saisieType:     'entrée',
@@ -3727,6 +3733,7 @@ const App = {
     S.poseModuleCode  = code;
     S.poseModuleLabel = [codeModule, chantier].filter(Boolean).join(' — ') || code;
     S.poseItems       = {};
+    S.poseViewItems   = [];
     const modal = document.getElementById('pose-modal');
     const lbl   = document.getElementById('pose-module-label');
     const inp   = document.getElementById('pose-search-input');
@@ -3735,6 +3742,17 @@ const App = {
     if (inp) { inp.value = ''; }
     if (res) { res.style.display = 'none'; res.innerHTML = ''; }
     this._renderPoseItems();
+    // Afficher les poses existantes
+    if (S.historyLoaded) {
+      this._renderPoseExisting(code);
+    } else {
+      const sec = document.getElementById('pose-existing-section');
+      if (sec) {
+        sec.style.display = '';
+        sec.innerHTML = '<div style="padding:8px 0;color:#94A3B8;font-size:12px;text-align:center;">⏳ Chargement de l\'historique…</div>';
+      }
+      this._loadPoseHistory(code);
+    }
     if (modal) modal.style.display = 'flex';
     setTimeout(() => inp?.focus(), 100);
   },
@@ -3742,6 +3760,89 @@ const App = {
   closePoseModal() {
     const modal = document.getElementById('pose-modal');
     if (modal) modal.style.display = 'none';
+  },
+
+  _renderPoseExisting(code) {
+    const section = document.getElementById('pose-existing-section');
+    if (!section) return;
+    const expectedNote = `[Pose ${code}]`;
+    const poses = S.historyData.filter(m => m.type === 'sortie' && m.note === expectedNote);
+    S.poseViewItems = poses;
+    if (!poses.length) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = '';
+    section.innerHTML = `
+      <div class="pose-existing-label">Déjà enregistré</div>
+      <div class="pose-existing-list">
+        ${poses.map((m, i) => {
+          const desc = S.stockData.find(d => d.ref === m.ref)?.description || '';
+          const dt   = new Date(m.date);
+          const dStr = isNaN(dt) ? '' : dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}) + ' ' + dt.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+          return `<div class="pose-existing-row">
+            <div style="flex:1;min-width:0;">
+              <span class="pose-item-ref">${m.ref}</span>
+              ${desc ? `<span class="pose-item-desc">${desc.length>42?desc.substring(0,40)+'…':desc}</span>` : ''}
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+              <span style="font-size:13px;font-weight:700;color:#1E293B;min-width:28px;text-align:right;">×${m.qty}</span>
+              <span style="font-size:10px;color:#94A3B8;white-space:nowrap;">${dStr}</span>
+              <button onclick="App.deletePoseEntry(${i})" title="Supprimer ce mouvement"
+                style="background:none;border:none;color:#DC2626;font-size:16px;cursor:pointer;padding:2px 6px;line-height:1;flex-shrink:0;">🗑</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+  },
+
+  async _loadPoseHistory(code) {
+    if (S.historyLoading) return;
+    if (S.historyLoaded) { this._renderPoseExisting(code); return; }
+    S.historyLoading = true;
+    try {
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=stock_recent_movements&limit=9999', {}, 30000);
+      const data = await r.json();
+      S.historyData   = (data.status === 'ok' ? data.movements : []) || [];
+      S.historyOps    = this._groupMovements(S.historyData);
+      S.historyLoaded = true;
+      this._buildPoseHistory();
+      if (S.poseModuleCode === code && document.getElementById('pose-modal')?.style.display !== 'none') {
+        this._renderPoseExisting(code);
+      }
+    } catch(e) {
+      const sec = document.getElementById('pose-existing-section');
+      if (sec) sec.innerHTML = `<div style="padding:8px 0;color:#DC2626;font-size:12px;text-align:center;">Erreur de chargement</div>`;
+    } finally {
+      S.historyLoading = false;
+    }
+  },
+
+  async deletePoseEntry(idx) {
+    const m = S.poseViewItems[idx];
+    if (!m) return;
+    if (!confirm(`Supprimer la pose de ×${m.qty} ${m.ref} ?\nCette action va remettre la quantité en stock.`)) return;
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action:'delete_mouvement', ref:m.ref, type:m.type, qty:m.qty, note:m.note, date:m.date }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast(`✓ Pose supprimée (${m.ref} ×${m.qty})`);
+        const item = S.stockData.find(i => i.ref === m.ref);
+        if (item && item.qte !== null) item.qte += m.qty;
+        const hi = S.historyData.findIndex(h => h.ref===m.ref && h.type===m.type && h.note===m.note && h.date===m.date);
+        if (hi > -1) S.historyData.splice(hi, 1);
+        S.historyOps = this._groupMovements(S.historyData);
+        this._buildPoseHistory();
+        this._renderPoseExisting(S.poseModuleCode);
+        if (S.depsLoaded) this._renderDepList();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+      }
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+    }
   },
 
   poseSearch(val) {
@@ -3889,14 +3990,20 @@ const App = {
       const data = await resp.json();
       if (data.status === 'ok') {
         this.toast(`✓ ${data.count} pièce${data.count > 1 ? 's' : ''} enregistrée${data.count > 1 ? 's' : ''}`);
-        // Mise à jour locale des stocks
+        const now = new Date().toISOString();
+        // Mise à jour locale des stocks + injection dans historyData
         items.forEach(([ref, qty]) => {
           const item = S.stockData.find(i => i.ref === ref);
           if (item && item.qte !== null) item.qte = item.qte - qty;
+          if (S.historyLoaded) {
+            S.historyData.unshift({ date: now, ref, type: 'sortie', qty, user, note });
+          }
         });
+        if (S.historyLoaded) {
+          S.historyOps = this._groupMovements(S.historyData);
+        }
         // Marquer la pose dans l'historique en mémoire
         S.poseHistory.add(code);
-        S.historyLoaded = false; // forcer reload historique à la prochaine ouverture
         S.analyticsLoaded = false;
         S.dashboardLoaded = false;
         this.closePoseModal();
@@ -8374,6 +8481,8 @@ document.addEventListener('DOMContentLoaded', () => {
         ✓ Valider
       </button>
     </div>
+    <!-- Poses existantes -->
+    <div id="pose-existing-section" class="pose-existing-section" style="display:none;"></div>
     <!-- Recherche référence -->
     <input id="pose-search-input" type="search" class="input-field" placeholder="🔍 Rechercher une référence…"
       oninput="App.poseSearch(this.value)" onkeydown="App._poseSearchKey(event)"
