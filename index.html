@@ -1070,7 +1070,7 @@
         <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-bottom:8px;">
           <div>
             <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">CP</label>
-            <input id="ann-f-cp" type="text" maxlength="5"
+            <input id="ann-f-cp" type="text" maxlength="10"
               style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
           </div>
           <div>
@@ -1079,6 +1079,9 @@
               style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
           </div>
         </div>
+        <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Pays</label>
+        <input id="ann-f-pays" type="text" autocapitalize="words" placeholder="France"
+          style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;margin-bottom:8px;">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
           <div>
             <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Email</label>
@@ -7465,7 +7468,7 @@ const App = {
           <span class="ann-nom">${a.nom}</span>
           ${srcBadge}
         </div>
-        ${a.adresse || a.ville ? `<div class="ann-meta">${[a.adresse, a.cp+' '+a.ville].filter(x=>x.trim()).join(' · ')}</div>` : ''}
+        ${a.adresse || a.ville || a.pays ? `<div class="ann-meta">${[a.adresse, [a.cp, a.ville].filter(Boolean).join(' '), (a.pays && a.pays.toLowerCase()!=='france' ? a.pays : '')].filter(x=>x&&x.trim()).join(' · ')}</div>` : ''}
         ${(a.email || a.tel) ? `<div class="ann-contact">
           ${a.email ? `<span>✉ ${a.email}</span>` : ''}
           ${a.tel   ? `<span>📞 ${a.tel}</span>`   : ''}
@@ -7484,16 +7487,17 @@ const App = {
     const title = document.getElementById('ann-modal-title');
     const orig  = document.getElementById('ann-f-orig-code');
     if (!modal) return;
-    const fields = { code:'', nom:'', adresse:'', cp:'', ville:'', email:'', tel:'', note:'' };
+    const fields = { code:'', nom:'', adresse:'', cp:'', ville:'', pays:'France', email:'', tel:'', note:'' };
     if (encodedCode) {
       const code = decodeURIComponent(encodedCode);
       const a    = S.annuaireData.find(x => x.code === code);
       if (a) Object.assign(fields, a);
+      if (!fields.pays) fields.pays = 'France';
       if (title) title.textContent = 'Modifier l\'agence';
     } else {
       if (title) title.textContent = 'Nouvelle agence';
     }
-    ['code','nom','adresse','cp','ville','email','tel'].forEach(f => {
+    ['code','nom','adresse','cp','ville','pays','email','tel'].forEach(f => {
       const el = document.getElementById('ann-f-' + f);
       if (el) el.value = fields[f];
     });
@@ -7510,6 +7514,7 @@ const App = {
 
   async annuaireSave() {
     const v = id => document.getElementById(id)?.value.trim() || '';
+    const origCode = document.getElementById('ann-f-orig-code')?.value || '';
     const payload = {
       action:   'save_agency',
       code:     v('ann-f-code'),
@@ -7517,20 +7522,26 @@ const App = {
       adresse:  v('ann-f-adresse'),
       cp:       v('ann-f-cp'),
       ville:    v('ann-f-ville'),
+      pays:     v('ann-f-pays') || 'France',
       email:    v('ann-f-email'),
       tel:      v('ann-f-tel'),
       note:     document.getElementById('ann-f-note')?.value.trim() || '',
     };
     if (!payload.code || !payload.nom) { this.toast('Code et nom obligatoires'); return; }
+    // Vérifier doublon de code uniquement à la création
+    if (!origCode && S.annuaireData.some(a => a.code === payload.code)) {
+      this.toast('⛔ Ce code existe déjà dans l\'annuaire');
+      return;
+    }
     if (!S.apiUrl) return;
     try {
       const r   = await _fetchWithTimeout(S.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) }, 15000);
       const res = await r.json();
       if (res.status === 'ok') {
         // Mise à jour locale
-        const origCode = document.getElementById('ann-f-orig-code')?.value || payload.code;
-        const idx = S.annuaireData.findIndex(a => a.code === origCode);
-        const entry = { code:payload.code, nom:payload.nom, adresse:payload.adresse, cp:payload.cp, ville:payload.ville, email:payload.email, tel:payload.tel, note:payload.note, source:'custom' };
+        const savedCode = origCode || payload.code;
+        const idx = S.annuaireData.findIndex(a => a.code === savedCode);
+        const entry = { code:payload.code, nom:payload.nom, adresse:payload.adresse, cp:payload.cp, ville:payload.ville, pays:payload.pays, email:payload.email, tel:payload.tel, note:payload.note, source:'custom' };
         if (idx > -1) S.annuaireData[idx] = entry; else S.annuaireData.push(entry);
         S.annuaireData.sort((a,b) => a.code.localeCompare(b.code));
         S.lvu.agencies = S.annuaireData;
