@@ -452,6 +452,10 @@
     .pose-result-row { padding:8px 12px; cursor:pointer; border-bottom:1px solid #F8FAFC; display:flex; align-items:center; gap:8px; }
     .pose-result-row:last-child { border-bottom:none; }
     .pose-result-row:active { background:#F8FAFC; }
+    .dest-search-results { max-height:200px; overflow-y:auto; border:1.5px solid #BFDBFE; border-radius:8px; margin-bottom:8px; display:none; background:white; box-shadow:0 4px 12px rgba(0,0,0,.1); }
+    .dest-result-row { padding:9px 12px; cursor:pointer; border-bottom:1px solid #F1F5F9; }
+    .dest-result-row:last-child { border-bottom:none; }
+    .dest-result-row:hover, .dest-result-row:active { background:#EFF6FF; }
     .pose-result-ref { font-family:'Courier New',monospace; font-size:12px; font-weight:700; color:var(--brand); flex-shrink:0; }
     .pose-result-desc { font-size:11px; color:#475569; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .pose-items-list { overflow-y:auto; flex:1; margin-bottom:10px; }
@@ -1887,6 +1891,11 @@
         <!-- Destinataire -->
         <div class="card" style="margin-bottom:12px;">
           <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Destinataire (livraison)</p>
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Rechercher une agence (code, ville, nom…)</label>
+          <input id="lvu-dest-search" type="text" autocomplete="off" placeholder="ex : 72 · ARNAGE · LOXAM…"
+            oninput="App.lvuDestSearch(this.value)"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #BFDBFE;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:4px;background:#F8FBFF;">
+          <div id="lvu-dest-results" class="dest-search-results"></div>
           <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Nom / Société</label>
           <input id="lvu-f-dest-nom" type="text" autocapitalize="words"
             style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
@@ -2519,6 +2528,7 @@ const App = {
     S.lvu.fromOpKey  = opKey;
     S.lvu.fromOpNote = op.note || '';
     await this.lvuInit();
+    this.lvuLoadAgencies();
     S.lvu.marchandises = rows;
     this._lvuRenderMarchandises();
     if (op.note) {
@@ -3336,6 +3346,7 @@ const App = {
           <span class="hist-op-chevron" id="hist-chev-${idx}">›</span>
         </div>
         <div class="hist-op-body" id="hist-body-${idx}">
+          ${lvBtn}
           <table class="hist-detail-table">
             <thead><tr><th>Réf.</th><th>Désignation</th><th style="text-align:right;">Qté</th></tr></thead>
             <tbody>${op.items.map(m => {
@@ -3345,7 +3356,6 @@ const App = {
           </table>
           ${op.note && dt !== 'pose' ? `<div style="margin-top:6px;font-size:10px;color:#94A3B8;">Note : ${op.note}</div>` : ''}
           ${op.items[0]?.user ? `<div style="margin-top:2px;font-size:10px;color:#94A3B8;">Par : ${op.items[0].user}</div>` : ''}
-          ${lvBtn}
         </div>
       </div>`;
     }).join('');
@@ -4679,6 +4689,7 @@ const App = {
             <span style="font-size:10px;color:#94A3B8;white-space:nowrap;flex-shrink:0;margin-left:8px;">${dtStr}</span>
           </div>
           <div class="dash-mvt-body">
+            ${lvBtn}
             ${op.items.map(m => {
               const desc = S.stockData.find(d => d.ref === m.ref)?.description || '';
               return `<div style="display:flex;align-items:baseline;gap:6px;padding:3px 0;border-bottom:.5px solid #F8FAFC;">
@@ -4687,7 +4698,6 @@ const App = {
                 <span style="font-size:11px;font-weight:700;color:#1E293B;flex-shrink:0;">×${m.qty}</span>
               </div>`;
             }).join('')}
-            ${lvBtn}
           </div>
         </div>`;
       }).join('');
@@ -7203,6 +7213,46 @@ const App = {
     } catch (_) {}
   },
 
+  lvuDestSearch(val) {
+    const q   = val.trim().toLowerCase();
+    const res = document.getElementById('lvu-dest-results');
+    if (!res) return;
+    if (!q) { res.style.display = 'none'; res.innerHTML = ''; return; }
+    if (!S.lvu.agencies.length) { this.lvuLoadAgencies(); }
+    const hits = S.lvu.agencies.filter(a =>
+      a.code.toLowerCase().includes(q) ||
+      a.nom.toLowerCase().includes(q)  ||
+      a.ville.toLowerCase().includes(q)
+    ).slice(0, 10);
+    if (!hits.length) {
+      res.innerHTML = '<div style="padding:10px 12px;color:#94A3B8;font-size:12px;">Aucun résultat</div>';
+      res.style.display = 'block';
+      return;
+    }
+    res.innerHTML = hits.map((a, i) => `
+      <div class="dest-result-row" onclick="App.lvuDestSelect(${S.lvu.agencies.indexOf(a)})">
+        <span style="font-size:11px;font-weight:700;color:#1D4ED8;min-width:38px;">${a.code}</span>
+        <span style="font-size:13px;color:#1E293B;flex:1;">${a.nom}</span>
+        <span style="font-size:11px;color:#64748B;">${a.cp} ${a.ville}</span>
+      </div>`).join('');
+    res.style.display = 'block';
+  },
+
+  lvuDestSelect(idx) {
+    const a = S.lvu.agencies[idx];
+    if (!a) return;
+    const fn = document.getElementById('lvu-f-dest-nom');
+    const fa = document.getElementById('lvu-f-dest-adresse');
+    const fv = document.getElementById('lvu-f-dest-ville');
+    const fs = document.getElementById('lvu-dest-search');
+    const fr = document.getElementById('lvu-dest-results');
+    if (fn) fn.value = a.nom;
+    if (fa) fa.value = a.adresse;
+    if (fv) fv.value = `${a.cp} ${a.ville}`.trim();
+    if (fs) fs.value = '';
+    if (fr) { fr.style.display = 'none'; fr.innerHTML = ''; }
+  },
+
   lvuNew() {
     S.lvu.lastDoc = null; S.lvu.lastData = null;
     S.lvu.marchandises = [];
@@ -7211,6 +7261,8 @@ const App = {
     if (S.lvu.selectedStock) S.lvu.selectedStock.clear();
     const res = document.getElementById('lvu-result');
     if (res) res.style.display = 'none';
+    const ds = document.getElementById('lvu-dest-search'); if (ds) ds.value = '';
+    const dr = document.getElementById('lvu-dest-results'); if (dr) { dr.style.display = 'none'; dr.innerHTML = ''; }
     ['lvu-f-conducteur','lvu-f-immat-moteur','lvu-f-immat-semi','lvu-f-donneur',
      'lvu-f-exp-nom','lvu-f-exp-adresse','lvu-f-exp-ville',
      'lvu-f-dest-nom','lvu-f-dest-adresse','lvu-f-dest-ville',
