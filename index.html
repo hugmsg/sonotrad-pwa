@@ -2149,6 +2149,8 @@ const S = {
   // ── Stockage ─────────────────────────────────────────────────────────────
   stockData:     [],       // catalogue complet
   stockLoaded:   false,
+  catalogLoaded:  false,   // true dès que stockData est peuplé (prefetch ou full load)
+  catalogLoading: false,
   stockPrefs:    new Set(),// refs marquées "mes références"
   stockFamilles: [],       // valeurs uniques pour le filtre
   stockFilter: { search: '', famille: '', myRefs: true },
@@ -2430,6 +2432,7 @@ const App = {
     setTimeout(() => {
       this._prefetchDeps();
       this._prefetchHistory();
+      this._prefetchCatalog();
     }, 600);
   },
 
@@ -2467,6 +2470,21 @@ const App = {
       else if (S.view === 'stock-dashboard')                       this._renderDashboard();
     } catch(e) { /* échec silencieux */ }
     finally { S.historyLoading = false; this._updateHomeCards(); }
+  },
+
+  async _prefetchCatalog() {
+    if (S.catalogLoaded || S.catalogLoading || S.stockLoaded) return;
+    S.catalogLoading = true;
+    try {
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=stock_catalog', {}, 40000);
+      const data = await r.json();
+      if (data.status === 'ok') {
+        S.stockData     = data.data     || [];
+        S.stockFamilles = data.familles || [];
+        S.catalogLoaded = true;
+      }
+    } catch(e) { /* échec silencieux */ }
+    finally { S.catalogLoading = false; }
   },
 
   /** Hash SHA-256 côté client via Web Crypto API. */
@@ -2926,6 +2944,7 @@ const App = {
         S.stockData     = cat.data || [];
         S.stockFamilles = cat.familles || [];
         S.stockLoaded   = true;
+        S.catalogLoaded = true;
       }
       if (prefs.status === 'ok') {
         S.stockPrefs = new Set(prefs.prefs?.relevant || []);
