@@ -1878,13 +1878,42 @@
                 <input id="bcb-f-remorque" type="text" placeholder="XY-456-EF" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;text-transform:uppercase;">
               </div>
             </div>
+            <!-- Transporteur -->
+            <div style="border:1px solid #DBEAFE;border-radius:8px;padding:10px;background:#F0F7FF;">
+              <div style="font-size:10px;font-weight:700;color:#1D4ED8;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;" id="bcb-lbl-transport-section"></div>
+              <div style="display:grid;gap:8px;">
+                <div>
+                  <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-transport-nom"></label>
+                  <input id="bcb-f-transport-nom" type="text" autocapitalize="words" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;">
+                </div>
+                <div>
+                  <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-transport-adresse"></label>
+                  <input id="bcb-f-transport-adresse" type="text" autocapitalize="words" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;">
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                  <div>
+                    <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-transport-ville"></label>
+                    <input id="bcb-f-transport-ville" type="text" autocapitalize="words" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;">
+                  </div>
+                  <div>
+                    <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-transport-pays"></label>
+                    <input id="bcb-f-transport-pays" type="text" list="ann-pays-list" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;" onblur="App.annPaysNormalize(this.id)">
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Client de destination -->
             <div>
               <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-client"></label>
               <input id="bcb-f-client" type="text" autocapitalize="words" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
             </div>
             <div>
-              <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-refs"></label>
-              <textarea id="bcb-f-refs" rows="3" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;resize:vertical;font-family:inherit;"></textarea>
+              <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-client-adresse"></label>
+              <input id="bcb-f-client-adresse" type="text" autocapitalize="words" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-client-pays"></label>
+              <input id="bcb-f-client-pays" type="text" list="ann-pays-list" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;" onblur="App.annPaysNormalize(this.id)">
             </div>
           </div>
           <button onclick="App.bcbSubmitConsigne()" style="margin-top:18px;width:100%;background:#1D4ED8;color:white;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:600;cursor:pointer;">✅ <span id="bcb-btn-valider"></span></button>
@@ -6890,73 +6919,73 @@ const App = {
     { code:'fr', flag:'🇫🇷', name:'Français', dir:'ltr',
       rulesTitle:'Consignes de sécurité obligatoires',
       formTitle:'Informations du conducteur',
-      fields:{ nom:'Nom', prenom:'Prénom', tracteur:'Immatriculation tracteur', remorque:'Immatriculation remorque', client:'Client de destination', refs:'Références à charger' },
+      fields:{ nom:'Nom', prenom:'Prénom', tracteur:'Immatriculation tracteur', remorque:'Immatriculation remorque', client:'Client de destination', clientAdresse:'Adresse du client', clientPays:'Pays', transport:{ sectionTitle:'Transporteur', nom:'Nom entreprise', adresse:'Adresse', ville:'CP / Ville', pays:'Pays' } },
       valider:'Valider l\'entrée', confirmTitle:'Entrée enregistrée', nouveau:'Nouveau chauffeur',
       rules:['Limitation de vitesse : 10 km/h sur l\'ensemble du site.','Arrêt obligatoire à chaque panneau STOP.','Les piétons sont toujours prioritaires.','Port du gilet de sécurité haute visibilité obligatoire.','Chaussures de sécurité obligatoires sur tout le site.','Utilisation du téléphone portable interdite lors des manœuvres.','Interdit de fumer sur l\'ensemble du site.','Respectez les consignes du personnel à tout moment.','Ne laissez pas votre véhicule sans surveillance dans les zones de circulation.','Tout accident ou incident doit être signalé immédiatement au personnel.'] },
     { code:'en', flag:'🇬🇧', name:'English', dir:'ltr',
       rulesTitle:'Mandatory safety instructions',
       formTitle:'Driver information',
-      fields:{ nom:'Last name', prenom:'First name', tracteur:'Tractor plate', remorque:'Trailer plate', client:'Destination client', refs:'References to collect' },
+      fields:{ nom:'Last name', prenom:'First name', tracteur:'Tractor plate', remorque:'Trailer plate', client:'Destination client', clientAdresse:'Client address', clientPays:'Country', transport:{ sectionTitle:'Carrier', nom:'Company name', adresse:'Address', ville:'Zip / City', pays:'Country' } },
       valider:'Validate entry', confirmTitle:'Entry recorded', nouveau:'New driver',
       rules:['Speed limit: 10 km/h throughout the site.','Mandatory stop at all STOP signs.','Pedestrians always have right of way.','High-visibility safety vest is mandatory.','Safety footwear is required throughout the site.','Mobile phone use is prohibited during maneuvers.','Smoking is strictly prohibited on the entire site.','Follow all instructions from staff at all times.','Do not leave your vehicle unattended in traffic areas.','Any accident or incident must be reported immediately to staff.'] },
     { code:'es', flag:'🇪🇸', name:'Español', dir:'ltr',
       rulesTitle:'Instrucciones de seguridad obligatorias',
       formTitle:'Información del conductor',
-      fields:{ nom:'Apellido', prenom:'Nombre', tracteur:'Matrícula tractora', remorque:'Matrícula remolque', client:'Cliente de destino', refs:'Referencias a recoger' },
+      fields:{ nom:'Apellido', prenom:'Nombre', tracteur:'Matrícula tractora', remorque:'Matrícula remolque', client:'Cliente de destino', clientAdresse:'Dirección del cliente', clientPays:'País', transport:{ sectionTitle:'Transportista', nom:'Nombre empresa', adresse:'Dirección', ville:'CP / Ciudad', pays:'País' } },
       valider:'Validar entrada', confirmTitle:'Entrada registrada', nuevo:'Nuevo conductor',
       rules:['Límite de velocidad: 10 km/h en todo el recinto.','Parada obligatoria en todas las señales de STOP.','Los peatones tienen prioridad en todo momento.','El uso del chaleco de seguridad de alta visibilidad es obligatorio.','Se requiere calzado de seguridad en todo el recinto.','Se prohíbe el uso del teléfono móvil durante las maniobras.','Está prohibido fumar en todo el recinto.','Siga las instrucciones del personal en todo momento.','No deje su vehículo sin vigilancia en zonas de circulación.','Todo accidente o incidente debe comunicarse inmediatamente al personal.'] },
     { code:'pt', flag:'🇵🇹', name:'Português', dir:'ltr',
       rulesTitle:'Instruções de segurança obrigatórias',
       formTitle:'Informações do condutor',
-      fields:{ nom:'Apelido', prenom:'Nome próprio', tracteur:'Matrícula do tractor', remorque:'Matrícula do reboque', client:'Cliente de destino', refs:'Referências a carregar' },
+      fields:{ nom:'Apelido', prenom:'Nome próprio', tracteur:'Matrícula do tractor', remorque:'Matrícula do reboque', client:'Cliente de destino', clientAdresse:'Morada do cliente', clientPays:'País', transport:{ sectionTitle:'Transportador', nom:'Nome empresa', adresse:'Morada', ville:'CP / Localidade', pays:'País' } },
       valider:'Validar entrada', confirmTitle:'Entrada registada', novo:'Novo condutor',
       rules:['Limite de velocidade: 10 km/h em todo o local.','Paragem obrigatória em todos os sinais de STOP.','Os peões têm sempre prioridade.','O uso de colete de segurança de alta visibilidade é obrigatório.','Calçado de segurança obrigatório em todo o local.','É proibido utilizar o telemóvel durante as manobras.','É proibido fumar em todo o local.','Siga as instruções do pessoal em todo momento.','Não deixe o seu veículo sem vigilância nas zonas de circulação.','Qualquer acidente ou incidente deve ser comunicado imediatamente ao pessoal.'] },
     { code:'ro', flag:'🇷🇴', name:'Română', dir:'ltr',
       rulesTitle:'Instrucțiuni de securitate obligatorii',
       formTitle:'Informații despre șofer',
-      fields:{ nom:'Nume', prenom:'Prenume', tracteur:'Nr. înmatriculare cap tractor', remorque:'Nr. înmatriculare remorcă', client:'Client de destinație', refs:'Referințe de ridicat' },
+      fields:{ nom:'Nume', prenom:'Prenume', tracteur:'Nr. înmatriculare cap tractor', remorque:'Nr. înmatriculare remorcă', client:'Client de destinație', clientAdresse:'Adresa clientului', clientPays:'Țară', transport:{ sectionTitle:'Transportator', nom:'Nume firmă', adresse:'Adresă', ville:'Cod / Localitate', pays:'Țară' } },
       valider:'Validare intrare', confirmTitle:'Intrare înregistrată', nou:'Șofer nou',
       rules:['Limita de viteză: 10 km/h pe întreg amplasamentul.','Oprire obligatorie la toate semnele STOP.','Pietonii au întotdeauna prioritate.','Purtarea vestei de siguranță cu vizibilitate ridicată este obligatorie.','Încălțămintea de protecție este obligatorie pe întreg amplasamentul.','Este interzisă utilizarea telefonului mobil în timpul manevrelor.','Fumatul este strict interzis pe întreg amplasamentul.','Respectați instrucțiunile personalului în orice moment.','Nu lăsați vehiculul nesupravegheat în zonele de circulație.','Orice accident sau incident trebuie raportat imediat personalului.'] },
     { code:'pl', flag:'🇵🇱', name:'Polski', dir:'ltr',
       rulesTitle:'Obowiązkowe instrukcje bezpieczeństwa',
       formTitle:'Dane kierowcy',
-      fields:{ nom:'Nazwisko', prenom:'Imię', tracteur:'Nr rej. ciągnika', remorque:'Nr rej. naczepy', client:'Klient docelowy', refs:'Referencje do odbioru' },
+      fields:{ nom:'Nazwisko', prenom:'Imię', tracteur:'Nr rej. ciągnika', remorque:'Nr rej. naczepy', client:'Klient docelowy', clientAdresse:'Adres klienta', clientPays:'Kraj', transport:{ sectionTitle:'Przewoźnik', nom:'Nazwa firmy', adresse:'Adres', ville:'Kod / Miasto', pays:'Kraj' } },
       valider:'Zatwierdź wjazd', confirmTitle:'Wjazd zarejestrowany', nowy:'Nowy kierowca',
       rules:['Ograniczenie prędkości: 10 km/h na terenie obiektu.','Obowiązkowe zatrzymanie przy wszystkich znakach STOP.','Piesi mają zawsze pierwszeństwo.','Obowiązkowe noszenie kamizelki odblaskowej.','Obuwie ochronne wymagane na terenie całego obiektu.','Używanie telefonu komórkowego podczas manewrów jest zabronione.','Palenie jest surowo zabronione na terenie całego obiektu.','Stosuj się do poleceń personelu w każdej chwili.','Nie pozostawiaj pojazdu bez nadzoru w strefach ruchu.','Każdy wypadek lub incydent należy niezwłocznie zgłosić personelowi.'] },
     { code:'tr', flag:'🇹🇷', name:'Türkçe', dir:'ltr',
       rulesTitle:'Zorunlu güvenlik talimatları',
       formTitle:'Sürücü bilgileri',
-      fields:{ nom:'Soyadı', prenom:'Adı', tracteur:'Çekici plakası', remorque:'Dorse plakası', client:'Varış müşterisi', refs:'Teslim alınacak referanslar' },
+      fields:{ nom:'Soyadı', prenom:'Adı', tracteur:'Çekici plakası', remorque:'Dorse plakası', client:'Varış müşterisi', clientAdresse:'Müşteri adresi', clientPays:'Ülke', transport:{ sectionTitle:'Taşıyıcı', nom:'Firma adı', adresse:'Adres', ville:'Posta kodu / Şehir', pays:'Ülke' } },
       valider:'Girişi onayla', confirmTitle:'Giriş kaydedildi', yeni:'Yeni sürücü',
       rules:['Hız sınırı: tüm tesis genelinde 10 km/sa.','Tüm STOP işaretlerinde zorunlu duruş.','Yayaların her zaman önceliği vardır.','Yüksek görünürlüklü güvenlik yeleği takmak zorunludur.','Tesisin tamamında güvenlik ayakkabısı zorunludur.','Manevra sırasında cep telefonu kullanımı yasaktır.','Tesisin tamamında sigara içmek kesinlikle yasaktır.','Personelin talimatlarına her zaman uyun.','Araçınızı trafik alanlarında gözetimsiz bırakmayın.','Her kaza veya olay derhal personele bildirilmelidir.'] },
     { code:'de', flag:'🇩🇪', name:'Deutsch', dir:'ltr',
       rulesTitle:'Obligatorische Sicherheitsanweisungen',
       formTitle:'Fahrerinformationen',
-      fields:{ nom:'Nachname', prenom:'Vorname', tracteur:'Kennzeichen Zugmaschine', remorque:'Kennzeichen Anhänger', client:'Zielkunde', refs:'Abzuholende Referenzen' },
+      fields:{ nom:'Nachname', prenom:'Vorname', tracteur:'Kennzeichen Zugmaschine', remorque:'Kennzeichen Anhänger', client:'Zielkunde', clientAdresse:'Adresse des Kunden', clientPays:'Land', transport:{ sectionTitle:'Spediteur', nom:'Firmenname', adresse:'Adresse', ville:'PLZ / Ort', pays:'Land' } },
       valider:'Einfahrt bestätigen', confirmTitle:'Einfahrt erfasst', neu:'Neuer Fahrer',
       rules:['Geschwindigkeitsbegrenzung: 10 km/h auf dem gesamten Gelände.','Obligatorischer Halt an allen STOP-Schildern.','Fußgänger haben stets Vorrang.','Das Tragen einer Warnweste ist Pflicht.','Sicherheitsschuhe sind auf dem gesamten Gelände vorgeschrieben.','Die Nutzung von Mobiltelefonen ist beim Rangieren verboten.','Das Rauchen ist auf dem gesamten Gelände streng verboten.','Folgen Sie jederzeit den Anweisungen des Personals.','Lassen Sie Ihr Fahrzeug in Verkehrsbereichen nicht unbeaufsichtigt.','Jeder Unfall oder Vorfall muss sofort dem Personal gemeldet werden.'] },
     { code:'nl', flag:'🇳🇱', name:'Nederlands', dir:'ltr',
       rulesTitle:'Verplichte veiligheidsinstructies',
       formTitle:'Gegevens chauffeur',
-      fields:{ nom:'Achternaam', prenom:'Voornaam', tracteur:'Kenteken trekker', remorque:'Kenteken oplegger', client:'Bestemmingsklant', refs:'Te laden referenties' },
+      fields:{ nom:'Achternaam', prenom:'Voornaam', tracteur:'Kenteken trekker', remorque:'Kenteken oplegger', client:'Bestemmingsklant', clientAdresse:'Adres van de klant', clientPays:'Land', transport:{ sectionTitle:'Vervoerder', nom:'Bedrijfsnaam', adresse:'Adres', ville:'Postcode / Stad', pays:'Land' } },
       valider:'Inrit bevestigen', confirmTitle:'Inrit geregistreerd', nieuw:'Nieuwe chauffeur',
       rules:['Snelheidslimiet: 10 km/u op het hele terrein.','Verplicht stoppen bij alle STOP-borden.','Voetgangers hebben altijd voorrang.','Het dragen van een veiligheidshesje met hoge zichtbaarheid is verplicht.','Veiligheidsschoenen zijn vereist op het hele terrein.','Het gebruik van een mobiele telefoon tijdens manoeuvres is verboden.','Roken is streng verboden op het hele terrein.','Volg altijd de instructies van het personeel op.','Laat uw voertuig niet onbeheerd achter in rijgebieden.','Elk ongeluk of incident moet onmiddellijk aan het personeel worden gemeld.'] },
     { code:'bg', flag:'🇧🇬', name:'Български', dir:'ltr',
       rulesTitle:'Задължителни инструкции за безопасност',
       formTitle:'Данни за шофьора',
-      fields:{ nom:'Фамилия', prenom:'Ime', tracteur:'Рег. номер влекач', remorque:'Рег. номер ремарке', client:'Клиент дестинация', refs:'Референции за вземане' },
+      fields:{ nom:'Фамилия', prenom:'Ime', tracteur:'Рег. номер влекач', remorque:'Рег. номер ремарке', client:'Клиент дестинация', clientAdresse:'Адрес на клиента', clientPays:'Държава', transport:{ sectionTitle:'Превозвач', nom:'Фирма', adresse:'Адрес', ville:'Пощ. код / Град', pays:'Държава' } },
       valider:'Потвърди влизане', confirmTitle:'Влизането е регистрирано', nov:'Нов шофьор',
       rules:['Ограничение на скоростта: 10 км/ч на целия обект.','Задължително спиране при всички знаци СТОП.','Пешеходците винаги имат предимство.','Носенето на светлоотразителна жилетка е задължително.','Предпазни обувки са задължителни на целия обект.','Използването на мобилен телефон по време на маневри е забранено.','Пушенето е строго забранено на целия обект.','Спазвайте указанията на персонала по всяко време.','Не оставяйте превозното средство без надзор в зоните за движение.','Всеки инцидент трябва незабавно да се докладва на персонала.'] },
     { code:'sq', flag:'🇦🇱', name:'Shqip', dir:'ltr',
       rulesTitle:'Udhëzime të detyrueshme sigurie',
       formTitle:'Të dhëna të shoferit',
-      fields:{ nom:'Mbiemri', prenom:'Emri', tracteur:'Targa traktori', remorque:'Targa rimorkio', client:'Klienti i destinacionit', refs:'Referencat për ngarkesë' },
+      fields:{ nom:'Mbiemri', prenom:'Emri', tracteur:'Targa traktori', remorque:'Targa rimorkio', client:'Klienti i destinacionit', clientAdresse:'Adresa e klientit', clientPays:'Vendi', transport:{ sectionTitle:'Transportuesi', nom:'Emri i kompanisë', adresse:'Adresa', ville:'Kodi / Qyteti', pays:'Vendi' } },
       valider:'Konfirmo hyrjen', confirmTitle:'Hyrja është regjistruar', ri:'Shofer i ri',
       rules:['Kufiri i shpejtësisë: 10 km/orë në të gjithë territorin.','Ndalim i detyrueshëm në të gjitha shenjat STOP.','Këmbësorët kanë gjithmonë përparësi.','Veshja e jelekut të sigurisë me dukshmëri të lartë është e detyrueshme.','Këpucët e sigurisë janë të detyrueshme në të gjithë territorin.','Përdorimi i telefonit celular gjatë manovrimit është i ndaluar.','Pirja e duhanit është rreptësisht e ndaluar në të gjithë territorin.','Ndiqni gjithmonë udhëzimet e personelit.','Mos e lini automjetin tuaj pa mbikëqyrje në zonat e qarkullimit.','Çdo aksident ose incident duhet të raportohet menjëherë tek personeli.'] },
     { code:'ar', flag:'🇸🇦', name:'العربية', dir:'rtl',
       rulesTitle:'تعليمات السلامة الإلزامية',
       formTitle:'معلومات السائق',
-      fields:{ nom:'اللقب', prenom:'الاسم', tracteur:'لوحة الجرار', remorque:'لوحة المقطورة', client:'العميل المقصود', refs:'المراجع المراد تحميلها' },
+      fields:{ nom:'اللقب', prenom:'الاسم', tracteur:'لوحة الجرار', remorque:'لوحة المقطورة', client:'العميل المقصود', clientAdresse:'عنوان العميل', clientPays:'البلد', transport:{ sectionTitle:'الناقل', nom:'اسم الشركة', adresse:'العنوان', ville:'الرمز البريدي / المدينة', pays:'البلد' } },
       valider:'تأكيد الدخول', confirmTitle:'تم تسجيل الدخول', jadid:'سائق جديد',
       rules:['الحد الأقصى للسرعة: 10 كم/ساعة في جميع أنحاء الموقع.','التوقف إلزامي عند جميع إشارات STOP.','المشاة لهم الأولوية في جميع الأوقات.','ارتداء سترة السلامة عالية الوضوح إلزامي.','حذاء السلامة إلزامي في جميع أنحاء الموقع.','يُحظر استخدام الهاتف المحمول أثناء المناورات.','يُحظر التدخين بشكل صارم في جميع أنحاء الموقع.','اتبع تعليمات الموظفين في جميع الأوقات.','لا تترك مركبتك دون مراقبة في مناطق الحركة.','يجب الإبلاغ فوراً عن أي حادث أو واقعة للموظفين.'] },
   ],
@@ -6990,14 +7019,20 @@ const App = {
     document.getElementById('bcb-lbl-tracteur').textContent = l.fields.tracteur;
     document.getElementById('bcb-lbl-remorque').textContent = l.fields.remorque;
     document.getElementById('bcb-lbl-client').textContent = l.fields.client;
-    document.getElementById('bcb-lbl-refs').textContent = l.fields.refs;
+    document.getElementById('bcb-lbl-client-adresse').textContent = l.fields.clientAdresse;
+    document.getElementById('bcb-lbl-client-pays').textContent = l.fields.clientPays;
+    document.getElementById('bcb-lbl-transport-section').textContent = l.fields.transport.sectionTitle;
+    document.getElementById('bcb-lbl-transport-nom').textContent = l.fields.transport.nom;
+    document.getElementById('bcb-lbl-transport-adresse').textContent = l.fields.transport.adresse;
+    document.getElementById('bcb-lbl-transport-ville').textContent = l.fields.transport.ville;
+    document.getElementById('bcb-lbl-transport-pays').textContent = l.fields.transport.pays;
     document.getElementById('bcb-btn-valider').textContent = l.valider;
     // Direction RTL/LTR
     const wrapper = document.getElementById('bcb-form-wrapper');
     wrapper.style.direction = l.dir;
     ol.style.direction = l.dir;
     // Clear form
-    ['bcb-f-nom','bcb-f-prenom','bcb-f-tracteur','bcb-f-remorque','bcb-f-client','bcb-f-refs'].forEach(id => { document.getElementById(id).value = ''; });
+    ['bcb-f-nom','bcb-f-prenom','bcb-f-tracteur','bcb-f-remorque','bcb-f-client','bcb-f-client-adresse','bcb-f-client-pays','bcb-f-transport-nom','bcb-f-transport-adresse','bcb-f-transport-ville','bcb-f-transport-pays'].forEach(id => { document.getElementById(id).value = ''; });
     // Show step 2
     document.getElementById('bcb-step-lang').style.display = 'none';
     document.getElementById('bcb-step-consignes').style.display = '';
@@ -7014,12 +7049,17 @@ const App = {
   bcbSubmitConsigne() {
     const l = S.bcbLang;
     if (!l) return;
-    const nom      = document.getElementById('bcb-f-nom').value.trim();
-    const prenom   = document.getElementById('bcb-f-prenom').value.trim();
-    const tracteur = document.getElementById('bcb-f-tracteur').value.trim().toUpperCase();
-    const remorque = document.getElementById('bcb-f-remorque').value.trim().toUpperCase();
-    const client   = document.getElementById('bcb-f-client').value.trim();
-    const refs     = document.getElementById('bcb-f-refs').value.trim();
+    const nom              = document.getElementById('bcb-f-nom').value.trim();
+    const prenom           = document.getElementById('bcb-f-prenom').value.trim();
+    const tracteur         = document.getElementById('bcb-f-tracteur').value.trim().toUpperCase();
+    const remorque         = document.getElementById('bcb-f-remorque').value.trim().toUpperCase();
+    const client           = document.getElementById('bcb-f-client').value.trim();
+    const clientAdresse    = document.getElementById('bcb-f-client-adresse').value.trim();
+    const clientPays       = document.getElementById('bcb-f-client-pays').value.trim();
+    const transportNom     = document.getElementById('bcb-f-transport-nom').value.trim();
+    const transportAdresse = document.getElementById('bcb-f-transport-adresse').value.trim();
+    const transportVille   = document.getElementById('bcb-f-transport-ville').value.trim();
+    const transportPays    = document.getElementById('bcb-f-transport-pays').value.trim();
     if (!nom || !tracteur || !client) {
       this.toast('⚠️ Veuillez remplir au moins le nom, le tracteur et le client.');
       return;
@@ -7027,7 +7067,7 @@ const App = {
     const now = new Date();
     const dateStr = now.toLocaleDateString('fr-FR') + ' ' + now.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
     // Save to localStorage log
-    const entry = { ts: now.toISOString(), lang: l.code, nom, prenom, tracteur, remorque, client, refs };
+    const entry = { ts: now.toISOString(), lang: l.code, nom, prenom, tracteur, remorque, client, clientAdresse, clientPays, transportNom, transportAdresse, transportVille, transportPays };
     const log = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
     log.unshift(entry);
     if (log.length > 200) log.length = 200;
@@ -7042,8 +7082,10 @@ const App = {
       `${f.nom} : <b>${nom}${prenom ? ' ' + prenom : ''}</b><br>` +
       `${f.tracteur} : <b>${tracteur}</b><br>` +
       (remorque ? `${f.remorque} : <b>${remorque}</b><br>` : '') +
-      `${f.client} : <b>${client}</b><br>` +
-      (refs ? `${f.refs} : <b>${refs}</b>` : '');
+      (transportNom ? `${f.transport.nom} : <b>${transportNom}${transportVille ? ', ' + transportVille : ''}</b><br>` : '') +
+      `${f.client} : <b>${client}</b>` +
+      (clientAdresse ? `<br>${f.clientAdresse} : <b>${clientAdresse}</b>` : '') +
+      (clientPays ? `<br>${f.clientPays} : <b>${clientPays}</b>` : '');
     document.getElementById('bcb-step-consignes').style.display = 'none';
     document.getElementById('bcb-step-confirm').style.display = '';
     document.getElementById('view-bcb-consignes').scrollTop = 0;
