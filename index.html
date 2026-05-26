@@ -1851,8 +1851,8 @@
       <!-- Barre de sélection (sticky bas) -->
       <div id="bcb-select-bar" style="display:none;position:sticky;bottom:0;background:white;border-top:2px solid #1D4ED8;padding:10px 14px;display:none;align-items:center;justify-content:space-between;gap:10px;z-index:3;">
         <div style="display:flex;align-items:center;gap:8px;">
-          <button onclick="App.bcbSelectAll()" style="font-size:11px;font-weight:600;padding:5px 10px;border-radius:7px;border:1.5px solid #E2E8F0;background:white;color:#475569;cursor:pointer;">Tout</button>
-          <span id="bcb-select-count" style="font-size:12px;font-weight:600;color:#1D4ED8;">Aucune sélection</span>
+          <button id="bcb-select-all-btn" onclick="App.bcbSelectAll()" style="font-size:11px;font-weight:600;padding:5px 10px;border-radius:7px;border:1.5px solid #E2E8F0;background:white;color:#475569;cursor:pointer;">Tout</button>
+          <span id="bcb-select-count" style="font-size:12px;font-weight:600;color:#1D4ED8;">0 sélectionné</span>
         </div>
         <div style="display:flex;align-items:center;gap:6px;">
           <button disabled style="font-size:11px;font-weight:600;padding:5px 12px;border-radius:7px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#94A3B8;cursor:default;">Modifier statut →</button>
@@ -7297,17 +7297,25 @@ const App = {
       S.bcbSelected.add(key);
       if (rowEl) { rowEl.style.background='#EFF6FF'; const cb=rowEl.querySelector('input'); if(cb) cb.checked=true; }
     }
-    this._bcbSyncSelectBar();
+    this._bcbUpdateCount();
   },
 
   bcbSelectAll() {
-    document.querySelectorAll('#bcb-lots-content [data-lot-key]').forEach(row => {
+    const rows = [...document.querySelectorAll('#bcb-lots-content [data-lot-key]')];
+    const allSel = rows.length > 0 && rows.every(r => S.bcbSelected.has(r.dataset.lotKey));
+    rows.forEach(row => {
       const key = row.dataset.lotKey;
-      S.bcbSelected.add(key);
-      row.style.background = '#EFF6FF';
-      const cb = row.querySelector('input'); if (cb) cb.checked = true;
+      if (allSel) {
+        S.bcbSelected.delete(key);
+        row.style.background = 'white';
+        const cb = row.querySelector('input'); if (cb) cb.checked = false;
+      } else {
+        S.bcbSelected.add(key);
+        row.style.background = '#EFF6FF';
+        const cb = row.querySelector('input'); if (cb) cb.checked = true;
+      }
     });
-    this._bcbSyncSelectBar();
+    this._bcbUpdateCount();
   },
 
   bcbClearSelect() {
@@ -7316,17 +7324,24 @@ const App = {
     this.bcbLotsRender();
   },
 
+  _bcbUpdateCount() {
+    const cnt    = document.getElementById('bcb-select-count');
+    const allBtn = document.getElementById('bcb-select-all-btn');
+    const n = S.bcbSelected.size;
+    if (cnt) cnt.textContent = n ? `${n} lot${n>1?'s':''} sélectionné${n>1?'s':''}` : '0 sélectionné';
+    if (allBtn) {
+      const rows  = document.querySelectorAll('#bcb-lots-content [data-lot-key]');
+      const allSel = rows.length > 0 && [...rows].every(r => S.bcbSelected.has(r.dataset.lotKey));
+      allBtn.textContent = allSel ? 'Aucun' : 'Tout';
+    }
+  },
+
   _bcbSyncSelectBar() {
     const bar = document.getElementById('bcb-select-bar');
-    const cnt = document.getElementById('bcb-select-count');
-    if (!bar) return;
-    bar.style.display = S.bcbSelectMode ? 'flex' : 'none';
-    if (cnt) {
-      const n = S.bcbSelected.size;
-      cnt.textContent = n ? `${n} lot${n>1?'s':''} sélectionné${n>1?'s':''}` : 'Aucune sélection';
-    }
+    if (bar) bar.style.display = S.bcbSelectMode ? 'flex' : 'none';
     const content = document.getElementById('bcb-lots-content');
     if (content) content.style.paddingBottom = S.bcbSelectMode ? '68px' : '24px';
+    this._bcbUpdateCount();
   },
 
   bcbLotsRender() {
