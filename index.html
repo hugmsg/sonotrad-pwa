@@ -899,9 +899,6 @@
       <span class="icon">🔄</span><span>Synchro</span>
     </button>
     <!-- ── Tabs BCB (masqués hors activité BCB) ───────────────────────── -->
-    <button class="nav-tab" data-bcbtab="bcb-menu" onclick="App.go('bcb-menu')" style="display:none">
-      <span class="icon">🏠</span><span>Menu</span>
-    </button>
     <button class="nav-tab" data-bcbtab="bcb-lots" onclick="App.go('bcb-lots')" style="display:none">
       <span class="icon">📦</span><span>Lots</span>
     </button>
@@ -1801,37 +1798,6 @@
       </div>
     </div>
 
-    <!-- ── VIEW : BCB MENU ───────────────────────────────────────────────── -->
-    <div class="view" id="view-bcb-menu">
-      <div style="padding:20px 16px;">
-        <h2 style="font-size:18px;font-weight:700;color:#1E293B;margin-bottom:6px;">BCB</h2>
-        <p style="font-size:13px;color:#64748B;margin-bottom:20px;">Vente &amp; Logistique</p>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-          <div onclick="App.go('bcb-lots')" style="background:white;border-radius:16px;padding:24px 12px 18px;box-shadow:0 2px 8px rgba(0,0,0,0.07);display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;border:2px solid transparent;transition:border-color .15s,transform .12s;" onmouseenter="this.style.borderColor='#2E86C1';this.style.transform='translateY(-2px)'" onmouseleave="this.style.borderColor='transparent';this.style.transform=''">
-            <div style="font-size:38px;">📦</div>
-            <div style="font-size:14px;font-weight:700;color:#1E293B;">Lots</div>
-            <div style="font-size:11px;color:#64748B;text-align:center;">Suivi lots par acheteur</div>
-            <span style="background:#D1FAE5;color:#065F46;font-size:10px;font-weight:600;padding:2px 10px;border-radius:20px;margin-top:2px;">● Actif</span>
-          </div>
-          <div onclick="App.go('bcb-consignes')" style="background:white;border-radius:16px;padding:24px 12px 18px;box-shadow:0 2px 8px rgba(0,0,0,0.07);display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;border:2px solid transparent;transition:border-color .15s,transform .12s;" onmouseenter="this.style.borderColor='#2E86C1';this.style.transform='translateY(-2px)'" onmouseleave="this.style.borderColor='transparent';this.style.transform=''">
-            <div style="font-size:38px;">📋</div>
-            <div style="font-size:14px;font-weight:700;color:#1E293B;">Consignes</div>
-            <div style="font-size:11px;color:#64748B;text-align:center;">Sécurité &amp; accueil chauffeur</div>
-            <span style="background:#D1FAE5;color:#065F46;font-size:10px;font-weight:600;padding:2px 10px;border-radius:20px;margin-top:2px;">● Actif</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── VIEW : BCB PARC ────────────────────────────────────────────────── -->
-    <div class="view" id="view-bcb-parc">
-      <div style="padding:48px 20px;text-align:center;color:#94A3B8;">
-        <div style="font-size:52px;margin-bottom:14px;">🚧</div>
-        <div style="font-size:16px;font-weight:600;color:#475569;">Module en développement</div>
-        <div style="font-size:13px;margin-top:6px;">Cette fonctionnalité sera disponible prochainement.</div>
-      </div>
-    </div>
-
     <!-- ── VIEW : BCB LOTS ──────────────────────────────────────────────── -->
     <div class="view" id="view-bcb-lots">
       <!-- Barre de contrôle -->
@@ -1842,6 +1808,13 @@
             <div style="font-size:11px;color:#64748B;" id="bcb-lots-subtitle">Chargement…</div>
           </div>
           <button onclick="App.bcbLotsLoad(true)" style="background:white;border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 11px;font-size:12px;font-weight:600;color:#1D4ED8;cursor:pointer;flex-shrink:0;">↺</button>
+        </div>
+        <!-- Sélecteur de vue -->
+        <div id="bcb-lots-view-tabs" style="display:flex;gap:4px;margin-bottom:8px;">
+          <button onclick="App.bcbSetView('lots')"     id="bcb-vtab-lots"     style="flex:1;padding:5px 2px;font-size:11px;font-weight:600;border-radius:7px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Lots</button>
+          <button onclick="App.bcbSetView('acheteur')" id="bcb-vtab-acheteur" style="flex:1;padding:5px 2px;font-size:11px;font-weight:600;border-radius:7px;border:1.5px solid #1D4ED8;background:#1D4ED8;color:white;cursor:pointer;">Acheteur</button>
+          <button onclick="App.bcbSetView('vendeur')"  id="bcb-vtab-vendeur"  style="flex:1;padding:5px 2px;font-size:11px;font-weight:600;border-radius:7px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Vendeur</button>
+          <button onclick="App.bcbSetView('vente')"    id="bcb-vtab-vente"    style="flex:1;padding:5px 2px;font-size:11px;font-weight:600;border-radius:7px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Vente</button>
         </div>
         <input id="bcb-lots-search" type="search" placeholder="Rechercher (code, vendeur, marque, n° série…)" autocomplete="off"
           oninput="S.bcbLotsSearch=this.value;App.bcbLotsRender()"
@@ -2427,6 +2400,7 @@ const S = {
   bcbLotsLoaded:   false,
   bcbLotsLoading:  false,
   bcbLotsSearch:   '',     // filtre texte libre
+  bcbLotsView:     'acheteur', // 'lots' | 'acheteur' | 'vendeur' | 'vente'
   bcbSelLot:       null,   // lot sélectionné pour la fiche détail
   // ── LVU ──────────────────────────────────────────────────────────────────
   lvLinks: {},        // { opKey: { numero, display, date } } — chargé au prefetch
@@ -2510,7 +2484,7 @@ const App = {
     S.activity = name;
     if (name === 'loxam')    this.go('departures');
     if (name === 'stockage') this.go('stock-dashboard');
-    if (name === 'bcb')      this.go('bcb-menu');
+    if (name === 'bcb')      this.go('bcb-lots');
     if (name === 'lvu')      this.lvuInit();
     if (name === 'annuaire') this.go('annuaire');
   },
@@ -7203,7 +7177,7 @@ const App = {
 
   async bcbLotsLoad(force) {
     if (S.bcbLotsLoading) return;
-    if (S.bcbLotsLoaded && !force) { this.bcbLotsRender(); return; }
+    if (S.bcbLotsLoaded && !force) { this.bcbSetView(S.bcbLotsView); return; }
     if (!S.apiUrl) { this.toast('URL API non configurée'); return; }
     S.bcbLotsLoading = true;
     document.getElementById('bcb-lots-loading').style.display = '';
@@ -7222,6 +7196,19 @@ const App = {
       S.bcbLotsLoading = false;
       document.getElementById('bcb-lots-loading').style.display = 'none';
     }
+    this.bcbSetView(S.bcbLotsView);
+  },
+
+  bcbSetView(v) {
+    S.bcbLotsView = v;
+    ['lots','acheteur','vendeur','vente'].forEach(k => {
+      const btn = document.getElementById('bcb-vtab-' + k);
+      if (!btn) return;
+      const active = k === v;
+      btn.style.background    = active ? '#1D4ED8' : 'white';
+      btn.style.color         = active ? 'white'   : '#64748B';
+      btn.style.borderColor   = active ? '#1D4ED8' : '#E2E8F0';
+    });
     this.bcbLotsRender();
   },
 
@@ -7237,15 +7224,11 @@ const App = {
           .some(v => (v||'').toLowerCase().includes(q)))
       : S.bcbLots;
 
-    const byBuyer = {};
-    filtered.forEach(l => { const b = l.acheteur||''; (byBuyer[b]=byBuyer[b]||[]).push(l); });
-    const buyers = Object.keys(byBuyer).sort((a,b) => a.localeCompare(b,'fr'));
-
-    subtitle.textContent = filtered.length
-      ? `${filtered.length} lot${filtered.length>1?'s':''} · ${buyers.length} acheteur${buyers.length>1?'s':''}`
-      : (q ? 'Aucun résultat' : 'Aucun lot');
-
-    if (!buyers.length) { content.style.display='none'; emptyEl.style.display=''; return; }
+    if (!filtered.length) {
+      content.style.display='none'; emptyEl.style.display='';
+      subtitle.textContent = q ? 'Aucun résultat' : 'Aucun lot';
+      return;
+    }
     emptyEl.style.display = 'none';
     content.style.display = '';
 
@@ -7253,38 +7236,62 @@ const App = {
     const idxMap = {};
     S.bcbLots.forEach((l,i) => { idxMap[l.inter+'|'+l.idBcb] = i; });
 
-    content.innerHTML = buyers.map(buyer => {
-      const lots = byBuyer[buyer];
-      const lotsHtml = lots.map(lot => {
-        const idx = idxMap[lot.inter+'|'+lot.idBcb] ?? -1;
-        // Statuts : 3 dots colorés A/I/V
-        const dotA = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.arrive?'#D1FAE5':'#F1F5F9'};color:${lot.arrive?'#065F46':'#94A3B8'};">A</span>`;
-        const dotI = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.inspecte?'#DBEAFE':'#F1F5F9'};color:${lot.inspecte?'#1D4ED8':'#94A3B8'};">I</span>`;
-        const dotV = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.vendu?'#FEF3C7':'#F1F5F9'};color:${lot.vendu?'#92400E':'#94A3B8'};">V</span>`;
-        const vente = lot.numVente ? `<span style="font-size:10px;color:#64748B;font-weight:600;">n°${lot.numVente}</span>` : '';
-        // Description condensée
-        const desc = [lot.vendeur, [lot.marque,lot.modele].filter(Boolean).join(' '), lot.type].filter(Boolean).join(' — ');
-        const sub  = [lot.refVendeur?`réf ${lot.refVendeur}`:'', lot.numSerie?`n° ${lot.numSerie}`:'', lot.poids?`${lot.poids}t`:'', lot.commentaire].filter(Boolean).join(' · ');
-        return `<div onclick="App.bcbLotDetail(${idx})" style="background:white;border:1px solid #E2E8F0;border-radius:8px;padding:7px 10px;cursor:pointer;display:flex;align-items:center;gap:8px;min-height:0;" onmouseenter="this.style.background='#F0F7FF'" onmouseleave="this.style.background='white'">
-          <div style="flex:1;min-width:0;overflow:hidden;">
-            <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;">
-              <span style="font-size:12px;font-weight:700;color:#1E293B;white-space:nowrap;">${lot.idBcb}</span>
-              ${lot.inter ? `<span style="font-size:10px;color:#94A3B8;font-family:monospace;white-space:nowrap;">${lot.inter}</span>` : ''}
-              <span style="font-size:11px;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:60px;">${desc}</span>
-            </div>
-            ${sub ? `<div style="font-size:10px;color:#94A3B8;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sub}</div>` : ''}
+    const lotRow = lot => {
+      const idx  = idxMap[lot.inter+'|'+lot.idBcb] ?? -1;
+      const dotA = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.arrive?'#D1FAE5':'#F1F5F9'};color:${lot.arrive?'#065F46':'#94A3B8'};">A</span>`;
+      const dotI = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.inspecte?'#DBEAFE':'#F1F5F9'};color:${lot.inspecte?'#1D4ED8':'#94A3B8'};">I</span>`;
+      const dotV = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.vendu?'#FEF3C7':'#F1F5F9'};color:${lot.vendu?'#92400E':'#94A3B8'};">V</span>`;
+      const vente = lot.numVente ? `<span style="font-size:10px;color:#64748B;font-weight:600;margin-left:2px;">n°${lot.numVente}</span>` : '';
+      const desc  = [lot.vendeur, [lot.marque,lot.modele].filter(Boolean).join(' '), lot.type].filter(Boolean).join(' — ');
+      const sub   = [lot.refVendeur?`réf ${lot.refVendeur}`:'', lot.numSerie?`n° ${lot.numSerie}`:'', lot.poids?`${lot.poids}t`:'', lot.commentaire].filter(Boolean).join(' · ');
+      return `<div onclick="App.bcbLotDetail(${idx})" style="background:white;border:1px solid #E2E8F0;border-radius:8px;padding:7px 10px;cursor:pointer;display:flex;align-items:center;gap:8px;" onmouseenter="this.style.background='#F0F7FF'" onmouseleave="this.style.background='white'">
+        <div style="flex:1;min-width:0;overflow:hidden;">
+          <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;">
+            <span style="font-size:12px;font-weight:700;color:#1E293B;white-space:nowrap;">${lot.idBcb}</span>
+            ${lot.inter ? `<span style="font-size:10px;color:#94A3B8;font-family:monospace;white-space:nowrap;">${lot.inter}</span>` : ''}
+            <span style="font-size:11px;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:60px;">${desc}</span>
           </div>
-          <div style="display:flex;align-items:center;gap:3px;flex-shrink:0;">${dotA}${dotI}${dotV}${vente?'<span style="margin-left:2px;">'+vente+'</span>':''}</div>
-        </div>`;
-      }).join('');
-      return `<div>
-        <div style="font-size:10px;font-weight:700;color:#1D4ED8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;display:flex;align-items:center;gap:5px;">
-          <span>${buyer||'(inconnu)'}</span>
-          <span style="background:#DBEAFE;color:#1D4ED8;font-size:10px;padding:0 7px;border-radius:10px;">${lots.length}</span>
+          ${sub ? `<div style="font-size:10px;color:#94A3B8;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sub}</div>` : ''}
         </div>
-        <div style="display:flex;flex-direction:column;gap:4px;">${lotsHtml}</div>
+        <div style="display:flex;align-items:center;gap:3px;flex-shrink:0;">${dotA}${dotI}${dotV}${vente}</div>
       </div>`;
-    }).join('');
+    };
+
+    const groupSection = (key, lots, color) => {
+      const label = key || '(non renseigné)';
+      return `<div>
+        <div style="font-size:10px;font-weight:700;color:${color||'#1D4ED8'};text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;display:flex;align-items:center;gap:5px;">
+          <span>${label}</span>
+          <span style="background:#F1F5F9;color:#475569;font-size:10px;padding:0 7px;border-radius:10px;">${lots.length}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;">${lots.map(lotRow).join('')}</div>
+      </div>`;
+    };
+
+    const v = S.bcbLotsView || 'acheteur';
+
+    if (v === 'lots') {
+      const sorted = [...filtered].sort((a,b) => a.idBcb.localeCompare(b.idBcb));
+      subtitle.textContent = `${sorted.length} lot${sorted.length>1?'s':''}`;
+      content.innerHTML = `<div style="display:flex;flex-direction:column;gap:4px;">${sorted.map(lotRow).join('')}</div>`;
+      return;
+    }
+
+    const groupBy = v === 'acheteur' ? l => l.acheteur
+                  : v === 'vendeur'  ? l => l.vendeur
+                  : l => (l.numVente ? `Vente n°${l.numVente}` : '');
+    const color   = v === 'vendeur'  ? '#065F46' : v === 'vente' ? '#92400E' : '#1D4ED8';
+
+    const groups = {};
+    filtered.forEach(l => { const k = groupBy(l)||''; (groups[k]=groups[k]||[]).push(l); });
+    const keys = Object.keys(groups).sort((a,b) => {
+      if (!a) return 1; if (!b) return -1;
+      return a.localeCompare(b, 'fr');
+    });
+
+    const word = v === 'acheteur' ? 'acheteur' : v === 'vendeur' ? 'vendeur' : 'vente';
+    subtitle.textContent = `${filtered.length} lot${filtered.length>1?'s':''} · ${keys.length} ${word}${keys.length>1?'s':''}`;
+    content.innerHTML = keys.map(k => groupSection(k, groups[k], color)).join('');
   },
 
   bcbLotDetail(idx) {
