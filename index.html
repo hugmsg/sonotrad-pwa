@@ -1818,7 +1818,19 @@
         </div>
         <input id="bcb-lots-search" type="search" placeholder="Rechercher (code, vendeur, marque, n° série…)" autocomplete="off"
           oninput="S.bcbLotsSearch=this.value;App.bcbLotsRender()"
-          style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:7px 10px;font-size:12px;outline:none;">
+          style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:7px 10px;font-size:12px;outline:none;margin-bottom:7px;">
+        <!-- Sous-filtres : statuts + tri + sélection -->
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+          <div style="display:flex;gap:4px;">
+            <button id="bcb-sf-arrive"   onclick="App.bcbToggleStatus('arrive')"   style="padding:3px 9px;font-size:11px;font-weight:600;border-radius:6px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Arrivé</button>
+            <button id="bcb-sf-inspecte" onclick="App.bcbToggleStatus('inspecte')" style="padding:3px 9px;font-size:11px;font-weight:600;border-radius:6px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Inspecté</button>
+            <button id="bcb-sf-vendu"    onclick="App.bcbToggleStatus('vendu')"    style="padding:3px 9px;font-size:11px;font-weight:600;border-radius:6px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Vendu</button>
+          </div>
+          <div style="display:flex;gap:4px;">
+            <button id="bcb-sort-btn"    onclick="App.bcbCycleSort()"              style="padding:3px 9px;font-size:11px;font-weight:600;border-radius:6px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;white-space:nowrap;">↑ ID</button>
+            <button id="bcb-select-btn"  onclick="App.bcbToggleSelect()"           style="padding:3px 10px;font-size:13px;border-radius:6px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;" title="Mode sélection">⊡</button>
+          </div>
+        </div>
       </div>
 
       <!-- État chargement -->
@@ -1833,8 +1845,20 @@
         <div style="font-size:14px;font-weight:600;color:#475569;">Aucun lot en attente</div>
       </div>
 
-      <!-- Contenu par acheteur -->
+      <!-- Contenu -->
       <div id="bcb-lots-content" style="padding:8px 10px 24px;display:flex;flex-direction:column;gap:10px;"></div>
+
+      <!-- Barre de sélection (sticky bas) -->
+      <div id="bcb-select-bar" style="display:none;position:sticky;bottom:0;background:white;border-top:2px solid #1D4ED8;padding:10px 14px;display:none;align-items:center;justify-content:space-between;gap:10px;z-index:3;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button onclick="App.bcbSelectAll()" style="font-size:11px;font-weight:600;padding:5px 10px;border-radius:7px;border:1.5px solid #E2E8F0;background:white;color:#475569;cursor:pointer;">Tout</button>
+          <span id="bcb-select-count" style="font-size:12px;font-weight:600;color:#1D4ED8;">Aucune sélection</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button disabled style="font-size:11px;font-weight:600;padding:5px 12px;border-radius:7px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#94A3B8;cursor:default;">Modifier statut →</button>
+          <button onclick="App.bcbClearSelect()" style="font-size:13px;padding:5px 9px;border-radius:7px;border:1.5px solid #E2E8F0;background:white;color:#475569;cursor:pointer;">✕</button>
+        </div>
+      </div>
     </div>
 
     <!-- ── VIEW : BCB LOT DÉTAIL ─────────────────────────────────────────── -->
@@ -2399,9 +2423,13 @@ const S = {
   bcbByBuyer:      {},     // { acheteur: [lot,...] }
   bcbLotsLoaded:   false,
   bcbLotsLoading:  false,
-  bcbLotsSearch:   '',     // filtre texte libre
+  bcbLotsSearch:   '',
   bcbLotsView:     'acheteur', // 'lots' | 'acheteur' | 'vendeur' | 'vente'
-  bcbSelLot:       null,   // lot sélectionné pour la fiche détail
+  bcbStatusFilter: { arrive: null, inspecte: null, vendu: null }, // null=tous | true=oui | false=non
+  bcbSortField:    'default',  // 'default' | 'id_desc' | 'date_asc' | 'date_desc'
+  bcbSelectMode:   false,
+  bcbSelected:     new Set(),
+  bcbSelLot:       null,
   // ── LVU ──────────────────────────────────────────────────────────────────
   lvLinks: {},        // { opKey: { numero, display, date } } — chargé au prefetch
   annuaireData: [],   // [{code,nom,adresse,cp,ville,email,tel,note}]
@@ -7201,15 +7229,104 @@ const App = {
 
   bcbSetView(v) {
     S.bcbLotsView = v;
+    this.bcbLotsRender();
+  },
+
+  bcbUpdateFilterUI() {
+    // Vue tabs
     ['lots','acheteur','vendeur','vente'].forEach(k => {
       const btn = document.getElementById('bcb-vtab-' + k);
       if (!btn) return;
-      const active = k === v;
-      btn.style.background    = active ? '#1D4ED8' : 'white';
-      btn.style.color         = active ? 'white'   : '#64748B';
-      btn.style.borderColor   = active ? '#1D4ED8' : '#E2E8F0';
+      const a = k === S.bcbLotsView;
+      btn.style.background  = a ? '#1D4ED8' : 'white';
+      btn.style.color       = a ? 'white'   : '#64748B';
+      btn.style.borderColor = a ? '#1D4ED8' : '#E2E8F0';
     });
+    // Chips statut
+    const sfStyles = {
+      null:  { bg:'white',   color:'#64748B', border:'#E2E8F0' },
+      true:  { bg:'#D1FAE5', color:'#065F46', border:'#6EE7B7' },
+      false: { bg:'#FEF3C7', color:'#92400E', border:'#FCD34D' },
+    };
+    ['arrive','inspecte','vendu'].forEach(f => {
+      const btn = document.getElementById('bcb-sf-' + f);
+      if (!btn) return;
+      const s = sfStyles[String(S.bcbStatusFilter[f])] || sfStyles.null;
+      btn.style.background  = s.bg;
+      btn.style.color       = s.color;
+      btn.style.borderColor = s.border;
+    });
+    // Bouton tri
+    const sortBtn = document.getElementById('bcb-sort-btn');
+    if (sortBtn) {
+      const labels = { default:'↑ ID', id_desc:'↓ ID', date_asc:'↑ Date', date_desc:'↓ Date' };
+      sortBtn.textContent = labels[S.bcbSortField] || '↑ ID';
+    }
+    // Bouton sélection
+    const selBtn = document.getElementById('bcb-select-btn');
+    if (selBtn) {
+      selBtn.style.background  = S.bcbSelectMode ? '#1D4ED8' : 'white';
+      selBtn.style.color       = S.bcbSelectMode ? 'white'   : '#64748B';
+      selBtn.style.borderColor = S.bcbSelectMode ? '#1D4ED8' : '#E2E8F0';
+    }
+  },
+
+  bcbToggleStatus(field) {
+    const cur = S.bcbStatusFilter[field];
+    S.bcbStatusFilter[field] = cur === null ? true : cur === true ? false : null;
     this.bcbLotsRender();
+  },
+
+  bcbCycleSort() {
+    const cycle = ['default','id_desc','date_asc','date_desc'];
+    S.bcbSortField = cycle[(cycle.indexOf(S.bcbSortField) + 1) % cycle.length];
+    this.bcbLotsRender();
+  },
+
+  bcbToggleSelect() {
+    S.bcbSelectMode = !S.bcbSelectMode;
+    if (!S.bcbSelectMode) S.bcbSelected.clear();
+    this.bcbLotsRender();
+  },
+
+  bcbToggleLotSelect(key, rowEl) {
+    if (S.bcbSelected.has(key)) {
+      S.bcbSelected.delete(key);
+      if (rowEl) { rowEl.style.background='white'; const cb=rowEl.querySelector('input'); if(cb) cb.checked=false; }
+    } else {
+      S.bcbSelected.add(key);
+      if (rowEl) { rowEl.style.background='#EFF6FF'; const cb=rowEl.querySelector('input'); if(cb) cb.checked=true; }
+    }
+    this._bcbSyncSelectBar();
+  },
+
+  bcbSelectAll() {
+    document.querySelectorAll('#bcb-lots-content [data-lot-key]').forEach(row => {
+      const key = row.dataset.lotKey;
+      S.bcbSelected.add(key);
+      row.style.background = '#EFF6FF';
+      const cb = row.querySelector('input'); if (cb) cb.checked = true;
+    });
+    this._bcbSyncSelectBar();
+  },
+
+  bcbClearSelect() {
+    S.bcbSelected.clear();
+    S.bcbSelectMode = false;
+    this.bcbLotsRender();
+  },
+
+  _bcbSyncSelectBar() {
+    const bar = document.getElementById('bcb-select-bar');
+    const cnt = document.getElementById('bcb-select-count');
+    if (!bar) return;
+    bar.style.display = S.bcbSelectMode ? 'flex' : 'none';
+    if (cnt) {
+      const n = S.bcbSelected.size;
+      cnt.textContent = n ? `${n} lot${n>1?'s':''} sélectionné${n>1?'s':''}` : 'Aucune sélection';
+    }
+    const content = document.getElementById('bcb-lots-content');
+    if (content) content.style.paddingBottom = S.bcbSelectMode ? '68px' : '24px';
   },
 
   bcbLotsRender() {
@@ -7218,33 +7335,62 @@ const App = {
     const subtitle = document.getElementById('bcb-lots-subtitle');
     if (!content) return;
 
+    this.bcbUpdateFilterUI();
+
+    // 1. Filtre texte
     const q = (S.bcbLotsSearch || '').toLowerCase().trim();
-    const filtered = q
+    let filtered = q
       ? S.bcbLots.filter(l => [l.idBcb,l.inter,l.vendeur,l.marque,l.modele,l.type,l.refVendeur,l.numSerie,l.commentaire,l.numVente,l.acheteur]
           .some(v => (v||'').toLowerCase().includes(q)))
-      : S.bcbLots;
+      : [...S.bcbLots];
+
+    // 2. Filtre statut
+    const sf = S.bcbStatusFilter;
+    if (sf.arrive   !== null) filtered = filtered.filter(l => l.arrive   === sf.arrive);
+    if (sf.inspecte !== null) filtered = filtered.filter(l => l.inspecte === sf.inspecte);
+    if (sf.vendu    !== null) filtered = filtered.filter(l => l.vendu    === sf.vendu);
+
+    // 3. Tri
+    const sortFn = {
+      default:   (a,b) => a.idBcb.localeCompare(b.idBcb),
+      id_desc:   (a,b) => b.idBcb.localeCompare(a.idBcb),
+      date_asc:  (a,b) => (a.dateArrivee||'').localeCompare(b.dateArrivee||''),
+      date_desc: (a,b) => (b.dateArrivee||'').localeCompare(a.dateArrivee||''),
+    };
+    filtered.sort(sortFn[S.bcbSortField] || sortFn.default);
 
     if (!filtered.length) {
       content.style.display='none'; emptyEl.style.display='';
-      subtitle.textContent = q ? 'Aucun résultat' : 'Aucun lot';
+      subtitle.textContent = 'Aucun résultat';
+      this._bcbSyncSelectBar();
       return;
     }
     emptyEl.style.display = 'none';
     content.style.display = '';
 
-    // idx dans S.bcbLots pour la navigation détail
+    // Map idx pour navigation détail
     const idxMap = {};
     S.bcbLots.forEach((l,i) => { idxMap[l.inter+'|'+l.idBcb] = i; });
 
     const lotRow = lot => {
-      const idx  = idxMap[lot.inter+'|'+lot.idBcb] ?? -1;
+      const key  = lot.inter + '|' + lot.idBcb;
+      const idx  = idxMap[key] ?? -1;
+      const isSel = S.bcbSelectMode && S.bcbSelected.has(key);
+      const bg   = isSel ? '#EFF6FF' : 'white';
+      const clickFn = S.bcbSelectMode
+        ? `App.bcbToggleLotSelect('${key.replace(/'/g,"\\'")}', this)`
+        : `App.bcbLotDetail(${idx})`;
       const dotA = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.arrive?'#D1FAE5':'#F1F5F9'};color:${lot.arrive?'#065F46':'#94A3B8'};">A</span>`;
       const dotI = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.inspecte?'#DBEAFE':'#F1F5F9'};color:${lot.inspecte?'#1D4ED8':'#94A3B8'};">I</span>`;
       const dotV = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.vendu?'#FEF3C7':'#F1F5F9'};color:${lot.vendu?'#92400E':'#94A3B8'};">V</span>`;
       const vente = lot.numVente ? `<span style="font-size:10px;color:#64748B;font-weight:600;margin-left:2px;">n°${lot.numVente}</span>` : '';
       const desc  = [lot.vendeur, [lot.marque,lot.modele].filter(Boolean).join(' '), lot.type].filter(Boolean).join(' — ');
       const sub   = [lot.refVendeur?`réf ${lot.refVendeur}`:'', lot.numSerie?`n° ${lot.numSerie}`:'', lot.poids?`${lot.poids}t`:'', lot.commentaire].filter(Boolean).join(' · ');
-      return `<div onclick="App.bcbLotDetail(${idx})" style="background:white;border:1px solid #E2E8F0;border-radius:8px;padding:7px 10px;cursor:pointer;display:flex;align-items:center;gap:8px;" onmouseenter="this.style.background='#F0F7FF'" onmouseleave="this.style.background='white'">
+      const cbHtml = S.bcbSelectMode
+        ? `<input type="checkbox" ${isSel?'checked':''} onclick="event.stopPropagation()" style="width:15px;height:15px;flex-shrink:0;accent-color:#1D4ED8;">`
+        : '';
+      return `<div data-lot-key="${key}" onclick="${clickFn}" style="background:${bg};border:1px solid #E2E8F0;border-radius:8px;padding:7px 10px;cursor:pointer;display:flex;align-items:center;gap:8px;" onmouseenter="if(!App._bcbIsSelected('${key}'))this.style.background='#F0F7FF'" onmouseleave="if(!App._bcbIsSelected('${key}'))this.style.background='white'">
+        ${cbHtml}
         <div style="flex:1;min-width:0;overflow:hidden;">
           <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;">
             <span style="font-size:12px;font-weight:700;color:#1E293B;white-space:nowrap;">${lot.idBcb}</span>
@@ -7257,42 +7403,35 @@ const App = {
       </div>`;
     };
 
-    const groupSection = (key, lots, color) => {
-      const label = key || '(non renseigné)';
-      return `<div>
-        <div style="font-size:10px;font-weight:700;color:${color||'#1D4ED8'};text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;display:flex;align-items:center;gap:5px;">
-          <span>${label}</span>
-          <span style="background:#F1F5F9;color:#475569;font-size:10px;padding:0 7px;border-radius:10px;">${lots.length}</span>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:4px;">${lots.map(lotRow).join('')}</div>
-      </div>`;
-    };
+    const groupSection = (key, lots, color) => `<div>
+      <div style="font-size:10px;font-weight:700;color:${color||'#1D4ED8'};text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;display:flex;align-items:center;gap:5px;">
+        <span>${key||'(non renseigné)'}</span>
+        <span style="background:#F1F5F9;color:#475569;font-size:10px;padding:0 7px;border-radius:10px;">${lots.length}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">${lots.map(lotRow).join('')}</div>
+    </div>`;
 
     const v = S.bcbLotsView || 'acheteur';
 
     if (v === 'lots') {
-      const sorted = [...filtered].sort((a,b) => a.idBcb.localeCompare(b.idBcb));
-      subtitle.textContent = `${sorted.length} lot${sorted.length>1?'s':''}`;
-      content.innerHTML = `<div style="display:flex;flex-direction:column;gap:4px;">${sorted.map(lotRow).join('')}</div>`;
-      return;
+      subtitle.textContent = `${filtered.length} lot${filtered.length>1?'s':''}`;
+      content.innerHTML = `<div style="display:flex;flex-direction:column;gap:4px;">${filtered.map(lotRow).join('')}</div>`;
+    } else {
+      const groupBy = v === 'acheteur' ? l => l.acheteur
+                    : v === 'vendeur'  ? l => l.vendeur
+                    : l => (l.numVente ? `Vente n°${l.numVente}` : '');
+      const color   = v === 'vendeur'  ? '#065F46' : v === 'vente' ? '#92400E' : '#1D4ED8';
+      const groups  = {};
+      filtered.forEach(l => { const k = groupBy(l)||''; (groups[k]=groups[k]||[]).push(l); });
+      const keys    = Object.keys(groups).sort((a,b) => { if(!a)return 1; if(!b)return -1; return a.localeCompare(b,'fr'); });
+      const word    = v === 'acheteur' ? 'acheteur' : v === 'vendeur' ? 'vendeur' : 'vente';
+      subtitle.textContent = `${filtered.length} lot${filtered.length>1?'s':''} · ${keys.length} ${word}${keys.length>1?'s':''}`;
+      content.innerHTML = keys.map(k => groupSection(k, groups[k], color)).join('');
     }
-
-    const groupBy = v === 'acheteur' ? l => l.acheteur
-                  : v === 'vendeur'  ? l => l.vendeur
-                  : l => (l.numVente ? `Vente n°${l.numVente}` : '');
-    const color   = v === 'vendeur'  ? '#065F46' : v === 'vente' ? '#92400E' : '#1D4ED8';
-
-    const groups = {};
-    filtered.forEach(l => { const k = groupBy(l)||''; (groups[k]=groups[k]||[]).push(l); });
-    const keys = Object.keys(groups).sort((a,b) => {
-      if (!a) return 1; if (!b) return -1;
-      return a.localeCompare(b, 'fr');
-    });
-
-    const word = v === 'acheteur' ? 'acheteur' : v === 'vendeur' ? 'vendeur' : 'vente';
-    subtitle.textContent = `${filtered.length} lot${filtered.length>1?'s':''} · ${keys.length} ${word}${keys.length>1?'s':''}`;
-    content.innerHTML = keys.map(k => groupSection(k, groups[k], color)).join('');
+    this._bcbSyncSelectBar();
   },
+
+  _bcbIsSelected(key) { return S.bcbSelected.has(key); },
 
   bcbLotDetail(idx) {
     const lot = S.bcbLots[idx];
