@@ -7745,12 +7745,14 @@ const App = {
     this._lvuRenderMarchandises();
     // Stocker le n° d'enlèvement pour le passer à lv_save
     S.lvu.enlevementNumero = e.numero;
+    const acheteur = (e.lots && e.lots.length > 0) ? (e.lots[0].acheteur || '') : '';
     setTimeout(() => {
       const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
       set('lvu-f-conducteur',   e.chauffeur   || '');
       set('lvu-f-immat-moteur', e.tracteur    || '');
       set('lvu-f-immat-semi',   e.remorque    || '');
       set('lvu-f-doc',          'Enl. ' + e.numero);
+      set('lvu-f-donneur',      acheteur);
       set('lvu-f-exp-nom',      'BCB OFF MARKET');
       set('lvu-f-exp-adresse',  'ZA Renardières');
       set('lvu-f-exp-ville',    'JAVRON-LES-CHAPELLES');
@@ -8882,7 +8884,7 @@ function _generateBcbPicklist(enlevement) {
   doc.setFontSize(9); doc.setFont('helvetica','normal');
   doc.text(enlevement.date || '', W - MR - 4, y + 9.5, { align:'right' });
   doc.setTextColor(0,0,0);
-  y += 15;
+  y += 19;
 
   // ── Bloc chargement / transport ──────────────────────────────────────────
   doc.setFontSize(8.5); doc.setFont('helvetica','bold');
@@ -8921,7 +8923,7 @@ function _generateBcbPicklist(enlevement) {
   // ── Lignes tableau ───────────────────────────────────────────────────────
   const ROW_H = 6;
   (enlevement.lots || []).forEach((lot, idx) => {
-    if (y + ROW_H > H - 25) { doc.addPage(); y = MT; }
+    if (y + ROW_H > H - 55) { doc.addPage(); y = MT; }
     if (idx % 2 === 0) { doc.setFillColor(248,250,252); doc.rect(ML, y, CW, ROW_H, 'F'); }
     doc.setFontSize(7.5); doc.setFont('helvetica','normal');
     x = ML;
@@ -8935,19 +8937,39 @@ function _generateBcbPicklist(enlevement) {
       doc.text(txt.length > Math.floor(col.w / 1.9) ? txt.slice(0, Math.floor(col.w / 1.9)) + '…' : txt, x + 1, y + 4.3);
       x += col.w;
     });
-    // Séparateur ligne
     doc.setDrawColor(226,232,240); doc.line(ML, y + ROW_H, W - MR, y + ROW_H);
     y += ROW_H;
   });
 
-  // ── Zone signature ───────────────────────────────────────────────────────
-  const sigY = H - 22;
+  // ── Ligne total ──────────────────────────────────────────────────────────
+  const totalLots  = (enlevement.lots || []).length;
+  const totalPoids = (enlevement.lots || []).reduce((sum, l) => {
+    const p = parseFloat(String(l.poids || '').replace(',', '.'));
+    return sum + (isNaN(p) ? 0 : p);
+  }, 0);
+  doc.setFillColor(30, 41, 59); doc.rect(ML, y, CW, 6, 'F');
+  doc.setFontSize(7.5); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+  doc.text('TOTAL : ' + totalLots + ' lot' + (totalLots > 1 ? 's' : ''), ML + 2, y + 4.2);
+  if (totalPoids > 0) {
+    doc.text(totalPoids.toFixed(3).replace('.', ',') + ' t', W - MR - 2, y + 4.2, { align:'right' });
+  }
+  doc.setTextColor(0,0,0);
+
+  // ── Zone signature (ancrée en bas de page) ───────────────────────────────
+  const sigY = H - 38;
   doc.setDrawColor(180,180,180);
   doc.setFontSize(8); doc.setFont('helvetica','bold');
   doc.text('Signature chauffeur :', ML, sigY);
-  doc.rect(ML, sigY + 2, 70, 14);
-  doc.text('Signature émetteur :', W/2 - 10, sigY);
-  doc.rect(W/2 - 10, sigY + 2, 70, 14);
+  doc.rect(ML, sigY + 2, 70, 16);
+  doc.text('Signature émetteur / BCB OFF MARKET :', W/2 - 10, sigY);
+  doc.rect(W/2 - 10, sigY + 2, 90, 16);
+  // Cachet BCB dans la case émetteur
+  doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setTextColor(30, 41, 59);
+  doc.text('BCB OFF MARKET', W/2 - 10 + 45, sigY + 8, { align:'center' });
+  doc.setFontSize(6.5); doc.setFont('helvetica','normal'); doc.setTextColor(100,116,139);
+  doc.text('ZA Renardières · 53250 JAVRON-LES-CHAPELLES', W/2 - 10 + 45, sigY + 13, { align:'center' });
+  doc.setTextColor(0,0,0);
+  // Pied de page
   doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(100,116,139);
   doc.text('BCB OFF MARKET · ZA Renardières · 53250 JAVRON-LES-CHAPELLES', W/2, H - 4, { align:'center' });
 
