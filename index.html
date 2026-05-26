@@ -7470,20 +7470,49 @@ const App = {
   },
 
   lvuSelectTransporteur(idx) {
-    S.lvu.transporteur = LVU_TRANSPORTEURS[idx] || null;
+    // Copie de l'objet pour ne pas muter le tableau LVU_TRANSPORTEURS
+    S.lvu.transporteur = Object.assign({}, LVU_TRANSPORTEURS[idx]) || null;
     this._lvuRenderTransporteurUI();
+  },
+
+  lvuUpdateTransporteurField(field, val) {
+    if (S.lvu.transporteur?.id === 'autre') S.lvu.transporteur[field] = val;
   },
 
   _lvuRenderTransporteurUI() {
     const el = document.getElementById('lvu-transporteur-btns');
     if (!el) return;
     const selId = S.lvu.transporteur?.id;
-    el.innerHTML = LVU_TRANSPORTEURS.map((t, i) => `
-      <button onclick="App.lvuSelectTransporteur(${i})"
-        style="text-align:left;width:100%;padding:10px 12px;border-radius:10px;border:2px solid ${selId===t.id?'#1D4ED8':'#E2E8F0'};background:${selId===t.id?'#EFF6FF':'white'};cursor:pointer;margin-bottom:4px;">
-        <div style="font-size:13px;font-weight:700;color:${selId===t.id?'#1D4ED8':'#1E293B'};">${t.nom}</div>
-        <div style="font-size:11px;color:#64748B;margin-top:2px;">${t.adresse} · ${t.ville}</div>
-      </button>`).join('');
+    const tl    = S.lvu.transporteur || {};
+    let html = LVU_TRANSPORTEURS.map((t, i) => {
+      const sel = selId === t.id;
+      const subtitle = t.id === 'autre'
+        ? (sel && tl.nom ? `<div style="font-size:11px;color:#64748B;margin-top:2px;">${tl.nom}</div>` : '')
+        : `<div style="font-size:11px;color:#64748B;margin-top:2px;">${t.adresse} · ${t.ville}</div>`;
+      return `<button onclick="App.lvuSelectTransporteur(${i})"
+        style="text-align:left;width:100%;padding:10px 12px;border-radius:10px;border:2px solid ${sel?'#1D4ED8':'#E2E8F0'};background:${sel?'#EFF6FF':'white'};cursor:pointer;margin-bottom:4px;">
+        <div style="font-size:13px;font-weight:700;color:${sel?'#1D4ED8':'#1E293B'};">${t.id === 'autre' ? 'Autre transporteur' : t.nom}</div>
+        ${subtitle}
+      </button>`;
+    }).join('');
+    if (selId === 'autre') {
+      const esc = s => (s || '').replace(/"/g, '&quot;');
+      html += `<div style="margin-top:4px;display:flex;flex-direction:column;gap:6px;">
+        <input class="input-field" placeholder="Nom du transporteur *" value="${esc(tl.nom)}"
+          oninput="App.lvuUpdateTransporteurField('nom',this.value)" style="font-size:13px;">
+        <input class="input-field" placeholder="Adresse (optionnel)" value="${esc(tl.adresse)}"
+          oninput="App.lvuUpdateTransporteurField('adresse',this.value)" style="font-size:13px;">
+        <input class="input-field" placeholder="CP / Ville (optionnel)" value="${esc(tl.ville)}"
+          oninput="App.lvuUpdateTransporteurField('ville',this.value)" style="font-size:13px;">
+        <div style="display:flex;gap:6px;">
+          <input class="input-field" placeholder="SIRET (optionnel)" value="${esc(tl.siret)}"
+            oninput="App.lvuUpdateTransporteurField('siret',this.value)" style="font-size:13px;flex:1;">
+          <input class="input-field" placeholder="Téléphone (optionnel)" value="${esc(tl.telephone)}"
+            oninput="App.lvuUpdateTransporteurField('telephone',this.value)" style="font-size:13px;flex:1;">
+        </div>
+      </div>`;
+    }
+    el.innerHTML = html;
   },
 
   async lvuLoadAgencies() {
@@ -7831,6 +7860,7 @@ function _randCode() {
 // ── LVU — Transporteurs pré-enregistrés ──────────────────────────────────────
 const LVU_TRANSPORTEURS = [
   { id: 'mesnager', nom: 'TRANSPORTS MESNAGER', adresse: 'ZA Renardière - B.P 10', ville: '53250 JAVRON-LES-CHAPELLES', info: 'SAS au capital de 500 000 €, Tél. 02.43.03.43.41', rcs: 'RCS LAVAL 314 901 869 - N° TVA FR 18 314 901 869' },
+  { id: 'autre', nom: '', adresse: '', ville: '', siret: '', telephone: '' },
 ];
 
 // ── LVU — Lettre de Voiture Unique (jsPDF) ───────────────────────────────────
@@ -7967,17 +7997,20 @@ function _lvuRecto(doc, d, isCMR, band) {
   tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_LABEL);
   tx('Transporteur / Carrier (nom, adresse, pays / name, address, country)', x0 + LV.CELL_PAD_X, y + 3.2);
   const tl = d.transporteur ?? {};
+  const _tlIsCustom = tl.id === 'autre';
+  const _tlFb = (val, fallback) => (val != null && val !== '') ? val : (_tlIsCustom ? '' : fallback);
   tc(0, 0, 0); sf('bold', LV.FONT_TRANS_NAME);
   let ty = y + 8;
-  tx(tl.nom ?? 'TRANSPORTS MESNAGER', x0 + LV.CELL_PAD_X, ty); ty += 4.2;
+  tx(_tlFb(tl.nom, 'TRANSPORTS MESNAGER'), x0 + LV.CELL_PAD_X, ty); ty += 4.2;
   sf('normal', LV.FONT_BODY);
+  const _tlInfoLine = tl.siret
+    ? 'SIRET : ' + tl.siret + (tl.telephone ? ' · ' + tl.telephone : '')
+    : (_tlIsCustom && tl.telephone ? 'Tél. ' + tl.telephone : _tlFb(tl.info, 'SAS au capital de 500 000 €'));
   for (const l of [
-    tl.adresse ?? 'Z.A. des Renardières - B.P 10',
-    tl.cp_ville ?? tl.ville ?? '53250 JAVRON LES CHAPELLES',
-    tl.siret
-      ? 'SIRET : ' + tl.siret + (tl.telephone ? ' · ' + tl.telephone : '')
-      : (tl.info ?? 'SAS au capital de 500 000 €'),
-    tl.rcs || 'RCS LAVAL 314 901 869',
+    _tlFb(tl.adresse, 'Z.A. des Renardières - B.P 10'),
+    tl.cp_ville || _tlFb(tl.ville, '53250 JAVRON LES CHAPELLES'),
+    _tlInfoLine,
+    _tlIsCustom ? '' : (tl.rcs || 'RCS LAVAL 314 901 869'),
   ].filter(Boolean)) { tx(l, x0 + LV.CELL_PAD_X, ty); ty += 3.7; }
   const cx2 = x0 + LV.W_TRANS_LEFT;
   tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_LABEL);
