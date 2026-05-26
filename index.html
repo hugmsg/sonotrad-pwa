@@ -2647,17 +2647,19 @@ const App = {
     if (fabDep) fabDep.style.display = (v === 'departures') ? 'flex' : 'none';
 
     // ── Header : back button / logo / titre ──────────────────────────────
-    const inForm = ['new-arrival','settings','dep-detail','arr-detail','stock-detail'].includes(v);
+    const inForm = ['new-arrival','settings','dep-detail','arr-detail','stock-detail','bcb-enlevement','bcb-lot-detail'].includes(v);
     document.getElementById('btn-back').classList.toggle('hidden', !inForm);
     document.getElementById('header-logo').style.display = inForm ? 'none' : 'flex';
 
     // Labels du bouton retour
     const backLabels = {
-      'new-arrival':  'Annuler',
-      'settings':     'Réglages',
-      'dep-detail':   S.depFromArchive ? 'Partis' : 'Production',
-      'arr-detail':   'Arrivées',
-      'stock-detail': 'Catalogue',
+      'new-arrival':       'Annuler',
+      'settings':          'Réglages',
+      'dep-detail':        S.depFromArchive ? 'Partis' : 'Production',
+      'arr-detail':        'Arrivées',
+      'stock-detail':      'Catalogue',
+      'bcb-enlevement':    'Enlèvements',
+      'bcb-lot-detail':    'Lots',
     };
     document.getElementById('back-label').textContent = backLabels[v] || 'Retour';
 
