@@ -908,6 +908,9 @@
     <button class="nav-tab" data-bcbtab="bcb-depart" onclick="App.go('bcb-depart')" style="display:none">
       <span class="icon">🚚</span><span>Départ</span>
     </button>
+    <button class="nav-tab" data-bcbtab="bcb-enlevements" onclick="App.go('bcb-enlevements')" style="display:none">
+      <span class="icon">📋</span><span>Enl.</span>
+    </button>
     <!-- ── Tabs LVU (masqués hors activité LVU) ──────────────────────────── -->
     <button class="nav-tab" data-lvutab="lvu-form" onclick="App.go('lvu-form')" style="display:none">
       <span class="icon">📝</span><span>Formulaire</span>
@@ -1953,6 +1956,10 @@
               <input id="bcb-f-client-adresse" type="text" autocapitalize="words" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
             </div>
             <div>
+              <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-client-ville"></label>
+              <input id="bcb-f-client-ville" type="text" autocapitalize="words" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
+            </div>
+            <div>
               <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-client-pays"></label>
               <input id="bcb-f-client-pays" type="text" list="ann-pays-list" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;" onblur="App.annPaysNormalize(this.id)">
             </div>
@@ -1999,11 +2006,35 @@
       </div>
       <div id="bcb-dep-bar" style="display:none;position:sticky;bottom:0;background:white;border-top:1px solid #E2E8F0;padding:10px 12px;align-items:center;gap:8px;">
         <span id="bcb-dep-count" style="flex:1;font-size:13px;color:#64748B;">0 lot sélectionné</span>
-        <button onclick="App.bcbDepartCreateCmr()"
+        <button onclick="App.bcbCreateEnlevement()"
           style="background:#1D4ED8;color:white;border:none;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;">
-          Créer CMR →
+          Bon d'enlèvement →
         </button>
       </div>
+    </div>
+
+    <!-- ── VIEW : BCB ENLÈVEMENT (pick-list détail) ─────────────────────── -->
+    <div class="view" id="view-bcb-enlevement">
+      <div style="padding:10px 12px 8px;background:#F8FAFC;border-bottom:1px solid #E2E8F0;position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:10px;">
+        <div style="flex:1;">
+          <div style="font-size:15px;font-weight:700;color:#1E293B;" id="bcb-enlev-title">Bon d'enlèvement</div>
+          <div style="font-size:11px;color:#64748B;" id="bcb-enlev-subtitle"></div>
+        </div>
+        <button onclick="App.bcbPrintEnlevement()" style="background:#1E293B;color:white;border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;">🖨 PDF</button>
+        <button onclick="App.bcbEnlevementCreateCmr()" style="background:#1D4ED8;color:white;border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;">CMR →</button>
+      </div>
+      <div id="bcb-enlev-body" style="padding:14px 14px 32px;"></div>
+    </div>
+
+    <!-- ── VIEW : BCB ENLÈVEMENTS (historique) ───────────────────────────── -->
+    <div class="view" id="view-bcb-enlevements">
+      <div style="padding:10px 12px 8px;background:#F8FAFC;border-bottom:1px solid #E2E8F0;position:sticky;top:0;z-index:2;">
+        <div style="font-size:15px;font-weight:700;color:#1E293B;">Bons d'enlèvement</div>
+        <div style="font-size:11px;color:#64748B;" id="bcb-enlevs-subtitle">Chargement…</div>
+      </div>
+      <div id="bcb-enlevs-loading" style="display:none;padding:32px;text-align:center;color:#94A3B8;font-size:13px;">Chargement…</div>
+      <div id="bcb-enlevs-empty" style="display:none;padding:32px;text-align:center;color:#94A3B8;font-size:13px;">Aucun bon d'enlèvement</div>
+      <div id="bcb-enlevs-list" style="padding:8px 10px 24px;"></div>
     </div>
 
     <!-- ── VIEW : LVU — FORMULAIRE ──────────────────────────────────────── -->
@@ -2469,9 +2500,13 @@ const S = {
   bcbSelectMode:   false,
   bcbSelected:     new Set(),
   bcbSelLot:         null,
-  bcbDepartConsigne: null,
-  bcbDepartSelected: new Set(),
-  bcbDepartBuyer:    null,
+  bcbDepartConsigne:     null,
+  bcbDepartSelected:     new Set(),
+  bcbDepartBuyer:        null,
+  bcbEnlevements:        [],
+  bcbEnlevementsLoaded:  false,
+  bcbEnlevementsLoading: false,
+  bcbCurEnlevement:      null,
   // ── LVU ──────────────────────────────────────────────────────────────────
   lvLinks: {},        // { opKey: { numero, display, date } } — chargé au prefetch
   annuaireData: [],   // [{code,nom,adresse,cp,ville,email,tel,note}]
@@ -2518,7 +2553,8 @@ const App = {
     if (view === 'stock-sync')   this.loadStockSync();
     if (view === 'bcb-lots')      this.bcbLotsLoad();
     if (view === 'bcb-consignes') this.bcbInitLangGrid();
-    if (view === 'bcb-depart')    this.bcbDepartInit();
+    if (view === 'bcb-depart')      this.bcbDepartInit();
+    if (view === 'bcb-enlevements') this.bcbEnlevementsLoad();
     if (view === 'lvu-form')      this._lvuRenderMarchandises();
     if (view === 'lvu-history')   this.lvuLoadHistory();
     if (view === 'annuaire')      this.annuaireLoad();
@@ -2527,6 +2563,7 @@ const App = {
     if (S.view === 'admin')           { this.goHome(); return; }
     if (S.view === 'stock-detail')    { this.go('stock'); return; }
     if (S.view === 'bcb-lot-detail')  { this.go('bcb-lots'); return; }
+    if (S.view === 'bcb-enlevement')  { this.go('bcb-enlevements'); return; }
     this.go(S.prevView);
   },
 
@@ -7013,73 +7050,73 @@ const App = {
     { code:'fr', flag:'🇫🇷', name:'Français', dir:'ltr',
       rulesTitle:'Consignes de sécurité obligatoires',
       formTitle:'Informations du conducteur',
-      fields:{ nom:'Nom', prenom:'Prénom', tracteur:'Immatriculation tracteur', remorque:'Immatriculation remorque', client:'Client de destination', clientAdresse:'Adresse du client', clientPays:'Pays', transport:{ sectionTitle:'Transporteur', nom:'Nom entreprise', adresse:'Adresse', ville:'CP / Ville', pays:'Pays' } },
+      fields:{ nom:'Nom', prenom:'Prénom', tracteur:'Immatriculation tracteur', remorque:'Immatriculation remorque', client:'Client de destination', clientAdresse:'Adresse du client', clientVille:'CP / Ville', clientPays:'Pays', transport:{ sectionTitle:'Transporteur', nom:'Nom entreprise', adresse:'Adresse', ville:'CP / Ville', pays:'Pays' } },
       valider:'Valider l\'entrée', confirmTitle:'Entrée enregistrée', nouveau:'Nouveau chauffeur',
       rules:['Limitation de vitesse : 10 km/h sur l\'ensemble du site.','Arrêt obligatoire à chaque panneau STOP.','Les piétons sont toujours prioritaires.','Port du gilet de sécurité haute visibilité obligatoire.','Chaussures de sécurité obligatoires sur tout le site.','Utilisation du téléphone portable interdite lors des manœuvres.','Interdit de fumer sur l\'ensemble du site.','Respectez les consignes du personnel à tout moment.','Ne laissez pas votre véhicule sans surveillance dans les zones de circulation.','Tout accident ou incident doit être signalé immédiatement au personnel.'] },
     { code:'en', flag:'🇬🇧', name:'English', dir:'ltr',
       rulesTitle:'Mandatory safety instructions',
       formTitle:'Driver information',
-      fields:{ nom:'Last name', prenom:'First name', tracteur:'Tractor plate', remorque:'Trailer plate', client:'Destination client', clientAdresse:'Client address', clientPays:'Country', transport:{ sectionTitle:'Carrier', nom:'Company name', adresse:'Address', ville:'Zip / City', pays:'Country' } },
+      fields:{ nom:'Last name', prenom:'First name', tracteur:'Tractor plate', remorque:'Trailer plate', client:'Destination client', clientAdresse:'Client address', clientVille:'Zip / City', clientPays:'Country', transport:{ sectionTitle:'Carrier', nom:'Company name', adresse:'Address', ville:'Zip / City', pays:'Country' } },
       valider:'Validate entry', confirmTitle:'Entry recorded', nouveau:'New driver',
       rules:['Speed limit: 10 km/h throughout the site.','Mandatory stop at all STOP signs.','Pedestrians always have right of way.','High-visibility safety vest is mandatory.','Safety footwear is required throughout the site.','Mobile phone use is prohibited during maneuvers.','Smoking is strictly prohibited on the entire site.','Follow all instructions from staff at all times.','Do not leave your vehicle unattended in traffic areas.','Any accident or incident must be reported immediately to staff.'] },
     { code:'es', flag:'🇪🇸', name:'Español', dir:'ltr',
       rulesTitle:'Instrucciones de seguridad obligatorias',
       formTitle:'Información del conductor',
-      fields:{ nom:'Apellido', prenom:'Nombre', tracteur:'Matrícula tractora', remorque:'Matrícula remolque', client:'Cliente de destino', clientAdresse:'Dirección del cliente', clientPays:'País', transport:{ sectionTitle:'Transportista', nom:'Nombre empresa', adresse:'Dirección', ville:'CP / Ciudad', pays:'País' } },
+      fields:{ nom:'Apellido', prenom:'Nombre', tracteur:'Matrícula tractora', remorque:'Matrícula remolque', client:'Cliente de destino', clientAdresse:'Dirección del cliente', clientVille:'CP / Ciudad', clientPays:'País', transport:{ sectionTitle:'Transportista', nom:'Nombre empresa', adresse:'Dirección', ville:'CP / Ciudad', pays:'País' } },
       valider:'Validar entrada', confirmTitle:'Entrada registrada', nuevo:'Nuevo conductor',
       rules:['Límite de velocidad: 10 km/h en todo el recinto.','Parada obligatoria en todas las señales de STOP.','Los peatones tienen prioridad en todo momento.','El uso del chaleco de seguridad de alta visibilidad es obligatorio.','Se requiere calzado de seguridad en todo el recinto.','Se prohíbe el uso del teléfono móvil durante las maniobras.','Está prohibido fumar en todo el recinto.','Siga las instrucciones del personal en todo momento.','No deje su vehículo sin vigilancia en zonas de circulación.','Todo accidente o incidente debe comunicarse inmediatamente al personal.'] },
     { code:'pt', flag:'🇵🇹', name:'Português', dir:'ltr',
       rulesTitle:'Instruções de segurança obrigatórias',
       formTitle:'Informações do condutor',
-      fields:{ nom:'Apelido', prenom:'Nome próprio', tracteur:'Matrícula do tractor', remorque:'Matrícula do reboque', client:'Cliente de destino', clientAdresse:'Morada do cliente', clientPays:'País', transport:{ sectionTitle:'Transportador', nom:'Nome empresa', adresse:'Morada', ville:'CP / Localidade', pays:'País' } },
+      fields:{ nom:'Apelido', prenom:'Nome próprio', tracteur:'Matrícula do tractor', remorque:'Matrícula do reboque', client:'Cliente de destino', clientAdresse:'Morada do cliente', clientVille:'CP / Localidade', clientPays:'País', transport:{ sectionTitle:'Transportador', nom:'Nome empresa', adresse:'Morada', ville:'CP / Localidade', pays:'País' } },
       valider:'Validar entrada', confirmTitle:'Entrada registada', novo:'Novo condutor',
       rules:['Limite de velocidade: 10 km/h em todo o local.','Paragem obrigatória em todos os sinais de STOP.','Os peões têm sempre prioridade.','O uso de colete de segurança de alta visibilidade é obrigatório.','Calçado de segurança obrigatório em todo o local.','É proibido utilizar o telemóvel durante as manobras.','É proibido fumar em todo o local.','Siga as instruções do pessoal em todo momento.','Não deixe o seu veículo sem vigilância nas zonas de circulação.','Qualquer acidente ou incidente deve ser comunicado imediatamente ao pessoal.'] },
     { code:'ro', flag:'🇷🇴', name:'Română', dir:'ltr',
       rulesTitle:'Instrucțiuni de securitate obligatorii',
       formTitle:'Informații despre șofer',
-      fields:{ nom:'Nume', prenom:'Prenume', tracteur:'Nr. înmatriculare cap tractor', remorque:'Nr. înmatriculare remorcă', client:'Client de destinație', clientAdresse:'Adresa clientului', clientPays:'Țară', transport:{ sectionTitle:'Transportator', nom:'Nume firmă', adresse:'Adresă', ville:'Cod / Localitate', pays:'Țară' } },
+      fields:{ nom:'Nume', prenom:'Prenume', tracteur:'Nr. înmatriculare cap tractor', remorque:'Nr. înmatriculare remorcă', client:'Client de destinație', clientAdresse:'Adresa clientului', clientVille:'Cod / Localitate', clientPays:'Țară', transport:{ sectionTitle:'Transportator', nom:'Nume firmă', adresse:'Adresă', ville:'Cod / Localitate', pays:'Țară' } },
       valider:'Validare intrare', confirmTitle:'Intrare înregistrată', nou:'Șofer nou',
       rules:['Limita de viteză: 10 km/h pe întreg amplasamentul.','Oprire obligatorie la toate semnele STOP.','Pietonii au întotdeauna prioritate.','Purtarea vestei de siguranță cu vizibilitate ridicată este obligatorie.','Încălțămintea de protecție este obligatorie pe întreg amplasamentul.','Este interzisă utilizarea telefonului mobil în timpul manevrelor.','Fumatul este strict interzis pe întreg amplasamentul.','Respectați instrucțiunile personalului în orice moment.','Nu lăsați vehiculul nesupravegheat în zonele de circulație.','Orice accident sau incident trebuie raportat imediat personalului.'] },
     { code:'pl', flag:'🇵🇱', name:'Polski', dir:'ltr',
       rulesTitle:'Obowiązkowe instrukcje bezpieczeństwa',
       formTitle:'Dane kierowcy',
-      fields:{ nom:'Nazwisko', prenom:'Imię', tracteur:'Nr rej. ciągnika', remorque:'Nr rej. naczepy', client:'Klient docelowy', clientAdresse:'Adres klienta', clientPays:'Kraj', transport:{ sectionTitle:'Przewoźnik', nom:'Nazwa firmy', adresse:'Adres', ville:'Kod / Miasto', pays:'Kraj' } },
+      fields:{ nom:'Nazwisko', prenom:'Imię', tracteur:'Nr rej. ciągnika', remorque:'Nr rej. naczepy', client:'Klient docelowy', clientAdresse:'Adres klienta', clientVille:'Kod poczt. / Miasto', clientPays:'Kraj', transport:{ sectionTitle:'Przewoźnik', nom:'Nazwa firmy', adresse:'Adres', ville:'Kod / Miasto', pays:'Kraj' } },
       valider:'Zatwierdź wjazd', confirmTitle:'Wjazd zarejestrowany', nowy:'Nowy kierowca',
       rules:['Ograniczenie prędkości: 10 km/h na terenie obiektu.','Obowiązkowe zatrzymanie przy wszystkich znakach STOP.','Piesi mają zawsze pierwszeństwo.','Obowiązkowe noszenie kamizelki odblaskowej.','Obuwie ochronne wymagane na terenie całego obiektu.','Używanie telefonu komórkowego podczas manewrów jest zabronione.','Palenie jest surowo zabronione na terenie całego obiektu.','Stosuj się do poleceń personelu w każdej chwili.','Nie pozostawiaj pojazdu bez nadzoru w strefach ruchu.','Każdy wypadek lub incydent należy niezwłocznie zgłosić personelowi.'] },
     { code:'tr', flag:'🇹🇷', name:'Türkçe', dir:'ltr',
       rulesTitle:'Zorunlu güvenlik talimatları',
       formTitle:'Sürücü bilgileri',
-      fields:{ nom:'Soyadı', prenom:'Adı', tracteur:'Çekici plakası', remorque:'Dorse plakası', client:'Varış müşterisi', clientAdresse:'Müşteri adresi', clientPays:'Ülke', transport:{ sectionTitle:'Taşıyıcı', nom:'Firma adı', adresse:'Adres', ville:'Posta kodu / Şehir', pays:'Ülke' } },
+      fields:{ nom:'Soyadı', prenom:'Adı', tracteur:'Çekici plakası', remorque:'Dorse plakası', client:'Varış müşterisi', clientAdresse:'Müşteri adresi', clientVille:'Posta kodu / Şehir', clientPays:'Ülke', transport:{ sectionTitle:'Taşıyıcı', nom:'Firma adı', adresse:'Adres', ville:'Posta kodu / Şehir', pays:'Ülke' } },
       valider:'Girişi onayla', confirmTitle:'Giriş kaydedildi', yeni:'Yeni sürücü',
       rules:['Hız sınırı: tüm tesis genelinde 10 km/sa.','Tüm STOP işaretlerinde zorunlu duruş.','Yayaların her zaman önceliği vardır.','Yüksek görünürlüklü güvenlik yeleği takmak zorunludur.','Tesisin tamamında güvenlik ayakkabısı zorunludur.','Manevra sırasında cep telefonu kullanımı yasaktır.','Tesisin tamamında sigara içmek kesinlikle yasaktır.','Personelin talimatlarına her zaman uyun.','Araçınızı trafik alanlarında gözetimsiz bırakmayın.','Her kaza veya olay derhal personele bildirilmelidir.'] },
     { code:'de', flag:'🇩🇪', name:'Deutsch', dir:'ltr',
       rulesTitle:'Obligatorische Sicherheitsanweisungen',
       formTitle:'Fahrerinformationen',
-      fields:{ nom:'Nachname', prenom:'Vorname', tracteur:'Kennzeichen Zugmaschine', remorque:'Kennzeichen Anhänger', client:'Zielkunde', clientAdresse:'Adresse des Kunden', clientPays:'Land', transport:{ sectionTitle:'Spediteur', nom:'Firmenname', adresse:'Adresse', ville:'PLZ / Ort', pays:'Land' } },
+      fields:{ nom:'Nachname', prenom:'Vorname', tracteur:'Kennzeichen Zugmaschine', remorque:'Kennzeichen Anhänger', client:'Zielkunde', clientAdresse:'Adresse des Kunden', clientVille:'PLZ / Ort', clientPays:'Land', transport:{ sectionTitle:'Spediteur', nom:'Firmenname', adresse:'Adresse', ville:'PLZ / Ort', pays:'Land' } },
       valider:'Einfahrt bestätigen', confirmTitle:'Einfahrt erfasst', neu:'Neuer Fahrer',
       rules:['Geschwindigkeitsbegrenzung: 10 km/h auf dem gesamten Gelände.','Obligatorischer Halt an allen STOP-Schildern.','Fußgänger haben stets Vorrang.','Das Tragen einer Warnweste ist Pflicht.','Sicherheitsschuhe sind auf dem gesamten Gelände vorgeschrieben.','Die Nutzung von Mobiltelefonen ist beim Rangieren verboten.','Das Rauchen ist auf dem gesamten Gelände streng verboten.','Folgen Sie jederzeit den Anweisungen des Personals.','Lassen Sie Ihr Fahrzeug in Verkehrsbereichen nicht unbeaufsichtigt.','Jeder Unfall oder Vorfall muss sofort dem Personal gemeldet werden.'] },
     { code:'nl', flag:'🇳🇱', name:'Nederlands', dir:'ltr',
       rulesTitle:'Verplichte veiligheidsinstructies',
       formTitle:'Gegevens chauffeur',
-      fields:{ nom:'Achternaam', prenom:'Voornaam', tracteur:'Kenteken trekker', remorque:'Kenteken oplegger', client:'Bestemmingsklant', clientAdresse:'Adres van de klant', clientPays:'Land', transport:{ sectionTitle:'Vervoerder', nom:'Bedrijfsnaam', adresse:'Adres', ville:'Postcode / Stad', pays:'Land' } },
+      fields:{ nom:'Achternaam', prenom:'Voornaam', tracteur:'Kenteken trekker', remorque:'Kenteken oplegger', client:'Bestemmingsklant', clientAdresse:'Adres van de klant', clientVille:'Postcode / Stad', clientPays:'Land', transport:{ sectionTitle:'Vervoerder', nom:'Bedrijfsnaam', adresse:'Adres', ville:'Postcode / Stad', pays:'Land' } },
       valider:'Inrit bevestigen', confirmTitle:'Inrit geregistreerd', nieuw:'Nieuwe chauffeur',
       rules:['Snelheidslimiet: 10 km/u op het hele terrein.','Verplicht stoppen bij alle STOP-borden.','Voetgangers hebben altijd voorrang.','Het dragen van een veiligheidshesje met hoge zichtbaarheid is verplicht.','Veiligheidsschoenen zijn vereist op het hele terrein.','Het gebruik van een mobiele telefoon tijdens manoeuvres is verboden.','Roken is streng verboden op het hele terrein.','Volg altijd de instructies van het personeel op.','Laat uw voertuig niet onbeheerd achter in rijgebieden.','Elk ongeluk of incident moet onmiddellijk aan het personeel worden gemeld.'] },
     { code:'bg', flag:'🇧🇬', name:'Български', dir:'ltr',
       rulesTitle:'Задължителни инструкции за безопасност',
       formTitle:'Данни за шофьора',
-      fields:{ nom:'Фамилия', prenom:'Ime', tracteur:'Рег. номер влекач', remorque:'Рег. номер ремарке', client:'Клиент дестинация', clientAdresse:'Адрес на клиента', clientPays:'Държава', transport:{ sectionTitle:'Превозвач', nom:'Фирма', adresse:'Адрес', ville:'Пощ. код / Град', pays:'Държава' } },
+      fields:{ nom:'Фамилия', prenom:'Ime', tracteur:'Рег. номер влекач', remorque:'Рег. номер ремарке', client:'Клиент дестинация', clientAdresse:'Адрес на клиента', clientVille:'Пощ. код / Град', clientPays:'Държава', transport:{ sectionTitle:'Превозвач', nom:'Фирма', adresse:'Адрес', ville:'Пощ. код / Град', pays:'Държава' } },
       valider:'Потвърди влизане', confirmTitle:'Влизането е регистрирано', nov:'Нов шофьор',
       rules:['Ограничение на скоростта: 10 км/ч на целия обект.','Задължително спиране при всички знаци СТОП.','Пешеходците винаги имат предимство.','Носенето на светлоотразителна жилетка е задължително.','Предпазни обувки са задължителни на целия обект.','Използването на мобилен телефон по време на маневри е забранено.','Пушенето е строго забранено на целия обект.','Спазвайте указанията на персонала по всяко време.','Не оставяйте превозното средство без надзор в зоните за движение.','Всеки инцидент трябва незабавно да се докладва на персонала.'] },
     { code:'sq', flag:'🇦🇱', name:'Shqip', dir:'ltr',
       rulesTitle:'Udhëzime të detyrueshme sigurie',
       formTitle:'Të dhëna të shoferit',
-      fields:{ nom:'Mbiemri', prenom:'Emri', tracteur:'Targa traktori', remorque:'Targa rimorkio', client:'Klienti i destinacionit', clientAdresse:'Adresa e klientit', clientPays:'Vendi', transport:{ sectionTitle:'Transportuesi', nom:'Emri i kompanisë', adresse:'Adresa', ville:'Kodi / Qyteti', pays:'Vendi' } },
+      fields:{ nom:'Mbiemri', prenom:'Emri', tracteur:'Targa traktori', remorque:'Targa rimorkio', client:'Klienti i destinacionit', clientAdresse:'Adresa e klientit', clientVille:'Kodi / Qyteti', clientPays:'Vendi', transport:{ sectionTitle:'Transportuesi', nom:'Emri i kompanisë', adresse:'Adresa', ville:'Kodi / Qyteti', pays:'Vendi' } },
       valider:'Konfirmo hyrjen', confirmTitle:'Hyrja është regjistruar', ri:'Shofer i ri',
       rules:['Kufiri i shpejtësisë: 10 km/orë në të gjithë territorin.','Ndalim i detyrueshëm në të gjitha shenjat STOP.','Këmbësorët kanë gjithmonë përparësi.','Veshja e jelekut të sigurisë me dukshmëri të lartë është e detyrueshme.','Këpucët e sigurisë janë të detyrueshme në të gjithë territorin.','Përdorimi i telefonit celular gjatë manovrimit është i ndaluar.','Pirja e duhanit është rreptësisht e ndaluar në të gjithë territorin.','Ndiqni gjithmonë udhëzimet e personelit.','Mos e lini automjetin tuaj pa mbikëqyrje në zonat e qarkullimit.','Çdo aksident ose incident duhet të raportohet menjëherë tek personeli.'] },
     { code:'ar', flag:'🇸🇦', name:'العربية', dir:'rtl',
       rulesTitle:'تعليمات السلامة الإلزامية',
       formTitle:'معلومات السائق',
-      fields:{ nom:'اللقب', prenom:'الاسم', tracteur:'لوحة الجرار', remorque:'لوحة المقطورة', client:'العميل المقصود', clientAdresse:'عنوان العميل', clientPays:'البلد', transport:{ sectionTitle:'الناقل', nom:'اسم الشركة', adresse:'العنوان', ville:'الرمز البريدي / المدينة', pays:'البلد' } },
+      fields:{ nom:'اللقب', prenom:'الاسم', tracteur:'لوحة الجرار', remorque:'لوحة المقطورة', client:'العميل المقصود', clientAdresse:'عنوان العميل', clientVille:'الرمز البريدي / المدينة', clientPays:'البلد', transport:{ sectionTitle:'الناقل', nom:'اسم الشركة', adresse:'العنوان', ville:'الرمز البريدي / المدينة', pays:'البلد' } },
       valider:'تأكيد الدخول', confirmTitle:'تم تسجيل الدخول', jadid:'سائق جديد',
       rules:['الحد الأقصى للسرعة: 10 كم/ساعة في جميع أنحاء الموقع.','التوقف إلزامي عند جميع إشارات STOP.','المشاة لهم الأولوية في جميع الأوقات.','ارتداء سترة السلامة عالية الوضوح إلزامي.','حذاء السلامة إلزامي في جميع أنحاء الموقع.','يُحظر استخدام الهاتف المحمول أثناء المناورات.','يُحظر التدخين بشكل صارم في جميع أنحاء الموقع.','اتبع تعليمات الموظفين في جميع الأوقات.','لا تترك مركبتك دون مراقبة في مناطق الحركة.','يجب الإبلاغ فوراً عن أي حادث أو واقعة للموظفين.'] },
   ],
@@ -7115,6 +7152,7 @@ const App = {
     document.getElementById('bcb-lbl-remorque').textContent = l.fields.remorque;
     document.getElementById('bcb-lbl-client').textContent = l.fields.client;
     document.getElementById('bcb-lbl-client-adresse').textContent = l.fields.clientAdresse;
+    document.getElementById('bcb-lbl-client-ville').textContent = l.fields.clientVille || 'CP / Ville';
     document.getElementById('bcb-lbl-client-pays').textContent = l.fields.clientPays;
     document.getElementById('bcb-lbl-transport-section').textContent = l.fields.transport.sectionTitle;
     document.getElementById('bcb-lbl-transport-nom').textContent = l.fields.transport.nom;
@@ -7127,7 +7165,7 @@ const App = {
     wrapper.style.direction = l.dir;
     ol.style.direction = l.dir;
     // Clear form
-    ['bcb-f-nom','bcb-f-prenom','bcb-f-tracteur','bcb-f-remorque','bcb-f-client','bcb-f-client-adresse','bcb-f-client-pays','bcb-f-transport-nom','bcb-f-transport-adresse','bcb-f-transport-ville','bcb-f-transport-pays'].forEach(id => { document.getElementById(id).value = ''; });
+    ['bcb-f-nom','bcb-f-prenom','bcb-f-tracteur','bcb-f-remorque','bcb-f-client','bcb-f-client-adresse','bcb-f-client-ville','bcb-f-client-pays','bcb-f-transport-nom','bcb-f-transport-adresse','bcb-f-transport-ville','bcb-f-transport-pays'].forEach(id => { document.getElementById(id).value = ''; });
     ['transport','client'].forEach(t => { const el = document.getElementById('bcb-suggest-'+t); if (el) el.style.display = 'none'; });
     // Show step 2
     document.getElementById('bcb-step-lang').style.display = 'none';
@@ -7151,6 +7189,7 @@ const App = {
     const remorque         = document.getElementById('bcb-f-remorque').value.trim().toUpperCase();
     const client           = document.getElementById('bcb-f-client').value.trim();
     const clientAdresse    = document.getElementById('bcb-f-client-adresse').value.trim();
+    const clientVille      = document.getElementById('bcb-f-client-ville').value.trim();
     const clientPays       = document.getElementById('bcb-f-client-pays').value.trim();
     const transportNom     = document.getElementById('bcb-f-transport-nom').value.trim();
     const transportAdresse = document.getElementById('bcb-f-transport-adresse').value.trim();
@@ -7163,7 +7202,7 @@ const App = {
     const now = new Date();
     const dateStr = now.toLocaleDateString('fr-FR') + ' ' + now.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
     // Save to localStorage log
-    const entry = { ts: now.toISOString(), lang: l.code, nom, prenom, tracteur, remorque, client, clientAdresse, clientPays, transportNom, transportAdresse, transportVille, transportPays };
+    const entry = { ts: now.toISOString(), lang: l.code, nom, prenom, tracteur, remorque, client, clientAdresse, clientVille, clientPays, transportNom, transportAdresse, transportVille, transportPays };
     const log = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
     log.unshift(entry);
     if (log.length > 200) log.length = 200;
@@ -7181,7 +7220,8 @@ const App = {
       (transportNom ? `${f.transport.nom} : <b>${transportNom}${transportVille ? ', ' + transportVille : ''}</b><br>` : '') +
       `${f.client} : <b>${client}</b>` +
       (clientAdresse ? `<br>${f.clientAdresse} : <b>${clientAdresse}</b>` : '') +
-      (clientPays ? `<br>${f.clientPays} : <b>${clientPays}</b>` : '');
+      (clientVille   ? `<br>${f.clientVille||'CP / Ville'} : <b>${clientVille}</b>` : '') +
+      (clientPays    ? `<br>${f.clientPays} : <b>${clientPays}</b>` : '');
     document.getElementById('bcb-step-consignes').style.display = 'none';
     document.getElementById('bcb-step-confirm').style.display = '';
     document.getElementById('view-bcb-consignes').scrollTop = 0;
@@ -7567,6 +7607,216 @@ const App = {
         </a>` : ''}
     `;
     this.go('bcb-lot-detail');
+  },
+
+  /* ─ BCB Enlèvements ─ */
+  async bcbEnlevementsLoad(force) {
+    if (S.bcbEnlevementsLoading) return;
+    if (S.bcbEnlevementsLoaded && !force) { this.bcbEnlevementsRender(); return; }
+    const loadEl = document.getElementById('bcb-enlevs-loading');
+    const listEl = document.getElementById('bcb-enlevs-list');
+    const emptyEl = document.getElementById('bcb-enlevs-empty');
+    if (loadEl) loadEl.style.display = '';
+    if (listEl) listEl.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'none';
+    S.bcbEnlevementsLoading = true;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=bcb_enlevements_list', {}, 15000);
+      const d = await r.json();
+      if (d.status === 'ok') {
+        S.bcbEnlevements = d.history || [];
+        S.bcbEnlevementsLoaded = true;
+      }
+    } catch(e) { this.toast('Erreur chargement enlèvements'); }
+    S.bcbEnlevementsLoading = false;
+    if (loadEl) loadEl.style.display = 'none';
+    this.bcbEnlevementsRender();
+  },
+
+  bcbEnlevementsRender() {
+    const listEl  = document.getElementById('bcb-enlevs-list');
+    const emptyEl = document.getElementById('bcb-enlevs-empty');
+    const subEl   = document.getElementById('bcb-enlevs-subtitle');
+    if (!listEl) return;
+    const h = S.bcbEnlevements;
+    if (subEl) subEl.textContent = h.length ? `${h.length} bon${h.length>1?'s':''}` : '';
+    if (!h.length) { if (emptyEl) emptyEl.style.display = ''; listEl.innerHTML = ''; return; }
+    if (emptyEl) emptyEl.style.display = 'none';
+    listEl.innerHTML = h.map((e, i) => {
+      const lots = (e.lots || []).length;
+      const hasCmr = !!e.cmrNumero;
+      return `<div onclick="App.bcbViewEnlevement(${i})" style="background:white;border:1px solid #E2E8F0;border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer;" onmouseenter="this.style.background='#F8FAFC'" onmouseleave="this.style.background='white'">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:700;color:#1E293B;">${e.numero}</div>
+            <div style="font-size:11px;color:#64748B;">${e.date} · ${e.chauffeur||'—'} · ${lots} lot${lots>1?'s':''}</div>
+            <div style="font-size:11px;color:#64748B;margin-top:1px;">${e.destination||''}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">
+            ${e.pdfUrl ? '<span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;border-radius:4px;padding:2px 6px;">PDF ✓</span>' : ''}
+            ${hasCmr  ? `<span style="font-size:10px;background:#F0FDF4;color:#065F46;border-radius:4px;padding:2px 6px;">CMR ${e.cmrNumero}</span>` : '<span style="font-size:10px;background:#FEF9C3;color:#92400E;border-radius:4px;padding:2px 6px;">Sans CMR</span>'}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  bcbViewEnlevement(idx) {
+    const e = S.bcbEnlevements[idx];
+    if (!e) return;
+    S.bcbCurEnlevement = e;
+    this._bcbRenderEnlevDetail();
+    this.go('bcb-enlevement');
+  },
+
+  _bcbRenderEnlevDetail() {
+    const e     = S.bcbCurEnlevement;
+    const title = document.getElementById('bcb-enlev-title');
+    const sub   = document.getElementById('bcb-enlev-subtitle');
+    const body  = document.getElementById('bcb-enlev-body');
+    if (!e || !body) return;
+    if (title) title.textContent = 'Enl. ' + e.numero;
+    if (sub)   sub.textContent   = e.date + (e.cmrNumero ? ' · CMR ' + e.cmrNumero : '');
+    const lots = e.lots || [];
+    const row  = (label, val) => val ? `<tr><td style="padding:4px 8px;font-size:11px;color:#64748B;white-space:nowrap;">${label}</td><td style="padding:4px 8px;font-size:12px;color:#1E293B;">${val}</td></tr>` : '';
+    const lotRows = lots.map((l, i) => `
+      <tr style="background:${i%2?'#F8FAFC':'white'}">
+        <td style="padding:4px 6px;font-size:11px;text-align:center;">${i+1}</td>
+        <td style="padding:4px 6px;font-size:11px;">${l.inter||''}</td>
+        <td style="padding:4px 6px;font-size:11px;font-weight:600;">${l.idBcb||''}</td>
+        <td style="padding:4px 6px;font-size:11px;">${l.idSeller||''}</td>
+        <td style="padding:4px 6px;font-size:11px;">${[l.marque,l.modele].filter(Boolean).join(' ')||l.type||''}</td>
+        <td style="padding:4px 6px;font-size:11px;">${l.marque||''}</td>
+        <td style="padding:4px 6px;font-size:11px;">${l.modele||''}</td>
+        <td style="padding:4px 6px;font-size:11px;">${l.numSerie||''}</td>
+        <td style="padding:4px 6px;font-size:11px;">${l.commentaire||''}</td>
+        <td style="padding:4px 6px;font-size:11px;">${l.dateVente||''}</td>
+        <td style="padding:4px 6px;font-size:11px;">${l.acheteur||''}</td>
+        <td style="padding:4px 6px;font-size:11px;text-align:right;">${l.poids||''}</td>
+      </tr>`).join('');
+    const thStyle = 'padding:4px 6px;font-size:10px;font-weight:700;color:white;background:#1E293B;white-space:nowrap;';
+    body.innerHTML = `
+      <div style="background:white;border:1px solid #E2E8F0;border-radius:10px;padding:4px 12px;margin-bottom:10px;">
+        <table style="width:100%;border-collapse:collapse;">
+          ${row('Chauffeur', e.chauffeur)} ${row('Tracteur', e.tracteur)} ${row('Remorque', e.remorque)}
+          ${row('Destination', e.destination)}
+          ${e.folderUrl ? `<tr><td style="padding:4px 8px;font-size:11px;color:#64748B;">Dossier Drive</td><td style="padding:4px 8px;"><a href="${e.folderUrl}" target="_blank" style="font-size:11px;color:#1D4ED8;">📁 Ouvrir</a></td></tr>` : ''}
+          ${e.cmrNumero ? `<tr><td style="padding:4px 8px;font-size:11px;color:#64748B;">CMR</td><td style="padding:4px 8px;"><a href="${e.cmrUrl}" target="_blank" style="font-size:11px;color:#1D4ED8;">CMR ${e.cmrNumero}</a></td></tr>` : ''}
+        </table>
+      </div>
+      <div style="overflow-x:auto;background:white;border:1px solid #E2E8F0;border-radius:10px;">
+        <table style="width:100%;border-collapse:collapse;min-width:700px;">
+          <thead><tr>
+            <th style="${thStyle}">#</th><th style="${thStyle}">Inter</th><th style="${thStyle}">ID BCB</th>
+            <th style="${thStyle}">ID Seller</th><th style="${thStyle}">Description</th><th style="${thStyle}">Brand</th>
+            <th style="${thStyle}">Model</th><th style="${thStyle}">VIN</th><th style="${thStyle}">Comment</th>
+            <th style="${thStyle}">Selling date</th><th style="${thStyle}">Buyer</th><th style="${thStyle}">Poids t</th>
+          </tr></thead>
+          <tbody>${lotRows}</tbody>
+        </table>
+      </div>`;
+  },
+
+  bcbPrintEnlevement() {
+    const e = S.bcbCurEnlevement;
+    if (!e) return;
+    const doc = _generateBcbPicklist(e);
+    doc.save(`Enlevement_${e.numero}.pdf`);
+  },
+
+  async bcbEnlevementCreateCmr() {
+    const e = S.bcbCurEnlevement;
+    if (!e) return;
+    const list = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+    const c    = list.find(x => [x.prenom, x.nom].filter(Boolean).join(' ') === e.chauffeur) || {};
+    S.lvu.transporteur = { id: 'autre', nom: c.transportNom || '', adresse: c.transportAdresse || '', ville: c.transportVille || '' };
+    S.lvu.marchandises = (e.lots || []).map(l => ({
+      qte: '1',
+      description: [l.idBcb, [l.marque, l.modele].filter(Boolean).join(' ') || l.type].filter(Boolean).join(' — '),
+      poids: l.poids ? String(l.poids) : '',
+      note: l.inter || '', ml: ''
+    }));
+    S.activity = 'lvu';
+    await this.lvuInit();
+    this.lvuSetType('CMR');
+    this.lvuSetSource('bcb');
+    this._lvuRenderMarchandises();
+    // Stocker le n° d'enlèvement pour le passer à lv_save
+    S.lvu.enlevementNumero = e.numero;
+    setTimeout(() => {
+      const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+      set('lvu-f-conducteur',   e.chauffeur   || '');
+      set('lvu-f-immat-moteur', e.tracteur    || '');
+      set('lvu-f-immat-semi',   e.remorque    || '');
+      set('lvu-f-doc',          'Enl. ' + e.numero);
+      set('lvu-f-exp-nom',      'BCB OFF MARKET');
+      set('lvu-f-exp-adresse',  'ZA Renardières');
+      set('lvu-f-exp-ville',    'JAVRON-LES-CHAPELLES');
+      set('lvu-f-exp-pays',     'FR - France');
+      const dest = e.destination || '';
+      if (dest) set('lvu-f-dest-nom', dest);
+    }, 100);
+  },
+
+  async bcbCreateEnlevement() {
+    const list = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+    const c    = list[S.bcbDepartConsigne];
+    if (!c) { this.toast('Sélectionnez un chauffeur.'); return; }
+    const selectedLots = S.bcbLots.filter(l => S.bcbDepartSelected.has(l.idBcb));
+    if (!selectedLots.length) { this.toast('Sélectionnez au moins un lot.'); return; }
+    this.toast('Génération du bon d\'enlèvement…');
+    try {
+      // 1. Obtenir le numéro
+      const rn = await _fetchWithTimeout(S.apiUrl + '?action=bcb_enlevement_next_number', {}, 10000);
+      const dn = await rn.json();
+      if (dn.status !== 'ok') throw new Error(dn.error || 'Numéro indisponible');
+      const numero = dn.numero;
+      const now    = new Date();
+      const date   = now.toLocaleDateString('fr-FR');
+      const chauffeur = [c.prenom, c.nom].filter(Boolean).join(' ');
+      const destination = [c.client, c.clientAdresse, c.clientVille, c.clientPays].filter(Boolean).join(' — ');
+      // 2. Construire l'objet enlèvement
+      const enlevement = {
+        numero, date, chauffeur,
+        tracteur:    c.tracteur  || '',
+        remorque:    c.remorque  || '',
+        destination,
+        expediteur:  { nom:'BCB OFF MARKET', adresse:'ZA Renardières', ville:'53250 JAVRON-LES-CHAPELLES' },
+        lots: selectedLots.map(l => ({
+          idBcb: l.idBcb, inter: l.inter || '', idSeller: l.refVendeur || '',
+          marque: l.marque || '', modele: l.modele || '', type: l.type || '',
+          numSerie: l.numSerie || '', commentaire: l.commentaire || '',
+          dateVente: l.dateVente || '', acheteur: l.acheteur || '',
+          poids: l.poids || '', numVente: l.numVente || ''
+        }))
+      };
+      // 3. Générer PDF
+      const doc = _generateBcbPicklist(enlevement);
+      const b64 = doc.output('datauristring').split(',')[1];
+      // 4. Sauvegarder dans Drive
+      const payload = {
+        action: 'bcb_enlevement_save', numero, date, chauffeur,
+        tracteur: enlevement.tracteur, remorque: enlevement.remorque,
+        destination, lots: enlevement.lots, pdf_b64: b64
+      };
+      const rs = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }, 30000);
+      const ds = await rs.json();
+      if (ds.status !== 'ok') throw new Error(ds.error || 'Erreur sauvegarde');
+      enlevement.pdfUrl    = ds.pdfUrl    || '';
+      enlevement.folderUrl = ds.folderUrl || '';
+      enlevement.cmrNumero = '';
+      enlevement.cmrUrl    = '';
+      // 5. Afficher
+      S.bcbCurEnlevement = enlevement;
+      S.bcbEnlevements.unshift(enlevement);
+      this._bcbRenderEnlevDetail();
+      this.go('bcb-enlevement');
+    } catch(err) {
+      this.toast('Erreur : ' + err.message);
+    }
   },
 
   /* ─ BCB Départ ─ */
@@ -8178,6 +8428,22 @@ const App = {
           S.lvu.fromOpKey = null; S.lvu.fromOpNote = '';
         }
         if (res.status === 'partial' && statusEl) statusEl.textContent += ' ⚠️ archivage partiel';
+        // Lier la CMR à son bon d'enlèvement si applicable
+        if (S.lvu.enlevementNumero && res.pdfUrl) {
+          try {
+            await _fetchWithTimeout(S.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({ action:'bcb_enlevement_update_cmr',
+                numero: S.lvu.enlevementNumero, cmrNumero: savedDisplay, cmrUrl: res.pdfUrl })
+            }, 10000);
+            // Mettre à jour l'entrée en mémoire
+            const ei = S.bcbEnlevements.findIndex(e => e.numero === S.lvu.enlevementNumero);
+            if (ei > -1) { S.bcbEnlevements[ei].cmrNumero = savedDisplay; S.bcbEnlevements[ei].cmrUrl = res.pdfUrl; }
+            if (S.bcbCurEnlevement?.numero === S.lvu.enlevementNumero) {
+              S.bcbCurEnlevement.cmrNumero = savedDisplay; S.bcbCurEnlevement.cmrUrl = res.pdfUrl;
+            }
+          } catch(_) {}
+          S.lvu.enlevementNumero = null;
+        }
       } else {
         if (statusEl) statusEl.textContent = '❌ ' + (res.error || 'erreur inconnue');
       }
@@ -8285,6 +8551,7 @@ const App = {
     S.lvu.lastDoc = null; S.lvu.lastData = null;
     S.lvu.marchandises = [];
     S.lvu.fromOpKey = null; S.lvu.fromOpNote = '';
+    S.lvu.enlevementNumero = null;
     S.lvu.selectedItems.clear(); S.lvu.selectedBcb.clear();
     if (S.lvu.selectedStock) S.lvu.selectedStock.clear();
     const res = document.getElementById('lvu-result');
@@ -8577,6 +8844,113 @@ const LVU_TRANSPORTEURS = [
   { id: 'mesnager', nom: 'TRANSPORTS MESNAGER', adresse: 'ZA Renardière - B.P 10', ville: '53250 JAVRON-LES-CHAPELLES', info: 'SAS au capital de 500 000 €, Tél. 02.43.03.43.41', rcs: 'RCS LAVAL 314 901 869 - N° TVA FR 18 314 901 869' },
   { id: 'autre', nom: '', adresse: '', ville: '', siret: '', telephone: '' },
 ];
+
+// ── BCB — Bon d'enlèvement / Pick-list (jsPDF, paysage A4) ───────────────────
+// enlevement = { numero, date, chauffeur, tracteur, remorque, destination,
+//   expediteur:{nom,adresse,ville}, lots:[{idBcb,inter,idSeller,marque,modele,
+//   numSerie,commentaire,dateVente,acheteur,poids}] }
+function _generateBcbPicklist(enlevement) {
+  const { jsPDF } = window.jspdf;
+  const doc  = new jsPDF({ unit:'mm', format:'a4', orientation:'landscape' });
+  const W    = 297; const H = 210;
+  const ML   = 10;  const MR = 10; const MT = 10;
+  const CW   = W - ML - MR; // 277mm
+  // Colonnes : #, Inter, ID BCB, ID Seller, Brand, Model, VIN, Comment, Selling date, Buyer, Poids t
+  const COLS = [
+    { h:'#',           w: 8  },
+    { h:'Inter',       w: 18 },
+    { h:'ID BCB',      w: 18 },
+    { h:'ID Seller',   w: 22 },
+    { h:'Brand',       w: 20 },
+    { h:'Model',       w: 22 },
+    { h:'VIN',         w: 30 },
+    { h:'Comment',     w: 28 },
+    { h:'Selling date',w: 20 },
+    { h:'Buyer',       w: 43 },
+    { h:'Poids t',     w: 14 },
+  ]; // total = 243mm, reste 34mm pour padding — on ajuste Description
+  let y = MT;
+
+  // ── En-tête ──────────────────────────────────────────────────────────────
+  doc.setFillColor(30, 41, 59); doc.rect(ML, y, CW, 12, 'F');
+  doc.setFontSize(13); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+  doc.text('BCB OFF MARKET — BON D\'ENLÈVEMENT', ML + 4, y + 8);
+  doc.setFontSize(11);
+  doc.text('N° ' + enlevement.numero, W - MR - 4, y + 5, { align:'right' });
+  doc.setFontSize(9); doc.setFont('helvetica','normal');
+  doc.text(enlevement.date || '', W - MR - 4, y + 9.5, { align:'right' });
+  doc.setTextColor(0,0,0);
+  y += 15;
+
+  // ── Bloc chargement / transport ──────────────────────────────────────────
+  doc.setFontSize(8.5); doc.setFont('helvetica','bold');
+  doc.text('Lieu de chargement :', ML, y);
+  doc.setFont('helvetica','normal');
+  doc.text('ZA Renardières — 53250 JAVRON-LES-CHAPELLES', ML + 34, y);
+  doc.setFont('helvetica','bold');
+  doc.text('Chauffeur :', W/2 + 2, y);
+  doc.setFont('helvetica','normal');
+  doc.text(enlevement.chauffeur || '—', W/2 + 22, y);
+  y += 5;
+
+  doc.setFont('helvetica','bold'); doc.text('Tracteur :', ML, y);
+  doc.setFont('helvetica','normal'); doc.text(enlevement.tracteur || '—', ML + 18, y);
+  doc.setFont('helvetica','bold'); doc.text('Semi-remorque :', ML + 55, y);
+  doc.setFont('helvetica','normal'); doc.text(enlevement.remorque || '—', ML + 83, y);
+  doc.setFont('helvetica','bold'); doc.text('Destination :', W/2 + 2, y);
+  doc.setFont('helvetica','normal');
+  doc.text(enlevement.destination || '—', W/2 + 24, y, { maxWidth: W/2 - MR - 26 });
+  y += 8;
+
+  // ── Ligne séparatrice ────────────────────────────────────────────────────
+  doc.setDrawColor(226,232,240); doc.line(ML, y, W - MR, y); y += 3;
+
+  // ── En-tête tableau ──────────────────────────────────────────────────────
+  let x = ML;
+  doc.setFillColor(30, 41, 59);
+  doc.rect(ML, y, CW, 6.5, 'F');
+  doc.setFontSize(7.5); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+  COLS.forEach(col => {
+    doc.text(col.h, x + 1, y + 4.5); x += col.w;
+  });
+  doc.setTextColor(0,0,0); doc.setFont('helvetica','normal');
+  y += 6.5;
+
+  // ── Lignes tableau ───────────────────────────────────────────────────────
+  const ROW_H = 6;
+  (enlevement.lots || []).forEach((lot, idx) => {
+    if (y + ROW_H > H - 25) { doc.addPage(); y = MT; }
+    if (idx % 2 === 0) { doc.setFillColor(248,250,252); doc.rect(ML, y, CW, ROW_H, 'F'); }
+    doc.setFontSize(7.5); doc.setFont('helvetica','normal');
+    x = ML;
+    const vals = [
+      String(idx + 1), lot.inter||'', lot.idBcb||'', lot.idSeller||'',
+      lot.marque||'', lot.modele||'', lot.numSerie||'', lot.commentaire||'',
+      lot.dateVente||'', lot.acheteur||'', lot.poids ? String(lot.poids) : ''
+    ];
+    COLS.forEach((col, ci) => {
+      const txt = String(vals[ci] || '');
+      doc.text(txt.length > Math.floor(col.w / 1.9) ? txt.slice(0, Math.floor(col.w / 1.9)) + '…' : txt, x + 1, y + 4.3);
+      x += col.w;
+    });
+    // Séparateur ligne
+    doc.setDrawColor(226,232,240); doc.line(ML, y + ROW_H, W - MR, y + ROW_H);
+    y += ROW_H;
+  });
+
+  // ── Zone signature ───────────────────────────────────────────────────────
+  const sigY = H - 22;
+  doc.setDrawColor(180,180,180);
+  doc.setFontSize(8); doc.setFont('helvetica','bold');
+  doc.text('Signature chauffeur :', ML, sigY);
+  doc.rect(ML, sigY + 2, 70, 14);
+  doc.text('Signature émetteur :', W/2 - 10, sigY);
+  doc.rect(W/2 - 10, sigY + 2, 70, 14);
+  doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(100,116,139);
+  doc.text('BCB OFF MARKET · ZA Renardières · 53250 JAVRON-LES-CHAPELLES', W/2, H - 4, { align:'center' });
+
+  return doc;
+}
 
 // ── LVU — Lettre de Voiture Unique (jsPDF) ───────────────────────────────────
 // data = { type:'LV'|'CMR', display:'01446', date:'24/04/2026',
