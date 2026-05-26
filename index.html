@@ -1984,21 +1984,17 @@
           + Nouvelle consigne
         </button>
       </div>
-      <div id="bcb-dep-dest-section" style="padding:0 12px 8px;display:none;">
-        <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;margin-top:12px;">Destinataire</div>
-        <input id="bcb-dep-dest-search" type="text" autocomplete="off" placeholder="Rechercher par nom, ville…"
-          oninput="App.bcbDepDestSearch(this.value)"
-          style="width:100%;box-sizing:border-box;border:1.5px solid #BFDBFE;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:4px;background:#F8FBFF;">
-        <div id="bcb-dep-dest-results" class="dest-search-results"></div>
-        <div id="bcb-dep-dest-selected" style="display:none;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:9px 12px;font-size:12px;color:#1E293B;position:relative;">
-          <div id="bcb-dep-dest-name" style="font-weight:700;"></div>
-          <div id="bcb-dep-dest-addr" style="color:#64748B;margin-top:1px;"></div>
-          <button onclick="App.bcbDepDestClear()"
-            style="position:absolute;top:6px;right:8px;background:none;border:none;font-size:14px;color:#94A3B8;cursor:pointer;padding:2px 4px;">✕</button>
-        </div>
-      </div>
       <div id="bcb-dep-lots-section" style="padding:12px;display:none;">
-        <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Lots à enlever</div>
+        <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Acheteur</div>
+        <input id="bcb-dep-buyer-search" type="text" autocomplete="off" placeholder="Nom de l'acheteur…"
+          oninput="App.bcbDepBuyerSearch(this.value)"
+          style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:4px;">
+        <div id="bcb-dep-buyer-results" class="dest-search-results"></div>
+        <div id="bcb-dep-buyer-active" style="display:none;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:7px 10px;margin-bottom:8px;display:none;align-items:center;gap:6px;">
+          <span id="bcb-dep-buyer-name" style="flex:1;font-size:13px;font-weight:700;color:#1D4ED8;"></span>
+          <button onclick="App.bcbDepBuyerClear()" style="background:none;border:none;font-size:13px;color:#94A3B8;cursor:pointer;padding:2px 4px;">✕ Tout afficher</button>
+        </div>
+        <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;margin-top:4px;">Lots à enlever</div>
         <div id="bcb-dep-lots-list"></div>
       </div>
       <div id="bcb-dep-bar" style="display:none;position:sticky;bottom:0;background:white;border-top:1px solid #E2E8F0;padding:10px 12px;align-items:center;gap:8px;">
@@ -2475,7 +2471,7 @@ const S = {
   bcbSelLot:         null,
   bcbDepartConsigne: null,
   bcbDepartSelected: new Set(),
-  bcbDepartDest:     null,
+  bcbDepartBuyer:    null,
   // ── LVU ──────────────────────────────────────────────────────────────────
   lvLinks: {},        // { opKey: { numero, display, date } } — chargé au prefetch
   annuaireData: [],   // [{code,nom,adresse,cp,ville,email,tel,note}]
@@ -7577,14 +7573,12 @@ const App = {
   bcbDepartInit() {
     S.bcbDepartConsigne = null;
     S.bcbDepartSelected = new Set();
-    S.bcbDepartDest     = null;
+    S.bcbDepartBuyer    = null;
     this._bcbDepRenderConsignes();
-    ['bcb-dep-dest-section','bcb-dep-lots-section'].forEach(id => {
-      const el = document.getElementById(id); if (el) el.style.display = 'none';
-    });
+    const lotsSection = document.getElementById('bcb-dep-lots-section');
     const bar = document.getElementById('bcb-dep-bar');
+    if (lotsSection) lotsSection.style.display = 'none';
     if (bar) bar.style.display = 'none';
-    this.lvuLoadAgencies();
   },
 
   _bcbDepRenderConsignes() {
@@ -7610,77 +7604,63 @@ const App = {
   bcbDepSelectConsigne(idx) {
     S.bcbDepartConsigne = idx;
     S.bcbDepartSelected = new Set();
-    S.bcbDepartDest     = null;
+    S.bcbDepartBuyer    = null;
     this._bcbDepRenderConsignes();
-    // Afficher section destination et pré-remplir avec le client
-    const destSection = document.getElementById('bcb-dep-dest-section');
-    if (destSection) destSection.style.display = '';
-    this.bcbDepDestClear();
+    const lotsSection = document.getElementById('bcb-dep-lots-section');
+    if (lotsSection) lotsSection.style.display = '';
+    // Pré-remplir la recherche acheteur avec le client de la consigne
     const list = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
     const c = list[idx];
-    if (c?.client) {
-      const searchEl = document.getElementById('bcb-dep-dest-search');
-      if (searchEl) { searchEl.value = c.client; this.bcbDepDestSearch(c.client); }
+    const searchEl = document.getElementById('bcb-dep-buyer-search');
+    if (searchEl) {
+      searchEl.value = c?.client || '';
+      if (c?.client) this.bcbDepBuyerSearch(c.client);
     }
     this._bcbDepRenderLots();
   },
 
-  bcbDepDestSearch(val) {
+  bcbDepBuyerSearch(val) {
     const q   = val.trim().toLowerCase();
-    const res = document.getElementById('bcb-dep-dest-results');
+    const res = document.getElementById('bcb-dep-buyer-results');
     if (!res) return;
     if (!q) { res.style.display = 'none'; res.innerHTML = ''; return; }
-    const agencies = [...(S.lvu.agencies || []), ...(S.annuaireData || [])];
-    const hits = agencies.filter(a =>
-      (a.nom   || '').toLowerCase().includes(q) ||
-      (a.ville || '').toLowerCase().includes(q) ||
-      (a.code  || '').toLowerCase().includes(q)
-    ).slice(0, 10);
-    if (!hits.length) {
-      res.innerHTML = '<div style="padding:10px 12px;color:#94A3B8;font-size:12px;">Aucun résultat</div>';
+    // Acheteurs uniques des lots non partis
+    const buyers = [...new Set(
+      S.bcbLots.filter(l => !l.parti && l.acheteur).map(l => l.acheteur)
+    )].filter(b => b.toLowerCase().includes(q)).slice(0, 8);
+    if (!buyers.length) {
+      res.innerHTML = '<div style="padding:10px 12px;color:#94A3B8;font-size:12px;">Aucun acheteur trouvé</div>';
       res.style.display = 'block';
       return;
     }
-    // Stocker les hits accessibles par index
-    this._bcbDepDestHits = hits;
-    res.innerHTML = hits.map((a, i) => `
-      <div class="dest-result-row" onclick="App.bcbDepDestSelect(${i})">
-        <span style="font-size:11px;font-weight:700;color:#1D4ED8;min-width:38px;">${a.code || ''}</span>
-        <span style="font-size:13px;color:#1E293B;flex:1;">${a.nom}</span>
-        <span style="font-size:11px;color:#64748B;">${a.cp||''} ${a.ville||''}</span>
-      </div>`).join('');
+    res.innerHTML = buyers.map(b => {
+      const count = S.bcbLots.filter(l => !l.parti && l.acheteur === b).length;
+      return `<div class="dest-result-row" onclick="App.bcbDepBuyerSelect('${b.replace(/'/g,"\\'")}')">
+        <span style="font-size:13px;color:#1E293B;flex:1;">${b}</span>
+        <span style="font-size:11px;color:#64748B;">${count} lot${count>1?'s':''}</span>
+      </div>`;
+    }).join('');
     res.style.display = 'block';
   },
 
-  bcbDepDestSelect(idx) {
-    const a = (this._bcbDepDestHits || [])[idx];
-    if (!a) return;
-    S.bcbDepartDest = {
-      nom:     a.nom     || '',
-      adresse: a.adresse || '',
-      ville:   [a.cp, a.ville].filter(Boolean).join(' '),
-      pays:    a.pays    || 'FR - France'
-    };
-    const res = document.getElementById('bcb-dep-dest-results');
-    const inp = document.getElementById('bcb-dep-dest-search');
+  bcbDepBuyerSelect(buyer) {
+    S.bcbDepartBuyer = buyer;
+    const res = document.getElementById('bcb-dep-buyer-results');
+    const inp = document.getElementById('bcb-dep-buyer-search');
     if (res) { res.style.display = 'none'; res.innerHTML = ''; }
     if (inp) inp.value = '';
-    const sel  = document.getElementById('bcb-dep-dest-selected');
-    const name = document.getElementById('bcb-dep-dest-name');
-    const addr = document.getElementById('bcb-dep-dest-addr');
-    if (name) name.textContent = S.bcbDepartDest.nom;
-    if (addr) addr.textContent = [S.bcbDepartDest.adresse, S.bcbDepartDest.ville, S.bcbDepartDest.pays].filter(Boolean).join(' · ');
-    if (sel)  sel.style.display = '';
+    const active = document.getElementById('bcb-dep-buyer-active');
+    const name   = document.getElementById('bcb-dep-buyer-name');
+    if (name)   name.textContent = buyer;
+    if (active) active.style.display = 'flex';
+    this._bcbDepRenderLots();
   },
 
-  bcbDepDestClear() {
-    S.bcbDepartDest = null;
-    const res = document.getElementById('bcb-dep-dest-results');
-    const inp = document.getElementById('bcb-dep-dest-search');
-    const sel = document.getElementById('bcb-dep-dest-selected');
-    if (res) { res.style.display = 'none'; res.innerHTML = ''; }
-    if (inp) inp.value = '';
-    if (sel) sel.style.display = 'none';
+  bcbDepBuyerClear() {
+    S.bcbDepartBuyer = null;
+    const active = document.getElementById('bcb-dep-buyer-active');
+    if (active) active.style.display = 'none';
+    this._bcbDepRenderLots();
   },
 
   _bcbDepRenderLots() {
@@ -7688,7 +7668,10 @@ const App = {
     const lotsList    = document.getElementById('bcb-dep-lots-list');
     if (!lotsSection || !lotsList) return;
     lotsSection.style.display = '';
-    const lots = S.bcbLots.filter(l => !l.parti);
+    const all  = S.bcbLots.filter(l => !l.parti);
+    const lots = S.bcbDepartBuyer
+      ? all.filter(l => l.acheteur === S.bcbDepartBuyer)
+      : all;
     // Group by buyer
     const groups = {};
     lots.forEach(l => {
@@ -7781,17 +7764,9 @@ const App = {
       set('lvu-f-exp-adresse',  'ZA Renardières');
       set('lvu-f-exp-ville',    'JAVRON-LES-CHAPELLES');
       set('lvu-f-exp-pays',     'FR - France');
-      const dest = S.bcbDepartDest;
-      if (dest) {
-        set('lvu-f-dest-nom',     dest.nom);
-        set('lvu-f-dest-adresse', dest.adresse);
-        set('lvu-f-dest-ville',   dest.ville);
-        set('lvu-f-dest-pays',    dest.pays);
-      } else {
-        if (c.client)        set('lvu-f-dest-nom',     c.client);
-        if (c.clientAdresse) set('lvu-f-dest-adresse', c.clientAdresse);
-        if (c.clientPays)    set('lvu-f-dest-pays',    c.clientPays);
-      }
+      if (c.client)        set('lvu-f-dest-nom',     c.client);
+      if (c.clientAdresse) set('lvu-f-dest-adresse', c.clientAdresse);
+      if (c.clientPays)    set('lvu-f-dest-pays',    c.clientPays);
     }, 100);
   },
 
