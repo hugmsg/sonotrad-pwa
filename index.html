@@ -905,6 +905,9 @@
     <button class="nav-tab" data-bcbtab="bcb-consignes" onclick="App.go('bcb-consignes')" style="display:none">
       <span class="icon">📋</span><span>Consignes</span>
     </button>
+    <button class="nav-tab" data-bcbtab="bcb-depart" onclick="App.go('bcb-depart')" style="display:none">
+      <span class="icon">🚚</span><span>Départ</span>
+    </button>
     <!-- ── Tabs LVU (masqués hors activité LVU) ──────────────────────────── -->
     <button class="nav-tab" data-lvutab="lvu-form" onclick="App.go('lvu-form')" style="display:none">
       <span class="icon">📝</span><span>Formulaire</span>
@@ -1967,6 +1970,33 @@
       </div>
     </div>
 
+    <!-- ── VIEW : BCB DÉPART ─────────────────────────────────────────────── -->
+    <div class="view" id="view-bcb-depart">
+      <div style="padding:10px 12px 8px;background:#F8FAFC;border-bottom:1px solid #E2E8F0;position:sticky;top:0;z-index:2;">
+        <div style="font-size:15px;font-weight:700;color:#1E293B;">Départ BCB</div>
+        <div style="font-size:11px;color:#64748B;">Sélectionner le chauffeur et les lots à enlever</div>
+      </div>
+      <div id="bcb-dep-consigne-section" style="padding:12px 12px 0;">
+        <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Chauffeur</div>
+        <div id="bcb-dep-consigne-picker"></div>
+        <button onclick="App.go('bcb-consignes')"
+          style="margin-top:6px;background:none;border:1px dashed #CBD5E1;border-radius:8px;padding:9px 12px;font-size:12px;color:#64748B;cursor:pointer;width:100%;text-align:left;">
+          + Nouvelle consigne
+        </button>
+      </div>
+      <div id="bcb-dep-lots-section" style="padding:12px;display:none;">
+        <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Lots à enlever</div>
+        <div id="bcb-dep-lots-list"></div>
+      </div>
+      <div id="bcb-dep-bar" style="display:none;position:sticky;bottom:0;background:white;border-top:1px solid #E2E8F0;padding:10px 12px;align-items:center;gap:8px;">
+        <span id="bcb-dep-count" style="flex:1;font-size:13px;color:#64748B;">0 lot sélectionné</span>
+        <button onclick="App.bcbDepartCreateCmr()"
+          style="background:#1D4ED8;color:white;border:none;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;">
+          Créer CMR →
+        </button>
+      </div>
+    </div>
+
     <!-- ── VIEW : LVU — FORMULAIRE ──────────────────────────────────────── -->
     <div class="view" id="view-lvu-form">
       <div style="padding:16px;">
@@ -2429,7 +2459,9 @@ const S = {
   bcbSortField:    'default',  // 'default' | 'id_desc' | 'date_asc' | 'date_desc'
   bcbSelectMode:   false,
   bcbSelected:     new Set(),
-  bcbSelLot:       null,
+  bcbSelLot:         null,
+  bcbDepartConsigne: null,
+  bcbDepartSelected: new Set(),
   // ── LVU ──────────────────────────────────────────────────────────────────
   lvLinks: {},        // { opKey: { numero, display, date } } — chargé au prefetch
   annuaireData: [],   // [{code,nom,adresse,cp,ville,email,tel,note}]
@@ -2476,6 +2508,7 @@ const App = {
     if (view === 'stock-sync')   this.loadStockSync();
     if (view === 'bcb-lots')      this.bcbLotsLoad();
     if (view === 'bcb-consignes') this.bcbInitLangGrid();
+    if (view === 'bcb-depart')    this.bcbDepartInit();
     if (view === 'lvu-form')      this._lvuRenderMarchandises();
     if (view === 'lvu-history')   this.lvuLoadHistory();
     if (view === 'annuaire')      this.annuaireLoad();
@@ -7292,10 +7325,18 @@ const App = {
   bcbToggleLotSelect(key, rowEl) {
     if (S.bcbSelected.has(key)) {
       S.bcbSelected.delete(key);
-      if (rowEl) { rowEl.style.background='white'; const cb=rowEl.querySelector('input'); if(cb) cb.checked=false; }
     } else {
       S.bcbSelected.add(key);
-      if (rowEl) { rowEl.style.background='#EFF6FF'; const cb=rowEl.querySelector('input'); if(cb) cb.checked=true; }
+    }
+    const isSel = S.bcbSelected.has(key);
+    if (rowEl) {
+      rowEl.style.background = isSel ? '#EFF6FF' : 'white';
+      const cbEl = rowEl.querySelector('[data-lot-cb]');
+      if (cbEl) {
+        cbEl.style.borderColor = isSel ? '#1D4ED8' : '#CBD5E1';
+        cbEl.style.background  = isSel ? '#1D4ED8' : 'white';
+        cbEl.textContent       = isSel ? '✓' : '';
+      }
     }
     this._bcbUpdateCount();
   },
@@ -7307,12 +7348,16 @@ const App = {
       const key = row.dataset.lotKey;
       if (allSel) {
         S.bcbSelected.delete(key);
-        row.style.background = 'white';
-        const cb = row.querySelector('input'); if (cb) cb.checked = false;
       } else {
         S.bcbSelected.add(key);
-        row.style.background = '#EFF6FF';
-        const cb = row.querySelector('input'); if (cb) cb.checked = true;
+      }
+      const isSel = S.bcbSelected.has(key);
+      row.style.background = isSel ? '#EFF6FF' : 'white';
+      const cbEl = row.querySelector('[data-lot-cb]');
+      if (cbEl) {
+        cbEl.style.borderColor = isSel ? '#1D4ED8' : '#CBD5E1';
+        cbEl.style.background  = isSel ? '#1D4ED8' : 'white';
+        cbEl.textContent       = isSel ? '✓' : '';
       }
     });
     this._bcbUpdateCount();
@@ -7402,7 +7447,7 @@ const App = {
       const desc  = [lot.vendeur, [lot.marque,lot.modele].filter(Boolean).join(' '), lot.type].filter(Boolean).join(' — ');
       const sub   = [lot.refVendeur?`réf ${lot.refVendeur}`:'', lot.numSerie?`n° ${lot.numSerie}`:'', lot.poids?`${lot.poids}t`:'', lot.commentaire].filter(Boolean).join(' · ');
       const cbHtml = S.bcbSelectMode
-        ? `<input type="checkbox" ${isSel?'checked':''} onclick="event.stopPropagation()" style="width:15px;height:15px;flex-shrink:0;accent-color:#1D4ED8;">`
+        ? `<div data-lot-cb style="width:18px;height:18px;border-radius:5px;border:2px solid ${isSel?'#1D4ED8':'#CBD5E1'};background:${isSel?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:white;">${isSel?'✓':''}</div>`
         : '';
       return `<div data-lot-key="${key}" onclick="${clickFn}" style="background:${bg};border:1px solid #E2E8F0;border-radius:8px;padding:7px 10px;cursor:pointer;display:flex;align-items:center;gap:8px;" onmouseenter="if(!App._bcbIsSelected('${key}'))this.style.background='#F0F7FF'" onmouseleave="if(!App._bcbIsSelected('${key}'))this.style.background='white'">
         ${cbHtml}
@@ -7512,6 +7557,148 @@ const App = {
         </a>` : ''}
     `;
     this.go('bcb-lot-detail');
+  },
+
+  /* ─ BCB Départ ─ */
+  bcbDepartInit() {
+    S.bcbDepartConsigne = null;
+    S.bcbDepartSelected = new Set();
+    this._bcbDepRenderConsignes();
+    const lotsSection = document.getElementById('bcb-dep-lots-section');
+    const bar = document.getElementById('bcb-dep-bar');
+    if (lotsSection) lotsSection.style.display = 'none';
+    if (bar) bar.style.display = 'none';
+  },
+
+  _bcbDepRenderConsignes() {
+    const container = document.getElementById('bcb-dep-consigne-picker');
+    if (!container) return;
+    const list = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+    if (!list.length) {
+      container.innerHTML = '<div style="padding:10px;text-align:center;color:#94A3B8;font-size:13px;">Aucune consigne enregistrée</div>';
+      return;
+    }
+    container.innerHTML = list.map((c, i) => {
+      const isSel = S.bcbDepartConsigne === i;
+      const name  = [c.prenom, c.nom].filter(Boolean).join(' ') || 'Chauffeur';
+      const truck = [c.tracteur, c.remorque].filter(Boolean).join(' + ') || '—';
+      return `<div onclick="App.bcbDepSelectConsigne(${i})"
+        style="background:${isSel?'#EFF6FF':'white'};border:1px solid ${isSel?'#1D4ED8':'#E2E8F0'};border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer;">
+        <div style="font-size:13px;font-weight:700;color:#1E293B;">${name}</div>
+        <div style="font-size:11px;color:#64748B;">${c.transportNom||'—'} · ${truck}</div>
+      </div>`;
+    }).join('');
+  },
+
+  bcbDepSelectConsigne(idx) {
+    S.bcbDepartConsigne = idx;
+    S.bcbDepartSelected = new Set();
+    this._bcbDepRenderConsignes();
+    this._bcbDepRenderLots();
+  },
+
+  _bcbDepRenderLots() {
+    const lotsSection = document.getElementById('bcb-dep-lots-section');
+    const lotsList    = document.getElementById('bcb-dep-lots-list');
+    if (!lotsSection || !lotsList) return;
+    lotsSection.style.display = '';
+    const lots = S.bcbLots.filter(l => !l.parti);
+    // Group by buyer
+    const groups = {};
+    lots.forEach(l => {
+      const key = l.acheteur || '(sans acheteur)';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(l);
+    });
+    let html = '';
+    for (const buyer of Object.keys(groups).sort()) {
+      html += `<div style="margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">${buyer}</div>`;
+      groups[buyer].forEach(lot => {
+        const key   = lot.idBcb;
+        const isSel = S.bcbDepartSelected.has(key);
+        const cb    = `<div data-dep-cb style="width:18px;height:18px;border-radius:5px;border:2px solid ${isSel?'#1D4ED8':'#CBD5E1'};background:${isSel?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:white;">${isSel?'✓':''}</div>`;
+        const dotV  = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.vendu?'#FEF9C3':'#F1F5F9'};color:${lot.vendu?'#92400E':'#94A3B8'};">V</span>`;
+        const desc  = [lot.marque, lot.modele].filter(Boolean).join(' ') || lot.type || '—';
+        html += `<div onclick="App.bcbDepartToggleLot('${key}')" data-dep-lot="${key}"
+          style="background:${isSel?'#EFF6FF':'white'};border:1px solid ${isSel?'#93C5FD':'#E2E8F0'};border-radius:8px;padding:8px 10px;margin-bottom:4px;cursor:pointer;display:flex;align-items:center;gap:8px;">
+          ${cb}
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;font-weight:700;color:#1E293B;">${lot.idBcb}</div>
+            <div style="font-size:11px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${desc}${lot.inter?' · '+lot.inter:''}</div>
+          </div>
+          <div style="display:flex;gap:3px;align-items:center;">${dotV}${lot.numVente?`<span style="font-size:10px;color:#64748B;margin-left:2px;">${lot.numVente}</span>`:''}</div>
+        </div>`;
+      });
+      html += `</div>`;
+    }
+    if (!html) html = '<div style="padding:16px;text-align:center;color:#94A3B8;font-size:13px;">Aucun lot disponible</div>';
+    lotsList.innerHTML = html;
+    this._bcbDepUpdateBar();
+  },
+
+  bcbDepartToggleLot(key) {
+    if (S.bcbDepartSelected.has(key)) {
+      S.bcbDepartSelected.delete(key);
+    } else {
+      S.bcbDepartSelected.add(key);
+    }
+    const isSel = S.bcbDepartSelected.has(key);
+    const row   = document.querySelector(`[data-dep-lot="${key}"]`);
+    if (row) {
+      row.style.background  = isSel ? '#EFF6FF' : 'white';
+      row.style.borderColor = isSel ? '#93C5FD' : '#E2E8F0';
+      const cbEl = row.querySelector('[data-dep-cb]');
+      if (cbEl) {
+        cbEl.style.borderColor = isSel ? '#1D4ED8' : '#CBD5E1';
+        cbEl.style.background  = isSel ? '#1D4ED8' : 'white';
+        cbEl.textContent       = isSel ? '✓' : '';
+      }
+    }
+    this._bcbDepUpdateBar();
+  },
+
+  _bcbDepUpdateBar() {
+    const bar = document.getElementById('bcb-dep-bar');
+    const cnt = document.getElementById('bcb-dep-count');
+    const n   = S.bcbDepartSelected.size;
+    if (cnt) cnt.textContent = n ? `${n} lot${n>1?'s':''} sélectionné${n>1?'s':''}` : '0 lot sélectionné';
+    if (bar) bar.style.display = (S.bcbDepartConsigne !== null && n > 0) ? 'flex' : 'none';
+  },
+
+  async bcbDepartCreateCmr() {
+    const list = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+    const c    = list[S.bcbDepartConsigne];
+    if (!c) return;
+    const selectedLots = S.bcbLots.filter(l => S.bcbDepartSelected.has(l.idBcb));
+    if (!selectedLots.length) { this.toast('Sélectionnez au moins un lot.'); return; }
+    S.lvu.transporteur = { id: 'autre', nom: c.transportNom || '', adresse: c.transportAdresse || '', ville: c.transportVille || '' };
+    S.lvu.marchandises = selectedLots.map(l => ({
+      qte: '1',
+      description: [l.idBcb, [l.marque, l.modele].filter(Boolean).join(' ') || l.type].filter(Boolean).join(' — '),
+      poids: l.poids ? String(l.poids) : '',
+      note: l.inter || '',
+      ml: ''
+    }));
+    S.activity = 'lvu';
+    await this.lvuInit();
+    this.lvuSetType('CMR');
+    this.lvuSetSource('bcb');
+    this._lvuRenderMarchandises();
+    setTimeout(() => {
+      const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+      set('lvu-f-conducteur',   [c.prenom, c.nom].filter(Boolean).join(' '));
+      set('lvu-f-immat-moteur', c.tracteur  || '');
+      set('lvu-f-immat-semi',   c.remorque  || '');
+      set('lvu-f-donneur',      c.client    || '');
+      set('lvu-f-exp-nom',      'BCB OFF MARKET');
+      set('lvu-f-exp-adresse',  'ZA Renardières');
+      set('lvu-f-exp-ville',    'JAVRON-LES-CHAPELLES');
+      set('lvu-f-exp-pays',     'FR - France');
+      if (c.client)        set('lvu-f-dest-nom',     c.client);
+      if (c.clientAdresse) set('lvu-f-dest-adresse', c.clientAdresse);
+      if (c.clientPays)    set('lvu-f-dest-pays',    c.clientPays);
+    }, 100);
   },
 
   /* ─ LVU ─ */
