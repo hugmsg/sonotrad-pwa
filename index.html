@@ -876,6 +876,16 @@
       <span id="sidebar-activity-label">Arrivées &amp; Départs</span>
       <span style="font-size:10px;color:#94A3B8;margin-top:2px;">← Changer d'activité</span>
     </div>
+    <!-- ── Tabs LOXAM (masqués sur loxam-menu et hors activité LOXAM) ──── -->
+    <button class="nav-tab" data-tab="departures" onclick="App.go('departures')" style="display:none">
+      <span class="icon">🏭</span><span>Production</span>
+    </button>
+    <button class="nav-tab" data-tab="arrivals" onclick="App.go('arrivals')" style="display:none">
+      <span class="icon">📥</span><span>Arrivées</span>
+    </button>
+    <button class="nav-tab" data-tab="history" onclick="App.go('history')" style="display:none">
+      <span class="icon">🕐</span><span>Historique</span>
+    </button>
     <!-- ── Tabs Stockage (masqués hors activité stockage) ─────────────── -->
     <button class="nav-tab" data-stab="stock-dashboard" onclick="App.go('stock-dashboard')" style="display:none">
       <span class="icon">📊</span><span>Tableau</span>
@@ -888,6 +898,19 @@
     </button>
     <button class="nav-tab" data-stab="stock-sync" onclick="App.go('stock-sync')" style="display:none">
       <span class="icon">🔄</span><span>Synchro</span>
+    </button>
+    <!-- ── Tabs BCB (masqués sur bcb-menu et hors activité BCB) ────────── -->
+    <button class="nav-tab" data-bcbtab="bcb-lots" onclick="App.go('bcb-lots')" style="display:none">
+      <span class="icon">📦</span><span>Lots</span>
+    </button>
+    <button class="nav-tab" data-bcbtab="bcb-consignes" onclick="App.go('bcb-consignes')" style="display:none">
+      <span class="icon">📋</span><span>Consignes</span>
+    </button>
+    <button class="nav-tab" data-bcbtab="bcb-depart" onclick="App.go('bcb-depart')" style="display:none">
+      <span class="icon">🚚</span><span>Chargement</span>
+    </button>
+    <button class="nav-tab" data-bcbtab="bcb-enlevements" onclick="App.go('bcb-enlevements')" style="display:none">
+      <span class="icon">📁</span><span>Enl.</span>
     </button>
     <!-- ── Tabs LVU (masqués hors activité LVU) ──────────────────────────── -->
     <button class="nav-tab" data-lvutab="lvu-form" onclick="App.go('lvu-form')" style="display:none">
@@ -1197,26 +1220,12 @@
       <!-- Grid (masqué pendant le chargement) -->
       <div id="lxmenu-grid" style="display:none;padding:20px;">
         <div id="activity-grid" style="grid-template-columns:1fr 1fr;">
-          <!-- Arrivées -->
-          <div class="activity-card" data-ready="true" onclick="App.go('arrivals')">
-            <div class="activity-icon">📥</div>
-            <div class="activity-name">Arrivées</div>
-            <div class="activity-desc">Sur parc · Partis</div>
-            <span id="lxmenu-badge-arr" class="activity-badge badge-loading">⟳ Chargement…</span>
-          </div>
-          <!-- En cours -->
+          <!-- Production -->
           <div class="activity-card" data-ready="true" onclick="App.go('departures')">
             <div class="activity-icon">🏭</div>
-            <div class="activity-name">En cours</div>
-            <div class="activity-desc">Production · LV · Départs</div>
+            <div class="activity-name">Production</div>
+            <div class="activity-desc">En cours · Arrivées · Historique LV</div>
             <span id="lxmenu-badge-prod" class="activity-badge badge-loading">⟳ Chargement…</span>
-          </div>
-          <!-- Historique -->
-          <div class="activity-card" data-ready="true" onclick="App.go('history')">
-            <div class="activity-icon">🕐</div>
-            <div class="activity-name">Historique</div>
-            <div class="activity-desc">Partis · LV</div>
-            <span id="lxmenu-badge-hist" class="activity-badge badge-soon">—</span>
           </div>
           <!-- Stock PIDEM -->
           <div class="activity-card" data-ready="true" onclick="App.loxamMenuGoStock('stock-dashboard')">
@@ -2730,10 +2739,16 @@ const App = {
     // ── Nav : cachée sur l'accueil, tabs selon activité ─────────────────
     const nav = document.getElementById('main-nav');
     if (nav) nav.style.display = onHome ? 'none' : '';
+    document.querySelectorAll('#main-nav .nav-tab[data-tab]').forEach(el => {
+      el.style.display = (S.activity === 'loxam' && v !== 'loxam-menu') ? '' : 'none';
+    });
     document.querySelectorAll('#main-nav .nav-tab[data-stab]').forEach(el => {
       const isAdmin   = S.currentUser?.role === 'admin';
       const isSynchro = el.dataset.stab === 'stock-sync';
       el.style.display = (S.activity === 'stockage' && (!isSynchro || isAdmin)) ? '' : 'none';
+    });
+    document.querySelectorAll('#main-nav .nav-tab[data-bcbtab]').forEach(el => {
+      el.style.display = (S.activity === 'bcb' && v !== 'bcb-menu') ? '' : 'none';
     });
     document.querySelectorAll('#main-nav .nav-tab[data-lvutab]').forEach(el => {
       el.style.display = (S.activity === 'lvu') ? '' : 'none';
@@ -6097,32 +6112,24 @@ const App = {
     if (statusEl) { const n = new Date(); statusEl.textContent = 'MAJ ' + n.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}); }
   },
   _loxamMenuRefreshCounts() {
-    const enProd  = S.depsLoaded     ? S.deps.filter(d => !d.parti).length : null;
+    const enProd  = S.depsLoaded    ? S.deps.filter(d => !d.parti).length : null;
     const arrPres = S.arrivalsLoaded ? S.arrivalsData.filter(a => !a.parti).length : null;
-    const badgeArr = document.getElementById('lxmenu-badge-arr');
-    if (badgeArr) {
-      if (arrPres !== null) {
-        badgeArr.className = 'activity-badge badge-active';
-        badgeArr.textContent = `● ${arrPres} sur parc`;
-      } else {
-        badgeArr.className = 'activity-badge badge-loading';
-        badgeArr.textContent = '⟳ Chargement…';
-      }
-    }
     const badgeProd = document.getElementById('lxmenu-badge-prod');
     if (badgeProd) {
-      if (enProd !== null) {
+      if (enProd !== null && arrPres !== null) {
         badgeProd.className = 'activity-badge badge-active';
-        badgeProd.textContent = `● ${enProd} en cours`;
+        badgeProd.textContent = `${enProd} en prod · ${arrPres} arrivée${arrPres!==1?'s':''}`;
       } else {
         badgeProd.className = 'activity-badge badge-loading';
         badgeProd.textContent = '⟳ Chargement…';
       }
     }
     const badgeStock = document.getElementById('lxmenu-badge-stock');
-    if (badgeStock && S.stockLoaded && S.stockData.length > 0) {
-      badgeStock.className = 'activity-badge badge-active';
-      badgeStock.textContent = `${S.stockData.length} réf.`;
+    if (badgeStock) {
+      if (S.stockLoaded && S.stockData.length > 0) {
+        badgeStock.className = 'activity-badge badge-active';
+        badgeStock.textContent = `${S.stockData.length} réf.`;
+      }
     }
   },
   loxamMenuGoStock(view) {
