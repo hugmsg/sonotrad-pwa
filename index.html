@@ -2855,7 +2855,7 @@ const App = {
       if (S.depsLoaded) {
         loxam.className = 'activity-badge badge-active';
         loxam.textContent = '● Actif';
-      } else if (S.depsLoading || S.apiUrl) {
+      } else if (S.depsLoading) {
         loxam.className = 'activity-badge badge-loading';
         loxam.textContent = '⟳ Chargement...';
       }
