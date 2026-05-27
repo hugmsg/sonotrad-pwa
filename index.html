@@ -1978,21 +1978,21 @@
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
               <div>
                 <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-nom"></label>
-                <input id="bcb-f-nom" type="text" autocapitalize="words" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
+                <input id="bcb-f-nom" type="text" autocapitalize="words" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
               </div>
               <div>
                 <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-prenom"></label>
-                <input id="bcb-f-prenom" type="text" autocapitalize="words" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
+                <input id="bcb-f-prenom" type="text" autocapitalize="words" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
               </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
               <div>
                 <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-tracteur"></label>
-                <input id="bcb-f-tracteur" type="text" placeholder="AB-123-CD" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;text-transform:uppercase;">
+                <input id="bcb-f-tracteur" type="text" placeholder="AB-123-CD" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;text-transform:uppercase;">
               </div>
               <div>
                 <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-remorque"></label>
-                <input id="bcb-f-remorque" type="text" placeholder="XY-456-EF" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;text-transform:uppercase;">
+                <input id="bcb-f-remorque" type="text" placeholder="XY-456-EF" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;text-transform:uppercase;">
               </div>
             </div>
             <!-- Transporteur -->
@@ -2001,22 +2001,23 @@
               <div style="display:grid;gap:8px;">
                 <div style="position:relative;">
                   <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-transport-nom"></label>
-                  <input id="bcb-f-transport-nom" type="text" autocapitalize="words" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;"
-                    oninput="App.bcbSuggestAgency('transport',this.value)" onblur="setTimeout(()=>App.bcbHideSuggest('transport'),200)">
+                  <input id="bcb-f-transport-nom" type="text" autocapitalize="words" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;"
+                    oninput="App.bcbSuggestAgency('transport',this.value)" onblur="setTimeout(()=>App.bcbHideSuggest('transport'),200)"
+                    onkeydown="App._suggestKeyDown(event,'bcb-suggest-transport',(i)=>App.bcbApplyAgency('transport',i))">
                   <div id="bcb-suggest-transport" style="display:none;border:1px solid #DBEAFE;border-radius:8px;overflow:hidden;margin-top:2px;background:white;box-shadow:0 4px 12px rgba(0,0,0,.08);"></div>
                 </div>
                 <div>
                   <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-transport-adresse"></label>
-                  <input id="bcb-f-transport-adresse" type="text" autocapitalize="words" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;">
+                  <input id="bcb-f-transport-adresse" type="text" autocapitalize="words" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;">
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                   <div>
                     <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-transport-ville"></label>
-                    <input id="bcb-f-transport-ville" type="text" autocapitalize="words" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;">
+                    <input id="bcb-f-transport-ville" type="text" autocapitalize="words" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;">
                   </div>
                   <div>
                     <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-transport-pays"></label>
-                    <input id="bcb-f-transport-pays" type="text" list="ann-pays-list" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;" onblur="App.annPaysNormalize(this.id)">
+                    <input id="bcb-f-transport-pays" type="text" list="ann-pays-list" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;" onblur="App.annPaysNormalize(this.id)">
                   </div>
                 </div>
               </div>
@@ -2027,22 +2028,23 @@
               <div style="display:grid;gap:8px;">
                 <div style="position:relative;">
                   <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-client"></label>
-                  <input id="bcb-f-client" type="text" autocapitalize="words" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;"
-                    oninput="App.bcbSuggestAgency('client',this.value)" onblur="setTimeout(()=>App.bcbHideSuggest('client'),200)">
+                  <input id="bcb-f-client" type="text" autocapitalize="words" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;"
+                    oninput="App.bcbSuggestAgency('client',this.value)" onblur="setTimeout(()=>App.bcbHideSuggest('client'),200)"
+                    onkeydown="App._suggestKeyDown(event,'bcb-suggest-client',(i)=>App.bcbApplyAgency('client',i))">
                   <div id="bcb-suggest-client" style="display:none;border:1px solid #CCFBF1;border-radius:8px;overflow:hidden;margin-top:2px;background:white;box-shadow:0 4px 12px rgba(0,0,0,.08);"></div>
                 </div>
                 <div>
                   <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-client-adresse"></label>
-                  <input id="bcb-f-client-adresse" type="text" autocapitalize="words" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;">
+                  <input id="bcb-f-client-adresse" type="text" autocapitalize="words" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;">
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                   <div>
                     <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-client-ville"></label>
-                    <input id="bcb-f-client-ville" type="text" autocapitalize="words" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;">
+                    <input id="bcb-f-client-ville" type="text" autocapitalize="words" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;">
                   </div>
                   <div>
                     <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-client-pays"></label>
-                    <input id="bcb-f-client-pays" type="text" list="ann-pays-list" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;" onblur="App.annPaysNormalize(this.id)">
+                    <input id="bcb-f-client-pays" type="text" list="ann-pays-list" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;" onblur="App.annPaysNormalize(this.id)">
                   </div>
                 </div>
               </div>
@@ -2094,8 +2096,8 @@
       </div>
       <div id="bcb-dep-lots-section" style="padding:12px;display:none;">
         <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Acheteur</div>
-        <input id="bcb-dep-buyer-search" type="text" autocomplete="off" placeholder="Nom de l'acheteur…"
-          oninput="App.bcbDepBuyerSearch(this.value)"
+        <input id="bcb-dep-buyer-search" type="text" autocomplete="nope" placeholder="Nom de l'acheteur…"
+          oninput="App.bcbDepBuyerSearch(this.value)" onkeydown="App._bcbBuyerKeyDown(event)"
           style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:4px;">
         <div id="bcb-dep-buyer-results" class="dest-search-results"></div>
         <div id="bcb-dep-buyer-active" style="display:none;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:7px 10px;margin-bottom:8px;display:none;align-items:center;gap:6px;">
@@ -2234,17 +2236,17 @@
         <div class="card" style="margin-bottom:12px;">
           <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Conducteur &amp; Véhicule</p>
           <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Conducteur(s)</label>
-          <input id="lvu-f-conducteur" type="text" autocapitalize="words" placeholder="Nom Prénom"
+          <input id="lvu-f-conducteur" type="text" autocapitalize="words" autocomplete="nope" placeholder="Nom Prénom"
             style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:10px;">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
             <div>
               <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Immat. moteur</label>
-              <input id="lvu-f-immat-moteur" type="text" placeholder="AB-123-CD" autocapitalize="characters"
+              <input id="lvu-f-immat-moteur" type="text" placeholder="AB-123-CD" autocapitalize="characters" autocomplete="nope"
                 style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;text-transform:uppercase;">
             </div>
             <div>
               <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Immat. semi</label>
-              <input id="lvu-f-immat-semi" type="text" placeholder="XY-456-EF" autocapitalize="characters"
+              <input id="lvu-f-immat-semi" type="text" placeholder="XY-456-EF" autocapitalize="characters" autocomplete="nope"
                 style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;text-transform:uppercase;">
             </div>
           </div>
@@ -2253,7 +2255,7 @@
         <!-- Donneur d'ordre -->
         <div class="card" style="margin-bottom:12px;">
           <label style="font-size:13px;font-weight:700;color:#1E293B;display:block;margin-bottom:8px;">Donneur d'ordre</label>
-          <input id="lvu-f-donneur" type="text" autocapitalize="words" placeholder="Société / Nom"
+          <input id="lvu-f-donneur" type="text" autocapitalize="words" autocomplete="nope" placeholder="Société / Nom"
             style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
         </div>
 
@@ -2261,16 +2263,16 @@
         <div class="card" style="margin-bottom:12px;">
           <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Expéditeur (chargement)</p>
           <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Nom / Société</label>
-          <input id="lvu-f-exp-nom" type="text" autocapitalize="words"
+          <input id="lvu-f-exp-nom" type="text" autocapitalize="words" autocomplete="nope"
             style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
           <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Adresse</label>
-          <input id="lvu-f-exp-adresse" type="text" autocapitalize="words"
+          <input id="lvu-f-exp-adresse" type="text" autocapitalize="words" autocomplete="nope"
             style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
           <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Ville / CP</label>
-          <input id="lvu-f-exp-ville" type="text" autocapitalize="words"
+          <input id="lvu-f-exp-ville" type="text" autocapitalize="words" autocomplete="nope"
             style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
           <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Pays</label>
-          <input id="lvu-f-exp-pays" type="text" placeholder="ex : FR - France" list="ann-pays-list"
+          <input id="lvu-f-exp-pays" type="text" placeholder="ex : FR - France" list="ann-pays-list" autocomplete="nope"
             onblur="App.annPaysNormalize(this.id)"
             style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
         </div>
@@ -2279,21 +2281,21 @@
         <div class="card" style="margin-bottom:12px;">
           <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Destinataire (livraison)</p>
           <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Rechercher une agence (code, ville, nom…)</label>
-          <input id="lvu-dest-search" type="text" autocomplete="off" placeholder="ex : 72 · ARNAGE · LOXAM…"
-            oninput="App.lvuDestSearch(this.value)"
+          <input id="lvu-dest-search" type="text" autocomplete="nope" placeholder="ex : 72 · ARNAGE · LOXAM…"
+            oninput="App.lvuDestSearch(this.value)" onkeydown="App._lvuDestKeyDown(event)"
             style="width:100%;box-sizing:border-box;border:1.5px solid #BFDBFE;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:4px;background:#F8FBFF;">
           <div id="lvu-dest-results" class="dest-search-results"></div>
           <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Nom / Société</label>
-          <input id="lvu-f-dest-nom" type="text" autocapitalize="words"
+          <input id="lvu-f-dest-nom" type="text" autocapitalize="words" autocomplete="nope"
             style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
           <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Adresse</label>
-          <input id="lvu-f-dest-adresse" type="text" autocapitalize="words"
+          <input id="lvu-f-dest-adresse" type="text" autocapitalize="words" autocomplete="nope"
             style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
           <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Ville / CP</label>
-          <input id="lvu-f-dest-ville" type="text" autocapitalize="words"
+          <input id="lvu-f-dest-ville" type="text" autocapitalize="words" autocomplete="nope"
             style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
           <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Pays</label>
-          <input id="lvu-f-dest-pays" type="text" placeholder="ex : FR - France" list="ann-pays-list"
+          <input id="lvu-f-dest-pays" type="text" placeholder="ex : FR - France" list="ann-pays-list" autocomplete="nope"
             onblur="App.annPaysNormalize(this.id)"
             style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
         </div>
@@ -7495,6 +7497,34 @@ const App = {
     const el = document.getElementById('bcb-suggest-' + fieldType);
     if (el) el.style.display = 'none';
   },
+  _suggestKeyDown(e, listId, selectFn) {
+    const list = document.getElementById(listId);
+    if (!list) return;
+    const rows = Array.from(list.children);
+    const open = list.style.display !== 'none' && rows.length > 0;
+    if (!open) { if (e.key === 'Escape') list.style.display = 'none'; return; }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Enter' && e.key !== 'Escape') { list._ni = -1; return; }
+    e.preventDefault();
+    if (e.key === 'Escape') { list.style.display = 'none'; list._ni = -1; return; }
+    let ni = list._ni !== undefined ? list._ni : -1;
+    if (e.key === 'ArrowDown')    ni = Math.min(ni + 1, rows.length - 1);
+    else if (e.key === 'ArrowUp') ni = Math.max(ni - 1, 0);
+    else if (e.key === 'Enter')   { if (ni >= 0) selectFn(ni); list._ni = -1; return; }
+    list._ni = ni;
+    rows.forEach((r, i) => r.style.background = i === ni ? '#EFF6FF' : '');
+  },
+  _bcbBuyerKeyDown(e) {
+    this._suggestKeyDown(e, 'bcb-dep-buyer-results', i => {
+      const r = document.querySelectorAll('#bcb-dep-buyer-results .dest-result-row')[i];
+      if (r) r.click();
+    });
+  },
+  _lvuDestKeyDown(e) {
+    this._suggestKeyDown(e, 'lvu-dest-results', i => {
+      const r = document.querySelectorAll('#lvu-dest-results .dest-result-row')[i];
+      if (r) r.click();
+    });
+  },
   bcbAddClientGroup() {
     this._bcbEnsureAgencies();
     const container = document.getElementById('bcb-extra-clients');
@@ -7513,23 +7543,24 @@ const App = {
       <div style="display:grid;gap:8px;">
         <div style="position:relative;">
           <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Client</label>
-          <input id="bcb-extra-client-${idx}" type="text"
+          <input id="bcb-extra-client-${idx}" type="text" autocomplete="nope"
             style="width:100%;border:1px solid #CBD5E1;border-radius:6px;padding:9px 10px;font-size:13px;box-sizing:border-box;background:#fff;"
             oninput="App.bcbSuggestExtraClient(${idx},this.value)"
-            onblur="App.bcbHideExtraSuggest(${idx})">
+            onblur="App.bcbHideExtraSuggest(${idx})"
+            onkeydown="App._suggestKeyDown(event,'bcb-extra-suggest-${idx}',(i)=>App.bcbApplyExtraAgency(${idx},i))">
           <div id="bcb-extra-suggest-${idx}" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #CBD5E1;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:100;max-height:180px;overflow-y:auto;"></div>
         </div>
         <div><label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Adresse</label>
-          <input id="bcb-extra-adresse-${idx}" type="text"
+          <input id="bcb-extra-adresse-${idx}" type="text" autocomplete="nope"
             style="width:100%;border:1px solid #CBD5E1;border-radius:6px;padding:9px 10px;font-size:13px;box-sizing:border-box;background:#fff;">
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           <div><label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">CP / Ville</label>
-            <input id="bcb-extra-ville-${idx}" type="text"
+            <input id="bcb-extra-ville-${idx}" type="text" autocomplete="nope"
               style="width:100%;border:1px solid #CBD5E1;border-radius:6px;padding:9px 10px;font-size:13px;box-sizing:border-box;background:#fff;">
           </div>
           <div><label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Pays</label>
-            <input id="bcb-extra-pays-${idx}" type="text"
+            <input id="bcb-extra-pays-${idx}" type="text" autocomplete="nope"
               style="width:100%;border:1px solid #CBD5E1;border-radius:6px;padding:9px 10px;font-size:13px;box-sizing:border-box;background:#fff;">
           </div>
         </div>
