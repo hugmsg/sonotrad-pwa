@@ -1885,14 +1885,7 @@
           </div>
           <button onclick="App.bcbLotsLoad(true)" style="background:white;border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 11px;font-size:12px;font-weight:600;color:#1D4ED8;cursor:pointer;flex-shrink:0;">↺</button>
         </div>
-        <!-- Sélecteur de vue -->
-        <div id="bcb-lots-view-tabs" style="display:flex;gap:4px;margin-bottom:8px;">
-          <button onclick="App.bcbSetView('lots')"     id="bcb-vtab-lots"     style="flex:1;padding:5px 2px;font-size:11px;font-weight:600;border-radius:7px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Lots</button>
-          <button onclick="App.bcbSetView('acheteur')" id="bcb-vtab-acheteur" style="flex:1;padding:5px 2px;font-size:11px;font-weight:600;border-radius:7px;border:1.5px solid #1D4ED8;background:#1D4ED8;color:white;cursor:pointer;">Acheteur</button>
-          <button onclick="App.bcbSetView('vendeur')"  id="bcb-vtab-vendeur"  style="flex:1;padding:5px 2px;font-size:11px;font-weight:600;border-radius:7px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Vendeur</button>
-          <button onclick="App.bcbSetView('vente')"    id="bcb-vtab-vente"    style="flex:1;padding:5px 2px;font-size:11px;font-weight:600;border-radius:7px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Vente</button>
-        </div>
-        <input id="bcb-lots-search" type="search" placeholder="Rechercher (code, vendeur, marque, n° série…)" autocomplete="off"
+<input id="bcb-lots-search" type="search" placeholder="Rechercher (code, vendeur, marque, n° série…)" autocomplete="off"
           oninput="S.bcbLotsSearch=this.value;App.bcbLotsRender()"
           style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:7px 10px;font-size:12px;outline:none;margin-bottom:7px;">
         <!-- Filtres colonne (style Excel) -->
@@ -2623,7 +2616,7 @@ const S = {
   bcbLotsLoaded:   false,
   bcbLotsLoading:  false,
   bcbLotsSearch:   '',
-  bcbLotsView:     'acheteur', // 'lots' | 'acheteur' | 'vendeur' | 'vente'
+  bcbLotsView:     'lots',
   bcbStatusFilter: { arrive: null, inspecte: null, vendu: null }, // null=tous | true=oui | false=non
   bcbSortField:    'default',  // 'default' | 'id_desc' | 'date_asc' | 'date_desc'
   bcbSelectMode:   false,
@@ -7761,15 +7754,6 @@ const App = {
   },
 
   bcbUpdateFilterUI() {
-    // Vue tabs
-    ['lots','acheteur','vendeur','vente'].forEach(k => {
-      const btn = document.getElementById('bcb-vtab-' + k);
-      if (!btn) return;
-      const a = k === S.bcbLotsView;
-      btn.style.background  = a ? '#1D4ED8' : 'white';
-      btn.style.color       = a ? 'white'   : '#64748B';
-      btn.style.borderColor = a ? '#1D4ED8' : '#E2E8F0';
-    });
     // Chips statut
     const sfStyles = {
       null:  { bg:'white',   color:'#64748B', border:'#E2E8F0' },
