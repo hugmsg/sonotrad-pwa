@@ -7683,6 +7683,8 @@ const App = {
 
   async bcbDeleteEnlevement(numero) {
     if (!confirm(`Supprimer le bon d'enlèvement ${numero} et mettre ses fichiers à la corbeille ?`)) return;
+    // Récupérer l'enlèvement avant suppression pour réinitialiser l'état local
+    const enlevement = S.bcbEnlevements.find(e => e.numero === numero);
     try {
       const r = await _fetchWithTimeout(S.apiUrl, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -7692,6 +7694,19 @@ const App = {
       if (d.status === 'ok') {
         S.bcbEnlevements = S.bcbEnlevements.filter(e => e.numero !== numero);
         if (S.bcbCurEnlevement?.numero === numero) S.bcbCurEnlevement = null;
+        // Remettre les lots comme non-partis localement
+        if (enlevement) {
+          const deletedIds = new Set((enlevement.lots || []).map(l => l.idBcb));
+          S.bcbLots.forEach(l => { if (deletedIds.has(l.idBcb)) l.parti = false; });
+          // Démarquer la consigne chauffeur
+          const consList = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+          const idx = consList.findIndex(c => [c.prenom, c.nom].filter(Boolean).join(' ') === enlevement.chauffeur);
+          if (idx > -1) {
+            const procCons = new Set(JSON.parse(localStorage.getItem('snt_bcb_processed_consignes') || '[]'));
+            procCons.delete(idx);
+            localStorage.setItem('snt_bcb_processed_consignes', JSON.stringify([...procCons]));
+          }
+        }
         this.toast('Enlèvement ' + numero + ' supprimé');
         this.bcbEnlevementsRender();
       } else this.toast('Erreur : ' + (d.error || 'inconnue'));
