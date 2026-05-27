@@ -906,7 +906,7 @@
       <span class="icon">📋</span><span>Consignes</span>
     </button>
     <button class="nav-tab" data-bcbtab="bcb-depart" onclick="App.go('bcb-depart')" style="display:none">
-      <span class="icon">🚚</span><span>Départ</span>
+      <span class="icon">🚚</span><span>Chargement</span>
     </button>
     <button class="nav-tab" data-bcbtab="bcb-enlevements" onclick="App.go('bcb-enlevements')" style="display:none">
       <span class="icon">📋</span><span>Enl.</span>
@@ -1804,6 +1804,62 @@
       </div>
     </div>
 
+    <!-- ── VIEW : BCB MENU ─────────────────────────────────────────────── -->
+    <div class="view" id="view-bcb-menu">
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#1D4ED8,#1E40AF);color:white;padding:20px 16px 24px;">
+        <div style="font-size:11px;font-weight:700;opacity:.65;letter-spacing:.8px;text-transform:uppercase;margin-bottom:4px;">Activité</div>
+        <div style="font-size:22px;font-weight:800;">BCB Off Market</div>
+        <div id="bcb-menu-status" style="font-size:12px;opacity:.75;margin-top:4px;">Chargement…</div>
+      </div>
+      <!-- Loader -->
+      <div id="bcb-menu-loader" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:64px 16px;gap:14px;">
+        <div class="spinner"></div>
+        <div style="font-size:13px;color:#64748B;font-weight:500;">Chargement des données…</div>
+      </div>
+      <!-- Grid (masqué pendant le chargement) -->
+      <div id="bcb-menu-grid" style="display:none;padding:16px;gap:12px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <!-- Lots -->
+          <div onclick="App.go('bcb-lots')"
+            style="background:white;border:1.5px solid #E2E8F0;border-radius:14px;padding:16px 12px;cursor:pointer;transition:all .15s;"
+            onmouseenter="this.style.borderColor='#1D4ED8';this.style.background='#EFF6FF'"
+            onmouseleave="this.style.borderColor='#E2E8F0';this.style.background='white'">
+            <div style="font-size:28px;margin-bottom:8px;">📦</div>
+            <div style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:3px;">Lots</div>
+            <div id="bcb-menu-lots-info" style="font-size:11px;color:#64748B;line-height:1.4;"></div>
+          </div>
+          <!-- Consignes -->
+          <div onclick="App.go('bcb-consignes')"
+            style="background:white;border:1.5px solid #E2E8F0;border-radius:14px;padding:16px 12px;cursor:pointer;transition:all .15s;"
+            onmouseenter="this.style.borderColor='#0F766E';this.style.background='#F0FDFA'"
+            onmouseleave="this.style.borderColor='#E2E8F0';this.style.background='white'">
+            <div style="font-size:28px;margin-bottom:8px;">📋</div>
+            <div style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:3px;">Consignes</div>
+            <div id="bcb-menu-consignes-info" style="font-size:11px;color:#64748B;line-height:1.4;"></div>
+          </div>
+          <!-- Chargement -->
+          <div onclick="App.go('bcb-depart')"
+            style="background:white;border:1.5px solid #E2E8F0;border-radius:14px;padding:16px 12px;cursor:pointer;transition:all .15s;"
+            onmouseenter="this.style.borderColor='#7C3AED';this.style.background='#F5F3FF'"
+            onmouseleave="this.style.borderColor='#E2E8F0';this.style.background='white'">
+            <div style="font-size:28px;margin-bottom:8px;">🚛</div>
+            <div style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:3px;">Chargement</div>
+            <div id="bcb-menu-chargement-info" style="font-size:11px;color:#64748B;line-height:1.4;"></div>
+          </div>
+          <!-- Enlèvements -->
+          <div onclick="App.go('bcb-enlevements')"
+            style="background:white;border:1.5px solid #E2E8F0;border-radius:14px;padding:16px 12px;cursor:pointer;transition:all .15s;"
+            onmouseenter="this.style.borderColor='#D97706';this.style.background='#FFFBEB'"
+            onmouseleave="this.style.borderColor='#E2E8F0';this.style.background='white'">
+            <div style="font-size:28px;margin-bottom:8px;">📁</div>
+            <div style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:3px;">Enlèvements</div>
+            <div id="bcb-menu-enlevements-info" style="font-size:11px;color:#64748B;line-height:1.4;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── VIEW : BCB LOTS ──────────────────────────────────────────────── -->
     <div class="view" id="view-bcb-lots">
       <!-- Barre de contrôle -->
@@ -1990,11 +2046,11 @@
       </div>
     </div>
 
-    <!-- ── VIEW : BCB DÉPART ─────────────────────────────────────────────── -->
+    <!-- ── VIEW : BCB CHARGEMENT ────────────────────────────────────────── -->
     <div class="view" id="view-bcb-depart">
       <div style="padding:10px 12px 8px;background:#F8FAFC;border-bottom:1px solid #E2E8F0;position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:8px;">
         <div style="flex:1;">
-          <div style="font-size:15px;font-weight:700;color:#1E293B;">Départ BCB</div>
+          <div style="font-size:15px;font-weight:700;color:#1E293B;">Chargement BCB</div>
           <div style="font-size:11px;color:#64748B;">Sélectionner le chauffeur et les lots à enlever</div>
         </div>
         <button id="bcb-dep-clear-btn" onclick="App.bcbDepartClear()" style="display:none;background:#F1F5F9;border:1px solid #E2E8F0;border-radius:8px;padding:6px 10px;font-size:11px;color:#64748B;cursor:pointer;white-space:nowrap;">
@@ -2571,6 +2627,7 @@ const App = {
     if (view === 'stock-detail') this._renderStockDetail();
     if (view === 'stock-history') { if (!S.historyLoaded) this.loadStockHistory(); else this._renderHistoryList(); }
     if (view === 'stock-sync')   this.loadStockSync();
+    if (view === 'bcb-menu')      this.bcbMenuInit();
     if (view === 'bcb-lots')      this.bcbLotsLoad();
     if (view === 'bcb-consignes') this.bcbInitLangGrid();
     if (view === 'bcb-depart')      this.bcbDepartInit();
@@ -2612,7 +2669,7 @@ const App = {
     S.activity = name;
     if (name === 'loxam')    this.go('departures');
     if (name === 'stockage') this.go('stock-dashboard');
-    if (name === 'bcb')      this.go('bcb-lots');
+    if (name === 'bcb')      this.go('bcb-menu');
     if (name === 'lvu')      this.lvuInit();
     if (name === 'annuaire') this.go('annuaire');
   },
@@ -2649,6 +2706,7 @@ const App = {
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
     const tab = document.querySelector(`[data-tab="${v}"]`) || document.querySelector(`[data-stab="${v}"]`) || document.querySelector(`[data-bcbtab="${v}"]`) || document.querySelector(`[data-lvutab="${v}"]`);
     if (tab) tab.classList.add('active');
+    // BCB menu → aucun tab actif (vue d'accueil)
     // BCB consignes → tab "Consignes" reste actif sur toutes les étapes
     if (v === 'bcb-consignes') {
       const t2 = document.querySelector('[data-bcbtab="bcb-consignes"]');
@@ -7429,6 +7487,79 @@ const App = {
   bcbHideExtraSuggest(idx) {
     const el = document.getElementById('bcb-extra-suggest-' + idx);
     if (el) el.style.display = 'none';
+  },
+
+  async bcbMenuInit() {
+    const loaderEl = document.getElementById('bcb-menu-loader');
+    const gridEl   = document.getElementById('bcb-menu-grid');
+    const statusEl = document.getElementById('bcb-menu-status');
+    // Refresh localStorage-based counts immediately
+    this._bcbMenuRefreshCounts();
+    // Already loaded — show grid right away
+    if (S.bcbLotsLoaded && S.bcbEnlevementsLoaded) {
+      if (loaderEl) loaderEl.style.display = 'none';
+      if (gridEl)   gridEl.style.display = 'block';
+      if (statusEl) { const n = new Date(); statusEl.textContent = 'MAJ ' + n.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}); }
+      return;
+    }
+    // Show loader
+    if (loaderEl) loaderEl.style.display = 'flex';
+    if (gridEl)   gridEl.style.display = 'none';
+    if (statusEl) statusEl.textContent = 'Chargement des données…';
+    if (!S.apiUrl) {
+      if (loaderEl) loaderEl.innerHTML = '<div style="text-align:center;color:#EF4444;font-size:13px;padding:12px;">⚠️ URL API non configurée</div>';
+      return;
+    }
+    await Promise.allSettled([
+      (async () => {
+        if (S.bcbLotsLoaded || S.bcbLotsLoading) return;
+        S.bcbLotsLoading = true;
+        try {
+          const r = await _fetchWithTimeout(S.apiUrl + '?action=bcb_lots', {}, 15000);
+          const d = await r.json();
+          if (d.status !== 'ok') throw new Error(d.error || 'Erreur');
+          S.bcbLots = d.lots || []; S.bcbByBuyer = d.byBuyer || {}; S.bcbLotsLoaded = true;
+        } catch(e) { this.toast('Erreur lots : ' + e.message); }
+        finally { S.bcbLotsLoading = false; }
+      })(),
+      (async () => {
+        if (S.bcbEnlevementsLoaded || S.bcbEnlevementsLoading) return;
+        S.bcbEnlevementsLoading = true;
+        try {
+          const r = await _fetchWithTimeout(S.apiUrl + '?action=bcb_enlevements_list', {}, 15000);
+          const d = await r.json();
+          if (d.status === 'ok') { S.bcbEnlevements = d.history || []; S.bcbEnlevementsLoaded = true; }
+        } catch(e) { this.toast('Erreur enlèvements'); }
+        finally { S.bcbEnlevementsLoading = false; }
+      })(),
+    ]);
+    this._bcbMenuRefreshCounts();
+    if (loaderEl) loaderEl.style.display = 'none';
+    if (gridEl)   gridEl.style.display = 'block';
+    if (statusEl) { const n = new Date(); statusEl.textContent = 'MAJ ' + n.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}); }
+  },
+  _bcbMenuRefreshCounts() {
+    const consList = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+    const procCons = new Set(JSON.parse(localStorage.getItem('snt_bcb_processed_consignes') || '[]'));
+    const pending  = consList.filter((_, i) => !procCons.has(i)).length;
+    const proc     = procCons.size;
+    const lotsInfo = document.getElementById('bcb-menu-lots-info');
+    if (lotsInfo) lotsInfo.innerHTML = S.bcbLots.length > 0
+      ? `<span style="color:#1D4ED8;font-weight:700;">${S.bcbLots.length}</span> lot${S.bcbLots.length > 1 ? 's' : ''} en attente`
+      : S.bcbLotsLoaded ? 'Aucun lot' : '—';
+    const consInfo = document.getElementById('bcb-menu-consignes-info');
+    if (consInfo) consInfo.innerHTML = consList.length === 0 ? 'Aucune consigne'
+      : pending > 0 ? `<span style="color:#0F766E;font-weight:700;">${pending}</span> en attente${proc > 0 ? ` · ${proc} traité${proc > 1 ? 's' : ''}` : ''}`
+      : `<span style="color:#16A34A;font-weight:700;">✓</span> ${consList.length} traité${consList.length > 1 ? 's' : ''}`;
+    const chargInfo = document.getElementById('bcb-menu-chargement-info');
+    if (chargInfo) chargInfo.innerHTML = pending > 0
+      ? `<span style="color:#7C3AED;font-weight:700;">${pending}</span> chauffeur${pending > 1 ? 's' : ''} à charger`
+      : consList.length > 0 ? '<span style="color:#16A34A;font-weight:700;">✓</span> Tout traité'
+      : 'Aucun chauffeur';
+    const enlevInfo = document.getElementById('bcb-menu-enlevements-info');
+    if (enlevInfo) enlevInfo.innerHTML = S.bcbEnlevements.length > 0
+      ? `<span style="color:#D97706;font-weight:700;">${S.bcbEnlevements.length}</span> enlèvement${S.bcbEnlevements.length > 1 ? 's' : ''}`
+      : S.bcbEnlevementsLoaded ? 'Aucun enlèvement' : '—';
   },
 
   async bcbLotsLoad(force) {
