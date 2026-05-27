@@ -8152,15 +8152,46 @@ const App = {
       const name   = [c.prenom, c.nom].filter(Boolean).join(' ') || 'Chauffeur';
       const truck  = [c.tracteur, c.remorque].filter(Boolean).join(' + ') || '—';
       const badge  = isDone ? `<span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:5px;background:#DCFCE7;color:#16A34A;white-space:nowrap;">✓ Traité</span>` : '';
+      const clientLine = c.client ? `<div style="font-size:12px;font-weight:600;color:#0F766E;margin-top:2px;">→ ${c.client}${c.clientVille ? ' · ' + c.clientVille : ''}</div>` : '';
       return `<div onclick="App.bcbDepSelectConsigne(${i})"
         style="background:${isSel?'#EFF6FF':isDone?'#F0FDF4':'white'};border:1px solid ${isSel?'#1D4ED8':isDone?'#86EFAC':'#E2E8F0'};border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer;display:flex;align-items:center;gap:8px;">
-        <div style="flex:1;">
+        <div style="flex:1;min-width:0;">
           <div style="font-size:13px;font-weight:700;color:#1E293B;">${name}</div>
           <div style="font-size:11px;color:#64748B;">${c.transportNom||'—'} · ${truck}</div>
+          ${clientLine}
         </div>
         ${badge}
+        <button onmousedown="event.stopPropagation();App.bcbDepDeleteConsigne(${i})"
+          style="background:none;border:none;color:#CBD5E1;font-size:16px;cursor:pointer;padding:4px;flex-shrink:0;line-height:1;"
+          title="Supprimer cette consigne"
+          onmouseenter="this.style.color='#EF4444'" onmouseleave="this.style.color='#CBD5E1'">✕</button>
       </div>`;
     }).join('');
+  },
+  bcbDepDeleteConsigne(idx) {
+    const list = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+    const c = list[idx];
+    const name = c ? ([c.prenom, c.nom].filter(Boolean).join(' ') || 'cette consigne') : 'cette consigne';
+    if (!confirm(`Supprimer la consigne de ${name} ?`)) return;
+    list.splice(idx, 1);
+    localStorage.setItem('snt_bcb_consignes', JSON.stringify(list));
+    // Adjust processed indices: remove idx, decrement all > idx
+    const procCons = new Set(JSON.parse(localStorage.getItem('snt_bcb_processed_consignes') || '[]'));
+    procCons.delete(idx);
+    const adjusted = new Set([...procCons].map(i => i > idx ? i - 1 : i));
+    localStorage.setItem('snt_bcb_processed_consignes', JSON.stringify([...adjusted]));
+    // Reset selection if deleted entry was selected
+    if (S.bcbDepartConsigne === idx) {
+      S.bcbDepartConsigne = null;
+      S.bcbDepartSelected = new Set();
+      const lotsSection = document.getElementById('bcb-dep-lots-section');
+      const bar = document.getElementById('bcb-dep-bar');
+      if (lotsSection) lotsSection.style.display = 'none';
+      if (bar) bar.style.display = 'none';
+    } else if (S.bcbDepartConsigne > idx) {
+      S.bcbDepartConsigne--;
+    }
+    this._bcbDepRenderConsignes();
   },
 
   bcbDepSelectConsigne(idx) {
