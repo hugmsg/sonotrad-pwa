@@ -7657,9 +7657,13 @@ const App = {
     if (!h.length) { if (emptyEl) emptyEl.style.display = ''; listEl.innerHTML = ''; return; }
     if (emptyEl) emptyEl.style.display = 'none';
     listEl.innerHTML = h.map((e, i) => {
-      const lots = (e.lots || []).length;
-      const hasCmr = !!e.cmrNumero;
-      return `<div style="background:white;border:1px solid #E2E8F0;border-radius:8px;padding:10px 12px;margin-bottom:6px;">
+      const lots    = (e.lots || []).length;
+      const hasCmr  = !!e.cmrNumero;
+      const nPhotos = e.photosCount || 0;
+      const photoBadge = nPhotos > 0
+        ? `<span style="font-size:10px;background:#CCFBF1;color:#0F766E;border-radius:4px;padding:2px 6px;font-weight:700;">📷 ${nPhotos}</span>`
+        : `<span style="font-size:10px;background:#F1F5F9;color:#94A3B8;border-radius:4px;padding:2px 6px;">📷 —</span>`;
+      return `<div style="background:white;border:1px solid ${nPhotos>0?'#99F6E4':'#E2E8F0'};border-radius:8px;padding:10px 12px;margin-bottom:6px;">
         <div onclick="App.bcbViewEnlevement(${i})" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
           <div style="flex:1;">
             <div style="font-size:13px;font-weight:700;color:#1E293B;">${e.numero}</div>
@@ -7667,13 +7671,15 @@ const App = {
             <div style="font-size:11px;color:#64748B;margin-top:1px;">${e.destination||''}</div>
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">
+            ${photoBadge}
             ${e.pdfUrl ? '<span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;border-radius:4px;padding:2px 6px;">PDF ✓</span>' : ''}
             ${hasCmr  ? `<span style="font-size:10px;background:#F0FDF4;color:#065F46;border-radius:4px;padding:2px 6px;">CMR ${e.cmrNumero}</span>` : '<span style="font-size:10px;background:#FEF9C3;color:#92400E;border-radius:4px;padding:2px 6px;">Sans CMR</span>'}
           </div>
         </div>
-        <div style="display:flex;gap:8px;margin-top:8px;border-top:1px solid #F1F5F9;padding-top:8px;">
+        <div style="display:flex;gap:8px;margin-top:8px;border-top:1px solid #F1F5F9;padding-top:8px;align-items:center;">
           ${e.pdfUrl ? `<a href="${e.pdfUrl}" target="_blank" rel="noopener" style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;text-decoration:none;">📄 PDF</a>` : ''}
           ${hasCmr ? `<a href="${e.cmrUrl}" target="_blank" rel="noopener" style="background:#F0FDF4;color:#065F46;border:1.5px solid #BBF7D0;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;text-decoration:none;">📋 CMR ${e.cmrNumero}</a>` : ''}
+          ${nPhotos > 0 ? `<span style="font-size:11px;color:#0F766E;font-weight:600;">📷 ${nPhotos} photo${nPhotos>1?'s':''}</span>` : ''}
           <button onclick="App.bcbDeleteEnlevement('${e.numero}')" style="margin-left:auto;background:#FEE2E2;color:#B91C1C;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;">🗑</button>
         </div>
       </div>`;
@@ -7728,7 +7734,12 @@ const App = {
     if (!e || !body) return;
     S.bcbEnlevPhotos = [];
     if (title) title.textContent = 'Enl. ' + e.numero;
-    if (sub)   sub.textContent   = e.date + (e.cmrNumero ? ' · CMR ' + e.cmrNumero : '');
+    const nPhotos = e.photosCount || 0;
+    if (sub) sub.innerHTML = e.date
+      + (e.cmrNumero ? ' · CMR ' + e.cmrNumero : '')
+      + (nPhotos > 0
+        ? ` · <span style="color:#0F766E;font-weight:700;">📷 ${nPhotos} photo${nPhotos>1?'s':''}</span>`
+        : ' · <span style="color:#94A3B8;">📷 aucune photo</span>');
     const lots = e.lots || [];
     const row  = (label, val) => val ? `<tr><td style="padding:4px 8px;font-size:11px;color:#64748B;white-space:nowrap;">${label}</td><td style="padding:4px 8px;font-size:12px;color:#1E293B;">${val}</td></tr>` : '';
     const lotRows = lots.map((l, i) => `
@@ -7818,6 +7829,10 @@ const App = {
         S.bcbEnlevPhotos = [];
         const countEl = document.getElementById('bcb-enlev-photo-count');
         if (countEl) countEl.textContent = e.photosCount + ' photo' + (e.photosCount > 1 ? 's' : '') + ' envoyée' + (e.photosCount > 1 ? 's' : '');
+        const sub = document.getElementById('bcb-enlev-subtitle');
+        if (sub) sub.innerHTML = e.date
+          + (e.cmrNumero ? ' · CMR ' + e.cmrNumero : '')
+          + ` · <span style="color:#0F766E;font-weight:700;">📷 ${e.photosCount} photo${e.photosCount>1?'s':''}</span>`;
         this._bcbRenderEnlevPhotoGrid();
         this.toast(d.count + ' photo' + (d.count > 1 ? 's' : '') + ' envoyée' + (d.count > 1 ? 's' : ''));
       } else {
