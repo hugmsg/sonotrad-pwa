@@ -7647,8 +7647,8 @@ const App = {
     listEl.innerHTML = h.map((e, i) => {
       const lots = (e.lots || []).length;
       const hasCmr = !!e.cmrNumero;
-      return `<div onclick="App.bcbViewEnlevement(${i})" style="background:white;border:1px solid #E2E8F0;border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer;" onmouseenter="this.style.background='#F8FAFC'" onmouseleave="this.style.background='white'">
-        <div style="display:flex;align-items:center;gap:8px;">
+      return `<div style="background:white;border:1px solid #E2E8F0;border-radius:8px;padding:10px 12px;margin-bottom:6px;">
+        <div onclick="App.bcbViewEnlevement(${i})" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
           <div style="flex:1;">
             <div style="font-size:13px;font-weight:700;color:#1E293B;">${e.numero}</div>
             <div style="font-size:11px;color:#64748B;">${e.date} · ${e.chauffeur||'—'} · ${lots} lot${lots>1?'s':''}</div>
@@ -7658,6 +7658,11 @@ const App = {
             ${e.pdfUrl ? '<span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;border-radius:4px;padding:2px 6px;">PDF ✓</span>' : ''}
             ${hasCmr  ? `<span style="font-size:10px;background:#F0FDF4;color:#065F46;border-radius:4px;padding:2px 6px;">CMR ${e.cmrNumero}</span>` : '<span style="font-size:10px;background:#FEF9C3;color:#92400E;border-radius:4px;padding:2px 6px;">Sans CMR</span>'}
           </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px;border-top:1px solid #F1F5F9;padding-top:8px;">
+          ${e.pdfUrl ? `<a href="${e.pdfUrl}" target="_blank" rel="noopener" style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;text-decoration:none;">📄 PDF</a>` : ''}
+          ${hasCmr ? `<a href="${e.cmrUrl}" target="_blank" rel="noopener" style="background:#F0FDF4;color:#065F46;border:1.5px solid #BBF7D0;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;text-decoration:none;">📋 CMR ${e.cmrNumero}</a>` : ''}
+          <button onclick="App.bcbDeleteEnlevement('${e.numero}')" style="margin-left:auto;background:#FEE2E2;color:#B91C1C;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;">🗑</button>
         </div>
       </div>`;
     }).join('');
@@ -7669,6 +7674,23 @@ const App = {
     S.bcbCurEnlevement = e;
     this._bcbRenderEnlevDetail();
     this.go('bcb-enlevement');
+  },
+
+  async bcbDeleteEnlevement(numero) {
+    if (!confirm(`Supprimer le bon d'enlèvement ${numero} et mettre ses fichiers à la corbeille ?`)) return;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'bcb_enlevement_delete', numero })
+      }, 40000);
+      const d = await r.json();
+      if (d.status === 'ok') {
+        S.bcbEnlevements = S.bcbEnlevements.filter(e => e.numero !== numero);
+        if (S.bcbCurEnlevement?.numero === numero) S.bcbCurEnlevement = null;
+        this.toast('Enlèvement ' + numero + ' supprimé');
+        this.bcbEnlevementsRender();
+      } else this.toast('Erreur : ' + (d.error || 'inconnue'));
+    } catch(e) { this.toast('Erreur : ' + e.message); }
   },
 
   _bcbRenderEnlevDetail() {
