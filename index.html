@@ -8352,6 +8352,7 @@ const App = {
       commande:     v('lvu-f-commande'),
       note:         v('lvu-f-note'),
       convoi:       document.getElementById('lvu-convoi-oui')?.checked || false,
+      source:       S.lvu.source || 'manual',
     };
   },
 
@@ -8597,14 +8598,33 @@ const App = {
             <span style="font-size:12px;color:#64748B;">${row.date||''}</span>
           </div>
           <div style="font-size:13px;color:#475569;">${row.destinataire||'—'}</div>
+          ${row.expediteur && row.expediteur !== 'SONOTRAD' ? `<div style="font-size:11px;color:#94A3B8;margin-top:1px;">${row.expediteur}</div>` : ''}
           ${row.conducteur?`<div style="font-size:12px;color:#94A3B8;margin-top:2px;">${row.conducteur} · ${row.immat_moteur||''}</div>`:''}
           ${row.commande?`<div style="font-size:12px;color:#94A3B8;">Cde : ${row.commande}</div>`:''}
-          ${row.pdfUrl?`<a href="${row.pdfUrl}" target="_blank" rel="noopener"
-            style="display:inline-block;margin-top:7px;background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:8px;padding:5px 11px;font-size:11px;font-weight:600;text-decoration:none;">📄 Ouvrir le PDF</a>`:''}
+          <div style="display:flex;align-items:center;gap:8px;margin-top:7px;flex-wrap:wrap;">
+            ${row.pdfUrl?`<a href="${row.pdfUrl}" target="_blank" rel="noopener"
+              style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:8px;padding:5px 11px;font-size:11px;font-weight:600;text-decoration:none;">📄 PDF</a>`
+              :'<span style="font-size:11px;color:#CBD5E1;">Pas de PDF</span>'}
+            <button onclick="App.lvuDeleteLv('${row.numero}')"
+              style="background:#FEE2E2;color:#B91C1C;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;">🗑</button>
+          </div>
         </div>`).join('');
     } catch (e) {
       el.innerHTML = `<div style="text-align:center;padding:40px;color:#EF4444;font-size:13px;">Erreur : ${e.message}</div>`;
     }
+  },
+
+  async lvuDeleteLv(numero) {
+    if (!confirm(`Supprimer ${numero} de l'historique et mettre la corbeille le PDF ?`)) return;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'lv_delete', numero })
+      }, 15000);
+      const d = await r.json();
+      if (d.status === 'ok') { this.toast('LV N° ' + numero + ' supprimée'); this.lvuLoadHistory(); }
+      else this.toast('Erreur : ' + (d.error || 'inconnue'));
+    } catch(e) { this.toast('Erreur : ' + e.message); }
   },
 
   /* ─ Annuaire ─ */
@@ -9335,12 +9355,20 @@ function _lvuRecto(doc, d, isCMR, band) {
   }
   const cachX = x0 + SW / 2;
   tc(0, 0, 0);
-  sf('bold', 10);             tx('SONOTRAD',                         cachX, y + 9.5,  'center');
-  sf('normal', 5.5);          tx('S.a.R.L au capital de 100 000 €', cachX, y + 13,   'center');
-  sf('normal', LV.FONT_BODY); tx('9 Z.A. des Renardières',          cachX, y + 16.5, 'center');
-                               tx('53250 JAVRON-LES-CHAPELLES',      cachX, y + 20,   'center');
-                               tx('Tél. 02.49.66.10.42',             cachX, y + 23.5, 'center');
-  sf('normal', 5.5);          tx('R.C.S LAVAL 409 002 326',          cachX, y + 26.5, 'center');
+  if (data.source === 'bcb') {
+    sf('bold', 10);             tx('BCB OFF MARKET',                  cachX, y + 9.5,  'center');
+    sf('normal', LV.FONT_BODY); tx('ZA Renardières',                  cachX, y + 14.5, 'center');
+                                 tx('53250 JAVRON-LES-CHAPELLES',     cachX, y + 18.5, 'center');
+    sf('normal', 5.5);          tx('SAS — RCS LAVAL 314 901 869',     cachX, y + 22,   'center');
+                                 tx('N° TVA FR 18 314 901 869',       cachX, y + 25.5, 'center');
+  } else {
+    sf('bold', 10);             tx('SONOTRAD',                         cachX, y + 9.5,  'center');
+    sf('normal', 5.5);          tx('S.a.R.L au capital de 100 000 €', cachX, y + 13,   'center');
+    sf('normal', LV.FONT_BODY); tx('9 Z.A. des Renardières',          cachX, y + 16.5, 'center');
+                                 tx('53250 JAVRON-LES-CHAPELLES',      cachX, y + 20,   'center');
+                                 tx('Tél. 02.49.66.10.42',             cachX, y + 23.5, 'center');
+    sf('normal', 5.5);          tx('R.C.S LAVAL 409 002 326',          cachX, y + 26.5, 'center');
+  }
   dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SIG_LINE);
   doc.setLineDash([1.5, 1]);
   const sigLineY = y + LV.H_SIG - LV.SIG_LINE_BOTTOM;
