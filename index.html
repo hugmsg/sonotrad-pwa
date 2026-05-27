@@ -1201,6 +1201,101 @@
       <div id="admin-user-list"></div>
     </div>
 
+    <!-- ── VIEW : LOXAM MENU ───────────────────────────────────────────── -->
+    <div class="view" id="view-loxam-menu">
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#1D4ED8,#1E40AF);color:white;padding:20px 16px 24px;">
+        <div style="font-size:11px;font-weight:700;opacity:.65;letter-spacing:.8px;text-transform:uppercase;margin-bottom:4px;">Activité</div>
+        <div style="font-size:22px;font-weight:800;">LOXAM · PIDEM</div>
+        <div id="lxmenu-status" style="font-size:12px;opacity:.75;margin-top:4px;">Chargement…</div>
+      </div>
+      <!-- Loader -->
+      <div id="lxmenu-loader" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:64px 16px;gap:14px;">
+        <div class="spinner"></div>
+        <div style="font-size:13px;color:#64748B;font-weight:500;">Chargement des données…</div>
+      </div>
+      <!-- Grid (masqué pendant le chargement) -->
+      <div id="lxmenu-grid" style="display:none;padding:16px;">
+        <!-- Section LOXAM -->
+        <div style="font-size:11px;font-weight:700;color:#1D4ED8;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">LOXAM</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+          <!-- Production -->
+          <div onclick="App.go('departures')"
+            style="background:white;border:1.5px solid #E2E8F0;border-radius:14px;padding:16px 12px;cursor:pointer;transition:all .15s;"
+            onmouseenter="this.style.borderColor='#1D4ED8';this.style.background='#EFF6FF'"
+            onmouseleave="this.style.borderColor='#E2E8F0';this.style.background='white'">
+            <div style="font-size:26px;margin-bottom:6px;">🏭</div>
+            <div style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:3px;">Production</div>
+            <div id="lxmenu-prod-info" style="font-size:11px;color:#64748B;line-height:1.4;"></div>
+          </div>
+          <!-- Arrivées -->
+          <div onclick="App.go('arrivals')"
+            style="background:white;border:1.5px solid #E2E8F0;border-radius:14px;padding:16px 12px;cursor:pointer;transition:all .15s;"
+            onmouseenter="this.style.borderColor='#0284C7';this.style.background='#F0F9FF'"
+            onmouseleave="this.style.borderColor='#E2E8F0';this.style.background='white'">
+            <div style="font-size:26px;margin-bottom:6px;">📥</div>
+            <div style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:3px;">Arrivées</div>
+            <div id="lxmenu-arr-info" style="font-size:11px;color:#64748B;line-height:1.4;"></div>
+          </div>
+          <!-- Historique LV (pleine largeur) -->
+          <div onclick="App.go('history')"
+            style="grid-column:1/-1;background:white;border:1.5px solid #E2E8F0;border-radius:14px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all .15s;"
+            onmouseenter="this.style.borderColor='#7C3AED';this.style.background='#F5F3FF'"
+            onmouseleave="this.style.borderColor='#E2E8F0';this.style.background='white'">
+            <div style="font-size:26px;">🕐</div>
+            <div>
+              <div style="font-size:13px;font-weight:700;color:#1E293B;">Historique LV</div>
+              <div style="font-size:11px;color:#64748B;">Lettres de voiture archivées</div>
+            </div>
+          </div>
+        </div>
+        <!-- Section Stockage PIDEM -->
+        <div style="font-size:11px;font-weight:700;color:#0F766E;text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">Stockage PIDEM</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <!-- Tableau de bord -->
+          <div onclick="App.loxamMenuGoStock('stock-dashboard')"
+            style="background:white;border:1.5px solid #E2E8F0;border-radius:14px;padding:16px 12px;cursor:pointer;transition:all .15s;"
+            onmouseenter="this.style.borderColor='#0F766E';this.style.background='#F0FDFA'"
+            onmouseleave="this.style.borderColor='#E2E8F0';this.style.background='white'">
+            <div style="font-size:26px;margin-bottom:6px;">📊</div>
+            <div style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:3px;">Tableau de bord</div>
+            <div style="font-size:11px;color:#64748B;line-height:1.4;">Vue d'ensemble</div>
+          </div>
+          <!-- Catalogue -->
+          <div onclick="App.loxamMenuGoStock('stock')"
+            style="background:white;border:1.5px solid #E2E8F0;border-radius:14px;padding:16px 12px;cursor:pointer;transition:all .15s;"
+            onmouseenter="this.style.borderColor='#0F766E';this.style.background='#F0FDFA'"
+            onmouseleave="this.style.borderColor='#E2E8F0';this.style.background='white'">
+            <div style="font-size:26px;margin-bottom:6px;">📦</div>
+            <div style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:3px;">Catalogue</div>
+            <div id="lxmenu-stock-info" style="font-size:11px;color:#64748B;line-height:1.4;"></div>
+          </div>
+          <!-- Historique mouvements (pleine largeur) -->
+          <div onclick="App.loxamMenuGoStock('stock-history')"
+            style="grid-column:1/-1;background:white;border:1.5px solid #E2E8F0;border-radius:14px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all .15s;"
+            onmouseenter="this.style.borderColor='#D97706';this.style.background='#FFFBEB'"
+            onmouseleave="this.style.borderColor='#E2E8F0';this.style.background='white'">
+            <div style="font-size:26px;">📋</div>
+            <div>
+              <div style="font-size:13px;font-weight:700;color:#1E293B;">Historique mouvements</div>
+              <div style="font-size:11px;color:#64748B;">Entrées, sorties, poses</div>
+            </div>
+          </div>
+          <!-- Synchro (admin seulement) -->
+          <div id="lxmenu-card-sync" onclick="App.loxamMenuGoStock('stock-sync')"
+            style="display:none;grid-column:1/-1;background:white;border:1.5px solid #E2E8F0;border-radius:14px;padding:14px 16px;cursor:pointer;display:none;align-items:center;gap:12px;transition:all .15s;"
+            onmouseenter="this.style.borderColor='#64748B';this.style.background='#F8FAFC'"
+            onmouseleave="this.style.borderColor='#E2E8F0';this.style.background='white'">
+            <div style="font-size:26px;">🔄</div>
+            <div>
+              <div style="font-size:13px;font-weight:700;color:#1E293B;">Synchro catalogue</div>
+              <div style="font-size:11px;color:#64748B;">Import / mise à jour</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── VIEW : ARRIVALS ──────────────────────────────────────────────── -->
     <div class="view" id="view-arrivals">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
@@ -2616,7 +2711,9 @@ const App = {
     }
     S.prevView = S.view;
     S.view = view;
+    if (view === 'loxam-menu') S.activity = 'loxam'; // reset avant _render pour les tabs nav
     this._render();
+    if (view === 'loxam-menu') this.loxamMenuInit();
     if (view === 'arrivals' && !S.arrivalsLoaded) this.loadArrivalsData();
     if (view === 'history')    this._renderHistory();
     if (view === 'departures') { if (S.depsLoaded) this._renderDepList(); else if (!S.depsLoading) this.loadDepartures(); }
@@ -2667,7 +2764,7 @@ const App = {
       }
     }
     S.activity = name;
-    if (name === 'loxam')    this.go('departures');
+    if (name === 'loxam')    this.go('loxam-menu');
     if (name === 'stockage') this.go('stock-dashboard');
     if (name === 'bcb')      this.go('bcb-menu');
     if (name === 'lvu')      this.lvuInit();
@@ -6018,6 +6115,59 @@ const App = {
         <button onclick="App.startNewArrival()" style="background:none;border:none;color:var(--accent);font-size:15px;font-weight:600;cursor:pointer;padding:8px;">+ Nouvelle arrivée</button>
       </div>`;
   },
+  /* ─ LOXAM Menu ─ */
+  async loxamMenuInit() {
+    const loaderEl = document.getElementById('lxmenu-loader');
+    const gridEl   = document.getElementById('lxmenu-grid');
+    const statusEl = document.getElementById('lxmenu-status');
+    this._loxamMenuRefreshCounts();
+    // Déjà chargé — grille immédiate
+    if (S.depsLoaded && S.arrivalsLoaded) {
+      if (loaderEl) loaderEl.style.display = 'none';
+      if (gridEl)   gridEl.style.display = 'block';
+      if (statusEl) { const n = new Date(); statusEl.textContent = 'MAJ ' + n.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}); }
+      return;
+    }
+    if (loaderEl) loaderEl.style.display = 'flex';
+    if (gridEl)   gridEl.style.display = 'none';
+    if (statusEl) statusEl.textContent = 'Chargement des données…';
+    if (!S.apiUrl) {
+      if (loaderEl) loaderEl.innerHTML = '<div style="text-align:center;color:#EF4444;font-size:13px;padding:12px;">⚠️ URL API non configurée</div>';
+      return;
+    }
+    await Promise.allSettled([
+      S.depsLoaded || S.depsLoading ? Promise.resolve() : this.loadDepartures(),
+      S.arrivalsLoaded               ? Promise.resolve() : this.loadArrivalsData(),
+    ]);
+    this._loxamMenuRefreshCounts();
+    if (loaderEl) loaderEl.style.display = 'none';
+    if (gridEl)   gridEl.style.display = 'block';
+    if (statusEl) { const n = new Date(); statusEl.textContent = 'MAJ ' + n.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}); }
+  },
+  _loxamMenuRefreshCounts() {
+    const enProd  = S.depsLoaded    ? S.deps.filter(d => !d.parti).length : null;
+    const arrPres = S.arrivalsLoaded ? S.arrivalsData.filter(a => !a.parti).length : null;
+    const prodInfo = document.getElementById('lxmenu-prod-info');
+    if (prodInfo) prodInfo.innerHTML = enProd === null ? '—'
+      : enProd > 0 ? `<span style="color:#1D4ED8;font-weight:700;">${enProd}</span> machine${enProd>1?'s':''} en cours`
+      : 'Aucune en cours';
+    const arrInfo = document.getElementById('lxmenu-arr-info');
+    if (arrInfo) arrInfo.innerHTML = arrPres === null ? '—'
+      : arrPres > 0 ? `<span style="color:#0284C7;font-weight:700;">${arrPres}</span> présente${arrPres>1?'s':''}`
+      : 'Aucune arrivée';
+    const stockInfo = document.getElementById('lxmenu-stock-info');
+    if (stockInfo) stockInfo.innerHTML = S.stockLoaded && S.stockData.length > 0
+      ? `<span style="color:#0F766E;font-weight:700;">${S.stockData.length}</span> référence${S.stockData.length>1?'s':''}`
+      : '—';
+    // Synchro visible admins seulement
+    const syncCard = document.getElementById('lxmenu-card-sync');
+    if (syncCard) syncCard.style.display = S.currentUser?.role === 'admin' ? 'flex' : 'none';
+  },
+  loxamMenuGoStock(view) {
+    S.activity = 'stockage';
+    this.go(view);
+  },
+
   /* ─ Departures ─ */
   async loadDepartures(force = false) {
     if (!force && (S.depsLoaded || S.depsLoading)) return;
