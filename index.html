@@ -7886,23 +7886,30 @@ const App = {
   },
 
   bcbDepartClear() {
-    if (!confirm('Vider la page départ ? Les chauffeurs traités seront réinitialisés.')) return;
+    const procCons = new Set(JSON.parse(localStorage.getItem('snt_bcb_processed_consignes') || '[]'));
+    if (procCons.size === 0) return;
+    if (!confirm('Supprimer les consignes chauffeurs traités ?')) return;
+    // Supprimer les consignes traitées de la liste (indices décroissants pour ne pas décaler)
+    const list    = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+    const indices = [...procCons].sort((a, b) => b - a);
+    indices.forEach(i => { if (i >= 0 && i < list.length) list.splice(i, 1); });
+    localStorage.setItem('snt_bcb_consignes', JSON.stringify(list));
     localStorage.removeItem('snt_bcb_processed_consignes');
     S.bcbDepartConsigne = null;
     S.bcbDepartSelected = new Set();
     S.bcbDepartBuyer    = null;
-    const active = document.getElementById('bcb-dep-buyer-active');
-    const search = document.getElementById('bcb-dep-buyer-search');
+    const active   = document.getElementById('bcb-dep-buyer-active');
+    const search   = document.getElementById('bcb-dep-buyer-search');
     const lotsSection = document.getElementById('bcb-dep-lots-section');
-    const bar = document.getElementById('bcb-dep-bar');
+    const bar      = document.getElementById('bcb-dep-bar');
     const clearBtn = document.getElementById('bcb-dep-clear-btn');
-    if (active) active.style.display = 'none';
-    if (search) search.value = '';
+    if (active)    active.style.display = 'none';
+    if (search)    search.value = '';
     if (lotsSection) lotsSection.style.display = 'none';
-    if (bar) bar.style.display = 'none';
-    if (clearBtn) clearBtn.style.display = 'none';
+    if (bar)       bar.style.display = 'none';
+    if (clearBtn)  clearBtn.style.display = 'none';
     this._bcbDepRenderConsignes();
-    this.toast('Page départ réinitialisée');
+    this.toast(`${indices.length} consigne${indices.length > 1 ? 's' : ''} supprimée${indices.length > 1 ? 's' : ''}`);
   },
 
   _bcbDepRenderConsignes() {
