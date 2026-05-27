@@ -1004,15 +1004,7 @@
           <span class="activity-badge badge-active">● Actif</span>
         </div>
 
-        <!-- Stockage — actif -->
-        <div class="activity-card" data-ready="true" onclick="App.selectActivity('stockage')">
-          <div class="activity-icon">📦</div>
-          <div class="activity-name">Stockage Pidem</div>
-          <div class="activity-desc">Catalogue &amp; Inventaire PIDEM</div>
-          <span id="badge-stockage" class="activity-badge badge-active">● Actif</span>
-        </div>
-
-        <!-- Annuaire — visible uniquement pour role=admin -->
+<!-- Annuaire — visible uniquement pour role=admin -->
         <div class="activity-card" id="annuaire-home-card" data-ready="true"
           onclick="App.selectActivity('annuaire')"
           style="display:none;">
@@ -1215,45 +1207,22 @@
         <div style="font-size:13px;color:#64748B;font-weight:500;">Chargement des données…</div>
       </div>
       <!-- Grid (masqué pendant le chargement) -->
-      <div id="lxmenu-grid" style="display:none;padding:20px;flex-direction:column;gap:14px;">
-        <!-- Carte Production -->
-        <div onclick="App.go('departures')"
-          style="background:white;border:2px solid #E2E8F0;border-radius:18px;padding:24px 20px;cursor:pointer;transition:all .18s;"
-          onmouseenter="this.style.borderColor='#1D4ED8';this.style.boxShadow='0 4px 16px rgba(29,78,216,.12)'"
-          onmouseleave="this.style.borderColor='#E2E8F0';this.style.boxShadow='none'">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
-            <div style="flex:1;">
-              <div style="font-size:13px;font-weight:700;color:#1D4ED8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">LOXAM</div>
-              <div style="font-size:22px;font-weight:800;color:#1E293B;margin-bottom:8px;">Production</div>
-              <div style="display:flex;flex-wrap:wrap;gap:6px;">
-                <span style="font-size:11px;background:#EFF6FF;color:#1D4ED8;font-weight:600;padding:3px 8px;border-radius:6px;">🏭 En cours</span>
-                <span style="font-size:11px;background:#F0F9FF;color:#0284C7;font-weight:600;padding:3px 8px;border-radius:6px;">📥 Arrivées</span>
-                <span style="font-size:11px;background:#F5F3FF;color:#7C3AED;font-weight:600;padding:3px 8px;border-radius:6px;">🕐 Historique LV</span>
-              </div>
-            </div>
-            <div style="font-size:44px;line-height:1;flex-shrink:0;">🏭</div>
+      <div id="lxmenu-grid" style="display:none;padding:20px;">
+        <div id="activity-grid" style="grid-template-columns:1fr 1fr;">
+          <!-- Production -->
+          <div class="activity-card" data-ready="true" onclick="App.go('departures')">
+            <div class="activity-icon">🏭</div>
+            <div class="activity-name">Production</div>
+            <div class="activity-desc">En cours · Arrivées · Historique LV</div>
+            <span id="lxmenu-badge-prod" class="activity-badge badge-loading">⟳ Chargement…</span>
           </div>
-          <div id="lxmenu-prod-info" style="margin-top:12px;font-size:12px;color:#64748B;padding-top:10px;border-top:1px solid #F1F5F9;"></div>
-        </div>
-        <!-- Carte Stock PIDEM -->
-        <div onclick="App.loxamMenuGoStock('stock-dashboard')"
-          style="background:white;border:2px solid #E2E8F0;border-radius:18px;padding:24px 20px;cursor:pointer;transition:all .18s;"
-          onmouseenter="this.style.borderColor='#0F766E';this.style.boxShadow='0 4px 16px rgba(15,118,110,.12)'"
-          onmouseleave="this.style.borderColor='#E2E8F0';this.style.boxShadow='none'">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
-            <div style="flex:1;">
-              <div style="font-size:13px;font-weight:700;color:#0F766E;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">PIDEM</div>
-              <div style="font-size:22px;font-weight:800;color:#1E293B;margin-bottom:8px;">Stock</div>
-              <div style="display:flex;flex-wrap:wrap;gap:6px;">
-                <span style="font-size:11px;background:#F0FDFA;color:#0F766E;font-weight:600;padding:3px 8px;border-radius:6px;">📊 Tableau</span>
-                <span style="font-size:11px;background:#F0FDFA;color:#0F766E;font-weight:600;padding:3px 8px;border-radius:6px;">📦 Catalogue</span>
-                <span style="font-size:11px;background:#FFFBEB;color:#D97706;font-weight:600;padding:3px 8px;border-radius:6px;">📋 Historique</span>
-                <span id="lxmenu-tag-sync" style="display:none;font-size:11px;background:#F8FAFC;color:#64748B;font-weight:600;padding:3px 8px;border-radius:6px;">🔄 Synchro</span>
-              </div>
-            </div>
-            <div style="font-size:44px;line-height:1;flex-shrink:0;">📦</div>
+          <!-- Stock PIDEM -->
+          <div class="activity-card" data-ready="true" onclick="App.loxamMenuGoStock('stock-dashboard')">
+            <div class="activity-icon">📦</div>
+            <div class="activity-name">Stock PIDEM</div>
+            <div class="activity-desc">Tableau · Catalogue · Historique</div>
+            <span id="lxmenu-badge-stock" class="activity-badge badge-active">● Actif</span>
           </div>
-          <div id="lxmenu-stock-info" style="margin-top:12px;font-size:12px;color:#64748B;padding-top:10px;border-top:1px solid #F1F5F9;"></div>
         </div>
       </div>
     </div>
@@ -6086,7 +6055,7 @@ const App = {
     // Déjà chargé — grille immédiate
     if (S.depsLoaded && S.arrivalsLoaded) {
       if (loaderEl) loaderEl.style.display = 'none';
-      if (gridEl)   gridEl.style.display = 'flex';
+      if (gridEl)   gridEl.style.display = 'block';
       if (statusEl) { const n = new Date(); statusEl.textContent = 'MAJ ' + n.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}); }
       return;
     }
@@ -6109,20 +6078,23 @@ const App = {
   _loxamMenuRefreshCounts() {
     const enProd  = S.depsLoaded    ? S.deps.filter(d => !d.parti).length : null;
     const arrPres = S.arrivalsLoaded ? S.arrivalsData.filter(a => !a.parti).length : null;
-    const prodInfo = document.getElementById('lxmenu-prod-info');
-    if (prodInfo) {
-      const parts = [];
-      if (enProd  !== null) parts.push(`<b style="color:#1D4ED8;">${enProd}</b> machine${enProd!==1?'s':''} en cours`);
-      if (arrPres !== null) parts.push(`<b style="color:#0284C7;">${arrPres}</b> arrivée${arrPres!==1?'s':''} présente${arrPres!==1?'s':''}`);
-      prodInfo.innerHTML = parts.length ? parts.join(' · ') : '—';
+    const badgeProd = document.getElementById('lxmenu-badge-prod');
+    if (badgeProd) {
+      if (enProd !== null && arrPres !== null) {
+        badgeProd.className = 'activity-badge badge-active';
+        badgeProd.textContent = `${enProd} en prod · ${arrPres} arrivée${arrPres!==1?'s':''}`;
+      } else {
+        badgeProd.className = 'activity-badge badge-loading';
+        badgeProd.textContent = '⟳ Chargement…';
+      }
     }
-    const stockInfo = document.getElementById('lxmenu-stock-info');
-    if (stockInfo) stockInfo.innerHTML = S.stockLoaded && S.stockData.length > 0
-      ? `<b style="color:#0F766E;">${S.stockData.length}</b> référence${S.stockData.length!==1?'s':''} au catalogue`
-      : S.stockLoaded ? 'Catalogue vide' : '—';
-    // Synchro tag visible admins seulement
-    const syncTag = document.getElementById('lxmenu-tag-sync');
-    if (syncTag) syncTag.style.display = S.currentUser?.role === 'admin' ? '' : 'none';
+    const badgeStock = document.getElementById('lxmenu-badge-stock');
+    if (badgeStock) {
+      if (S.stockLoaded && S.stockData.length > 0) {
+        badgeStock.className = 'activity-badge badge-active';
+        badgeStock.textContent = `${S.stockData.length} réf.`;
+      }
+    }
   },
   loxamMenuGoStock(view) {
     S.activity = 'stockage';
@@ -7609,7 +7581,7 @@ const App = {
     // Already loaded — show grid right away
     if (S.bcbLotsLoaded && S.bcbEnlevementsLoaded) {
       if (loaderEl) loaderEl.style.display = 'none';
-      if (gridEl)   gridEl.style.display = 'flex';
+      if (gridEl)   gridEl.style.display = 'block';
       if (statusEl) { const n = new Date(); statusEl.textContent = 'MAJ ' + n.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}); }
       return;
     }
