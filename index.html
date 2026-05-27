@@ -8620,7 +8620,7 @@ const App = {
       const r = await _fetchWithTimeout(S.apiUrl, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'lv_delete', numero })
-      }, 15000);
+      }, 40000);
       const d = await r.json();
       if (d.status === 'ok') { this.toast('LV N° ' + numero + ' supprimée'); this.lvuLoadHistory(); }
       else this.toast('Erreur : ' + (d.error || 'inconnue'));
