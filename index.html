@@ -2027,6 +2027,7 @@
         </div>
         <button onclick="App.bcbPrintEnlevement()" style="background:#1E293B;color:white;border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;">🖨 PDF</button>
         <button onclick="App.bcbEnlevementCreateCmr()" style="background:#1D4ED8;color:white;border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;">CMR →</button>
+        <button onclick="App.bcbDeleteCurEnlevement()" style="background:#FEE2E2;color:#B91C1C;border:none;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:600;cursor:pointer;">🗑</button>
       </div>
       <div id="bcb-enlev-body" style="padding:14px 14px 32px;"></div>
     </div>
@@ -2512,6 +2513,7 @@ const S = {
   bcbEnlevementsLoaded:  false,
   bcbEnlevementsLoading: false,
   bcbCurEnlevement:      null,
+  bcbEnlevPhotos:        [],
   // ── LVU ──────────────────────────────────────────────────────────────────
   lvLinks: {},        // { opKey: { numero, display, date } } — chargé au prefetch
   annuaireData: [],   // [{code,nom,adresse,cp,ville,email,tel,note}]
@@ -5825,14 +5827,16 @@ const App = {
     if (!files.length) return;
     for (const f of files) {
       const dataUrl = await _compress(f, 1200, 0.82);
-      if (target === 'arrival')     S.arr.photos.push({ dataUrl, name: f.name });
-      else if (target === 'arr')   S.arrPhotos.push({ dataUrl, name: f.name });
-      else                         S.depPhotos.push({ dataUrl, name: f.name });
+      if (target === 'arrival')        S.arr.photos.push({ dataUrl, name: f.name });
+      else if (target === 'arr')      S.arrPhotos.push({ dataUrl, name: f.name });
+      else if (target === 'bcb-enlev') S.bcbEnlevPhotos.push({ dataUrl, name: f.name });
+      else                            S.depPhotos.push({ dataUrl, name: f.name });
     }
     evt.target.value = '';
-    if (target === 'arrival')       this._renderPhotoGrid('photo-grid-2', S.arr.photos, 'arrival');
-    else if (target === 'arr')      this._renderArrPhotoGrid();
-    else                            this._renderDepPhotoGrid();
+    if (target === 'arrival')        this._renderPhotoGrid('photo-grid-2', S.arr.photos, 'arrival');
+    else if (target === 'arr')       this._renderArrPhotoGrid();
+    else if (target === 'bcb-enlev') this._bcbRenderEnlevPhotoGrid();
+    else                             this._renderDepPhotoGrid();
   },
   _renderPhotoGrid(gridId, photos, target) {
     const grid = document.getElementById(gridId);
@@ -5856,6 +5860,9 @@ const App = {
     } else if (target === 'arr') {
       S.arrPhotos.splice(idx, 1);
       this._renderArrPhotoGrid();
+    } else if (target === 'bcb-enlev') {
+      S.bcbEnlevPhotos.splice(idx, 1);
+      this._bcbRenderEnlevPhotoGrid();
     } else {
       S.depPhotos.splice(idx, 1);
       this._renderDepPhotoGrid();
@@ -7719,6 +7726,7 @@ const App = {
     const sub   = document.getElementById('bcb-enlev-subtitle');
     const body  = document.getElementById('bcb-enlev-body');
     if (!e || !body) return;
+    S.bcbEnlevPhotos = [];
     if (title) title.textContent = 'Enl. ' + e.numero;
     if (sub)   sub.textContent   = e.date + (e.cmrNumero ? ' · CMR ' + e.cmrNumero : '');
     const lots = e.lots || [];
@@ -7748,7 +7756,7 @@ const App = {
           ${e.cmrNumero ? `<tr><td style="padding:4px 8px;font-size:11px;color:#64748B;">CMR</td><td style="padding:4px 8px;"><a href="${e.cmrUrl}" target="_blank" style="font-size:11px;color:#1D4ED8;">CMR ${e.cmrNumero}</a></td></tr>` : ''}
         </table>
       </div>
-      <div style="overflow-x:auto;background:white;border:1px solid #E2E8F0;border-radius:10px;">
+      <div style="overflow-x:auto;background:white;border:1px solid #E2E8F0;border-radius:10px;margin-bottom:14px;">
         <table style="width:100%;border-collapse:collapse;min-width:700px;">
           <thead><tr>
             <th style="${thStyle}">#</th><th style="${thStyle}">Inter</th><th style="${thStyle}">ID BCB</th>
@@ -7758,7 +7766,76 @@ const App = {
           </tr></thead>
           <tbody>${lotRows}</tbody>
         </table>
+      </div>
+      <div style="background:white;border:1px solid #E2E8F0;border-radius:10px;padding:12px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-size:12px;font-weight:700;color:#1E293B;">📷 Photos du chargement</div>
+          <span id="bcb-enlev-photo-count" style="font-size:11px;color:#64748B;">${e.photosCount ? e.photosCount + ' photo' + (e.photosCount > 1 ? 's' : '') + ' envoyée' + (e.photosCount > 1 ? 's' : '') : 'Aucune photo'}</span>
+        </div>
+        <div class="photo-grid" id="bcb-enlev-photo-grid"></div>
+        <input type="file" id="bcb-enlev-photo-input" accept="image/*" multiple capture="environment" style="display:none;" onchange="App.handlePhotos(event,'bcb-enlev')">
+        <button id="bcb-enlev-upload-btn" onclick="App.bcbUploadPhotos()" style="display:none;margin-top:10px;width:100%;background:#0F766E;color:white;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;">
+          Envoyer les photos
+        </button>
       </div>`;
+    this._bcbRenderEnlevPhotoGrid();
+  },
+
+  _bcbRenderEnlevPhotoGrid() {
+    const grid      = document.getElementById('bcb-enlev-photo-grid');
+    const uploadBtn = document.getElementById('bcb-enlev-upload-btn');
+    if (!grid) return;
+    grid.innerHTML = S.bcbEnlevPhotos.map((p, i) => `
+      <div class="photo-thumb">
+        <img src="${p.dataUrl}" loading="lazy">
+        <button class="rm-btn" onclick="App.removePhoto(${i},'bcb-enlev')">✕</button>
+      </div>`).join('') + `
+      <div class="photo-add-btn" onclick="App.triggerInput('bcb-enlev-photo-input')">
+        <span style="font-size:26px;">📷</span><span>Ajouter</span>
+      </div>`;
+    if (uploadBtn) uploadBtn.style.display = S.bcbEnlevPhotos.length > 0 ? '' : 'none';
+  },
+
+  async bcbUploadPhotos() {
+    const e = S.bcbCurEnlevement;
+    if (!e || !S.bcbEnlevPhotos.length) return;
+    const btn = document.getElementById('bcb-enlev-upload-btn');
+    if (btn) btn.textContent = 'Envoi…';
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'bcb_enlevement_photo',
+          numero: e.numero,
+          photos: S.bcbEnlevPhotos.map(p => p.dataUrl)
+        })
+      }, 60000);
+      const d = await r.json();
+      if (d.status === 'ok') {
+        e.photosCount = (e.photosCount || 0) + d.count;
+        const idx = S.bcbEnlevements.findIndex(x => x.numero === e.numero);
+        if (idx > -1) S.bcbEnlevements[idx].photosCount = e.photosCount;
+        S.bcbEnlevPhotos = [];
+        const countEl = document.getElementById('bcb-enlev-photo-count');
+        if (countEl) countEl.textContent = e.photosCount + ' photo' + (e.photosCount > 1 ? 's' : '') + ' envoyée' + (e.photosCount > 1 ? 's' : '');
+        this._bcbRenderEnlevPhotoGrid();
+        this.toast(d.count + ' photo' + (d.count > 1 ? 's' : '') + ' envoyée' + (d.count > 1 ? 's' : ''));
+      } else {
+        if (btn) btn.textContent = 'Envoyer les photos';
+        this.toast('Erreur : ' + (d.error || 'inconnue'));
+      }
+    } catch(err) {
+      if (btn) btn.textContent = 'Envoyer les photos';
+      this.toast('Erreur : ' + err.message);
+    }
+  },
+
+  bcbDeleteCurEnlevement() {
+    const e = S.bcbCurEnlevement;
+    if (!e) return;
+    this.bcbDeleteEnlevement(e.numero).then(() => {
+      if (!S.bcbCurEnlevement) this.go('bcb-enlevements');
+    });
   },
 
   bcbPrintEnlevement() {
