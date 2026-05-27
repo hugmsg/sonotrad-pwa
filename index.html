@@ -945,6 +945,16 @@
           <div id="header-subtitle" style="font-size:10px;opacity:0.6;font-weight:400;line-height:1;"></div>
         </div>
       </div>
+      <!-- Breadcrumb (visible hors accueil et hors formulaires) -->
+      <div id="header-breadcrumb" style="display:none;align-items:center;gap:2px;">
+        <span onclick="App.goHome()"
+          style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.65);cursor:pointer;padding:3px 5px;border-radius:5px;transition:color .12s;"
+          onmouseenter="this.style.color='white'" onmouseleave="this.style.color='rgba(255,255,255,0.65)'">SONOTRAD</span>
+        <span style="color:rgba(255,255,255,0.35);font-size:14px;">›</span>
+        <span id="breadcrumb-activity" onclick="App.breadcrumbGoActivity()"
+          style="font-size:13px;font-weight:700;color:white;cursor:pointer;padding:3px 5px;border-radius:5px;transition:background .12s;"
+          onmouseenter="this.style.background='rgba(255,255,255,0.15)'" onmouseleave="this.style.background=''"></span>
+      </div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
       <div style="display:flex;align-items:center;gap:5px;font-size:12px;opacity:0.9;">
@@ -974,7 +984,7 @@
 
         <!-- LOXAM — actif -->
         <div class="activity-card" data-ready="true" onclick="App.selectActivity('loxam')">
-          <div class="activity-icon"><img src="Logo%20Loxam.png" alt="LOXAM" style="width:48px;height:48px;object-fit:contain;"></div>
+          <div class="activity-icon"><img src="Logo%20Loxam.png" alt="LOXAM" style="width:64px;height:64px;object-fit:contain;"></div>
           <div class="activity-name">LOXAM</div>
           <div class="activity-desc">Arrivées &amp; Départs de modules</div>
           <span id="badge-loxam" class="activity-badge badge-active">● Actif</span>
@@ -982,7 +992,7 @@
 
         <!-- BCB — actif -->
         <div class="activity-card" data-ready="true" onclick="App.selectActivity('bcb')">
-          <div class="activity-icon"><img src="Logo%20BCB.png" alt="BCB" style="width:48px;height:48px;object-fit:contain;"></div>
+          <div class="activity-icon"><img src="Logo%20BCB.png" alt="BCB" style="width:64px;height:64px;object-fit:contain;"></div>
           <div class="activity-name">BCB</div>
           <div class="activity-desc">Vente &amp; Logistique</div>
           <span class="activity-badge badge-active">● Actif</span>
@@ -2664,6 +2674,13 @@ const App = {
     if (view === 'lvu-history')   this.lvuLoadHistory();
     if (view === 'annuaire')      this.annuaireLoad();
   },
+  breadcrumbGoActivity() {
+    const map = { loxam:'loxam-menu', bcb:'bcb-menu', stockage:'loxam-menu' };
+    const dest = map[S.activity];
+    if (dest) { if (S.view !== dest) this.go(dest); return; }
+    if (S.activity === 'lvu')      this.lvuInit();
+    else if (S.activity === 'annuaire') this.go('annuaire');
+  },
   goBack() {
     if (S.view === 'admin')           { this.goHome(); return; }
     if (S.view === 'stock-detail')    { this.go('stock'); return; }
@@ -2752,10 +2769,18 @@ const App = {
     const fabDep = document.getElementById('fab-dep');
     if (fabDep) fabDep.style.display = (v === 'departures') ? 'flex' : 'none';
 
-    // ── Header : back button / logo / titre ──────────────────────────────
+    // ── Header : back button / logo / breadcrumb ─────────────────────────
     const inForm = ['new-arrival','settings','dep-detail','arr-detail','stock-detail','bcb-enlevement','bcb-lot-detail'].includes(v);
     document.getElementById('btn-back').classList.toggle('hidden', !inForm);
-    document.getElementById('header-logo').style.display = inForm ? 'none' : 'flex';
+    const showBreadcrumb = !onHome && !inForm && !!S.activity;
+    document.getElementById('header-logo').style.display       = (!showBreadcrumb && !inForm) ? 'flex' : 'none';
+    const bcEl  = document.getElementById('header-breadcrumb');
+    const actEl = document.getElementById('breadcrumb-activity');
+    if (bcEl) bcEl.style.display = showBreadcrumb ? 'flex' : 'none';
+    if (showBreadcrumb && actEl) {
+      const names = { loxam:'LOXAM', bcb:'BCB', stockage:'LOXAM', lvu:'LV / CMR', annuaire:'Annuaire' };
+      actEl.textContent = names[S.activity] || S.activity;
+    }
 
     // Labels du bouton retour
     const backLabels = {
@@ -2811,6 +2836,7 @@ const App = {
     if (v === 'admin') {
       document.getElementById('btn-back').classList.remove('hidden');
       document.getElementById('header-logo').style.display = 'none';
+      if (bcEl) bcEl.style.display = 'none';
       document.getElementById('back-label').textContent = 'Accueil';
       if (titleEl) titleEl.textContent = '👥 Utilisateurs';
       if (subtitleEl) subtitleEl.textContent = 'Administration';
