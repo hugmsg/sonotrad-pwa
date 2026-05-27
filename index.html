@@ -4136,14 +4136,23 @@ const App = {
     }
   },
 
+  _stockSearchHits(q, limit) {
+    const numeric = /^\d+$/.test(q);
+    if (numeric) {
+      return S.stockData.filter(d => d.ref.toLowerCase().includes(q)).slice(0, limit);
+    }
+    const exact   = S.stockData.filter(d => d.ref.toLowerCase() === q);
+    const starts  = S.stockData.filter(d => d.ref.toLowerCase().startsWith(q) && d.ref.toLowerCase() !== q);
+    const inRef   = S.stockData.filter(d => { const r = d.ref.toLowerCase(); return r.includes(q) && !r.startsWith(q); });
+    const inDesc  = S.stockData.filter(d => !d.ref.toLowerCase().includes(q) && d.description.toLowerCase().includes(q));
+    return [...exact, ...starts, ...inRef, ...inDesc].slice(0, limit);
+  },
   poseSearch(val) {
     const q   = val.toLowerCase().trim();
     const res = document.getElementById('pose-search-results');
     if (!res) return;
     if (!q) { res.style.display = 'none'; res.innerHTML = ''; return; }
-    const hits = S.stockData.filter(d =>
-      d.ref.toLowerCase().includes(q) || d.description.toLowerCase().includes(q)
-    ).slice(0, 20);
+    const hits = this._stockSearchHits(q, 20);
     if (!hits.length) {
       res.style.display = 'block';
       res.innerHTML = '<div style="padding:10px 12px;color:#94A3B8;font-size:12px;">Aucun résultat</div>';
@@ -4346,9 +4355,7 @@ const App = {
     const res = document.getElementById('saisie-search-results');
     if (!res) return;
     if (!q) { res.style.display = 'none'; res.innerHTML = ''; return; }
-    const hits = S.stockData.filter(d =>
-      d.ref.toLowerCase().includes(q) || d.description.toLowerCase().includes(q)
-    ).slice(0, 20);
+    const hits = this._stockSearchHits(q, 20);
     if (!hits.length) {
       res.style.display = 'block';
       res.innerHTML = '<div style="padding:10px 12px;color:#94A3B8;font-size:12px;">Aucun résultat</div>';
@@ -7513,6 +7520,7 @@ const App = {
     }
     list._ni = ni;
     rows.forEach((r, i) => r.style.background = i === ni ? '#EFF6FF' : '');
+    if (ni >= 0 && rows[ni]) rows[ni].scrollIntoView({ block: 'nearest' });
   },
   _bcbBuyerKeyDown(e) {
     this._suggestKeyDown(e, 'bcb-dep-buyer-results', i => {
