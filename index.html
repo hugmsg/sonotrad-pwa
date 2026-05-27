@@ -1997,21 +1997,15 @@
         </button>
       </div>
       <div id="bcb-dep-lots-section" style="padding:12px;display:none;">
-        <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Acheteur</div>
-        <input id="bcb-dep-buyer-search" type="text" autocomplete="off" placeholder="Nom de l'acheteur…"
-          oninput="App.bcbDepBuyerSearch(this.value)"
-          style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:4px;">
-        <div id="bcb-dep-buyer-results" class="dest-search-results"></div>
-        <div id="bcb-dep-buyer-active" style="display:none;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:7px 10px;margin-bottom:8px;display:none;align-items:center;gap:6px;">
-          <span id="bcb-dep-buyer-name" style="flex:1;font-size:13px;font-weight:700;color:#1D4ED8;"></span>
-          <button onclick="App.bcbDepBuyerClear()" style="background:none;border:none;font-size:13px;color:#94A3B8;cursor:pointer;padding:2px 4px;">✕ Tout afficher</button>
-        </div>
-        <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;margin-top:4px;">Lots à enlever</div>
-        <div id="bcb-dep-lots-list"></div>
+        <div id="bcb-dep-groups-container"></div>
+        <button onclick="App.bcbDepAddGroup()" id="bcb-dep-add-group-btn"
+          style="width:100%;background:none;border:1.5px dashed #CBD5E1;border-radius:8px;padding:10px;font-size:12px;color:#64748B;cursor:pointer;margin-top:4px;">
+          + Ajouter un autre client
+        </button>
       </div>
       <div id="bcb-dep-bar" style="display:none;position:sticky;bottom:0;background:white;border-top:1px solid #E2E8F0;padding:10px 12px;align-items:center;gap:8px;">
         <span id="bcb-dep-count" style="flex:1;font-size:13px;color:#64748B;">0 lot sélectionné</span>
-        <button onclick="App.bcbCreateEnlevement()"
+        <button onclick="App.bcbCreateEnlevement()" id="bcb-dep-create-btn"
           style="background:#1D4ED8;color:white;border:none;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;">
           Bon d'enlèvement →
         </button>
@@ -2507,8 +2501,8 @@ const S = {
   bcbSelected:     new Set(),
   bcbSelLot:         null,
   bcbDepartConsigne:     null,
-  bcbDepartSelected:     new Set(),
-  bcbDepartBuyer:        null,
+  bcbDepartGroups:       [],   // [{ id, buyer, selected:Set }]
+  bcbDepartGroupIdSeq:   0,
   bcbEnlevements:        [],
   bcbEnlevementsLoaded:  false,
   bcbEnlevementsLoading: false,
@@ -7897,69 +7891,78 @@ const App = {
   },
 
   async bcbCreateEnlevement() {
-    const list = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
-    const c    = list[S.bcbDepartConsigne];
+    const list   = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+    const c      = list[S.bcbDepartConsigne];
     if (!c) { this.toast('Sélectionnez un chauffeur.'); return; }
-    const selectedLots = S.bcbLots.filter(l => S.bcbDepartSelected.has(l.idBcb));
-    if (!selectedLots.length) { this.toast('Sélectionnez au moins un lot.'); return; }
-    this.toast('Génération du bon d\'enlèvement…');
+    const activeGroups = S.bcbDepartGroups.filter(g => g.buyer && g.selected.size > 0);
+    if (!activeGroups.length) { this.toast('Sélectionnez au moins un lot.'); return; }
+    this.toast(`Création de ${activeGroups.length} bon${activeGroups.length>1?'s':''}…`);
+    const now        = new Date();
+    const date       = now.toLocaleDateString('fr-FR');
+    const chauffeur  = [c.prenom, c.nom].filter(Boolean).join(' ');
+    const created    = [];
     try {
-      // 1. Obtenir le numéro
-      const rn = await _fetchWithTimeout(S.apiUrl + '?action=bcb_enlevement_next_number', {}, 10000);
-      const dn = await rn.json();
-      if (dn.status !== 'ok') throw new Error(dn.error || 'Numéro indisponible');
-      const numero = dn.numero;
-      const now    = new Date();
-      const date   = now.toLocaleDateString('fr-FR');
-      const chauffeur = [c.prenom, c.nom].filter(Boolean).join(' ');
-      const destination = [c.client, c.clientAdresse, c.clientVille, c.clientPays].filter(Boolean).join(' — ');
-      // 2. Construire l'objet enlèvement
-      const enlevement = {
-        numero, date, chauffeur,
-        tracteur:    c.tracteur  || '',
-        remorque:    c.remorque  || '',
-        destination,
-        expediteur:  { nom:'BCB OFF MARKET', adresse:'ZA Renardières', ville:'53250 JAVRON-LES-CHAPELLES' },
-        lots: selectedLots.map(l => ({
-          idBcb: l.idBcb, inter: l.inter || '', idSeller: l.refVendeur || '',
-          marque: l.marque || '', modele: l.modele || '', type: l.type || '',
-          numSerie: l.numSerie || '', commentaire: l.commentaire || '',
-          dateVente: l.dateVente || '', acheteur: l.acheteur || '',
-          poids: l.poids || '', numVente: l.numVente || ''
-        }))
-      };
-      // 3. Générer PDF
-      const doc = _generateBcbPicklist(enlevement);
-      const b64 = doc.output('datauristring').split(',')[1];
-      // 4. Sauvegarder dans Drive
-      const payload = {
-        action: 'bcb_enlevement_save', numero, date, chauffeur,
-        tracteur: enlevement.tracteur, remorque: enlevement.remorque,
-        destination, lots: enlevement.lots, pdf_b64: b64
-      };
-      const rs = await _fetchWithTimeout(S.apiUrl, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }, 30000);
-      const ds = await rs.json();
-      if (ds.status !== 'ok') throw new Error(ds.error || 'Erreur sauvegarde');
-      enlevement.pdfUrl    = ds.pdfUrl    || '';
-      enlevement.folderUrl = ds.folderUrl || '';
-      enlevement.cmrNumero = '';
-      enlevement.cmrUrl    = '';
-      // 5. Marquer les lots comme partis localement (disparaissent de la liste immédiatement)
-      const departedIds = new Set(selectedLots.map(l => l.idBcb));
-      S.bcbLots.forEach(l => { if (departedIds.has(l.idBcb)) l.parti = true; });
-      S.bcbDepartSelected = new Set();
+      for (const group of activeGroups) {
+        const selectedLots = S.bcbLots.filter(l => group.selected.has(l.idBcb));
+        // Destination : depuis la consigne si groupe principal, sinon nom de l'acheteur
+        const isMainClient = group.buyer === c.client;
+        const destination  = isMainClient
+          ? [c.client, c.clientAdresse, c.clientVille, c.clientPays].filter(Boolean).join(' — ')
+          : group.buyer;
+        // 1. Numéro
+        const rn = await _fetchWithTimeout(S.apiUrl + '?action=bcb_enlevement_next_number', {}, 10000);
+        const dn = await rn.json();
+        if (dn.status !== 'ok') throw new Error(dn.error || 'Numéro indisponible');
+        const numero = dn.numero;
+        // 2. Construire l'enlèvement
+        const enlevement = {
+          numero, date, chauffeur,
+          tracteur:   c.tracteur  || '',
+          remorque:   c.remorque  || '',
+          destination,
+          expediteur: { nom:'BCB OFF MARKET', adresse:'ZA Renardières', ville:'53250 JAVRON-LES-CHAPELLES' },
+          lots: selectedLots.map(l => ({
+            idBcb: l.idBcb, inter: l.inter || '', idSeller: l.refVendeur || '',
+            marque: l.marque || '', modele: l.modele || '', type: l.type || '',
+            numSerie: l.numSerie || '', commentaire: l.commentaire || '',
+            dateVente: l.dateVente || '', acheteur: l.acheteur || '',
+            poids: l.poids || '', numVente: l.numVente || ''
+          }))
+        };
+        // 3. Générer PDF
+        const doc = _generateBcbPicklist(enlevement);
+        const b64 = doc.output('datauristring').split(',')[1];
+        // 4. Sauvegarder
+        const rs = await _fetchWithTimeout(S.apiUrl, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action:'bcb_enlevement_save', numero, date, chauffeur,
+            tracteur: enlevement.tracteur, remorque: enlevement.remorque,
+            destination, lots: enlevement.lots, pdf_b64: b64 })
+        }, 30000);
+        const ds = await rs.json();
+        if (ds.status !== 'ok') throw new Error(ds.error || 'Erreur sauvegarde');
+        enlevement.pdfUrl = ds.pdfUrl || ''; enlevement.folderUrl = ds.folderUrl || '';
+        enlevement.cmrNumero = ''; enlevement.cmrUrl = '';
+        // 5. Marquer les lots comme partis localement
+        const departedIds = new Set(selectedLots.map(l => l.idBcb));
+        S.bcbLots.forEach(l => { if (departedIds.has(l.idBcb)) l.parti = true; });
+        S.bcbEnlevements.unshift(enlevement);
+        created.push(enlevement);
+      }
       // 6. Marquer la consigne chauffeur comme traitée
       const procCons = new Set(JSON.parse(localStorage.getItem('snt_bcb_processed_consignes') || '[]'));
       procCons.add(S.bcbDepartConsigne);
       localStorage.setItem('snt_bcb_processed_consignes', JSON.stringify([...procCons]));
-      // 7. Afficher
-      S.bcbCurEnlevement = enlevement;
-      S.bcbEnlevements.unshift(enlevement);
-      this._bcbRenderEnlevDetail();
-      this.go('bcb-enlevement');
+      // 7. Naviguer
+      if (created.length === 1) {
+        S.bcbCurEnlevement = created[0];
+        this._bcbRenderEnlevDetail();
+        this.go('bcb-enlevement');
+      } else {
+        this.toast(`${created.length} bons créés`);
+        this.go('bcb-enlevements');
+        this.bcbEnlevementsRender();
+      }
     } catch(err) {
       this.toast('Erreur : ' + err.message);
     }
@@ -7967,9 +7970,9 @@ const App = {
 
   /* ─ BCB Départ ─ */
   bcbDepartInit() {
-    S.bcbDepartConsigne = null;
-    S.bcbDepartSelected = new Set();
-    S.bcbDepartBuyer    = null;
+    S.bcbDepartConsigne   = null;
+    S.bcbDepartGroups     = [];
+    S.bcbDepartGroupIdSeq = 0;
     this._bcbDepRenderConsignes();
     const lotsSection = document.getElementById('bcb-dep-lots-section');
     const bar = document.getElementById('bcb-dep-bar');
@@ -7987,16 +7990,12 @@ const App = {
     indices.forEach(i => { if (i >= 0 && i < list.length) list.splice(i, 1); });
     localStorage.setItem('snt_bcb_consignes', JSON.stringify(list));
     localStorage.removeItem('snt_bcb_processed_consignes');
-    S.bcbDepartConsigne = null;
-    S.bcbDepartSelected = new Set();
-    S.bcbDepartBuyer    = null;
-    const active   = document.getElementById('bcb-dep-buyer-active');
-    const search   = document.getElementById('bcb-dep-buyer-search');
+    S.bcbDepartConsigne   = null;
+    S.bcbDepartGroups     = [];
+    S.bcbDepartGroupIdSeq = 0;
     const lotsSection = document.getElementById('bcb-dep-lots-section');
     const bar      = document.getElementById('bcb-dep-bar');
     const clearBtn = document.getElementById('bcb-dep-clear-btn');
-    if (active)    active.style.display = 'none';
-    if (search)    search.value = '';
     if (lotsSection) lotsSection.style.display = 'none';
     if (bar)       bar.style.display = 'none';
     if (clearBtn)  clearBtn.style.display = 'none';
@@ -8033,40 +8032,52 @@ const App = {
   },
 
   bcbDepSelectConsigne(idx) {
-    S.bcbDepartConsigne = idx;
-    S.bcbDepartSelected = new Set();
-    S.bcbDepartBuyer    = null;
+    S.bcbDepartConsigne  = idx;
+    S.bcbDepartGroupIdSeq = 0;
+    const list = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+    const c    = list[idx];
+    // Premier groupe pré-rempli avec le client de la consigne
+    S.bcbDepartGroups = [{ id: S.bcbDepartGroupIdSeq++, buyer: c?.client || null, selected: new Set() }];
     this._bcbDepRenderConsignes();
     const lotsSection = document.getElementById('bcb-dep-lots-section');
     if (lotsSection) lotsSection.style.display = '';
-    // Pré-remplir la recherche acheteur avec le client de la consigne
-    const list = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
-    const c = list[idx];
-    const searchEl = document.getElementById('bcb-dep-buyer-search');
-    if (searchEl) {
-      searchEl.value = c?.client || '';
-      if (c?.client) this.bcbDepBuyerSearch(c.client);
-    }
-    this._bcbDepRenderLots();
+    this._bcbDepRenderGroups();
   },
 
-  bcbDepBuyerSearch(val) {
+  bcbDepAddGroup() {
+    if (S.bcbDepartGroups.some(g => !g.buyer)) {
+      this.toast('Sélectionnez d\'abord le client du groupe en cours');
+      return;
+    }
+    S.bcbDepartGroups.push({ id: S.bcbDepartGroupIdSeq++, buyer: null, selected: new Set() });
+    this._bcbDepRenderGroups();
+    // Scroll vers le nouveau groupe
+    setTimeout(() => {
+      const last = document.querySelector(`[data-dep-group]:last-child`);
+      if (last) last.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  },
+
+  bcbDepRemoveGroup(gid) {
+    S.bcbDepartGroups = S.bcbDepartGroups.filter(g => g.id !== gid);
+    this._bcbDepRenderGroups();
+  },
+
+  bcbDepGroupBuyerSearch(gid, val) {
     const q   = val.trim().toLowerCase();
-    const res = document.getElementById('bcb-dep-buyer-results');
+    const res = document.getElementById(`bcb-dep-gres-${gid}`);
     if (!res) return;
     if (!q) { res.style.display = 'none'; res.innerHTML = ''; return; }
-    // Acheteurs uniques des lots non partis
-    const buyers = [...new Set(
-      S.bcbLots.filter(l => !l.parti && l.acheteur).map(l => l.acheteur)
-    )].filter(b => b.toLowerCase().includes(q)).slice(0, 8);
+    const usedBuyers = new Set(S.bcbDepartGroups.filter(g => g.buyer).map(g => g.buyer));
+    const buyers = [...new Set(S.bcbLots.filter(l => !l.parti && l.acheteur).map(l => l.acheteur))]
+      .filter(b => b.toLowerCase().includes(q) && !usedBuyers.has(b)).slice(0, 8);
     if (!buyers.length) {
-      res.innerHTML = '<div style="padding:10px 12px;color:#94A3B8;font-size:12px;">Aucun acheteur trouvé</div>';
-      res.style.display = 'block';
-      return;
+      res.innerHTML = '<div style="padding:10px 12px;color:#94A3B8;font-size:12px;">Aucun acheteur disponible</div>';
+      res.style.display = 'block'; return;
     }
     res.innerHTML = buyers.map(b => {
       const count = S.bcbLots.filter(l => !l.parti && l.acheteur === b).length;
-      return `<div class="dest-result-row" onclick="App.bcbDepBuyerSelect('${b.replace(/'/g,"\\'")}')">
+      return `<div class="dest-result-row" onclick="App.bcbDepGroupBuyerSelect(${gid},'${b.replace(/'/g,"\\'")}')">
         <span style="font-size:13px;color:#1E293B;flex:1;">${b}</span>
         <span style="font-size:11px;color:#64748B;">${count} lot${count>1?'s':''}</span>
       </div>`;
@@ -8074,96 +8085,100 @@ const App = {
     res.style.display = 'block';
   },
 
-  bcbDepBuyerSelect(buyer) {
-    S.bcbDepartBuyer = buyer;
-    const res = document.getElementById('bcb-dep-buyer-results');
-    const inp = document.getElementById('bcb-dep-buyer-search');
-    if (res) { res.style.display = 'none'; res.innerHTML = ''; }
-    if (inp) inp.value = '';
-    const active = document.getElementById('bcb-dep-buyer-active');
-    const name   = document.getElementById('bcb-dep-buyer-name');
-    if (name)   name.textContent = buyer;
-    if (active) active.style.display = 'flex';
-    this._bcbDepRenderLots();
+  bcbDepGroupBuyerSelect(gid, buyer) {
+    const g = S.bcbDepartGroups.find(g => g.id === gid);
+    if (g) { g.buyer = buyer; g.selected = new Set(); }
+    this._bcbDepRenderGroups();
   },
 
-  bcbDepBuyerClear() {
-    S.bcbDepartBuyer = null;
-    const active = document.getElementById('bcb-dep-buyer-active');
-    if (active) active.style.display = 'none';
-    this._bcbDepRenderLots();
-  },
-
-  _bcbDepRenderLots() {
-    const lotsSection = document.getElementById('bcb-dep-lots-section');
-    const lotsList    = document.getElementById('bcb-dep-lots-list');
-    if (!lotsSection || !lotsList) return;
-    lotsSection.style.display = '';
-    const all  = S.bcbLots.filter(l => !l.parti);
-    const lots = S.bcbDepartBuyer
-      ? all.filter(l => l.acheteur === S.bcbDepartBuyer)
-      : all;
-    // Group by buyer
-    const groups = {};
-    lots.forEach(l => {
-      const key = l.acheteur || '(sans acheteur)';
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(l);
-    });
-    let html = '';
-    for (const buyer of Object.keys(groups).sort()) {
-      html += `<div style="margin-bottom:10px;">
-        <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">${buyer}</div>`;
-      groups[buyer].forEach(lot => {
-        const key   = lot.idBcb;
-        const isSel = S.bcbDepartSelected.has(key);
-        const cb    = `<div data-dep-cb style="width:18px;height:18px;border-radius:5px;border:2px solid ${isSel?'#1D4ED8':'#CBD5E1'};background:${isSel?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:white;">${isSel?'✓':''}</div>`;
-        const dotV  = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.vendu?'#FEF9C3':'#F1F5F9'};color:${lot.vendu?'#92400E':'#94A3B8'};">V</span>`;
-        const desc  = [lot.marque, lot.modele].filter(Boolean).join(' ') || lot.type || '—';
-        html += `<div onclick="App.bcbDepartToggleLot('${key}')" data-dep-lot="${key}"
-          style="background:${isSel?'#EFF6FF':'white'};border:1px solid ${isSel?'#93C5FD':'#E2E8F0'};border-radius:8px;padding:8px 10px;margin-bottom:4px;cursor:pointer;display:flex;align-items:center;gap:8px;">
-          ${cb}
-          <div style="flex:1;min-width:0;">
-            <div style="font-size:12px;font-weight:700;color:#1E293B;">${lot.idBcb}</div>
-            <div style="font-size:11px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${desc}${lot.inter?' · '+lot.inter:''}</div>
+  _bcbDepRenderGroups() {
+    const container = document.getElementById('bcb-dep-groups-container');
+    if (!container) return;
+    const list = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+    const c    = list[S.bcbDepartConsigne] || {};
+    // Ensemble de tous les lots déjà attribués à un groupe
+    const allSelected = new Set(S.bcbDepartGroups.flatMap(g => [...g.selected]));
+    container.innerHTML = S.bcbDepartGroups.map((g, gi) => {
+      const canRemove = S.bcbDepartGroups.length > 1;
+      const isMain    = gi === 0;
+      const destLine  = g.buyer && isMain
+        ? [c.clientAdresse, c.clientVille, c.clientPays].filter(Boolean).join(', ')
+        : '';
+      const headerBg  = isMain ? '#1E293B' : '#0F766E';
+      // — Header du groupe —
+      let html = `<div data-dep-group style="margin-bottom:12px;border:1px solid #E2E8F0;border-radius:10px;overflow:hidden;">
+        <div style="background:${headerBg};padding:9px 12px;display:flex;align-items:center;gap:8px;">
+          <div style="flex:1;">
+            <div style="font-size:12px;font-weight:700;color:white;">${g.buyer || `Client ${gi+1}`}</div>
+            ${destLine ? `<div style="font-size:10px;color:#94A3B8;margin-top:1px;">${destLine}</div>` : ''}
           </div>
-          <div style="display:flex;gap:3px;align-items:center;">${dotV}${lot.numVente?`<span style="font-size:10px;color:#64748B;margin-left:2px;">${lot.numVente}</span>`:''}</div>
+          ${canRemove ? `<button onclick="App.bcbDepRemoveGroup(${g.id})" style="background:rgba(255,255,255,.15);border:none;border-radius:5px;color:white;font-size:12px;padding:3px 7px;cursor:pointer;">✕</button>` : ''}
         </div>`;
-      });
+      // — Recherche buyer si pas encore sélectionné —
+      if (!g.buyer) {
+        html += `<div style="padding:10px;">
+          <input type="text" autocomplete="off" placeholder="Rechercher un acheteur…"
+            oninput="App.bcbDepGroupBuyerSearch(${g.id}, this.value)"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+          <div id="bcb-dep-gres-${g.id}" class="dest-search-results" style="display:none;"></div>
+        </div>`;
+      } else {
+        // — Liste des lots de ce buyer —
+        const lots = S.bcbLots.filter(l => !l.parti && l.acheteur === g.buyer);
+        if (!lots.length) {
+          html += `<div style="padding:12px;text-align:center;color:#94A3B8;font-size:12px;">Aucun lot disponible pour cet acheteur</div>`;
+        } else {
+          html += `<div style="padding:8px 10px;">`;
+          lots.forEach(lot => {
+            const isSel  = g.selected.has(lot.idBcb);
+            const inOther = !isSel && allSelected.has(lot.idBcb);
+            const desc   = [lot.marque, lot.modele].filter(Boolean).join(' ') || lot.type || '—';
+            const dotV   = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.vendu?'#FEF9C3':'#F1F5F9'};color:${lot.vendu?'#92400E':'#94A3B8'};">V</span>`;
+            const cb     = `<div data-dep-cb style="width:18px;height:18px;border-radius:5px;border:2px solid ${isSel?'#1D4ED8':inOther?'#FCA5A5':'#CBD5E1'};background:${isSel?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:white;">${isSel?'✓':inOther?'—':''}</div>`;
+            html += `<div onclick="${inOther?'':'App.bcbDepartToggleLot(\''+lot.idBcb+'\','+g.id+')'}" data-dep-lot="${lot.idBcb}" data-dep-gid="${g.id}"
+              style="background:${isSel?'#EFF6FF':inOther?'#FEF2F2':'white'};border:1px solid ${isSel?'#93C5FD':inOther?'#FCA5A5':'#E2E8F0'};border-radius:8px;padding:7px 10px;margin-bottom:4px;${inOther?'opacity:.5;':'cursor:pointer;'}display:flex;align-items:center;gap:8px;">
+              ${cb}
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:12px;font-weight:700;color:#1E293B;">${lot.idBcb}</div>
+                <div style="font-size:11px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${desc}${lot.inter?' · '+lot.inter:''}</div>
+              </div>
+              <div style="display:flex;gap:3px;align-items:center;">${dotV}${lot.numVente?`<span style="font-size:10px;color:#64748B;margin-left:2px;">${lot.numVente}</span>`:''}</div>
+            </div>`;
+          });
+          html += `</div>`;
+        }
+      }
       html += `</div>`;
-    }
-    if (!html) html = '<div style="padding:16px;text-align:center;color:#94A3B8;font-size:13px;">Aucun lot disponible</div>';
-    lotsList.innerHTML = html;
+      return html;
+    }).join('');
     this._bcbDepUpdateBar();
   },
 
-  bcbDepartToggleLot(key) {
-    if (S.bcbDepartSelected.has(key)) {
-      S.bcbDepartSelected.delete(key);
-    } else {
-      S.bcbDepartSelected.add(key);
-    }
-    const isSel = S.bcbDepartSelected.has(key);
-    const row   = document.querySelector(`[data-dep-lot="${key}"]`);
+  bcbDepartToggleLot(key, gid) {
+    const g = S.bcbDepartGroups.find(g => g.id === gid);
+    if (!g) return;
+    if (g.selected.has(key)) g.selected.delete(key); else g.selected.add(key);
+    // Mise à jour visuelle inline
+    const isSel = g.selected.has(key);
+    const row   = document.querySelector(`[data-dep-lot="${key}"][data-dep-gid="${gid}"]`);
     if (row) {
       row.style.background  = isSel ? '#EFF6FF' : 'white';
       row.style.borderColor = isSel ? '#93C5FD' : '#E2E8F0';
       const cbEl = row.querySelector('[data-dep-cb]');
-      if (cbEl) {
-        cbEl.style.borderColor = isSel ? '#1D4ED8' : '#CBD5E1';
-        cbEl.style.background  = isSel ? '#1D4ED8' : 'white';
-        cbEl.textContent       = isSel ? '✓' : '';
-      }
+      if (cbEl) { cbEl.style.borderColor = isSel?'#1D4ED8':'#CBD5E1'; cbEl.style.background = isSel?'#1D4ED8':'white'; cbEl.textContent = isSel?'✓':''; }
     }
     this._bcbDepUpdateBar();
   },
 
   _bcbDepUpdateBar() {
-    const bar = document.getElementById('bcb-dep-bar');
-    const cnt = document.getElementById('bcb-dep-count');
-    const n   = S.bcbDepartSelected.size;
-    if (cnt) cnt.textContent = n ? `${n} lot${n>1?'s':''} sélectionné${n>1?'s':''}` : '0 lot sélectionné';
-    if (bar) bar.style.display = (S.bcbDepartConsigne !== null && n > 0) ? 'flex' : 'none';
+    const bar  = document.getElementById('bcb-dep-bar');
+    const cnt  = document.getElementById('bcb-dep-count');
+    const btn  = document.getElementById('bcb-dep-create-btn');
+    const totalLots   = S.bcbDepartGroups.reduce((s, g) => s + g.selected.size, 0);
+    const activeGroups = S.bcbDepartGroups.filter(g => g.buyer && g.selected.size > 0).length;
+    if (cnt) cnt.textContent = totalLots ? `${totalLots} lot${totalLots>1?'s':''} · ${activeGroups} bon${activeGroups>1?'s':''}` : '0 lot sélectionné';
+    if (btn) btn.textContent = activeGroups > 1 ? `Créer ${activeGroups} bons →` : 'Bon d\'enlèvement →';
+    if (bar) bar.style.display = (S.bcbDepartConsigne !== null && totalLots > 0) ? 'flex' : 'none';
   },
 
   async bcbDepartCreateCmr() {
