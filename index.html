@@ -8622,8 +8622,13 @@ const App = {
         body: JSON.stringify({ action: 'lv_delete', numero })
       }, 40000);
       const d = await r.json();
-      if (d.status === 'ok') { this.toast('LV N° ' + numero + ' supprimée'); this.lvuLoadHistory(); }
-      else this.toast('Erreur : ' + (d.error || 'inconnue'));
+      if (d.status === 'ok') {
+        this.toast('LV N° ' + numero + ' supprimée');
+        // Nettoyer le lien CMR en mémoire dans les enlèvements BCB
+        S.bcbEnlevements.forEach(e => { if (e.cmrNumero === numero) { e.cmrNumero = ''; e.cmrUrl = ''; } });
+        if (S.bcbCurEnlevement?.cmrNumero === numero) { S.bcbCurEnlevement.cmrNumero = ''; S.bcbCurEnlevement.cmrUrl = ''; }
+        this.lvuLoadHistory();
+      } else this.toast('Erreur : ' + (d.error || 'inconnue'));
     } catch(e) { this.toast('Erreur : ' + e.message); }
   },
 
