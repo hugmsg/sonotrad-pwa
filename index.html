@@ -1936,6 +1936,7 @@
           <span style="font-size:11px;font-weight:700;color:#1E293B;" id="bcb-flt-title"></span>
           <div style="display:flex;gap:4px;">
             <button onclick="App.bcbFilterAll()" style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:5px;border:1px solid #E2E8F0;background:white;color:#1D4ED8;cursor:pointer;">Tout</button>
+            <button onclick="App.bcbFilterNone()" style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:5px;border:1px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Aucun</button>
             <button onclick="App.bcbCloseFilter()" style="font-size:12px;padding:2px 7px;border-radius:5px;border:1px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">✕</button>
           </div>
         </div>
@@ -8077,6 +8078,15 @@ const App = {
     if (!dropdown || !dropdown._bcbField) return;
     S.bcbLotsFilters[dropdown._bcbField] = null;
     this.bcbCloseFilter();
+    this.bcbLotsRender();
+  },
+
+  bcbFilterNone() {
+    const dropdown = document.getElementById('bcb-filter-dropdown');
+    if (!dropdown || !dropdown._bcbField) return;
+    S.bcbLotsFilters[dropdown._bcbField] = new Set();
+    document.querySelectorAll('#bcb-flt-items input[type=checkbox]').forEach(cb => cb.checked = false);
+    this.bcbUpdateFilterUI();
     this.bcbLotsRender();
   },
 
