@@ -7840,12 +7840,15 @@ const App = {
       enlevement.folderUrl = ds.folderUrl || '';
       enlevement.cmrNumero = '';
       enlevement.cmrUrl    = '';
-      // 5. Marquer les lots comme traités dans la page départ
-      const processed = new Set(JSON.parse(localStorage.getItem('snt_bcb_processed_lots') || '[]'));
-      selectedLots.forEach(l => processed.add(l.idBcb));
-      localStorage.setItem('snt_bcb_processed_lots', JSON.stringify([...processed]));
+      // 5. Marquer les lots comme partis localement (disparaissent de la liste immédiatement)
+      const departedIds = new Set(selectedLots.map(l => l.idBcb));
+      S.bcbLots.forEach(l => { if (departedIds.has(l.idBcb)) l.parti = true; });
       S.bcbDepartSelected = new Set();
-      // 6. Afficher
+      // 6. Marquer la consigne chauffeur comme traitée
+      const procCons = new Set(JSON.parse(localStorage.getItem('snt_bcb_processed_consignes') || '[]'));
+      procCons.add(S.bcbDepartConsigne);
+      localStorage.setItem('snt_bcb_processed_consignes', JSON.stringify([...procCons]));
+      // 7. Afficher
       S.bcbCurEnlevement = enlevement;
       S.bcbEnlevements.unshift(enlevement);
       this._bcbRenderEnlevDetail();
@@ -7865,14 +7868,11 @@ const App = {
     const bar = document.getElementById('bcb-dep-bar');
     if (lotsSection) lotsSection.style.display = 'none';
     if (bar) bar.style.display = 'none';
-    const clearBtn = document.getElementById('bcb-dep-clear-btn');
-    const processed = new Set(JSON.parse(localStorage.getItem('snt_bcb_processed_lots') || '[]'));
-    if (clearBtn) clearBtn.style.display = processed.size > 0 ? '' : 'none';
   },
 
   bcbDepartClear() {
-    if (!confirm('Vider la page départ ? Les lots marqués comme traités seront réinitialisés.')) return;
-    localStorage.removeItem('snt_bcb_processed_lots');
+    if (!confirm('Vider la page départ ? Les chauffeurs traités seront réinitialisés.')) return;
+    localStorage.removeItem('snt_bcb_processed_consignes');
     S.bcbDepartConsigne = null;
     S.bcbDepartSelected = new Set();
     S.bcbDepartBuyer    = null;
@@ -7898,14 +7898,22 @@ const App = {
       container.innerHTML = '<div style="padding:10px;text-align:center;color:#94A3B8;font-size:13px;">Aucune consigne enregistrée</div>';
       return;
     }
+    const procCons = new Set(JSON.parse(localStorage.getItem('snt_bcb_processed_consignes') || '[]'));
+    const clearBtn = document.getElementById('bcb-dep-clear-btn');
+    if (clearBtn) clearBtn.style.display = procCons.size > 0 ? '' : 'none';
     container.innerHTML = list.map((c, i) => {
-      const isSel = S.bcbDepartConsigne === i;
-      const name  = [c.prenom, c.nom].filter(Boolean).join(' ') || 'Chauffeur';
-      const truck = [c.tracteur, c.remorque].filter(Boolean).join(' + ') || '—';
+      const isSel  = S.bcbDepartConsigne === i;
+      const isDone = procCons.has(i);
+      const name   = [c.prenom, c.nom].filter(Boolean).join(' ') || 'Chauffeur';
+      const truck  = [c.tracteur, c.remorque].filter(Boolean).join(' + ') || '—';
+      const badge  = isDone ? `<span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:5px;background:#DCFCE7;color:#16A34A;white-space:nowrap;">✓ Traité</span>` : '';
       return `<div onclick="App.bcbDepSelectConsigne(${i})"
-        style="background:${isSel?'#EFF6FF':'white'};border:1px solid ${isSel?'#1D4ED8':'#E2E8F0'};border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer;">
-        <div style="font-size:13px;font-weight:700;color:#1E293B;">${name}</div>
-        <div style="font-size:11px;color:#64748B;">${c.transportNom||'—'} · ${truck}</div>
+        style="background:${isSel?'#EFF6FF':isDone?'#F0FDF4':'white'};border:1px solid ${isSel?'#1D4ED8':isDone?'#86EFAC':'#E2E8F0'};border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer;display:flex;align-items:center;gap:8px;">
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:700;color:#1E293B;">${name}</div>
+          <div style="font-size:11px;color:#64748B;">${c.transportNom||'—'} · ${truck}</div>
+        </div>
+        ${badge}
       </div>`;
     }).join('');
   },
@@ -7977,9 +7985,6 @@ const App = {
     const lotsList    = document.getElementById('bcb-dep-lots-list');
     if (!lotsSection || !lotsList) return;
     lotsSection.style.display = '';
-    const processed = new Set(JSON.parse(localStorage.getItem('snt_bcb_processed_lots') || '[]'));
-    const clearBtn  = document.getElementById('bcb-dep-clear-btn');
-    if (clearBtn) clearBtn.style.display = processed.size > 0 ? '' : 'none';
     const all  = S.bcbLots.filter(l => !l.parti);
     const lots = S.bcbDepartBuyer
       ? all.filter(l => l.acheteur === S.bcbDepartBuyer)
@@ -7996,25 +8001,19 @@ const App = {
       html += `<div style="margin-bottom:10px;">
         <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">${buyer}</div>`;
       groups[buyer].forEach(lot => {
-        const key      = lot.idBcb;
-        const isSel    = S.bcbDepartSelected.has(key);
-        const isDone   = processed.has(key);
-        const bgCard   = isSel ? '#EFF6FF' : isDone ? '#F0FDF4' : 'white';
-        const brCard   = isSel ? '#93C5FD' : isDone ? '#86EFAC' : '#E2E8F0';
-        const cb       = isDone
-          ? `<div style="width:18px;height:18px;border-radius:5px;background:#16A34A;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:white;">✓</div>`
-          : `<div data-dep-cb style="width:18px;height:18px;border-radius:5px;border:2px solid ${isSel?'#1D4ED8':'#CBD5E1'};background:${isSel?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:white;">${isSel?'✓':''}</div>`;
-        const dotV     = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.vendu?'#FEF9C3':'#F1F5F9'};color:${lot.vendu?'#92400E':'#94A3B8'};">V</span>`;
-        const desc     = [lot.marque, lot.modele].filter(Boolean).join(' ') || lot.type || '—';
-        const doneBadge = isDone ? `<span style="font-size:10px;font-weight:600;color:#16A34A;white-space:nowrap;">Enlv. traité</span>` : '';
-        html += `<div onclick="${isDone?'':' App.bcbDepartToggleLot(\''+key+'\')'}" data-dep-lot="${key}"
-          style="background:${bgCard};border:1px solid ${brCard};border-radius:8px;padding:8px 10px;margin-bottom:4px;${isDone?'opacity:0.75;':'cursor:pointer;'}display:flex;align-items:center;gap:8px;">
+        const key   = lot.idBcb;
+        const isSel = S.bcbDepartSelected.has(key);
+        const cb    = `<div data-dep-cb style="width:18px;height:18px;border-radius:5px;border:2px solid ${isSel?'#1D4ED8':'#CBD5E1'};background:${isSel?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:white;">${isSel?'✓':''}</div>`;
+        const dotV  = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.vendu?'#FEF9C3':'#F1F5F9'};color:${lot.vendu?'#92400E':'#94A3B8'};">V</span>`;
+        const desc  = [lot.marque, lot.modele].filter(Boolean).join(' ') || lot.type || '—';
+        html += `<div onclick="App.bcbDepartToggleLot('${key}')" data-dep-lot="${key}"
+          style="background:${isSel?'#EFF6FF':'white'};border:1px solid ${isSel?'#93C5FD':'#E2E8F0'};border-radius:8px;padding:8px 10px;margin-bottom:4px;cursor:pointer;display:flex;align-items:center;gap:8px;">
           ${cb}
           <div style="flex:1;min-width:0;">
             <div style="font-size:12px;font-weight:700;color:#1E293B;">${lot.idBcb}</div>
             <div style="font-size:11px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${desc}${lot.inter?' · '+lot.inter:''}</div>
           </div>
-          <div style="display:flex;gap:3px;align-items:center;">${doneBadge}${!isDone?dotV:''}${!isDone&&lot.numVente?`<span style="font-size:10px;color:#64748B;margin-left:2px;">${lot.numVente}</span>`:''}</div>
+          <div style="display:flex;gap:3px;align-items:center;">${dotV}${lot.numVente?`<span style="font-size:10px;color:#64748B;margin-left:2px;">${lot.numVente}</span>`:''}</div>
         </div>`;
       });
       html += `</div>`;
