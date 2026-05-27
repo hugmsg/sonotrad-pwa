@@ -4173,12 +4173,10 @@ const App = {
   },
 
   _poseSearchKey(e) {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    const res   = document.getElementById('pose-search-results');
-    if (!res || res.style.display === 'none') return;
-    const first = res.querySelector('.pose-result-row');
-    if (first) first.click();
+    this._suggestKeyDown(e, 'pose-search-results', i => {
+      const r = document.querySelectorAll('#pose-search-results .pose-result-row')[i];
+      if (r) r.click();
+    }, true);
   },
 
   _poseQtyKey(e, ref) {
@@ -4367,12 +4365,10 @@ const App = {
   },
 
   _saisieSearchKey(e) {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    const res   = document.getElementById('saisie-search-results');
-    if (!res || res.style.display === 'none') return;
-    const first = res.querySelector('.pose-result-row');
-    if (first) first.click();
+    this._suggestKeyDown(e, 'saisie-search-results', i => {
+      const r = document.querySelectorAll('#saisie-search-results .pose-result-row')[i];
+      if (r) r.click();
+    }, true);
   },
 
   addSaisieRef(ref) {
@@ -7497,7 +7493,7 @@ const App = {
     const el = document.getElementById('bcb-suggest-' + fieldType);
     if (el) el.style.display = 'none';
   },
-  _suggestKeyDown(e, listId, selectFn) {
+  _suggestKeyDown(e, listId, selectFn, defaultFirst) {
     const list = document.getElementById(listId);
     if (!list) return;
     const rows = Array.from(list.children);
@@ -7509,7 +7505,12 @@ const App = {
     let ni = list._ni !== undefined ? list._ni : -1;
     if (e.key === 'ArrowDown')    ni = Math.min(ni + 1, rows.length - 1);
     else if (e.key === 'ArrowUp') ni = Math.max(ni - 1, 0);
-    else if (e.key === 'Enter')   { if (ni >= 0) selectFn(ni); list._ni = -1; return; }
+    else if (e.key === 'Enter') {
+      const target = ni >= 0 ? ni : (defaultFirst ? 0 : -1);
+      if (target >= 0) selectFn(target);
+      list._ni = -1;
+      return;
+    }
     list._ni = ni;
     rows.forEach((r, i) => r.style.background = i === ni ? '#EFF6FF' : '');
   },
