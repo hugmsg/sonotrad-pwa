@@ -9353,8 +9353,11 @@ function _lvuRecto(doc, d, isCMR, band) {
   tc(0, 0, 0); sf('normal', LV.FONT_BODY);
   const _cname = p => String(p || '').replace(/^[A-Z]{2,3}\s*[-–]\s*/i, '').toUpperCase();
   let ey = y + 9.5;
-  const expPays = _cname(d.expediteur?.pays || 'FR - France');
-  for (const l of ['SONOTRAD', '9 Z.A. des Renardières', '53250 JAVRON-LES-CHAPELLES', expPays]) { tx(l, x0 + LV.CELL_PAD_X, ey); ey += 4; }
+  const expPays  = _cname(d.expediteur?.pays || 'FR - France');
+  const expNom   = (d.expediteur?.nom    || '').trim() || 'SONOTRAD';
+  const expAdr   = (d.expediteur?.adresse|| '').trim() || '9 Z.A. des Renardières';
+  const expVille = (d.expediteur?.ville  || '').trim() || '53250 JAVRON-LES-CHAPELLES';
+  for (const l of [expNom, expAdr, expVille, expPays].filter(Boolean)) { tx(l, x0 + LV.CELL_PAD_X, ey); ey += 4; }
   const dst = d.destinataire ?? {};
   const dstPays = _cname(dst.pays);
   let dy2 = y + 9.5;
@@ -9382,7 +9385,7 @@ function _lvuRecto(doc, d, isCMR, band) {
   }
   const cachX = x0 + SW / 2;
   tc(0, 0, 0);
-  if (data.source === 'bcb') {
+  if (d.source === 'bcb') {
     sf('bold', 10);             tx('BCB OFF MARKET',                  cachX, y + 9.5,  'center');
     sf('normal', LV.FONT_BODY); tx('ZA Renardières',                  cachX, y + 14.5, 'center');
                                  tx('53250 JAVRON-LES-CHAPELLES',     cachX, y + 18.5, 'center');
