@@ -2889,17 +2889,7 @@ const App = {
     document.getElementById('login-overlay').style.display = 'flex';
   },
 
-  /** Précharge départs + historique stock en arrière-plan après connexion. */
-  _prefetch() {
-    if (!S.apiUrl) return;
-    // Léger délai pour laisser le rendu initial se terminer d'abord
-    setTimeout(() => {
-      this._prefetchDeps();
-      this._prefetchHistory();
-      this._prefetchCatalog();
-      this._prefetchLvLinks();
-    }, 600);
-  },
+  _prefetch() { /* désactivé — chargement désormais déclenché par les menus d'activité */ },
 
   async _prefetchDeps() {
     if (S.depsLoaded || S.depsLoading) return;
@@ -6093,9 +6083,12 @@ const App = {
       return;
     }
     await Promise.allSettled([
-      S.depsLoaded || S.depsLoading ? Promise.resolve() : this.loadDepartures(),
-      S.arrivalsLoaded               ? Promise.resolve() : this.loadArrivalsData(),
+      S.depsLoaded || S.depsLoading                     ? Promise.resolve() : this.loadDepartures(),
+      S.arrivalsLoaded                                   ? Promise.resolve() : this.loadArrivalsData(),
+      S.catalogLoaded || S.catalogLoading || S.stockLoaded ? Promise.resolve() : this._prefetchCatalog(),
     ]);
+    // LV links non-bloquants (utiles dans la liste production)
+    if (!S.lvLinks || !Object.keys(S.lvLinks).length) this._prefetchLvLinks();
     this._loxamMenuRefreshCounts();
     if (loaderEl) loaderEl.style.display = 'none';
     if (gridEl)   gridEl.style.display = 'block';
