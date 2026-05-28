@@ -10809,12 +10809,89 @@ window.addEventListener('offline', _updateOnline);
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW:', e));
 }
+// ── Pull-to-refresh ──────────────────────────────────────────────────────────
+Object.assign(App, {
+  _ptrSetup() {
+    const mainEl = document.querySelector('.main-content');
+    const ind    = document.getElementById('ptr-indicator');
+    if (!mainEl) return;
+    let startY = 0, startX = 0, pulling = false, refreshing = false;
+    const THRESHOLD = 70;
+
+    const _show = (dy) => {
+      if (!ind) return;
+      const pct = Math.min(dy / THRESHOLD, 1);
+      ind.style.opacity   = String(Math.min(pct * 1.5, 1));
+      ind.style.transform = `translateX(-50%) translateY(${-54 + pct * 54}px)`;
+      const icon = document.getElementById('ptr-icon');
+      if (icon) { icon.style.animation = ''; icon.style.transform = `rotate(${pct * 180}deg)`; icon.textContent = '↓'; }
+    };
+    const _hide = () => {
+      if (!ind) return;
+      ind.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
+      ind.style.opacity    = '0';
+      ind.style.transform  = 'translateX(-50%) translateY(-54px)';
+    };
+
+    mainEl.addEventListener('touchstart', e => {
+      if (refreshing) return;
+      startY = e.touches[0].clientY;
+      startX = e.touches[0].clientX;
+      pulling = mainEl.scrollTop <= 0;
+      if (ind) ind.style.transition = 'none';
+    }, { passive: true });
+
+    mainEl.addEventListener('touchmove', e => {
+      if (!pulling || refreshing) return;
+      const dy = e.touches[0].clientY - startY;
+      const dx = Math.abs(e.touches[0].clientX - startX);
+      if (dx > 30 || dy <= 0) { pulling = false; _hide(); return; }
+      _show(dy);
+    }, { passive: true });
+
+    mainEl.addEventListener('touchend', e => {
+      if (!pulling || refreshing) return;
+      pulling = false;
+      const dy = e.changedTouches[0].clientY - startY;
+      if (dy >= THRESHOLD) {
+        refreshing = true;
+        const icon = document.getElementById('ptr-icon');
+        if (icon) { icon.textContent = '⟳'; icon.style.transform = ''; icon.style.animation = 'spin 0.6s linear infinite'; }
+        if (ind) { ind.style.transition = 'none'; _show(THRESHOLD); }
+        setTimeout(() => {
+          App._ptrRefresh();
+          _hide();
+          setTimeout(() => { refreshing = false; }, 350);
+        }, 350);
+      } else {
+        _hide();
+      }
+    });
+  },
+
+  _ptrRefresh() {
+    const v = S.view;
+    if      (v === 'departures')      this.loadDepartures(true);
+    else if (v === 'arrivals')        this.loadArrivalsData(true);
+    else if (v === 'loxam-menu')      { S.depsLoaded = false; S.arrivalsLoaded = false; this.loxamMenuInit(); }
+    else if (v === 'stock-dashboard') this.loadStockDashboard(true);
+    else if (v === 'stock')           { S.stockLoaded = false; this.loadStockCatalog(); }
+    else if (v === 'stock-history')   this.loadStockHistory(true);
+    else if (v === 'bcb-lots')        this.bcbLotsLoad(true);
+    else if (v === 'bcb-enlevements') this.bcbEnlevementsLoad(true);
+    else if (v === 'lvu-history')     this.lvuLoadHistory();
+    else if (v === 'annuaire')        this.annuaireLoad(true);
+    else                              this.toast('↺ Actualisé');
+  },
+});
+
 document.addEventListener('DOMContentLoaded', () => {
   // Vérifie la session → affiche login ou accueil
   App._initAuth();
   // Détecte le mode TEST via l'API (ADR-007 — non-breaking si GAS actuel)
   App._applyEnvMode();
   _updateOnline();
+  App._ptrSetup();
   // ── Drag-and-drop sur la dropzone XLS ────────────────────────────────────
   const dz = document.getElementById('xls-dropzone');
   if (dz) {
@@ -10898,6 +10975,18 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     </div>
   </div>
+</div>
+
+<!-- Pull-to-refresh indicator -->
+<div id="ptr-indicator"
+  style="position:fixed;top:calc(56px + env(safe-area-inset-top,0px));left:50%;
+         transform:translateX(-50%) translateY(-54px);opacity:0;
+         background:white;border-radius:20px;padding:7px 16px 7px 12px;
+         box-shadow:0 2px 12px rgba(0,0,0,.18);font-size:13px;font-weight:600;
+         color:#475569;display:flex;align-items:center;gap:8px;
+         z-index:500;pointer-events:none;white-space:nowrap;">
+  <span id="ptr-icon" style="display:inline-block;font-size:16px;">↓</span>
+  Actualiser
 </div>
 </body>
 </html>
