@@ -1969,6 +1969,7 @@
             <div style="font-size:15px;font-weight:700;color:#1E293B;">Lots en attente</div>
             <div style="font-size:11px;color:#64748B;" id="bcb-lots-subtitle">Chargement…</div>
           </div>
+          <button onclick="App.bcbPrintByBuyer()" style="background:white;border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 10px;font-size:14px;cursor:pointer;flex-shrink:0;" title="Imprimer les listes par acheteur">🖨</button>
           <button onclick="App.bcbLotsLoad(true)" style="background:white;border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 11px;font-size:12px;font-weight:600;color:#1D4ED8;cursor:pointer;flex-shrink:0;">↺</button>
         </div>
 <input id="bcb-lots-search" type="search" placeholder="Rechercher (code, vendeur, marque, n° série…)" autocomplete="off"
@@ -7937,6 +7938,84 @@ const App = {
         departBadge.textContent = '— Aucune consigne';
       }
     }
+  },
+
+  bcbPrintByBuyer() {
+    if (!S.bcbLotsLoaded || !S.bcbLots.length) { this.toast('Lots non chargés'); return; }
+    const sold = S.bcbLots.filter(l => l.vendu && l.acheteur);
+    if (!sold.length) { this.toast('Aucun lot vendu avec acheteur renseigné'); return; }
+
+    // Regroupement par acheteur
+    const byBuyer = {};
+    sold.forEach(l => {
+      const b = l.acheteur.trim();
+      if (!byBuyer[b]) byBuyer[b] = [];
+      byBuyer[b].push(l);
+    });
+
+    const numVentes = [...new Set(sold.map(l => l.numVente).filter(Boolean))];
+    const venteLbl  = numVentes.length ? 'Vente ' + numVentes.map(v => 'n°' + v).join(', ') : '';
+    const dateGen   = new Date().toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
+
+    const sections = Object.keys(byBuyer).sort().map(buyer => {
+      const lots = byBuyer[buyer];
+      const rows = lots.map((l, i) => {
+        const cells = [
+          i + 1,
+          l.idBcb || '',
+          l.vendeur || l.inter || '',
+          l.refVendeur || l.idSeller || '',
+          l.type || '',
+          l.marque || '',
+          l.modele || '',
+          l.numSerie || '',
+          l.commentaire || '',
+          l.dateVente || '',
+          l.codeEnlevement ? 'OUI' : 'NON',
+        ];
+        return `<tr>${cells.map((c, ci) => `<td${ci === 4 ? ' class="desc"' : ''}>${c}</td>`).join('')}</tr>`;
+      }).join('');
+      return `<div class="bs">
+        <div class="bh"><span class="bn">${buyer}</span><span class="bc">${lots.length} lot${lots.length > 1 ? 's' : ''}</span></div>
+        <table><thead><tr>
+          <th>#</th><th>ID BCB</th><th>Vendeur</th><th>Code</th><th>Description</th>
+          <th>Marque</th><th>Modèle</th><th>N° Série</th><th>Commentaire</th><th>Date vente</th><th>Chargé</th>
+        </tr></thead><tbody>${rows}</tbody></table>
+      </div>`;
+    }).join('');
+
+    const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+<title>BCB — Listes acheteurs</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,sans-serif;font-size:9.5px;color:#1E293B;padding:10mm}
+  h1{font-size:15px;font-weight:800;margin-bottom:3px}
+  .meta{font-size:9px;color:#64748B;margin-bottom:14px}
+  .bs{margin-bottom:18px;page-break-inside:avoid}
+  .bh{display:flex;align-items:baseline;gap:10px;background:#1E293B;color:white;padding:5px 9px;border-radius:3px 3px 0 0}
+  .bn{font-size:12px;font-weight:700}
+  .bc{font-size:9px;opacity:.7}
+  table{width:100%;border-collapse:collapse}
+  thead tr{background:#F1F5F9}
+  th{padding:4px 3px;text-align:left;font-size:8px;font-weight:700;color:#475569;text-transform:uppercase;border-bottom:1px solid #CBD5E1;white-space:nowrap}
+  td{padding:3.5px 3px;font-size:9px;border-bottom:1px solid #F1F5F9;vertical-align:top}
+  td.desc{max-width:90px;word-break:break-word}
+  tr:last-child td{border-bottom:none}
+  @media print{
+    body{padding:7mm}
+    .bs+.bs{page-break-before:always}
+  }
+</style></head><body>
+<h1>BCB — Listes par acheteur</h1>
+<p class="meta">${[venteLbl, sold.length + ' lots', 'Généré le ' + dateGen].filter(Boolean).join(' · ')}</p>
+${sections}
+<script>window.addEventListener('load',function(){setTimeout(function(){window.print();},250)});<\/script>
+</body></html>`;
+
+    const w = window.open('', '_blank');
+    if (!w) { this.toast('⚠ Autorisez les popups pour imprimer'); return; }
+    w.document.write(html);
+    w.document.close();
   },
 
   async bcbLotsLoad(force) {
