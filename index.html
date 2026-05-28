@@ -7971,7 +7971,7 @@ const App = {
           l.numSerie || '',
           l.commentaire || '',
           l.dateVente || '',
-          l.codeEnlevement ? 'OUI' : 'NON',
+          `<input type="checkbox"${l.codeEnlevement ? ' checked' : ''} style="width:13px;height:13px;">`,
         ];
         return `<tr>${cells.map((c, ci) => `<td${ci === 4 ? ' class="desc"' : ''}>${c}</td>`).join('')}</tr>`;
       }).join('');
