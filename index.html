@@ -7960,6 +7960,12 @@ const App = {
     const sections = Object.keys(byBuyer).sort().map(buyer => {
       const lots = byBuyer[buyer];
       const rows = lots.map((l, i) => {
+        const rawDate = l.dateVente || '';
+        const fmtDate = rawDate ? (() => {
+          const d = new Date(rawDate);
+          return isNaN(d) ? rawDate
+            : d.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
+        })() : '';
         const cells = [
           i + 1,
           l.idBcb || '',
@@ -7970,7 +7976,8 @@ const App = {
           l.modele || '',
           l.numSerie || '',
           l.commentaire || '',
-          l.dateVente || '',
+          fmtDate,
+          l.numVente || '',
           `<input type="checkbox"${l.codeEnlevement ? ' checked' : ''} style="width:13px;height:13px;">`,
         ];
         return `<tr>${cells.map((c, ci) => `<td${ci === 4 ? ' class="desc"' : ''}>${c}</td>`).join('')}</tr>`;
@@ -7979,7 +7986,7 @@ const App = {
         <div class="bh"><span class="bn">${buyer}</span><span class="bc">${lots.length} lot${lots.length > 1 ? 's' : ''}</span></div>
         <table><thead><tr>
           <th>#</th><th>ID BCB</th><th>Vendeur</th><th>Code</th><th>Description</th>
-          <th>Marque</th><th>Modèle</th><th>N° Série</th><th>Commentaire</th><th>Date vente</th><th>Chargé</th>
+          <th>Marque</th><th>Modèle</th><th>N° Série</th><th>Commentaire</th><th>Date vente</th><th>N° vente</th><th>Chargé</th>
         </tr></thead><tbody>${rows}</tbody></table>
       </div>`;
     }).join('');
