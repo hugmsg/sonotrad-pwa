@@ -876,13 +876,14 @@
       <span id="sidebar-activity-label">Arrivées &amp; Départs</span>
       <span style="font-size:10px;color:#94A3B8;margin-top:2px;">← Changer d'activité</span>
     </div>
-    <button class="nav-tab" data-tab="departures" onclick="App.go('departures')">
+    <!-- ── Tabs LOXAM (masqués sur loxam-menu et hors activité LOXAM) ──── -->
+    <button class="nav-tab" data-tab="departures" onclick="App.go('departures')" style="display:none">
       <span class="icon">🏭</span><span>Production</span>
     </button>
-    <button class="nav-tab" data-tab="arrivals" onclick="App.go('arrivals')">
+    <button class="nav-tab" data-tab="arrivals" onclick="App.go('arrivals')" style="display:none">
       <span class="icon">📥</span><span>Arrivées</span>
     </button>
-    <button class="nav-tab" data-tab="history" onclick="App.go('history')">
+    <button class="nav-tab" data-tab="history" onclick="App.go('history')" style="display:none">
       <span class="icon">🕐</span><span>Historique</span>
     </button>
     <!-- ── Tabs Stockage (masqués hors activité stockage) ─────────────── -->
@@ -898,7 +899,7 @@
     <button class="nav-tab" data-stab="stock-sync" onclick="App.go('stock-sync')" style="display:none">
       <span class="icon">🔄</span><span>Synchro</span>
     </button>
-    <!-- ── Tabs BCB (masqués hors activité BCB) ───────────────────────── -->
+    <!-- ── Tabs BCB (masqués sur bcb-menu et hors activité BCB) ────────── -->
     <button class="nav-tab" data-bcbtab="bcb-lots" onclick="App.go('bcb-lots')" style="display:none">
       <span class="icon">📦</span><span>Lots</span>
     </button>
@@ -909,7 +910,7 @@
       <span class="icon">🚚</span><span>Chargement</span>
     </button>
     <button class="nav-tab" data-bcbtab="bcb-enlevements" onclick="App.go('bcb-enlevements')" style="display:none">
-      <span class="icon">📋</span><span>Enl.</span>
+      <span class="icon">📁</span><span>Enl.</span>
     </button>
     <!-- ── Tabs LVU (masqués hors activité LVU) ──────────────────────────── -->
     <button class="nav-tab" data-lvutab="lvu-form" onclick="App.go('lvu-form')" style="display:none">
@@ -1885,16 +1886,15 @@
           </div>
           <button onclick="App.bcbLotsLoad(true)" style="background:white;border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 11px;font-size:12px;font-weight:600;color:#1D4ED8;cursor:pointer;flex-shrink:0;">↺</button>
         </div>
-        <!-- Sélecteur de vue -->
-        <div id="bcb-lots-view-tabs" style="display:flex;gap:4px;margin-bottom:8px;">
-          <button onclick="App.bcbSetView('lots')"     id="bcb-vtab-lots"     style="flex:1;padding:5px 2px;font-size:11px;font-weight:600;border-radius:7px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Lots</button>
-          <button onclick="App.bcbSetView('acheteur')" id="bcb-vtab-acheteur" style="flex:1;padding:5px 2px;font-size:11px;font-weight:600;border-radius:7px;border:1.5px solid #1D4ED8;background:#1D4ED8;color:white;cursor:pointer;">Acheteur</button>
-          <button onclick="App.bcbSetView('vendeur')"  id="bcb-vtab-vendeur"  style="flex:1;padding:5px 2px;font-size:11px;font-weight:600;border-radius:7px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Vendeur</button>
-          <button onclick="App.bcbSetView('vente')"    id="bcb-vtab-vente"    style="flex:1;padding:5px 2px;font-size:11px;font-weight:600;border-radius:7px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Vente</button>
-        </div>
-        <input id="bcb-lots-search" type="search" placeholder="Rechercher (code, vendeur, marque, n° série…)" autocomplete="off"
+<input id="bcb-lots-search" type="search" placeholder="Rechercher (code, vendeur, marque, n° série…)" autocomplete="off"
           oninput="S.bcbLotsSearch=this.value;App.bcbLotsRender()"
           style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:7px 10px;font-size:12px;outline:none;margin-bottom:7px;">
+        <!-- Filtres colonne (style Excel) -->
+        <div style="display:flex;gap:4px;margin-bottom:7px;">
+          <button id="bcb-flt-acheteur" onclick="App.bcbOpenFilter(event,'acheteur')" style="flex:1;padding:4px 4px;font-size:11px;font-weight:600;border-radius:7px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Acheteur ▾</button>
+          <button id="bcb-flt-vendeur"  onclick="App.bcbOpenFilter(event,'vendeur')"  style="flex:1;padding:4px 4px;font-size:11px;font-weight:600;border-radius:7px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Vendeur ▾</button>
+          <button id="bcb-flt-vente"    onclick="App.bcbOpenFilter(event,'vente')"    style="flex:1;padding:4px 4px;font-size:11px;font-weight:600;border-radius:7px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Vente ▾</button>
+        </div>
         <!-- Sous-filtres : statuts + tri + sélection -->
         <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
           <div style="display:flex;gap:4px;">
@@ -1923,6 +1923,19 @@
 
       <!-- Contenu -->
       <div id="bcb-lots-content" style="padding:8px 10px 24px;display:flex;flex-direction:column;gap:10px;"></div>
+
+      <!-- Dropdown filtre colonne (position:fixed, survole tout) -->
+      <div id="bcb-filter-dropdown" style="display:none;position:fixed;background:white;border:1.5px solid #CBD5E1;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.14);z-index:200;max-height:320px;flex-direction:column;min-width:210px;max-width:270px;">
+        <div style="padding:8px 10px 7px;border-bottom:1px solid #F1F5F9;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+          <span style="font-size:11px;font-weight:700;color:#1E293B;" id="bcb-flt-title"></span>
+          <div style="display:flex;gap:4px;">
+            <button onclick="App.bcbFilterAll()" style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:5px;border:1px solid #E2E8F0;background:white;color:#1D4ED8;cursor:pointer;">Tout</button>
+            <button onclick="App.bcbFilterNone()" style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:5px;border:1px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Aucun</button>
+            <button onclick="App.bcbCloseFilter()" style="font-size:12px;padding:2px 7px;border-radius:5px;border:1px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">✕</button>
+          </div>
+        </div>
+        <div id="bcb-flt-items" style="overflow-y:auto;flex:1;padding:4px 0;"></div>
+      </div>
 
       <!-- Barre de sélection (sticky bas) -->
       <div id="bcb-select-bar" style="display:none;position:sticky;bottom:0;background:white;border-top:2px solid #1D4ED8;padding:10px 14px;display:none;align-items:center;justify-content:space-between;gap:10px;z-index:3;">
@@ -2604,11 +2617,13 @@ const S = {
   bcbLotsLoaded:   false,
   bcbLotsLoading:  false,
   bcbLotsSearch:   '',
-  bcbLotsView:     'acheteur', // 'lots' | 'acheteur' | 'vendeur' | 'vente'
+  bcbLotsView:     'lots',
   bcbStatusFilter: { arrive: null, inspecte: null, vendu: null }, // null=tous | true=oui | false=non
   bcbSortField:    'default',  // 'default' | 'id_desc' | 'date_asc' | 'date_desc'
   bcbSelectMode:   false,
   bcbSelected:     new Set(),
+  bcbLotsFilters:  { acheteur: null, vendeur: null, vente: null },
+  bcbActiveFilter: null,
   bcbSelLot:         null,
   bcbDepartConsigne:     null,
   bcbDepartSelected:     new Set(),
@@ -2725,15 +2740,15 @@ const App = {
     const nav = document.getElementById('main-nav');
     if (nav) nav.style.display = onHome ? 'none' : '';
     document.querySelectorAll('#main-nav .nav-tab[data-tab]').forEach(el => {
-      el.style.display = (S.activity === 'loxam') ? '' : 'none';
+      el.style.display = (S.activity === 'loxam' && v !== 'loxam-menu') ? '' : 'none';
     });
     document.querySelectorAll('#main-nav .nav-tab[data-stab]').forEach(el => {
-      const isAdmin  = S.currentUser?.role === 'admin';
+      const isAdmin   = S.currentUser?.role === 'admin';
       const isSynchro = el.dataset.stab === 'stock-sync';
       el.style.display = (S.activity === 'stockage' && (!isSynchro || isAdmin)) ? '' : 'none';
     });
     document.querySelectorAll('#main-nav .nav-tab[data-bcbtab]').forEach(el => {
-      el.style.display = (S.activity === 'bcb') ? '' : 'none';
+      el.style.display = (S.activity === 'bcb' && v !== 'bcb-menu') ? '' : 'none';
     });
     document.querySelectorAll('#main-nav .nav-tab[data-lvutab]').forEach(el => {
       el.style.display = (S.activity === 'lvu') ? '' : 'none';
@@ -7713,6 +7728,7 @@ const App = {
     if (S.bcbLotsLoading) return;
     if (S.bcbLotsLoaded && !force) { this.bcbSetView(S.bcbLotsView); return; }
     if (!S.apiUrl) { this.toast('URL API non configurée'); return; }
+    if (force) { S.bcbLotsFilters = { acheteur: null, vendeur: null, vente: null }; this.bcbCloseFilter(); }
     S.bcbLotsLoading = true;
     document.getElementById('bcb-lots-loading').style.display = '';
     document.getElementById('bcb-lots-content').style.display = 'none';
@@ -7739,15 +7755,6 @@ const App = {
   },
 
   bcbUpdateFilterUI() {
-    // Vue tabs
-    ['lots','acheteur','vendeur','vente'].forEach(k => {
-      const btn = document.getElementById('bcb-vtab-' + k);
-      if (!btn) return;
-      const a = k === S.bcbLotsView;
-      btn.style.background  = a ? '#1D4ED8' : 'white';
-      btn.style.color       = a ? 'white'   : '#64748B';
-      btn.style.borderColor = a ? '#1D4ED8' : '#E2E8F0';
-    });
     // Chips statut
     const sfStyles = {
       null:  { bg:'white',   color:'#64748B', border:'#E2E8F0' },
@@ -7775,6 +7782,20 @@ const App = {
       selBtn.style.color       = S.bcbSelectMode ? 'white'   : '#64748B';
       selBtn.style.borderColor = S.bcbSelectMode ? '#1D4ED8' : '#E2E8F0';
     }
+    // Boutons filtres colonne
+    const fltLabels = { acheteur:'Acheteur', vendeur:'Vendeur', vente:'Vente' };
+    ['acheteur','vendeur','vente'].forEach(f => {
+      const btn = document.getElementById('bcb-flt-' + f);
+      if (!btn) return;
+      const active = S.bcbLotsFilters[f] !== null;
+      const open   = S.bcbActiveFilter === f;
+      const n      = active ? S.bcbLotsFilters[f].size : null;
+      btn.textContent      = active ? `${fltLabels[f]} (${n}) ▾` : `${fltLabels[f]} ▾`;
+      btn.style.background  = (active||open) ? '#EFF6FF' : 'white';
+      btn.style.color       = (active||open) ? '#1D4ED8' : '#64748B';
+      btn.style.borderColor = (active||open) ? '#1D4ED8' : '#E2E8F0';
+      btn.style.fontWeight  = active          ? '700'     : '600';
+    });
   },
 
   bcbToggleStatus(field) {
@@ -7883,7 +7904,13 @@ const App = {
     if (sf.inspecte !== null) filtered = filtered.filter(l => l.inspecte === sf.inspecte);
     if (sf.vendu    !== null) filtered = filtered.filter(l => l.vendu    === sf.vendu);
 
-    // 3. Tri
+    // 3. Filtres colonne (Excel-like)
+    const cf = S.bcbLotsFilters;
+    if (cf.acheteur !== null) filtered = filtered.filter(l => cf.acheteur.has(l.acheteur||''));
+    if (cf.vendeur  !== null) filtered = filtered.filter(l => cf.vendeur.has(l.vendeur||''));
+    if (cf.vente    !== null) filtered = filtered.filter(l => cf.vente.has(l.numVente ? `Vente n°${l.numVente}` : ''));
+
+    // 4. Tri
     const sortFn = {
       default:   (a,b) => a.idBcb.localeCompare(b.idBcb),
       id_desc:   (a,b) => b.idBcb.localeCompare(a.idBcb),
@@ -7965,6 +7992,100 @@ const App = {
   },
 
   _bcbIsSelected(key) { return S.bcbSelected.has(key); },
+
+  bcbOpenFilter(evt, field) {
+    if (S.bcbActiveFilter === field) { this.bcbCloseFilter(); return; }
+    S.bcbActiveFilter = field;
+    const dropdown = document.getElementById('bcb-filter-dropdown');
+    if (!dropdown) return;
+    const getVal = l => field === 'acheteur' ? (l.acheteur||'')
+                      : field === 'vendeur'  ? (l.vendeur||'')
+                      : (l.numVente ? `Vente n°${l.numVente}` : '');
+    const allVals = [...new Set(S.bcbLots.map(getVal))]
+      .sort((a,b) => !a ? 1 : !b ? -1 : a.localeCompare(b,'fr'));
+    dropdown._bcbField = field;
+    dropdown._bcbVals  = allVals;
+    const activeSet = S.bcbLotsFilters[field];
+    const countMap  = {};
+    S.bcbLots.forEach(l => { const v = getVal(l); countMap[v] = (countMap[v]||0)+1; });
+    const labels = { acheteur:'Acheteur', vendeur:'Vendeur', vente:'Vente' };
+    document.getElementById('bcb-flt-title').textContent = labels[field];
+    document.getElementById('bcb-flt-items').innerHTML = allVals.map((v, i) => {
+      const checked = activeSet === null || activeSet.has(v);
+      return `<label style="display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;user-select:none;" onmouseenter="this.style.background='#F8FAFC'" onmouseleave="this.style.background=''">
+        <input type="checkbox" ${checked?'checked':''} onchange="App._bcbFltToggle(${i})" style="width:15px;height:15px;cursor:pointer;accent-color:#1D4ED8;flex-shrink:0;">
+        <span style="font-size:12px;color:#1E293B;flex:1;">${v||'(non renseigné)'}</span>
+        <span style="font-size:10px;color:#94A3B8;font-weight:600;">${countMap[v]||0}</span>
+      </label>`;
+    }).join('');
+    const btn  = evt.currentTarget;
+    const rect = btn.getBoundingClientRect();
+    dropdown.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 280)) + 'px';
+    dropdown.style.top  = (rect.bottom + 4) + 'px';
+    dropdown.style.display = 'flex';
+    this.bcbUpdateFilterUI();
+    if (this._bcbFltHandler) {
+      document.removeEventListener('mousedown', this._bcbFltHandler);
+      document.removeEventListener('touchstart', this._bcbFltHandler);
+    }
+    this._bcbFltHandler = e => {
+      const d = document.getElementById('bcb-filter-dropdown');
+      const btns = ['bcb-flt-acheteur','bcb-flt-vendeur','bcb-flt-vente'].map(id => document.getElementById(id));
+      if (d && !d.contains(e.target) && btns.every(b => !b || !b.contains(e.target))) this.bcbCloseFilter();
+    };
+    setTimeout(() => {
+      document.addEventListener('mousedown', this._bcbFltHandler);
+      document.addEventListener('touchstart', this._bcbFltHandler);
+    }, 0);
+  },
+
+  _bcbFltToggle(idx) {
+    const dropdown = document.getElementById('bcb-filter-dropdown');
+    if (!dropdown) return;
+    const field   = dropdown._bcbField;
+    const allVals = dropdown._bcbVals;
+    const value   = allVals[idx];
+    let cur = S.bcbLotsFilters[field];
+    if (cur === null) {
+      cur = new Set(allVals);
+      cur.delete(value);
+    } else {
+      if (cur.has(value)) cur.delete(value); else cur.add(value);
+      if (cur.size === allVals.length) cur = null;
+    }
+    S.bcbLotsFilters[field] = cur;
+    this.bcbUpdateFilterUI();
+    this.bcbLotsRender();
+  },
+
+  bcbFilterAll() {
+    const dropdown = document.getElementById('bcb-filter-dropdown');
+    if (!dropdown || !dropdown._bcbField) return;
+    S.bcbLotsFilters[dropdown._bcbField] = null;
+    this.bcbCloseFilter();
+    this.bcbLotsRender();
+  },
+
+  bcbFilterNone() {
+    const dropdown = document.getElementById('bcb-filter-dropdown');
+    if (!dropdown || !dropdown._bcbField) return;
+    S.bcbLotsFilters[dropdown._bcbField] = new Set();
+    document.querySelectorAll('#bcb-flt-items input[type=checkbox]').forEach(cb => cb.checked = false);
+    this.bcbUpdateFilterUI();
+    this.bcbLotsRender();
+  },
+
+  bcbCloseFilter() {
+    S.bcbActiveFilter = null;
+    const d = document.getElementById('bcb-filter-dropdown');
+    if (d) d.style.display = 'none';
+    if (this._bcbFltHandler) {
+      document.removeEventListener('mousedown', this._bcbFltHandler);
+      document.removeEventListener('touchstart', this._bcbFltHandler);
+      this._bcbFltHandler = null;
+    }
+    this.bcbUpdateFilterUI();
+  },
 
   bcbLotDetail(idx) {
     const lot = S.bcbLots[idx];
