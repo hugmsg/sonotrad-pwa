@@ -8020,8 +8020,9 @@ const App = {
   th{padding:4px 3px;text-align:left;font-size:7.5px;font-weight:700;color:white;white-space:nowrap;overflow:hidden}
   td{padding:3px 3px;font-size:8.5px;border-bottom:1px solid #F1F5F9;vertical-align:top;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   td.desc{white-space:normal;word-break:break-word}
-  .bhr td{background:#475569;color:white;padding:5px 6px;font-size:10px;white-space:normal}
-  .bhr-pending td{background:#92400E;color:#FEF3C7;padding:5px 6px;font-size:10px;white-space:normal}
+  .bhr td{background:#475569;color:white;padding:5px 6px;font-size:10px;white-space:normal;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .bhr-pending td{background:#92400E;color:#FEF3C7;padding:5px 6px;font-size:10px;white-space:normal;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  thead tr{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .bc{font-size:8px;font-weight:400;opacity:.8}
   colgroup col:nth-child(1){width:3%}
   colgroup col:nth-child(2){width:7%}
@@ -8273,20 +8274,17 @@ ${bodies}${sansAcheteurBody}
       const clickFn = S.bcbSelectMode
         ? `App.bcbToggleLotSelect('${key.replace(/'/g,"\\'")}', this)`
         : `App.bcbLotDetail(${idx})`;
-      const needsAcheteur = lot.vendu && !lot.acheteur;
       const dotA = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.arrive?'#D1FAE5':'#F1F5F9'};color:${lot.arrive?'#065F46':'#94A3B8'};">A</span>`;
       const dotI = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.inspecte?'#DBEAFE':'#F1F5F9'};color:${lot.inspecte?'#1D4ED8':'#94A3B8'};">I</span>`;
       const dotV = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.vendu?'#FEF3C7':'#F1F5F9'};color:${lot.vendu?'#92400E':'#94A3B8'};">V</span>`;
-      const dotNA = needsAcheteur ? `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:#FEF3C7;color:#D97706;" title="Vendu — acheteur non renseigné">!</span>` : '';
+      const acheteurChip = lot.acheteur ? `<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:#FEF9C3;color:#713F12;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:1;">${lot.acheteur}</span>` : '';
       const vente = lot.numVente ? `<span style="font-size:10px;color:#64748B;font-weight:600;margin-left:2px;">n°${lot.numVente}</span>` : '';
       const desc  = [lot.vendeur, [lot.marque,lot.modele].filter(Boolean).join(' '), lot.type].filter(Boolean).join(' — ');
       const sub   = [lot.refVendeur?`réf ${lot.refVendeur}`:'', lot.numSerie?`n° ${lot.numSerie}`:'', lot.poids?`${lot.poids}t`:'', lot.commentaire].filter(Boolean).join(' · ');
       const cbHtml = S.bcbSelectMode
         ? `<div data-lot-cb style="width:18px;height:18px;border-radius:5px;border:2px solid ${isSel?'#1D4ED8':'#CBD5E1'};background:${isSel?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:white;">${isSel?'✓':''}</div>`
         : '';
-      const cardBorder = isSel ? '#93C5FD' : needsAcheteur ? '#F59E0B' : '#E2E8F0';
-      const hoverBg    = needsAcheteur ? '#FFFBEB' : '#F0F7FF';
-      return `<div data-lot-key="${key}" onclick="${clickFn}" style="background:${bg};border:1px solid ${cardBorder};border-radius:8px;padding:7px 10px;cursor:pointer;display:flex;align-items:center;gap:8px;" onmouseenter="if(!App._bcbIsSelected('${key}'))this.style.background='${hoverBg}'" onmouseleave="if(!App._bcbIsSelected('${key}'))this.style.background='white'">
+      return `<div data-lot-key="${key}" onclick="${clickFn}" style="background:${bg};border:1px solid #E2E8F0;border-radius:8px;padding:7px 10px;cursor:pointer;display:flex;align-items:center;gap:8px;" onmouseenter="if(!App._bcbIsSelected('${key}'))this.style.background='#F0F7FF'" onmouseleave="if(!App._bcbIsSelected('${key}'))this.style.background='white'">
         ${cbHtml}
         <div style="flex:1;min-width:0;overflow:hidden;">
           <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;">
@@ -8296,7 +8294,7 @@ ${bodies}${sansAcheteurBody}
           </div>
           ${sub ? `<div style="font-size:10px;color:#94A3B8;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sub}</div>` : ''}
         </div>
-        <div style="display:flex;align-items:center;gap:3px;flex-shrink:0;">${dotA}${dotI}${dotV}${dotNA}${vente}</div>
+        <div style="display:flex;align-items:center;gap:3px;flex-shrink:0;flex-wrap:nowrap;">${acheteurChip}${dotA}${dotI}${dotV}${vente}</div>
       </div>`;
     };
 
