@@ -7942,7 +7942,6 @@ const App = {
 
   bcbPrintMenu() {
     if (!S.bcbLotsLoaded || !S.bcbLots.length) { this.toast('Lots non chargés'); return; }
-    if (!S.bcbLots.filter(l => l.vendu && l.acheteur).length) { this.toast('Aucun lot vendu avec acheteur renseigné'); return; }
     const bd = document.createElement('div');
     bd.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:999;';
     const menu = document.createElement('div');
@@ -7966,7 +7965,8 @@ const App = {
   },
 
   bcbPrintByBuyer(mode) {
-    const sold = S.bcbLots.filter(l => l.vendu && l.acheteur);
+    const sold       = S.bcbLots.filter(l => l.vendu && l.acheteur);
+    const noAcheteur = S.bcbLots.filter(l => !l.acheteur);
     const byBuyer = {};
     sold.forEach(l => {
       const b = l.acheteur.trim();
@@ -7983,22 +7983,29 @@ const App = {
       return isNaN(d) ? raw : d.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
     };
 
+    const makeRow = (l, i) => {
+      const cells = [
+        i + 1, l.idBcb||'', l.vendeur||l.inter||'', l.refVendeur||l.idSeller||'',
+        l.type||'', l.marque||'', l.modele||'', l.numSerie||'',
+        l.commentaire||'', fmtDate(l.dateVente), l.numVente||'',
+        `<input type="checkbox"${l.codeEnlevement?' checked':''} style="width:13px;height:13px;">`,
+      ];
+      return `<tr>${cells.map((c,ci)=>`<td${ci===4?' class="desc"':''}>${c}</td>`).join('')}</tr>`;
+    };
+
     // Une seule table — un <tbody> par acheteur → colonnes parfaitement alignées
     const bodies = Object.keys(byBuyer).sort().map(buyer => {
       const lots = byBuyer[buyer];
-      const rows = lots.map((l, i) => {
-        const cells = [
-          i + 1, l.idBcb||'', l.vendeur||l.inter||'', l.refVendeur||l.idSeller||'',
-          l.type||'', l.marque||'', l.modele||'', l.numSerie||'',
-          l.commentaire||'', fmtDate(l.dateVente), l.numVente||'',
-          `<input type="checkbox"${l.codeEnlevement?' checked':''} style="width:13px;height:13px;">`,
-        ];
-        return `<tr>${cells.map((c,ci)=>`<td${ci===4?' class="desc"':''}>${c}</td>`).join('')}</tr>`;
-      }).join('');
-      return `<tbody><tr class="bhr"><td colspan="12"><strong>${buyer}</strong><span class="bc"> — ${lots.length} lot${lots.length>1?'s':''}</span></td></tr>${rows}</tbody>`;
+      return `<tbody><tr class="bhr"><td colspan="12"><strong>${buyer}</strong><span class="bc"> — ${lots.length} lot${lots.length>1?'s':''}</span></td></tr>${lots.map(makeRow).join('')}</tbody>`;
     }).join('');
 
+    // Section lots sans acheteur
+    const sansAcheteurBody = noAcheteur.length
+      ? `<tbody><tr class="bhr-pending"><td colspan="12"><strong>Sans acheteur</strong><span class="bc"> — ${noAcheteur.length} lot${noAcheteur.length>1?'s':''} en attente</span></td></tr>${noAcheteur.map(makeRow).join('')}</tbody>`
+      : '';
+
     const pageBreak = mode === 'page' ? 'tbody+tbody{page-break-before:always}' : '';
+    const totalMeta = [venteLbl, sold.length ? sold.length+' lot'+(sold.length>1?'s':'')+' vendus' : '', noAcheteur.length ? noAcheteur.length+' sans acheteur' : '', 'Généré le '+dateGen].filter(Boolean).join(' · ');
 
     const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
 <title>BCB — Listes acheteurs</title>
@@ -8014,6 +8021,7 @@ const App = {
   td{padding:3px 3px;font-size:8.5px;border-bottom:1px solid #F1F5F9;vertical-align:top;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   td.desc{white-space:normal;word-break:break-word}
   .bhr td{background:#475569;color:white;padding:5px 6px;font-size:10px;white-space:normal}
+  .bhr-pending td{background:#92400E;color:#FEF3C7;padding:5px 6px;font-size:10px;white-space:normal}
   .bc{font-size:8px;font-weight:400;opacity:.8}
   colgroup col:nth-child(1){width:3%}
   colgroup col:nth-child(2){width:7%}
@@ -8031,14 +8039,14 @@ const App = {
   @media print{body{padding:5mm}}
 </style></head><body>
 <h1>BCB — Listes par acheteur</h1>
-<p class="meta">${[venteLbl,sold.length+' lots','Généré le '+dateGen].filter(Boolean).join(' · ')}</p>
+<p class="meta">${totalMeta}</p>
 <table>
 <colgroup><col><col><col><col><col><col><col><col><col><col><col><col></colgroup>
 <thead><tr>
   <th>#</th><th>ID BCB</th><th>Vendeur</th><th>Code</th><th>Description</th>
   <th>Marque</th><th>Modèle</th><th>N° Série</th><th>Commentaire</th><th>Date vente</th><th>N° vente</th><th>Chargé</th>
 </tr></thead>
-${bodies}
+${bodies}${sansAcheteurBody}
 </table>
 <script>window.addEventListener('load',function(){setTimeout(function(){window.print();},250)});<\/script>
 </body></html>`;
@@ -8265,16 +8273,20 @@ ${bodies}
       const clickFn = S.bcbSelectMode
         ? `App.bcbToggleLotSelect('${key.replace(/'/g,"\\'")}', this)`
         : `App.bcbLotDetail(${idx})`;
+      const needsAcheteur = lot.vendu && !lot.acheteur;
       const dotA = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.arrive?'#D1FAE5':'#F1F5F9'};color:${lot.arrive?'#065F46':'#94A3B8'};">A</span>`;
       const dotI = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.inspecte?'#DBEAFE':'#F1F5F9'};color:${lot.inspecte?'#1D4ED8':'#94A3B8'};">I</span>`;
       const dotV = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.vendu?'#FEF3C7':'#F1F5F9'};color:${lot.vendu?'#92400E':'#94A3B8'};">V</span>`;
+      const dotNA = needsAcheteur ? `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:#FEF3C7;color:#D97706;" title="Vendu — acheteur non renseigné">!</span>` : '';
       const vente = lot.numVente ? `<span style="font-size:10px;color:#64748B;font-weight:600;margin-left:2px;">n°${lot.numVente}</span>` : '';
       const desc  = [lot.vendeur, [lot.marque,lot.modele].filter(Boolean).join(' '), lot.type].filter(Boolean).join(' — ');
       const sub   = [lot.refVendeur?`réf ${lot.refVendeur}`:'', lot.numSerie?`n° ${lot.numSerie}`:'', lot.poids?`${lot.poids}t`:'', lot.commentaire].filter(Boolean).join(' · ');
       const cbHtml = S.bcbSelectMode
         ? `<div data-lot-cb style="width:18px;height:18px;border-radius:5px;border:2px solid ${isSel?'#1D4ED8':'#CBD5E1'};background:${isSel?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:white;">${isSel?'✓':''}</div>`
         : '';
-      return `<div data-lot-key="${key}" onclick="${clickFn}" style="background:${bg};border:1px solid #E2E8F0;border-radius:8px;padding:7px 10px;cursor:pointer;display:flex;align-items:center;gap:8px;" onmouseenter="if(!App._bcbIsSelected('${key}'))this.style.background='#F0F7FF'" onmouseleave="if(!App._bcbIsSelected('${key}'))this.style.background='white'">
+      const cardBorder = isSel ? '#93C5FD' : needsAcheteur ? '#F59E0B' : '#E2E8F0';
+      const hoverBg    = needsAcheteur ? '#FFFBEB' : '#F0F7FF';
+      return `<div data-lot-key="${key}" onclick="${clickFn}" style="background:${bg};border:1px solid ${cardBorder};border-radius:8px;padding:7px 10px;cursor:pointer;display:flex;align-items:center;gap:8px;" onmouseenter="if(!App._bcbIsSelected('${key}'))this.style.background='${hoverBg}'" onmouseleave="if(!App._bcbIsSelected('${key}'))this.style.background='white'">
         ${cbHtml}
         <div style="flex:1;min-width:0;overflow:hidden;">
           <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;">
@@ -8284,7 +8296,7 @@ ${bodies}
           </div>
           ${sub ? `<div style="font-size:10px;color:#94A3B8;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sub}</div>` : ''}
         </div>
-        <div style="display:flex;align-items:center;gap:3px;flex-shrink:0;">${dotA}${dotI}${dotV}${vente}</div>
+        <div style="display:flex;align-items:center;gap:3px;flex-shrink:0;">${dotA}${dotI}${dotV}${dotNA}${vente}</div>
       </div>`;
     };
 
