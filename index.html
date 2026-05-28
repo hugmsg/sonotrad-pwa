@@ -3021,9 +3021,13 @@ const App = {
       S.historyOps    = this._groupMovements(S.historyData);
       S.historyLoaded = true;
       this._buildPoseHistory();
-      if (S.view === 'stock-history')                              this._renderHistoryList();
-      else if (S.view === 'departures' && S.depsLoaded)           this._renderDepList();
-      else if (S.view === 'stock-dashboard')                       this._renderDashboard();
+      if (S.view === 'stock-history')   this._renderHistoryList();
+      if (S.view === 'stock-dashboard') this._renderDashboard();
+      if (S.view === 'departures' && S.depsLoaded) this._renderDepList();
+      // Si la modale de pose est ouverte (ouverte pendant le prefetch), l'alimenter maintenant
+      if (S.poseModuleCode && document.getElementById('pose-modal')?.style.display !== 'none') {
+        this._renderPoseExisting(S.poseModuleCode);
+      }
     } catch(e) { /* échec silencieux */ }
     finally { S.historyLoading = false; this._updateHomeCards(); }
   },
@@ -4255,6 +4259,7 @@ const App = {
       if (S.poseModuleCode === code && document.getElementById('pose-modal')?.style.display !== 'none') {
         this._renderPoseExisting(code);
       }
+      if (S.depsLoaded) this._renderDepList();
     } catch(e) {
       const sec = document.getElementById('pose-existing-section');
       if (sec) sec.innerHTML = `<div style="padding:8px 0;color:#DC2626;font-size:12px;text-align:center;">Erreur de chargement</div>`;
@@ -6297,6 +6302,7 @@ const App = {
       if (loaderEl) loaderEl.style.display = 'none';
       if (gridEl)   gridEl.style.display = 'block';
       if (statusEl) { const n = new Date(); statusEl.textContent = 'MAJ ' + n.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}); }
+      if (!S.historyLoaded && !S.historyLoading) this._prefetchHistory();
       return;
     }
     if (loaderEl) loaderEl.style.display = 'flex';
@@ -6313,6 +6319,8 @@ const App = {
     ]);
     // LV links non-bloquants (utiles dans la liste production)
     if (!S.lvLinks || !Object.keys(S.lvLinks).length) this._prefetchLvLinks();
+    // Historique non-bloquant — alimente les pastilles de pose dans les départs
+    if (!S.historyLoaded && !S.historyLoading) this._prefetchHistory();
     this._loxamMenuRefreshCounts();
     if (loaderEl) loaderEl.style.display = 'none';
     if (gridEl)   gridEl.style.display = 'block';
