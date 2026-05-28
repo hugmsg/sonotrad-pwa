@@ -3803,6 +3803,33 @@ const App = {
     return (note.match(/\[Pose\s+(\S+)\]/) || [])[1] || '';
   },
 
+  _consolidatePoseOps(ops) {
+    const nonPose = [];
+    const poseMap = {};
+    ops.forEach(op => {
+      if (this._opDisplayType(op.type, op.note) !== 'pose') { nonPose.push(op); return; }
+      const code = this._poseCode(op.note);
+      if (!code) { nonPose.push(op); return; }
+      if (!poseMap[code]) {
+        poseMap[code] = { type: op.type, note: op.note, key: op.key, date: op.date,
+                          items: op.items.map(i => Object.assign({}, i)), _consolidated: true };
+      } else {
+        op.items.forEach(item => {
+          const ex = poseMap[code].items.find(i => i.ref === item.ref);
+          if (ex) ex.qty = (Number(ex.qty) || 0) + (Number(item.qty) || 0);
+          else poseMap[code].items.push(Object.assign({}, item));
+        });
+        if (new Date(op.date) > new Date(poseMap[code].date)) {
+          poseMap[code].date = op.date;
+          poseMap[code].key  = op.key;
+          poseMap[code].note = op.note;
+        }
+      }
+    });
+    return nonPose.concat(Object.values(poseMap))
+                  .sort((a, b) => new Date(b.date) - new Date(a.date));
+  },
+
   _buildPoseHistory() {
     S.poseHistory = new Set();
     S.historyData.forEach(m => {
@@ -3849,6 +3876,9 @@ const App = {
         );
       });
     }
+
+    // Consolider les poses : une seule ligne par module (toutes sessions fusionnées)
+    ops = this._consolidatePoseOps(ops);
 
     // KPIs
     const totalOps   = ops.length;
@@ -5380,7 +5410,7 @@ const App = {
     // ── Mouvements récents (groupés par opération) ──
     // Priorité : historyData (complet) si déjà chargé, sinon stockRecentMvs
     const srcMvs = S.historyLoaded ? S.historyData : S.stockRecentMvs;
-    const allOps     = this._groupMovements(srcMvs);
+    const allOps     = this._consolidatePoseOps(this._groupMovements(srcMvs));
     const visibleOps = allOps.slice(0, S.dashMvtLimit);
     const moreEl     = document.getElementById('dash-mvt-more');
     if (!visibleOps.length) {
