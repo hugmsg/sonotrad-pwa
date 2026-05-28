@@ -1871,7 +1871,92 @@
             <div class="activity-desc">Consignes · Chargement · Enlèvements</div>
             <span id="bcb-menu-badge-depart" class="activity-badge badge-soon">—</span>
           </div>
+          <!-- Import acheteurs (pleine largeur) -->
+          <div class="activity-card" data-ready="true" onclick="App.go('bcb-import')" style="grid-column:1/-1;">
+            <div class="activity-icon">📋</div>
+            <div class="activity-name">Import acheteurs</div>
+            <div class="activity-desc">Importer une liste depuis un fichier XLS / CSV</div>
+            <span class="activity-badge badge-soon">—</span>
+          </div>
         </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW : BCB IMPORT ACHETEURS ──────────────────────────────────── -->
+    <div class="view" id="view-bcb-import">
+      <!-- Sticky header -->
+      <div style="background:#1D4ED8;color:white;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;">
+        <div>
+          <div style="font-size:15px;font-weight:700;">Import acheteurs</div>
+          <div style="font-size:11px;opacity:.75;" id="bcb-imp-step-label">Étape 1 — Chargement du fichier</div>
+        </div>
+        <button onclick="App.go('bcb-menu')" style="background:rgba(255,255,255,.15);border:none;color:white;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;">✕ Fermer</button>
+      </div>
+
+      <!-- Étape 1 : drop zone -->
+      <div id="bcb-imp-step1" style="padding:24px 16px;">
+        <div id="bcb-imp-drop"
+          onclick="document.getElementById('bcb-imp-file').click()"
+          ondragover="event.preventDefault();this.style.borderColor='#1D4ED8';this.style.background='#EFF6FF'"
+          ondragleave="this.style.borderColor='#CBD5E1';this.style.background='#F8FAFC'"
+          ondrop="event.preventDefault();this.style.borderColor='#CBD5E1';this.style.background='#F8FAFC';App.bcbImportHandleFile(event.dataTransfer.files[0])"
+          style="border:2px dashed #CBD5E1;border-radius:14px;padding:48px 20px;text-align:center;cursor:pointer;background:#F8FAFC;transition:all .2s;">
+          <div style="font-size:44px;margin-bottom:12px;">📂</div>
+          <div style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:6px;">Déposer un fichier ici</div>
+          <div style="font-size:12px;color:#64748B;margin-bottom:16px;">ou cliquer pour parcourir</div>
+          <div style="font-size:11px;color:#94A3B8;background:#E2E8F0;border-radius:6px;padding:4px 12px;display:inline-block;">CSV · XLS · XLSX</div>
+        </div>
+        <input type="file" id="bcb-imp-file" accept=".csv,.xls,.xlsx,.ods" style="display:none" onchange="App.bcbImportHandleFile(this.files[0])">
+        <div id="bcb-imp-s1-loading" style="display:none;text-align:center;padding:20px;color:#64748B;font-size:13px;margin-top:14px;">⏳ Lecture du fichier…</div>
+        <div id="bcb-imp-s1-error" style="display:none;margin-top:14px;background:#FEF2F2;border:1px solid #FCA5A5;border-radius:10px;padding:12px 14px;font-size:12px;color:#DC2626;"></div>
+      </div>
+
+      <!-- Étape 2 : mapping colonnes -->
+      <div id="bcb-imp-step2" style="display:none;padding:16px;">
+        <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:8px;">Aperçu du fichier</div>
+        <div id="bcb-imp-preview" style="overflow-x:auto;border:1px solid #E2E8F0;border-radius:10px;margin-bottom:14px;max-height:160px;overflow-y:auto;"></div>
+        <div style="display:grid;gap:11px;margin-bottom:14px;">
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#475569;cursor:pointer;">
+            <input type="checkbox" id="bcb-imp-has-header" checked onchange="App.bcbImportUpdateSelects()" style="accent-color:#1D4ED8;width:15px;height:15px;">
+            La première ligne est un en-tête
+          </label>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:#1E293B;display:block;margin-bottom:4px;">Colonne N° BCB <span style="color:#EF4444;">*</span></label>
+            <select id="bcb-imp-sel-bcb" style="width:100%;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;background:white;"></select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:#1E293B;display:block;margin-bottom:4px;">Colonne Acheteur <span style="color:#EF4444;">*</span></label>
+            <select id="bcb-imp-sel-acheteur" style="width:100%;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;background:white;"></select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:#1E293B;display:block;margin-bottom:4px;">Colonne N° vente <span style="color:#94A3B8;font-weight:400;">(optionnel)</span></label>
+            <select id="bcb-imp-sel-vente" style="width:100%;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;background:white;"></select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:#1E293B;display:block;margin-bottom:4px;">Date de vente <span style="color:#EF4444;">*</span></label>
+            <input type="date" id="bcb-imp-date" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+          </div>
+        </div>
+        <button onclick="App.bcbImportAnalyze()" style="width:100%;background:#1D4ED8;color:white;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px;">Analyser →</button>
+        <button onclick="App.bcbImportReset()" style="width:100%;background:white;border:1.5px solid #E2E8F0;color:#64748B;border-radius:10px;padding:10px;font-size:12px;font-weight:600;cursor:pointer;">← Changer de fichier</button>
+      </div>
+
+      <!-- Étape 3 : prévisualisation et confirmation -->
+      <div id="bcb-imp-step3" style="display:none;padding:16px;">
+        <div id="bcb-imp-stats" style="margin-bottom:12px;"></div>
+        <div id="bcb-imp-match-table" style="margin-bottom:12px;"></div>
+        <div id="bcb-imp-unsold" style="margin-bottom:14px;"></div>
+        <div style="display:flex;gap:8px;">
+          <button id="bcb-imp-confirm-btn" onclick="App.bcbImportConfirm()" style="flex:1;background:#059669;color:white;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;"></button>
+          <button onclick="App.bcbImportBack2()" style="background:white;border:1.5px solid #E2E8F0;color:#64748B;border-radius:10px;padding:13px 14px;font-size:12px;font-weight:600;cursor:pointer;">← Retour</button>
+        </div>
+      </div>
+
+      <!-- Étape 4 : résultat -->
+      <div id="bcb-imp-step4" style="display:none;padding:32px 16px;text-align:center;">
+        <div id="bcb-imp-result" style="margin-bottom:24px;"></div>
+        <button onclick="App.go('bcb-lots')" style="width:100%;background:#1D4ED8;color:white;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:10px;">📦 Voir les lots</button>
+        <button onclick="App.bcbImportReset()" style="width:100%;background:white;border:1.5px solid #E2E8F0;color:#64748B;border-radius:10px;padding:10px;font-size:12px;font-weight:600;cursor:pointer;">↩ Nouvel import</button>
       </div>
     </div>
 
@@ -2624,6 +2709,7 @@ const S = {
   bcbSelected:     new Set(),
   bcbLotsFilters:  { acheteur: null, vendeur: null, vente: null },
   bcbActiveFilter: null,
+  bcbImp:          { step:1, rows:[], matched:[], notInFile:[] },
   bcbSelLot:         null,
   bcbDepartConsigne:     null,
   bcbDepartSelected:     new Set(),
@@ -2681,6 +2767,7 @@ const App = {
     if (view === 'stock-sync')   this.loadStockSync();
     if (view === 'bcb-menu')      this.bcbMenuInit();
     if (view === 'bcb-lots')      this.bcbLotsLoad();
+    if (view === 'bcb-import')    this.bcbImportInit();
     if (view === 'bcb-consignes') this.bcbInitLangGrid();
     if (view === 'bcb-depart')      this.bcbDepartInit();
     if (view === 'bcb-enlevements') this.bcbEnlevementsLoad();
@@ -8085,6 +8172,254 @@ const App = {
       this._bcbFltHandler = null;
     }
     this.bcbUpdateFilterUI();
+  },
+
+  /* ─ BCB Import acheteurs ─ */
+  bcbImportInit() {
+    S.bcbImp = { step:1, rows:[], matched:[], notInFile:[] };
+    this._bcbImpShowStep(1);
+    const dateEl = document.getElementById('bcb-imp-date');
+    if (dateEl) dateEl.value = new Date().toISOString().slice(0,10);
+    if (!S.bcbLotsLoaded && !S.bcbLotsLoading) this.bcbLotsLoad();
+  },
+
+  _bcbImpShowStep(n) {
+    S.bcbImp.step = n;
+    [1,2,3,4].forEach(i => {
+      const el = document.getElementById('bcb-imp-step' + i);
+      if (el) el.style.display = (i === n) ? '' : 'none';
+    });
+    const labels = { 1:'Étape 1 — Chargement du fichier', 2:'Étape 2 — Sélection des colonnes', 3:'Étape 3 — Vérification et confirmation', 4:'Import terminé' };
+    const lbl = document.getElementById('bcb-imp-step-label');
+    if (lbl) lbl.textContent = labels[n] || '';
+  },
+
+  _loadSheetJs(cb) {
+    if (window.XLSX) { cb(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = cb;
+    s.onerror = () => this.toast('Impossible de charger le lecteur Excel');
+    document.head.appendChild(s);
+  },
+
+  _parseCsv(text) {
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (!lines.length) return [];
+    const delim = lines[0].split(';').length > lines[0].split(',').length ? ';' : ',';
+    return lines.map(line => {
+      const res = []; let inQ = false, cur = '';
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') { inQ = !inQ; }
+        else if (c === delim && !inQ) { res.push(cur.trim()); cur = ''; }
+        else cur += c;
+      }
+      res.push(cur.trim());
+      return res;
+    });
+  },
+
+  bcbImportHandleFile(file) {
+    if (!file) return;
+    const errEl  = document.getElementById('bcb-imp-s1-error');
+    const loadEl = document.getElementById('bcb-imp-s1-loading');
+    if (errEl)  errEl.style.display = 'none';
+    if (loadEl) loadEl.style.display = '';
+    const ext = file.name.split('.').pop().toLowerCase();
+    const done = (rows) => {
+      if (loadEl) loadEl.style.display = 'none';
+      if (!rows || rows.length < 2) {
+        if (errEl) { errEl.style.display = ''; errEl.textContent = 'Fichier vide ou illisible.'; } return;
+      }
+      S.bcbImp.rows = rows;
+      this._bcbImpShowStep(2);
+      this.bcbImportUpdateSelects();
+    };
+    if (ext === 'csv') {
+      const reader = new FileReader();
+      reader.onload = e => done(this._parseCsv(e.target.result));
+      reader.readAsText(file, 'UTF-8');
+    } else {
+      this._loadSheetJs(() => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          try {
+            const wb   = XLSX.read(new Uint8Array(e.target.result), { type:'array' });
+            const ws   = wb.Sheets[wb.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+            done(rows.map(r => r.map(c => String(c == null ? '' : c).trim())));
+          } catch(err) {
+            if (loadEl) loadEl.style.display = 'none';
+            if (errEl)  { errEl.style.display = ''; errEl.textContent = 'Erreur lecture : ' + err.message; }
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      });
+    }
+  },
+
+  bcbImportUpdateSelects() {
+    const rows = S.bcbImp.rows;
+    if (!rows.length) return;
+    const hasHeader = document.getElementById('bcb-imp-has-header')?.checked;
+    const headerRow = hasHeader ? rows[0] : null;
+    const ncols = Math.max(...rows.slice(0, 6).map(r => r.length));
+    const opts = Array.from({ length: ncols }, (_, i) => {
+      const lbl = headerRow && headerRow[i] ? `Col ${i+1} — ${headerRow[i]}` : `Colonne ${i+1}`;
+      return `<option value="${i}">${lbl}</option>`;
+    }).join('');
+    document.getElementById('bcb-imp-sel-bcb').innerHTML = opts;
+    document.getElementById('bcb-imp-sel-acheteur').innerHTML = opts;
+    document.getElementById('bcb-imp-sel-vente').innerHTML = `<option value="-1">(aucune)</option>` + opts;
+    if (hasHeader && headerRow) {
+      const try_ = (...kws) => { const i = headerRow.findIndex(h => kws.some(k => String(h).toLowerCase().includes(k))); return i >= 0 ? i : null; };
+      const bi = try_('bcb','id bcb','n° bcb','lot','code','ref bcb');
+      const ai = try_('achet','buyer','client','acquéreur');
+      const vi = try_('vente','sale','n° vente','num vente');
+      if (bi != null) document.getElementById('bcb-imp-sel-bcb').value = bi;
+      if (ai != null) document.getElementById('bcb-imp-sel-acheteur').value = ai;
+      if (vi != null) document.getElementById('bcb-imp-sel-vente').value = vi;
+    }
+    const previewRows = rows.slice(0, 8);
+    const maxC = Math.max(...previewRows.map(r => r.length));
+    const preview = document.getElementById('bcb-imp-preview');
+    if (preview) preview.innerHTML = `<table style="border-collapse:collapse;font-size:11px;min-width:${maxC*72}px;">` +
+      previewRows.map((row, ri) => {
+        const isH = ri === 0 && hasHeader;
+        return `<tr style="background:${isH?'#F1F5F9':'white'};border-bottom:1px solid #F1F5F9;">` +
+          Array.from({length:maxC}, (_,ci) =>
+            `<td style="padding:4px 8px;white-space:nowrap;${isH?'font-weight:700;color:#475569;':''}">${row[ci]||''}</td>`
+          ).join('') + '</tr>';
+      }).join('') + '</table>';
+  },
+
+  bcbImportAnalyze() {
+    const selBcb   = parseInt(document.getElementById('bcb-imp-sel-bcb')?.value);
+    const selAcht  = parseInt(document.getElementById('bcb-imp-sel-acheteur')?.value);
+    const selVente = parseInt(document.getElementById('bcb-imp-sel-vente')?.value ?? '-1');
+    const date     = document.getElementById('bcb-imp-date')?.value;
+    if (isNaN(selBcb) || isNaN(selAcht)) { this.toast('Sélectionnez les colonnes requises'); return; }
+    if (!date) { this.toast('Entrez une date de vente'); return; }
+    const hasHeader = document.getElementById('bcb-imp-has-header')?.checked;
+    const dataRows  = hasHeader ? S.bcbImp.rows.slice(1) : S.bcbImp.rows;
+    const lotsMap   = {};
+    S.bcbLots.forEach(l => { lotsMap[l.idBcb.trim().toUpperCase()] = l; });
+    const seen = {}, matched = [];
+    dataRows.forEach(row => {
+      const idBcb    = String(row[selBcb]  || '').trim();
+      const acheteur = String(row[selAcht] || '').trim();
+      const numVente = selVente >= 0 ? String(row[selVente] || '').trim() : '';
+      if (!idBcb) return;
+      const key  = idBcb.toUpperCase();
+      const isDup = !!seen[key]; seen[key] = true;
+      const lot  = lotsMap[key] || null;
+      matched.push({ idBcb, acheteur, numVente, dateVente: date, lot, isDup, alreadyVendu: lot?.vendu||false });
+    });
+    S.bcbImp.matched   = matched;
+    S.bcbImp.notInFile = S.bcbLots.filter(l => !seen[l.idBcb.toUpperCase()]);
+    this._bcbImpShowStep(3);
+    this._bcbImpRenderPreview();
+  },
+
+  _bcbImpRenderPreview() {
+    const { matched, notInFile } = S.bcbImp;
+    const found    = matched.filter(m => m.lot && !m.isDup);
+    const dups     = matched.filter(m => m.isDup);
+    const notFound = matched.filter(m => !m.lot && !m.isDup);
+    const alreadyV = matched.filter(m => m.lot && m.alreadyVendu && !m.isDup);
+    const statsEl  = document.getElementById('bcb-imp-stats');
+    if (statsEl) statsEl.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px;">
+      <div style="background:#D1FAE5;border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:22px;font-weight:800;color:#065F46;">${found.length}</div>
+        <div style="font-size:10px;color:#065F46;font-weight:600;">Lots trouvés</div>
+      </div>
+      <div style="background:${notFound.length?'#FEF3C7':'#F1F5F9'};border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:22px;font-weight:800;color:${notFound.length?'#92400E':'#94A3B8'};">${notFound.length}</div>
+        <div style="font-size:10px;color:${notFound.length?'#92400E':'#94A3B8'};font-weight:600;">Non trouvés</div>
+      </div>
+      ${dups.length?`<div style="background:#FEE2E2;border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:22px;font-weight:800;color:#DC2626;">${dups.length}</div>
+        <div style="font-size:10px;color:#DC2626;font-weight:600;">Doublons fichier</div></div>`:''}
+      ${alreadyV.length?`<div style="background:#EDE9FE;border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:22px;font-weight:800;color:#7C3AED;">${alreadyV.length}</div>
+        <div style="font-size:10px;color:#7C3AED;font-weight:600;">Déjà vendus</div></div>`:''}
+    </div>`;
+    const hasVente = matched.some(m => m.numVente);
+    const tableEl  = document.getElementById('bcb-imp-match-table');
+    if (tableEl) tableEl.innerHTML = `<div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;">Détail — ${matched.length} ligne${matched.length>1?'s':''} fichier</div>
+      <div style="overflow:auto;border:1px solid #E2E8F0;border-radius:10px;max-height:200px;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr style="background:#F8FAFC;border-bottom:1px solid #E2E8F0;">
+            <th style="padding:5px 8px;font-size:10px;text-align:left;color:#64748B;">N° BCB</th>
+            <th style="padding:5px 8px;font-size:10px;text-align:left;color:#64748B;">Acheteur</th>
+            ${hasVente?'<th style="padding:5px 8px;font-size:10px;text-align:left;color:#64748B;">N° vente</th>':''}
+            <th style="padding:5px 8px;font-size:10px;text-align:left;color:#64748B;">Statut</th>
+          </tr></thead><tbody>
+          ${matched.slice(0,60).map(m => {
+            const color = m.isDup?'#DC2626':!m.lot?'#D97706':m.alreadyVendu?'#7C3AED':'#065F46';
+            const icon  = m.isDup?'⚠️ doublon':!m.lot?'❌ inconnu':m.alreadyVendu?'🔄 déjà vendu':'✅';
+            return `<tr style="border-bottom:1px solid #F8FAFC;">
+              <td style="padding:4px 8px;font-size:11px;font-family:monospace;font-weight:600;">${m.idBcb}</td>
+              <td style="padding:4px 8px;font-size:11px;color:#475569;">${m.acheteur}</td>
+              ${hasVente?`<td style="padding:4px 8px;font-size:10px;color:#94A3B8;">${m.numVente}</td>`:''}
+              <td style="padding:4px 8px;font-size:11px;font-weight:600;color:${color};">${icon}</td>
+            </tr>`;
+          }).join('')}
+          ${matched.length>60?`<tr><td colspan="4" style="padding:5px 8px;font-size:10px;color:#94A3B8;text-align:center;">… et ${matched.length-60} autres</td></tr>`:''}
+          </tbody></table></div>`;
+    const unsoldEl = document.getElementById('bcb-imp-unsold');
+    if (unsoldEl) unsoldEl.innerHTML = notInFile.length ? `<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;padding:12px 14px;">
+      <div style="font-size:11px;font-weight:700;color:#92400E;margin-bottom:8px;">⚠️ ${notInFile.length} lot${notInFile.length>1?'s':''} absent${notInFile.length>1?'s':''} du fichier (non vendus)</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;">${notInFile.map(l=>`<span style="background:white;border:1px solid #FED7AA;border-radius:5px;padding:1px 7px;font-size:10px;font-family:monospace;color:#92400E;">${l.idBcb}</span>`).join('')}</div>
+    </div>` : '';
+    const toImport = found.concat(alreadyV);
+    const btn = document.getElementById('bcb-imp-confirm-btn');
+    if (btn) {
+      btn.disabled     = !toImport.length;
+      btn.style.opacity = toImport.length ? '1' : '.4';
+      btn.textContent  = toImport.length ? `✅ Importer ${toImport.length} lot${toImport.length>1?'s':''}` : 'Aucun lot à importer';
+    }
+  },
+
+  async bcbImportConfirm() {
+    const toImport = S.bcbImp.matched.filter(m => m.lot && !m.isDup);
+    if (!toImport.length) return;
+    const btn = document.getElementById('bcb-imp-confirm-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Import en cours…'; }
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ action:'bcb_import_acheteurs', lots: toImport.map(m=>({ idBcb:m.idBcb, acheteur:m.acheteur, numVente:m.numVente, dateVente:m.dateVente })) })
+      }, 30000);
+      const d = await r.json();
+      if (d.status !== 'ok') throw new Error(d.error || 'Erreur serveur');
+      toImport.forEach(m => {
+        const lot = S.bcbLots.find(l => l.idBcb === m.idBcb);
+        if (lot) { lot.acheteur = m.acheteur; lot.vendu = true; lot.dateVente = m.dateVente; lot.numVente = m.numVente; }
+      });
+      this._bcbImpShowStep(4);
+      const resultEl = document.getElementById('bcb-imp-result');
+      if (resultEl) resultEl.innerHTML = `
+        <div style="font-size:48px;margin-bottom:12px;">✅</div>
+        <div style="font-size:20px;font-weight:800;color:#1E293B;margin-bottom:6px;">${d.updated||toImport.length} lot${(d.updated||toImport.length)>1?'s':''} importé${(d.updated||toImport.length)>1?'s':''}</div>
+        ${d.notFound?.length?`<div style="font-size:12px;color:#D97706;margin-top:8px;">⚠️ ${d.notFound.length} N° BCB introuvable${d.notFound.length>1?'s':''} dans le sheet</div>`:''}
+        <div style="font-size:12px;color:#64748B;margin-top:8px;">Statut "vendu", acheteur et date de vente mis à jour dans Google Sheets.</div>`;
+    } catch(e) {
+      if (btn) { btn.disabled = false; btn.textContent = '↩ Réessayer'; }
+      this.toast('Erreur import : ' + e.message);
+    }
+  },
+
+  bcbImportBack2() { this._bcbImpShowStep(2); },
+
+  bcbImportReset() {
+    S.bcbImp = { step:1, rows:[], matched:[], notInFile:[] };
+    const fi = document.getElementById('bcb-imp-file');
+    if (fi) fi.value = '';
+    const errEl = document.getElementById('bcb-imp-s1-error');
+    if (errEl) errEl.style.display = 'none';
+    this._bcbImpShowStep(1);
   },
 
   bcbLotDetail(idx) {
