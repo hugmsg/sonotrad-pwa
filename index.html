@@ -464,8 +464,8 @@
     .pose-item-desc { font-size:10px; color:#64748B; display:block; }
     .pose-item-del  { background:none; border:none; color:#DC2626; font-size:18px; cursor:pointer; padding:2px 4px; flex-shrink:0; line-height:1; }
     .dep-pose-dot { width:7px; height:7px; border-radius:50%; background:#15803D; display:inline-block; margin-left:1px; vertical-align:middle; }
-    .pose-existing-section { margin-bottom:8px; flex-shrink:0; }
-    .pose-existing-list { border:1px solid #E2E8F0; border-radius:8px; overflow:hidden; }
+    .pose-existing-section { margin-bottom:8px; flex:0 1 auto; overflow:hidden; min-height:0; }
+    .pose-existing-list { border:1px solid #E2E8F0; border-radius:8px; overflow-y:auto; max-height:35vh; }
     .pose-existing-row { display:flex; align-items:center; gap:8px; padding:7px 10px; border-bottom:1px solid #F1F5F9; background:#FAFBFC; }
     .pose-existing-row:last-child { border-bottom:none; }
     .pose-existing-label { font-size:11px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:.4px; margin-bottom:5px; }
@@ -3887,6 +3887,18 @@ const App = {
             style="margin-top:8px;padding:6px 12px;background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;width:100%;">
             📄 Créer LV / CMR</button>`
         : '';
+      const poseBtn  = (() => {
+        if (dt !== 'pose') return '';
+        const pc = this._poseCode(op.note);
+        if (!pc) return '';
+        const dep  = S.depsLoaded ? S.deps.find(d => (d.code||'').toUpperCase() === pc.toUpperCase()) : null;
+        const pcs  = pc.replace(/'/g,"&#39;");
+        const mods = (dep?.codeModule||'').replace(/'/g,"&#39;");
+        const chs  = (dep?.chantier||'').replace(/'/g,"&#39;");
+        return `<button onclick="App.openPoseModal('${pcs}','${mods}','${chs}')"
+          style="margin-top:8px;padding:6px 12px;background:#FFF7ED;color:#C2410C;border:1.5px solid #FED7AA;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;width:100%;">
+          🔧 Gérer les pièces posées</button>`;
+      })();
       return `<div class="hist-op-card t-${dt}">
         <div class="hist-op-header" onclick="App.toggleHistOp(${idx})">
           <span class="hist-badge ${dt}">${typeLabels[dt] || dt}</span>
@@ -3897,7 +3909,7 @@ const App = {
           <span class="hist-op-chevron" id="hist-chev-${idx}">›</span>
         </div>
         <div class="hist-op-body" id="hist-body-${idx}">
-          ${lvBtn}
+          ${lvBtn}${poseBtn}
           <table class="hist-detail-table">
             <thead><tr><th>Réf.</th><th>Désignation</th><th style="text-align:right;">Qté</th></tr></thead>
             <tbody>${op.items.map(m => {
@@ -3906,7 +3918,6 @@ const App = {
             }).join('')}</tbody>
           </table>
           ${op.note && dt !== 'pose' ? `<div style="margin-top:6px;font-size:10px;color:#94A3B8;">Note : ${op.note}</div>` : ''}
-          ${dt === 'pose' ? (() => { const pc = this._poseCode(op.note); return pc ? `<div style="margin-top:6px;font-size:10px;color:#94A3B8;">Code module : ${pc}</div>` : ''; })() : ''}
           ${op.items[0]?.user ? `<div style="margin-top:2px;font-size:10px;color:#94A3B8;">Par : ${op.items[0].user}</div>` : ''}
         </div>
       </div>`;
@@ -4179,8 +4190,19 @@ const App = {
               ${desc ? `<span class="pose-item-desc">${desc.length>42?desc.substring(0,40)+'…':desc}</span>` : ''}
             </div>
             <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
-              <span style="font-size:13px;font-weight:700;color:#1E293B;min-width:28px;text-align:right;">×${m.qty}</span>
+              <span id="pose-qty-${i}" style="font-size:13px;font-weight:700;color:#1E293B;min-width:28px;text-align:right;">×${m.qty}</span>
+              <span id="pose-edit-${i}" style="display:none;align-items:center;gap:3px;">
+                <input id="pose-edit-inp-${i}" type="number" min="1" value="${m.qty}"
+                  style="width:52px;padding:3px 5px;border:1.5px solid #CBD5E1;border-radius:6px;font-size:13px;text-align:center;"
+                  onkeydown="if(event.key==='Enter')App.confirmEditPoseQty(${i});else if(event.key==='Escape')App._cancelEditPoseQty(${i})">
+                <button onclick="App.confirmEditPoseQty(${i})" id="pose-edit-confirm-${i}"
+                  style="background:var(--brand);color:white;border:none;padding:4px 7px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;line-height:1;">✓</button>
+                <button onclick="App._cancelEditPoseQty(${i})"
+                  style="background:none;border:none;color:#94A3B8;font-size:14px;cursor:pointer;padding:2px;line-height:1;">✕</button>
+              </span>
               <span style="font-size:10px;color:#94A3B8;white-space:nowrap;">${dStr}</span>
+              <button onclick="App.editPoseQty(${i})" title="Modifier la quantité"
+                style="background:none;border:none;color:#64748B;font-size:14px;cursor:pointer;padding:2px 4px;line-height:1;flex-shrink:0;">✏</button>
               <button onclick="App.deletePoseEntry(${i})" title="Supprimer ce mouvement"
                 style="background:none;border:none;color:#DC2626;font-size:16px;cursor:pointer;padding:2px 6px;line-height:1;flex-shrink:0;">🗑</button>
             </div>
@@ -4235,6 +4257,62 @@ const App = {
       }
     } catch(e) {
       this.toast('Erreur réseau : ' + e.message);
+    }
+  },
+
+  editPoseQty(idx) {
+    const qtyEl  = document.getElementById('pose-qty-' + idx);
+    const editEl = document.getElementById('pose-edit-' + idx);
+    if (!qtyEl || !editEl) return;
+    qtyEl.style.display  = 'none';
+    editEl.style.display = 'flex';
+    document.getElementById('pose-edit-inp-' + idx)?.focus();
+  },
+
+  _cancelEditPoseQty(idx) {
+    const qtyEl  = document.getElementById('pose-qty-' + idx);
+    const editEl = document.getElementById('pose-edit-' + idx);
+    if (qtyEl)  qtyEl.style.display  = '';
+    if (editEl) editEl.style.display = 'none';
+  },
+
+  async confirmEditPoseQty(idx) {
+    const m = S.poseViewItems[idx];
+    if (!m) return;
+    const inp = document.getElementById('pose-edit-inp-' + idx);
+    if (!inp) return;
+    const newQty = parseInt(inp.value, 10);
+    if (isNaN(newQty) || newQty <= 0) { this.toast('Quantité invalide'); return; }
+    if (newQty === m.qty) { this._cancelEditPoseQty(idx); return; }
+    const confirmBtn = document.getElementById('pose-edit-confirm-' + idx);
+    if (confirmBtn) confirmBtn.disabled = true;
+    try {
+      const fd1 = new FormData();
+      fd1.append('payload', JSON.stringify({ action:'delete_mouvement', ref:m.ref, type:m.type, qty:m.qty, note:m.note, date:m.date }));
+      const r1 = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd1 }, 15000);
+      const d1 = await r1.json();
+      if (d1.status !== 'ok') { this.toast('Erreur suppression : ' + (d1.error || 'inconnue')); return; }
+      const u    = S.currentUser;
+      const user = u ? `${u.prenom} ${u.nom}` : (m.user || 'inconnu');
+      const fd2  = new FormData();
+      fd2.append('payload', JSON.stringify({ action:'add_mouvement', ref:m.ref, type:'sortie', qty:newQty, note:m.note, user }));
+      const r2 = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd2 }, 15000);
+      const d2 = await r2.json();
+      if (d2.status !== 'ok') { this.toast('Erreur enregistrement : ' + (d2.error || 'inconnue')); return; }
+      this.toast(`✓ Qté modifiée : ${m.ref} ×${newQty}`);
+      const qtyDiff = newQty - m.qty;
+      const item = S.stockData.find(i => i.ref === m.ref);
+      if (item && item.qte !== null) item.qte -= qtyDiff;
+      const hi = S.historyData.findIndex(h => h.ref===m.ref && h.type===m.type && h.note===m.note && h.date===m.date);
+      if (hi > -1) S.historyData[hi] = Object.assign({}, S.historyData[hi], { qty: newQty });
+      S.historyOps = this._groupMovements(S.historyData);
+      this._buildPoseHistory();
+      this._renderPoseExisting(S.poseModuleCode);
+      if (S.depsLoaded) this._renderDepList();
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+    } finally {
+      if (confirmBtn) confirmBtn.disabled = false;
     }
   },
 
@@ -5331,6 +5409,18 @@ const App = {
               style="margin-top:6px;padding:5px 10px;background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;width:100%;">
               📄 Créer LV / CMR</button>`
           : '';
+        const poseBtnDash = (() => {
+          if (dt !== 'pose') return '';
+          const pc = this._poseCode(op.note);
+          if (!pc) return '';
+          const dep  = S.depsLoaded ? S.deps.find(d => (d.code||'').toUpperCase() === pc.toUpperCase()) : null;
+          const pcs  = pc.replace(/'/g,"&#39;");
+          const mods = (dep?.codeModule||'').replace(/'/g,"&#39;");
+          const chs  = (dep?.chantier||'').replace(/'/g,"&#39;");
+          return `<button onclick="App.openPoseModal('${pcs}','${mods}','${chs}')"
+            style="margin-top:6px;padding:5px 10px;background:#FFF7ED;color:#C2410C;border:1.5px solid #FED7AA;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;width:100%;">
+            🔧 Gérer les pièces posées</button>`;
+        })();
         const lvBadgeDash = lvLink
           ? `<span style="font-size:10px;font-weight:600;background:#DBEAFE;color:#1D4ED8;padding:2px 6px;border-radius:10px;flex-shrink:0;margin-left:4px;">📄 LV N° ${lvLink.display || lvLink.numero}</span>`
           : '';
@@ -5344,7 +5434,7 @@ const App = {
             <span style="font-size:10px;color:#94A3B8;white-space:nowrap;flex-shrink:0;margin-left:8px;">${dtStr}</span>
           </div>
           <div class="dash-mvt-body">
-            ${lvBtn}
+            ${lvBtn}${poseBtnDash}
             ${op.items.map(m => {
               const desc = S.stockData.find(d => d.ref === m.ref)?.description || '';
               return `<div style="display:flex;align-items:baseline;gap:6px;padding:3px 0;border-bottom:.5px solid #F8FAFC;">
