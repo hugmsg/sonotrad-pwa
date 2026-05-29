@@ -2192,6 +2192,19 @@
           style="margin-top:6px;background:none;border:1px dashed #CBD5E1;border-radius:8px;padding:9px 12px;font-size:12px;color:#64748B;cursor:pointer;width:100%;text-align:left;">
           + Nouvelle consigne
         </button>
+        <div style="display:flex;align-items:center;gap:8px;margin:10px 0 4px;">
+          <div style="flex:1;height:1px;background:#E2E8F0;"></div>
+          <span style="font-size:11px;color:#CBD5E1;white-space:nowrap;">ou</span>
+          <div style="flex:1;height:1px;background:#E2E8F0;"></div>
+        </div>
+        <button id="bcb-prep-btn" onclick="App.bcbStartPrepMode()"
+          style="width:100%;background:white;border:1.5px solid #E2E8F0;border-radius:10px;padding:11px 14px;font-size:13px;font-weight:600;color:#475569;cursor:pointer;text-align:left;display:flex;align-items:center;gap:10px;">
+          <span style="font-size:20px;line-height:1;">📦</span>
+          <div>
+            <div>Préparer un chargement</div>
+            <div style="font-size:11px;font-weight:400;color:#94A3B8;margin-top:1px;">Sans chauffeur pré-enregistré</div>
+          </div>
+        </button>
       </div>
       <div id="bcb-dep-lots-section" style="padding:12px;display:none;">
         <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Acheteur</div>
@@ -2715,6 +2728,7 @@ const S = {
   bcbDepartConsigne:     null,
   bcbDepartSelected:     new Set(),
   bcbDepartBuyer:        null,
+  bcbPrepMode:           false,
   bcbEnlevements:        [],
   bcbEnlevementsLoaded:  false,
   bcbEnlevementsLoading: false,
@@ -9011,8 +9025,8 @@ ${bodies}${sansAcheteurBody}
 
   async bcbCreateEnlevement() {
     const list = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
-    const c    = list[S.bcbDepartConsigne];
-    if (!c) { this.toast('Sélectionnez un chauffeur.'); return; }
+    const c    = S.bcbPrepMode ? {} : list[S.bcbDepartConsigne];
+    if (!S.bcbPrepMode && !c) { this.toast('Sélectionnez un chauffeur.'); return; }
     const selectedLots = S.bcbLots.filter(l => S.bcbDepartSelected.has(l.idBcb));
     if (!selectedLots.length) { this.toast('Sélectionnez au moins un lot.'); return; }
     this.toast('Génération du bon d\'enlèvement…');
@@ -9084,11 +9098,31 @@ ${bodies}${sansAcheteurBody}
     S.bcbDepartConsigne = null;
     S.bcbDepartSelected = new Set();
     S.bcbDepartBuyer    = null;
+    S.bcbPrepMode       = false;
     this._bcbDepRenderConsignes();
+    this._bcbDepResetPrepBtn();
     const lotsSection = document.getElementById('bcb-dep-lots-section');
     const bar = document.getElementById('bcb-dep-bar');
     if (lotsSection) lotsSection.style.display = 'none';
     if (bar) bar.style.display = 'none';
+  },
+
+  bcbStartPrepMode() {
+    S.bcbPrepMode       = true;
+    S.bcbDepartConsigne = null;
+    S.bcbDepartSelected = new Set();
+    S.bcbDepartBuyer    = null;
+    this._bcbDepRenderConsignes();
+    const btn = document.getElementById('bcb-prep-btn');
+    if (btn) { btn.style.background = '#EFF6FF'; btn.style.borderColor = '#1D4ED8'; btn.style.color = '#1D4ED8'; }
+    const lotsSection = document.getElementById('bcb-dep-lots-section');
+    if (lotsSection) lotsSection.style.display = '';
+    this._bcbDepRenderLots();
+  },
+
+  _bcbDepResetPrepBtn() {
+    const btn = document.getElementById('bcb-prep-btn');
+    if (btn) { btn.style.background = 'white'; btn.style.borderColor = '#E2E8F0'; btn.style.color = '#475569'; }
   },
 
   bcbDepartClear() {
@@ -9104,6 +9138,7 @@ ${bodies}${sansAcheteurBody}
     S.bcbDepartConsigne = null;
     S.bcbDepartSelected = new Set();
     S.bcbDepartBuyer    = null;
+    S.bcbPrepMode       = false;
     const active   = document.getElementById('bcb-dep-buyer-active');
     const search   = document.getElementById('bcb-dep-buyer-search');
     const lotsSection = document.getElementById('bcb-dep-lots-section');
@@ -9114,6 +9149,7 @@ ${bodies}${sansAcheteurBody}
     if (lotsSection) lotsSection.style.display = 'none';
     if (bar)       bar.style.display = 'none';
     if (clearBtn)  clearBtn.style.display = 'none';
+    this._bcbDepResetPrepBtn();
     this._bcbDepRenderConsignes();
     this.toast(`${indices.length} consigne${indices.length > 1 ? 's' : ''} supprimée${indices.length > 1 ? 's' : ''}`);
   },
@@ -9181,6 +9217,8 @@ ${bodies}${sansAcheteurBody}
     S.bcbDepartConsigne = idx;
     S.bcbDepartSelected = new Set();
     S.bcbDepartBuyer    = null;
+    S.bcbPrepMode       = false;
+    this._bcbDepResetPrepBtn();
     this._bcbDepRenderConsignes();
     const lotsSection = document.getElementById('bcb-dep-lots-section');
     if (lotsSection) lotsSection.style.display = '';
@@ -9308,7 +9346,7 @@ ${bodies}${sansAcheteurBody}
     const cnt = document.getElementById('bcb-dep-count');
     const n   = S.bcbDepartSelected.size;
     if (cnt) cnt.textContent = n ? `${n} lot${n>1?'s':''} sélectionné${n>1?'s':''}` : '0 lot sélectionné';
-    if (bar) bar.style.display = (S.bcbDepartConsigne !== null && n > 0) ? 'flex' : 'none';
+    if (bar) bar.style.display = ((S.bcbDepartConsigne !== null || S.bcbPrepMode) && n > 0) ? 'flex' : 'none';
   },
 
   async bcbDepartCreateCmr() {
