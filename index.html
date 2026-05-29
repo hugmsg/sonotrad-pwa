@@ -2206,6 +2206,10 @@
           </div>
         </button>
       </div>
+      <div id="bcb-dep-prepared-section" style="padding:0 12px 8px;display:none;">
+        <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Chargements préparés</div>
+        <div id="bcb-dep-prepared-list"></div>
+      </div>
       <div id="bcb-dep-lots-section" style="padding:12px;display:none;">
         <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Acheteur</div>
         <input id="bcb-dep-buyer-search" type="text" autocomplete="nope" placeholder="Nom de l'acheteur…"
@@ -8885,7 +8889,37 @@ ${bodies}${sansAcheteurBody}
         <td style="padding:4px 6px;font-size:11px;text-align:right;">${l.poids||''}</td>
       </tr>`).join('');
     const thStyle = 'padding:4px 6px;font-size:10px;font-weight:700;color:white;background:#1E293B;white-space:nowrap;';
-    body.innerHTML = `
+    const driverForm = !e.chauffeur ? `
+      <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:12px;margin-bottom:10px;">
+        <div style="font-size:12px;font-weight:700;color:#92400E;margin-bottom:10px;">Infos chauffeur manquantes</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div style="grid-column:1/-1;">
+            <label style="font-size:11px;color:#64748B;display:block;margin-bottom:3px;">Chauffeur *</label>
+            <input id="bcb-enlev-drv-chauffeur" type="text" autocomplete="nope" placeholder="Prénom NOM"
+              style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:7px 10px;font-size:13px;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#64748B;display:block;margin-bottom:3px;">Tracteur</label>
+            <input id="bcb-enlev-drv-tracteur" type="text" autocomplete="nope" placeholder="Immat."
+              style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:7px 10px;font-size:13px;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#64748B;display:block;margin-bottom:3px;">Remorque</label>
+            <input id="bcb-enlev-drv-remorque" type="text" autocomplete="nope" placeholder="Immat."
+              style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:7px 10px;font-size:13px;box-sizing:border-box;">
+          </div>
+          <div style="grid-column:1/-1;">
+            <label style="font-size:11px;color:#64748B;display:block;margin-bottom:3px;">Transporteur</label>
+            <input id="bcb-enlev-drv-transport" type="text" autocomplete="nope" placeholder="Nom société transport"
+              style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:7px 10px;font-size:13px;box-sizing:border-box;">
+          </div>
+        </div>
+        <button id="bcb-enlev-drv-save" onclick="App.bcbEnlevSaveDriver()"
+          style="width:100%;background:#1D4ED8;color:white;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;">
+          Enregistrer
+        </button>
+      </div>` : '';
+    body.innerHTML = driverForm + `
       <div style="background:white;border:1px solid #E2E8F0;border-radius:10px;padding:4px 12px;margin-bottom:10px;">
         <table style="width:100%;border-collapse:collapse;">
           ${row('Chauffeur', e.chauffeur)} ${row('Tracteur', e.tracteur)} ${row('Remorque', e.remorque)}
@@ -8917,6 +8951,39 @@ ${bodies}${sansAcheteurBody}
         </button>
       </div>`;
     this._bcbRenderEnlevPhotoGrid();
+  },
+
+  async bcbEnlevSaveDriver() {
+    const e = S.bcbCurEnlevement;
+    if (!e) return;
+    const chauffeur    = document.getElementById('bcb-enlev-drv-chauffeur')?.value.trim();
+    const tracteur     = document.getElementById('bcb-enlev-drv-tracteur')?.value.trim();
+    const remorque     = document.getElementById('bcb-enlev-drv-remorque')?.value.trim();
+    const transportNom = document.getElementById('bcb-enlev-drv-transport')?.value.trim();
+    if (!chauffeur) { this.toast('Nom du chauffeur requis'); return; }
+    const btn = document.getElementById('bcb-enlev-drv-save');
+    if (btn) btn.textContent = '…';
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'bcb_enlevement_update', numero: e.numero,
+          chauffeur, tracteur, remorque, transportNom })
+      }, 10000);
+      const d = await r.json();
+      if (d.status === 'ok') {
+        Object.assign(e, { chauffeur, tracteur, remorque, transportNom });
+        const idx = S.bcbEnlevements.findIndex(x => x.numero === e.numero);
+        if (idx > -1) Object.assign(S.bcbEnlevements[idx], { chauffeur, tracteur, remorque, transportNom });
+        this._bcbRenderEnlevDetail();
+        this.toast('Infos chauffeur enregistrées');
+      } else {
+        if (btn) btn.textContent = 'Enregistrer';
+        this.toast('Erreur : ' + (d.error || 'inconnue'));
+      }
+    } catch(err) {
+      if (btn) btn.textContent = 'Enregistrer';
+      this.toast('Erreur : ' + err.message);
+    }
   },
 
   _bcbRenderEnlevPhotoGrid() {
@@ -9105,6 +9172,12 @@ ${bodies}${sansAcheteurBody}
     const bar = document.getElementById('bcb-dep-bar');
     if (lotsSection) lotsSection.style.display = 'none';
     if (bar) bar.style.display = 'none';
+    // Charger et afficher les chargements préparés
+    if (S.bcbEnlevementsLoaded) {
+      this._bcbRenderPreparedSection();
+    } else if (!S.bcbEnlevementsLoading && S.apiUrl) {
+      this.bcbEnlevementsLoad().then(() => this._bcbRenderPreparedSection());
+    }
   },
 
   bcbStartPrepMode() {
@@ -9123,6 +9196,58 @@ ${bodies}${sansAcheteurBody}
   _bcbDepResetPrepBtn() {
     const btn = document.getElementById('bcb-prep-btn');
     if (btn) { btn.style.background = 'white'; btn.style.borderColor = '#E2E8F0'; btn.style.color = '#475569'; }
+  },
+
+  _bcbRenderPreparedSection() {
+    const section = document.getElementById('bcb-dep-prepared-section');
+    const list    = document.getElementById('bcb-dep-prepared-list');
+    if (!section || !list) return;
+    const prepared = S.bcbEnlevements.filter(e => !e.cmrNumero && e.statut !== 'parti');
+    if (!prepared.length) { section.style.display = 'none'; return; }
+    section.style.display = '';
+    list.innerHTML = prepared.map(e => {
+      const hasChauffeur = !!e.chauffeur;
+      const badgeTxt   = hasChauffeur ? 'En cours' : 'Préparé';
+      const badgeBg    = hasChauffeur ? '#DBEAFE' : '#FEF9C3';
+      const badgeColor = hasChauffeur ? '#1D4ED8' : '#92400E';
+      return `<div style="background:white;border:1px solid #E2E8F0;border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:8px;">
+        <div onclick="App.bcbGoToEnlevement('${e.numero}')" style="flex:1;cursor:pointer;min-width:0;">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+            <span style="font-size:13px;font-weight:700;color:#1E293B;">${e.numero}</span>
+            <span style="font-size:10px;font-weight:600;padding:1px 7px;border-radius:10px;background:${badgeBg};color:${badgeColor};">${badgeTxt}</span>
+          </div>
+          <div style="font-size:11px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.date} · ${e.destination || '—'}</div>
+        </div>
+        <button onclick="App.bcbEnlevMarkParti('${e.numero}')" style="background:#F1F5F9;border:1px solid #E2E8F0;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;color:#475569;cursor:pointer;white-space:nowrap;flex-shrink:0;">✓ Parti</button>
+      </div>`;
+    }).join('');
+  },
+
+  bcbGoToEnlevement(numero) {
+    const e = S.bcbEnlevements.find(x => x.numero === numero);
+    if (!e) return;
+    S.bcbCurEnlevement = e;
+    this._bcbRenderEnlevDetail();
+    this.go('bcb-enlevement');
+  },
+
+  async bcbEnlevMarkParti(numero) {
+    if (!confirm('Marquer cet enlèvement comme parti ?')) return;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'bcb_enlevement_update', numero, statut: 'parti' })
+      }, 10000);
+      const d = await r.json();
+      if (d.status === 'ok') {
+        const idx = S.bcbEnlevements.findIndex(x => x.numero === numero);
+        if (idx > -1) S.bcbEnlevements[idx].statut = 'parti';
+        this._bcbRenderPreparedSection();
+        this.toast('Marqué comme parti');
+      } else {
+        this.toast('Erreur : ' + (d.error || 'inconnue'));
+      }
+    } catch(e) { this.toast('Erreur : ' + e.message); }
   },
 
   bcbDepartClear() {
