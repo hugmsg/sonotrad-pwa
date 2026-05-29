@@ -464,8 +464,8 @@
     .pose-item-desc { font-size:10px; color:#64748B; display:block; }
     .pose-item-del  { background:none; border:none; color:#DC2626; font-size:18px; cursor:pointer; padding:2px 4px; flex-shrink:0; line-height:1; }
     .dep-pose-dot { width:7px; height:7px; border-radius:50%; background:#15803D; display:inline-block; margin-left:1px; vertical-align:middle; }
-    .pose-existing-section { margin-bottom:8px; flex-shrink:0; }
-    .pose-existing-list { border:1px solid #E2E8F0; border-radius:8px; overflow:hidden; }
+    .pose-existing-section { margin-bottom:8px; flex:0 1 auto; overflow:hidden; min-height:0; }
+    .pose-existing-list { border:1px solid #E2E8F0; border-radius:8px; overflow-y:auto; max-height:35vh; }
     .pose-existing-row { display:flex; align-items:center; gap:8px; padding:7px 10px; border-bottom:1px solid #F1F5F9; background:#FAFBFC; }
     .pose-existing-row:last-child { border-bottom:none; }
     .pose-existing-label { font-size:11px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:.4px; margin-bottom:5px; }
@@ -1871,7 +1871,92 @@
             <div class="activity-desc">Consignes · Chargement · Enlèvements</div>
             <span id="bcb-menu-badge-depart" class="activity-badge badge-soon">—</span>
           </div>
+          <!-- Import acheteurs (pleine largeur) -->
+          <div class="activity-card" data-ready="true" onclick="App.go('bcb-import')" style="grid-column:1/-1;">
+            <div class="activity-icon">📋</div>
+            <div class="activity-name">Import acheteurs</div>
+            <div class="activity-desc">Importer une liste depuis un fichier XLS / CSV</div>
+            <span class="activity-badge badge-soon">—</span>
+          </div>
         </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW : BCB IMPORT ACHETEURS ──────────────────────────────────── -->
+    <div class="view" id="view-bcb-import">
+      <!-- Sticky header -->
+      <div style="background:#1D4ED8;color:white;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;">
+        <div>
+          <div style="font-size:15px;font-weight:700;">Import acheteurs</div>
+          <div style="font-size:11px;opacity:.75;" id="bcb-imp-step-label">Étape 1 — Chargement du fichier</div>
+        </div>
+        <button onclick="App.go('bcb-menu')" style="background:rgba(255,255,255,.15);border:none;color:white;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;">✕ Fermer</button>
+      </div>
+
+      <!-- Étape 1 : drop zone -->
+      <div id="bcb-imp-step1" style="padding:24px 16px;">
+        <div id="bcb-imp-drop"
+          onclick="document.getElementById('bcb-imp-file').click()"
+          ondragover="event.preventDefault();this.style.borderColor='#1D4ED8';this.style.background='#EFF6FF'"
+          ondragleave="this.style.borderColor='#CBD5E1';this.style.background='#F8FAFC'"
+          ondrop="event.preventDefault();this.style.borderColor='#CBD5E1';this.style.background='#F8FAFC';App.bcbImportHandleFile(event.dataTransfer.files[0])"
+          style="border:2px dashed #CBD5E1;border-radius:14px;padding:48px 20px;text-align:center;cursor:pointer;background:#F8FAFC;transition:all .2s;">
+          <div style="font-size:44px;margin-bottom:12px;">📂</div>
+          <div style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:6px;">Déposer un fichier ici</div>
+          <div style="font-size:12px;color:#64748B;margin-bottom:16px;">ou cliquer pour parcourir</div>
+          <div style="font-size:11px;color:#94A3B8;background:#E2E8F0;border-radius:6px;padding:4px 12px;display:inline-block;">CSV · XLS · XLSX</div>
+        </div>
+        <input type="file" id="bcb-imp-file" accept=".csv,.xls,.xlsx,.ods" style="display:none" onchange="App.bcbImportHandleFile(this.files[0])">
+        <div id="bcb-imp-s1-loading" style="display:none;text-align:center;padding:20px;color:#64748B;font-size:13px;margin-top:14px;">⏳ Lecture du fichier…</div>
+        <div id="bcb-imp-s1-error" style="display:none;margin-top:14px;background:#FEF2F2;border:1px solid #FCA5A5;border-radius:10px;padding:12px 14px;font-size:12px;color:#DC2626;"></div>
+      </div>
+
+      <!-- Étape 2 : mapping colonnes -->
+      <div id="bcb-imp-step2" style="display:none;padding:16px;">
+        <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:8px;">Aperçu du fichier</div>
+        <div id="bcb-imp-preview" style="overflow-x:auto;border:1px solid #E2E8F0;border-radius:10px;margin-bottom:14px;max-height:160px;overflow-y:auto;"></div>
+        <div style="display:grid;gap:11px;margin-bottom:14px;">
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#475569;cursor:pointer;">
+            <input type="checkbox" id="bcb-imp-has-header" checked onchange="App.bcbImportUpdateSelects()" style="accent-color:#1D4ED8;width:15px;height:15px;">
+            La première ligne est un en-tête
+          </label>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:#1E293B;display:block;margin-bottom:4px;">Colonne N° BCB <span style="color:#EF4444;">*</span></label>
+            <select id="bcb-imp-sel-bcb" style="width:100%;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;background:white;"></select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:#1E293B;display:block;margin-bottom:4px;">Colonne Acheteur <span style="color:#EF4444;">*</span></label>
+            <select id="bcb-imp-sel-acheteur" style="width:100%;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;background:white;"></select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:#1E293B;display:block;margin-bottom:4px;">Colonne N° vente <span style="color:#94A3B8;font-weight:400;">(optionnel)</span></label>
+            <select id="bcb-imp-sel-vente" style="width:100%;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;background:white;"></select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:#1E293B;display:block;margin-bottom:4px;">Date de vente <span style="color:#EF4444;">*</span></label>
+            <input type="date" id="bcb-imp-date" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+          </div>
+        </div>
+        <button onclick="App.bcbImportAnalyze()" style="width:100%;background:#1D4ED8;color:white;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px;">Analyser →</button>
+        <button onclick="App.bcbImportReset()" style="width:100%;background:white;border:1.5px solid #E2E8F0;color:#64748B;border-radius:10px;padding:10px;font-size:12px;font-weight:600;cursor:pointer;">← Changer de fichier</button>
+      </div>
+
+      <!-- Étape 3 : prévisualisation et confirmation -->
+      <div id="bcb-imp-step3" style="display:none;padding:16px;">
+        <div id="bcb-imp-stats" style="margin-bottom:12px;"></div>
+        <div id="bcb-imp-match-table" style="margin-bottom:12px;"></div>
+        <div id="bcb-imp-unsold" style="margin-bottom:14px;"></div>
+        <div style="display:flex;gap:8px;">
+          <button id="bcb-imp-confirm-btn" onclick="App.bcbImportConfirm()" style="flex:1;background:#059669;color:white;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;"></button>
+          <button onclick="App.bcbImportBack2()" style="background:white;border:1.5px solid #E2E8F0;color:#64748B;border-radius:10px;padding:13px 14px;font-size:12px;font-weight:600;cursor:pointer;">← Retour</button>
+        </div>
+      </div>
+
+      <!-- Étape 4 : résultat -->
+      <div id="bcb-imp-step4" style="display:none;padding:32px 16px;text-align:center;">
+        <div id="bcb-imp-result" style="margin-bottom:24px;"></div>
+        <button onclick="App.go('bcb-lots')" style="width:100%;background:#1D4ED8;color:white;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:10px;">📦 Voir les lots</button>
+        <button onclick="App.bcbImportReset()" style="width:100%;background:white;border:1.5px solid #E2E8F0;color:#64748B;border-radius:10px;padding:10px;font-size:12px;font-weight:600;cursor:pointer;">↩ Nouvel import</button>
       </div>
     </div>
 
@@ -1884,6 +1969,7 @@
             <div style="font-size:15px;font-weight:700;color:#1E293B;">Lots en attente</div>
             <div style="font-size:11px;color:#64748B;" id="bcb-lots-subtitle">Chargement…</div>
           </div>
+          <button onclick="App.bcbPrintMenu()" style="background:white;border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 10px;font-size:14px;cursor:pointer;flex-shrink:0;" title="Imprimer les listes par acheteur">🖨</button>
           <button onclick="App.bcbLotsLoad(true)" style="background:white;border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 11px;font-size:12px;font-weight:600;color:#1D4ED8;cursor:pointer;flex-shrink:0;">↺</button>
         </div>
 <input id="bcb-lots-search" type="search" placeholder="Rechercher (code, vendeur, marque, n° série…)" autocomplete="off"
@@ -2624,6 +2710,7 @@ const S = {
   bcbSelected:     new Set(),
   bcbLotsFilters:  { acheteur: null, vendeur: null, vente: null },
   bcbActiveFilter: null,
+  bcbImp:          { step:1, rows:[], matched:[], notInFile:[] },
   bcbSelLot:         null,
   bcbDepartConsigne:     null,
   bcbDepartSelected:     new Set(),
@@ -2681,6 +2768,7 @@ const App = {
     if (view === 'stock-sync')   this.loadStockSync();
     if (view === 'bcb-menu')      this.bcbMenuInit();
     if (view === 'bcb-lots')      this.bcbLotsLoad();
+    if (view === 'bcb-import')    this.bcbImportInit();
     if (view === 'bcb-consignes') this.bcbInitLangGrid();
     if (view === 'bcb-depart')      this.bcbDepartInit();
     if (view === 'bcb-enlevements') this.bcbEnlevementsLoad();
@@ -2934,9 +3022,13 @@ const App = {
       S.historyOps    = this._groupMovements(S.historyData);
       S.historyLoaded = true;
       this._buildPoseHistory();
-      if (S.view === 'stock-history')                              this._renderHistoryList();
-      else if (S.view === 'departures' && S.depsLoaded)           this._renderDepList();
-      else if (S.view === 'stock-dashboard')                       this._renderDashboard();
+      if (S.view === 'stock-history')   this._renderHistoryList();
+      if (S.view === 'stock-dashboard') this._renderDashboard();
+      if (S.view === 'departures' && S.depsLoaded) this._renderDepList();
+      // Si la modale de pose est ouverte (ouverte pendant le prefetch), l'alimenter maintenant
+      if (S.poseModuleCode && document.getElementById('pose-modal')?.style.display !== 'none') {
+        this._renderPoseExisting(S.poseModuleCode);
+      }
     } catch(e) { /* échec silencieux */ }
     finally { S.historyLoading = false; this._updateHomeCards(); }
   },
@@ -3716,6 +3808,33 @@ const App = {
     return (note.match(/\[Pose\s+(\S+)\]/) || [])[1] || '';
   },
 
+  _consolidatePoseOps(ops) {
+    const nonPose = [];
+    const poseMap = {};
+    ops.forEach(op => {
+      if (this._opDisplayType(op.type, op.note) !== 'pose') { nonPose.push(op); return; }
+      const code = this._poseCode(op.note);
+      if (!code) { nonPose.push(op); return; }
+      if (!poseMap[code]) {
+        poseMap[code] = { type: op.type, note: op.note, key: op.key, date: op.date,
+                          items: op.items.map(i => Object.assign({}, i)), _consolidated: true };
+      } else {
+        op.items.forEach(item => {
+          const ex = poseMap[code].items.find(i => i.ref === item.ref);
+          if (ex) ex.qty = (Number(ex.qty) || 0) + (Number(item.qty) || 0);
+          else poseMap[code].items.push(Object.assign({}, item));
+        });
+        if (new Date(op.date) > new Date(poseMap[code].date)) {
+          poseMap[code].date = op.date;
+          poseMap[code].key  = op.key;
+          poseMap[code].note = op.note;
+        }
+      }
+    });
+    return nonPose.concat(Object.values(poseMap))
+                  .sort((a, b) => new Date(b.date) - new Date(a.date));
+  },
+
   _buildPoseHistory() {
     S.poseHistory = new Set();
     S.historyData.forEach(m => {
@@ -3763,6 +3882,9 @@ const App = {
       });
     }
 
+    // Consolider les poses : une seule ligne par module (toutes sessions fusionnées)
+    ops = this._consolidatePoseOps(ops);
+
     // KPIs
     const totalOps   = ops.length;
     const totalLines = ops.reduce((s, op) => s + op.items.length, 0);
@@ -3800,6 +3922,18 @@ const App = {
             style="margin-top:8px;padding:6px 12px;background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;width:100%;">
             📄 Créer LV / CMR</button>`
         : '';
+      const poseBtn  = (() => {
+        if (dt !== 'pose') return '';
+        const pc = this._poseCode(op.note);
+        if (!pc) return '';
+        const dep  = S.depsLoaded ? S.deps.find(d => (d.code||'').toUpperCase() === pc.toUpperCase()) : null;
+        const pcs  = pc.replace(/'/g,"&#39;");
+        const mods = (dep?.codeModule||'').replace(/'/g,"&#39;");
+        const chs  = (dep?.chantier||'').replace(/'/g,"&#39;");
+        return `<button onclick="App.openPoseModal('${pcs}','${mods}','${chs}')"
+          style="margin-top:8px;padding:6px 12px;background:#FFF7ED;color:#C2410C;border:1.5px solid #FED7AA;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;width:100%;">
+          🔧 Gérer les pièces posées</button>`;
+      })();
       return `<div class="hist-op-card t-${dt}">
         <div class="hist-op-header" onclick="App.toggleHistOp(${idx})">
           <span class="hist-badge ${dt}">${typeLabels[dt] || dt}</span>
@@ -3810,7 +3944,7 @@ const App = {
           <span class="hist-op-chevron" id="hist-chev-${idx}">›</span>
         </div>
         <div class="hist-op-body" id="hist-body-${idx}">
-          ${lvBtn}
+          ${lvBtn}${poseBtn}
           <table class="hist-detail-table">
             <thead><tr><th>Réf.</th><th>Désignation</th><th style="text-align:right;">Qté</th></tr></thead>
             <tbody>${op.items.map(m => {
@@ -3819,7 +3953,6 @@ const App = {
             }).join('')}</tbody>
           </table>
           ${op.note && dt !== 'pose' ? `<div style="margin-top:6px;font-size:10px;color:#94A3B8;">Note : ${op.note}</div>` : ''}
-          ${dt === 'pose' ? (() => { const pc = this._poseCode(op.note); return pc ? `<div style="margin-top:6px;font-size:10px;color:#94A3B8;">Code module : ${pc}</div>` : ''; })() : ''}
           ${op.items[0]?.user ? `<div style="margin-top:2px;font-size:10px;color:#94A3B8;">Par : ${op.items[0].user}</div>` : ''}
         </div>
       </div>`;
@@ -4092,8 +4225,19 @@ const App = {
               ${desc ? `<span class="pose-item-desc">${desc.length>42?desc.substring(0,40)+'…':desc}</span>` : ''}
             </div>
             <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
-              <span style="font-size:13px;font-weight:700;color:#1E293B;min-width:28px;text-align:right;">×${m.qty}</span>
+              <span id="pose-qty-${i}" style="font-size:13px;font-weight:700;color:#1E293B;min-width:28px;text-align:right;">×${m.qty}</span>
+              <span id="pose-edit-${i}" style="display:none;align-items:center;gap:3px;">
+                <input id="pose-edit-inp-${i}" type="number" min="1" value="${m.qty}"
+                  style="width:52px;padding:3px 5px;border:1.5px solid #CBD5E1;border-radius:6px;font-size:13px;text-align:center;"
+                  onkeydown="if(event.key==='Enter')App.confirmEditPoseQty(${i});else if(event.key==='Escape')App._cancelEditPoseQty(${i})">
+                <button onclick="App.confirmEditPoseQty(${i})" id="pose-edit-confirm-${i}"
+                  style="background:var(--brand);color:white;border:none;padding:4px 7px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;line-height:1;">✓</button>
+                <button onclick="App._cancelEditPoseQty(${i})"
+                  style="background:none;border:none;color:#94A3B8;font-size:14px;cursor:pointer;padding:2px;line-height:1;">✕</button>
+              </span>
               <span style="font-size:10px;color:#94A3B8;white-space:nowrap;">${dStr}</span>
+              <button onclick="App.editPoseQty(${i})" title="Modifier la quantité"
+                style="background:none;border:none;color:#64748B;font-size:14px;cursor:pointer;padding:2px 4px;line-height:1;flex-shrink:0;">✏</button>
               <button onclick="App.deletePoseEntry(${i})" title="Supprimer ce mouvement"
                 style="background:none;border:none;color:#DC2626;font-size:16px;cursor:pointer;padding:2px 6px;line-height:1;flex-shrink:0;">🗑</button>
             </div>
@@ -4116,6 +4260,7 @@ const App = {
       if (S.poseModuleCode === code && document.getElementById('pose-modal')?.style.display !== 'none') {
         this._renderPoseExisting(code);
       }
+      if (S.depsLoaded) this._renderDepList();
     } catch(e) {
       const sec = document.getElementById('pose-existing-section');
       if (sec) sec.innerHTML = `<div style="padding:8px 0;color:#DC2626;font-size:12px;text-align:center;">Erreur de chargement</div>`;
@@ -4148,6 +4293,62 @@ const App = {
       }
     } catch(e) {
       this.toast('Erreur réseau : ' + e.message);
+    }
+  },
+
+  editPoseQty(idx) {
+    const qtyEl  = document.getElementById('pose-qty-' + idx);
+    const editEl = document.getElementById('pose-edit-' + idx);
+    if (!qtyEl || !editEl) return;
+    qtyEl.style.display  = 'none';
+    editEl.style.display = 'flex';
+    document.getElementById('pose-edit-inp-' + idx)?.focus();
+  },
+
+  _cancelEditPoseQty(idx) {
+    const qtyEl  = document.getElementById('pose-qty-' + idx);
+    const editEl = document.getElementById('pose-edit-' + idx);
+    if (qtyEl)  qtyEl.style.display  = '';
+    if (editEl) editEl.style.display = 'none';
+  },
+
+  async confirmEditPoseQty(idx) {
+    const m = S.poseViewItems[idx];
+    if (!m) return;
+    const inp = document.getElementById('pose-edit-inp-' + idx);
+    if (!inp) return;
+    const newQty = parseInt(inp.value, 10);
+    if (isNaN(newQty) || newQty <= 0) { this.toast('Quantité invalide'); return; }
+    if (newQty === m.qty) { this._cancelEditPoseQty(idx); return; }
+    const confirmBtn = document.getElementById('pose-edit-confirm-' + idx);
+    if (confirmBtn) confirmBtn.disabled = true;
+    try {
+      const fd1 = new FormData();
+      fd1.append('payload', JSON.stringify({ action:'delete_mouvement', ref:m.ref, type:m.type, qty:m.qty, note:m.note, date:m.date }));
+      const r1 = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd1 }, 15000);
+      const d1 = await r1.json();
+      if (d1.status !== 'ok') { this.toast('Erreur suppression : ' + (d1.error || 'inconnue')); return; }
+      const u    = S.currentUser;
+      const user = u ? `${u.prenom} ${u.nom}` : (m.user || 'inconnu');
+      const fd2  = new FormData();
+      fd2.append('payload', JSON.stringify({ action:'add_mouvement', ref:m.ref, type:'sortie', qty:newQty, note:m.note, user }));
+      const r2 = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd2 }, 15000);
+      const d2 = await r2.json();
+      if (d2.status !== 'ok') { this.toast('Erreur enregistrement : ' + (d2.error || 'inconnue')); return; }
+      this.toast(`✓ Qté modifiée : ${m.ref} ×${newQty}`);
+      const qtyDiff = newQty - m.qty;
+      const item = S.stockData.find(i => i.ref === m.ref);
+      if (item && item.qte !== null) item.qte -= qtyDiff;
+      const hi = S.historyData.findIndex(h => h.ref===m.ref && h.type===m.type && h.note===m.note && h.date===m.date);
+      if (hi > -1) S.historyData[hi] = Object.assign({}, S.historyData[hi], { qty: newQty });
+      S.historyOps = this._groupMovements(S.historyData);
+      this._buildPoseHistory();
+      this._renderPoseExisting(S.poseModuleCode);
+      if (S.depsLoaded) this._renderDepList();
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+    } finally {
+      if (confirmBtn) confirmBtn.disabled = false;
     }
   },
 
@@ -5215,7 +5416,7 @@ const App = {
     // ── Mouvements récents (groupés par opération) ──
     // Priorité : historyData (complet) si déjà chargé, sinon stockRecentMvs
     const srcMvs = S.historyLoaded ? S.historyData : S.stockRecentMvs;
-    const allOps     = this._groupMovements(srcMvs);
+    const allOps     = this._consolidatePoseOps(this._groupMovements(srcMvs));
     const visibleOps = allOps.slice(0, S.dashMvtLimit);
     const moreEl     = document.getElementById('dash-mvt-more');
     if (!visibleOps.length) {
@@ -5244,6 +5445,18 @@ const App = {
               style="margin-top:6px;padding:5px 10px;background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;width:100%;">
               📄 Créer LV / CMR</button>`
           : '';
+        const poseBtnDash = (() => {
+          if (dt !== 'pose') return '';
+          const pc = this._poseCode(op.note);
+          if (!pc) return '';
+          const dep  = S.depsLoaded ? S.deps.find(d => (d.code||'').toUpperCase() === pc.toUpperCase()) : null;
+          const pcs  = pc.replace(/'/g,"&#39;");
+          const mods = (dep?.codeModule||'').replace(/'/g,"&#39;");
+          const chs  = (dep?.chantier||'').replace(/'/g,"&#39;");
+          return `<button onclick="App.openPoseModal('${pcs}','${mods}','${chs}')"
+            style="margin-top:6px;padding:5px 10px;background:#FFF7ED;color:#C2410C;border:1.5px solid #FED7AA;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;width:100%;">
+            🔧 Gérer les pièces posées</button>`;
+        })();
         const lvBadgeDash = lvLink
           ? `<span style="font-size:10px;font-weight:600;background:#DBEAFE;color:#1D4ED8;padding:2px 6px;border-radius:10px;flex-shrink:0;margin-left:4px;">📄 LV N° ${lvLink.display || lvLink.numero}</span>`
           : '';
@@ -5257,7 +5470,7 @@ const App = {
             <span style="font-size:10px;color:#94A3B8;white-space:nowrap;flex-shrink:0;margin-left:8px;">${dtStr}</span>
           </div>
           <div class="dash-mvt-body">
-            ${lvBtn}
+            ${lvBtn}${poseBtnDash}
             ${op.items.map(m => {
               const desc = S.stockData.find(d => d.ref === m.ref)?.description || '';
               return `<div style="display:flex;align-items:baseline;gap:6px;padding:3px 0;border-bottom:.5px solid #F8FAFC;">
@@ -6090,6 +6303,7 @@ const App = {
       if (loaderEl) loaderEl.style.display = 'none';
       if (gridEl)   gridEl.style.display = 'block';
       if (statusEl) { const n = new Date(); statusEl.textContent = 'MAJ ' + n.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}); }
+      if (!S.historyLoaded && !S.historyLoading) this._prefetchHistory();
       return;
     }
     if (loaderEl) loaderEl.style.display = 'flex';
@@ -6106,6 +6320,8 @@ const App = {
     ]);
     // LV links non-bloquants (utiles dans la liste production)
     if (!S.lvLinks || !Object.keys(S.lvLinks).length) this._prefetchLvLinks();
+    // Historique non-bloquant — alimente les pastilles de pose dans les départs
+    if (!S.historyLoaded && !S.historyLoading) this._prefetchHistory();
     this._loxamMenuRefreshCounts();
     if (loaderEl) loaderEl.style.display = 'none';
     if (gridEl)   gridEl.style.display = 'block';
@@ -7724,6 +7940,124 @@ const App = {
     }
   },
 
+  bcbPrintMenu() {
+    if (!S.bcbLotsLoaded || !S.bcbLots.length) { this.toast('Lots non chargés'); return; }
+    const bd = document.createElement('div');
+    bd.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:999;';
+    const menu = document.createElement('div');
+    menu.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.22);padding:18px 16px 12px;z-index:1000;width:270px;';
+    menu.innerHTML = `
+      <div style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:14px;">🖨 Listes par acheteur</div>
+      <button onclick="this.closest('div').remove();document.querySelector('[data-bcb-print-bd]').remove();App.bcbPrintByBuyer('page')"
+        style="width:100%;padding:11px 12px;background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:8px;text-align:left;display:block;">
+        📄 1 acheteur par page
+      </button>
+      <button onclick="this.closest('div').remove();document.querySelector('[data-bcb-print-bd]').remove();App.bcbPrintByBuyer('inline')"
+        style="width:100%;padding:11px 12px;background:#F8FAFC;color:#475569;border:1.5px solid #E2E8F0;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;text-align:left;display:block;">
+        📋 Tout à la suite
+      </button>
+      <button onclick="this.closest('div').remove();document.querySelector('[data-bcb-print-bd]').remove()"
+        style="width:100%;padding:7px;background:none;border:none;color:#94A3B8;font-size:12px;cursor:pointer;margin-top:4px;">Annuler</button>`;
+    bd.setAttribute('data-bcb-print-bd', '');
+    bd.onclick = () => { bd.remove(); menu.remove(); };
+    document.body.appendChild(bd);
+    document.body.appendChild(menu);
+  },
+
+  bcbPrintByBuyer(mode) {
+    const sold       = S.bcbLots.filter(l => l.vendu && l.acheteur);
+    const noAcheteur = S.bcbLots.filter(l => !l.acheteur);
+    const byBuyer = {};
+    sold.forEach(l => {
+      const b = l.acheteur.trim();
+      if (!byBuyer[b]) byBuyer[b] = [];
+      byBuyer[b].push(l);
+    });
+    const numVentes = [...new Set(sold.map(l => l.numVente).filter(Boolean))];
+    const venteLbl  = numVentes.length ? 'Vente ' + numVentes.map(v => 'n°' + v).join(', ') : '';
+    const dateGen   = new Date().toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
+
+    const fmtDate = (raw) => {
+      if (!raw) return '';
+      const d = new Date(raw);
+      return isNaN(d) ? raw : d.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
+    };
+
+    const makeRow = (l, i) => {
+      const cells = [
+        i + 1, l.idBcb||'', l.vendeur||l.inter||'', l.refVendeur||l.idSeller||'',
+        l.type||'', l.marque||'', l.modele||'', l.numSerie||'',
+        l.commentaire||'', fmtDate(l.dateVente), l.numVente||'',
+        `<input type="checkbox"${l.codeEnlevement?' checked':''} style="width:13px;height:13px;">`,
+      ];
+      return `<tr>${cells.map((c,ci)=>`<td${ci===4?' class="desc"':''}>${c}</td>`).join('')}</tr>`;
+    };
+
+    // Une seule table — un <tbody> par acheteur → colonnes parfaitement alignées
+    const bodies = Object.keys(byBuyer).sort().map(buyer => {
+      const lots = byBuyer[buyer];
+      return `<tbody><tr class="bhr"><td colspan="12"><strong>${buyer}</strong><span class="bc"> — ${lots.length} lot${lots.length>1?'s':''}</span></td></tr>${lots.map(makeRow).join('')}</tbody>`;
+    }).join('');
+
+    // Section lots sans acheteur
+    const sansAcheteurBody = noAcheteur.length
+      ? `<tbody><tr class="bhr-pending"><td colspan="12"><strong>Sans acheteur</strong><span class="bc"> — ${noAcheteur.length} lot${noAcheteur.length>1?'s':''} en attente</span></td></tr>${noAcheteur.map(makeRow).join('')}</tbody>`
+      : '';
+
+    const pageBreak = mode === 'page' ? 'tbody+tbody{page-break-before:always}' : '';
+    const totalMeta = [venteLbl, sold.length ? sold.length+' lot'+(sold.length>1?'s':'')+' vendus' : '', noAcheteur.length ? noAcheteur.length+' sans acheteur' : '', 'Généré le '+dateGen].filter(Boolean).join(' · ');
+
+    const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+<title>BCB — Listes acheteurs</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,sans-serif;font-size:9px;color:#1E293B;padding:8mm}
+  h1{font-size:14px;font-weight:800;margin-bottom:3px}
+  .meta{font-size:8.5px;color:#64748B;margin-bottom:12px}
+  table{width:100%;border-collapse:collapse;table-layout:fixed}
+  thead{display:table-header-group}
+  thead tr{background:#1E293B}
+  th{padding:4px 3px;text-align:left;font-size:7.5px;font-weight:700;color:white;white-space:nowrap;overflow:hidden}
+  td{padding:3px 3px;font-size:8.5px;border-bottom:1px solid #F1F5F9;vertical-align:top;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  td.desc{white-space:normal;word-break:break-word}
+  .bhr td{background:#475569;color:white;padding:5px 6px;font-size:10px;white-space:normal;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .bhr-pending td{background:#92400E;color:#FEF3C7;padding:5px 6px;font-size:10px;white-space:normal;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  thead tr{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .bc{font-size:8px;font-weight:400;opacity:.8}
+  colgroup col:nth-child(1){width:3%}
+  colgroup col:nth-child(2){width:7%}
+  colgroup col:nth-child(3){width:7%}
+  colgroup col:nth-child(4){width:6%}
+  colgroup col:nth-child(5){width:19%}
+  colgroup col:nth-child(6){width:7%}
+  colgroup col:nth-child(7){width:8%}
+  colgroup col:nth-child(8){width:9%}
+  colgroup col:nth-child(9){width:13%}
+  colgroup col:nth-child(10){width:7%}
+  colgroup col:nth-child(11){width:6%}
+  colgroup col:nth-child(12){width:4%}
+  ${pageBreak}
+  @media print{body{padding:5mm}}
+</style></head><body>
+<h1>BCB — Listes par acheteur</h1>
+<p class="meta">${totalMeta}</p>
+<table>
+<colgroup><col><col><col><col><col><col><col><col><col><col><col><col></colgroup>
+<thead><tr>
+  <th>#</th><th>ID BCB</th><th>Vendeur</th><th>Code</th><th>Description</th>
+  <th>Marque</th><th>Modèle</th><th>N° Série</th><th>Commentaire</th><th>Date vente</th><th>N° vente</th><th>Chargé</th>
+</tr></thead>
+${bodies}${sansAcheteurBody}
+</table>
+<script>window.addEventListener('load',function(){setTimeout(function(){window.print();},250)});<\/script>
+</body></html>`;
+
+    const w = window.open('', '_blank');
+    if (!w) { this.toast('⚠ Autorisez les popups pour imprimer'); return; }
+    w.document.write(html);
+    w.document.close();
+  },
+
   async bcbLotsLoad(force) {
     if (S.bcbLotsLoading) return;
     if (S.bcbLotsLoaded && !force) { this.bcbSetView(S.bcbLotsView); return; }
@@ -7943,6 +8277,7 @@ const App = {
       const dotA = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.arrive?'#D1FAE5':'#F1F5F9'};color:${lot.arrive?'#065F46':'#94A3B8'};">A</span>`;
       const dotI = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.inspecte?'#DBEAFE':'#F1F5F9'};color:${lot.inspecte?'#1D4ED8':'#94A3B8'};">I</span>`;
       const dotV = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.vendu?'#FEF3C7':'#F1F5F9'};color:${lot.vendu?'#92400E':'#94A3B8'};">V</span>`;
+      const acheteurChip = lot.acheteur ? `<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:#FEF9C3;color:#713F12;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:1;">${lot.acheteur}</span>` : '';
       const vente = lot.numVente ? `<span style="font-size:10px;color:#64748B;font-weight:600;margin-left:2px;">n°${lot.numVente}</span>` : '';
       const desc  = [lot.vendeur, [lot.marque,lot.modele].filter(Boolean).join(' '), lot.type].filter(Boolean).join(' — ');
       const sub   = [lot.refVendeur?`réf ${lot.refVendeur}`:'', lot.numSerie?`n° ${lot.numSerie}`:'', lot.poids?`${lot.poids}t`:'', lot.commentaire].filter(Boolean).join(' · ');
@@ -7959,7 +8294,7 @@ const App = {
           </div>
           ${sub ? `<div style="font-size:10px;color:#94A3B8;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sub}</div>` : ''}
         </div>
-        <div style="display:flex;align-items:center;gap:3px;flex-shrink:0;">${dotA}${dotI}${dotV}${vente}</div>
+        <div style="display:flex;align-items:center;gap:3px;flex-shrink:0;flex-wrap:nowrap;">${acheteurChip}${dotA}${dotI}${dotV}${vente}</div>
       </div>`;
     };
 
@@ -8085,6 +8420,254 @@ const App = {
       this._bcbFltHandler = null;
     }
     this.bcbUpdateFilterUI();
+  },
+
+  /* ─ BCB Import acheteurs ─ */
+  bcbImportInit() {
+    S.bcbImp = { step:1, rows:[], matched:[], notInFile:[] };
+    this._bcbImpShowStep(1);
+    const dateEl = document.getElementById('bcb-imp-date');
+    if (dateEl) dateEl.value = new Date().toISOString().slice(0,10);
+    if (!S.bcbLotsLoaded && !S.bcbLotsLoading) this.bcbLotsLoad();
+  },
+
+  _bcbImpShowStep(n) {
+    S.bcbImp.step = n;
+    [1,2,3,4].forEach(i => {
+      const el = document.getElementById('bcb-imp-step' + i);
+      if (el) el.style.display = (i === n) ? '' : 'none';
+    });
+    const labels = { 1:'Étape 1 — Chargement du fichier', 2:'Étape 2 — Sélection des colonnes', 3:'Étape 3 — Vérification et confirmation', 4:'Import terminé' };
+    const lbl = document.getElementById('bcb-imp-step-label');
+    if (lbl) lbl.textContent = labels[n] || '';
+  },
+
+  _loadSheetJs(cb) {
+    if (window.XLSX) { cb(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = cb;
+    s.onerror = () => this.toast('Impossible de charger le lecteur Excel');
+    document.head.appendChild(s);
+  },
+
+  _parseCsv(text) {
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (!lines.length) return [];
+    const delim = lines[0].split(';').length > lines[0].split(',').length ? ';' : ',';
+    return lines.map(line => {
+      const res = []; let inQ = false, cur = '';
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') { inQ = !inQ; }
+        else if (c === delim && !inQ) { res.push(cur.trim()); cur = ''; }
+        else cur += c;
+      }
+      res.push(cur.trim());
+      return res;
+    });
+  },
+
+  bcbImportHandleFile(file) {
+    if (!file) return;
+    const errEl  = document.getElementById('bcb-imp-s1-error');
+    const loadEl = document.getElementById('bcb-imp-s1-loading');
+    if (errEl)  errEl.style.display = 'none';
+    if (loadEl) loadEl.style.display = '';
+    const ext = file.name.split('.').pop().toLowerCase();
+    const done = (rows) => {
+      if (loadEl) loadEl.style.display = 'none';
+      if (!rows || rows.length < 2) {
+        if (errEl) { errEl.style.display = ''; errEl.textContent = 'Fichier vide ou illisible.'; } return;
+      }
+      S.bcbImp.rows = rows;
+      this._bcbImpShowStep(2);
+      this.bcbImportUpdateSelects();
+    };
+    if (ext === 'csv') {
+      const reader = new FileReader();
+      reader.onload = e => done(this._parseCsv(e.target.result));
+      reader.readAsText(file, 'UTF-8');
+    } else {
+      this._loadSheetJs(() => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          try {
+            const wb   = XLSX.read(new Uint8Array(e.target.result), { type:'array' });
+            const ws   = wb.Sheets[wb.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+            done(rows.map(r => r.map(c => String(c == null ? '' : c).trim())));
+          } catch(err) {
+            if (loadEl) loadEl.style.display = 'none';
+            if (errEl)  { errEl.style.display = ''; errEl.textContent = 'Erreur lecture : ' + err.message; }
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      });
+    }
+  },
+
+  bcbImportUpdateSelects() {
+    const rows = S.bcbImp.rows;
+    if (!rows.length) return;
+    const hasHeader = document.getElementById('bcb-imp-has-header')?.checked;
+    const headerRow = hasHeader ? rows[0] : null;
+    const ncols = Math.max(...rows.slice(0, 6).map(r => r.length));
+    const opts = Array.from({ length: ncols }, (_, i) => {
+      const lbl = headerRow && headerRow[i] ? `Col ${i+1} — ${headerRow[i]}` : `Colonne ${i+1}`;
+      return `<option value="${i}">${lbl}</option>`;
+    }).join('');
+    document.getElementById('bcb-imp-sel-bcb').innerHTML = opts;
+    document.getElementById('bcb-imp-sel-acheteur').innerHTML = opts;
+    document.getElementById('bcb-imp-sel-vente').innerHTML = `<option value="-1">(aucune)</option>` + opts;
+    if (hasHeader && headerRow) {
+      const try_ = (...kws) => { const i = headerRow.findIndex(h => kws.some(k => String(h).toLowerCase().includes(k))); return i >= 0 ? i : null; };
+      const bi = try_('bcb','id bcb','n° bcb','lot','code','ref bcb');
+      const ai = try_('achet','buyer','client','acquéreur');
+      const vi = try_('vente','sale','n° vente','num vente');
+      if (bi != null) document.getElementById('bcb-imp-sel-bcb').value = bi;
+      if (ai != null) document.getElementById('bcb-imp-sel-acheteur').value = ai;
+      if (vi != null) document.getElementById('bcb-imp-sel-vente').value = vi;
+    }
+    const previewRows = rows.slice(0, 8);
+    const maxC = Math.max(...previewRows.map(r => r.length));
+    const preview = document.getElementById('bcb-imp-preview');
+    if (preview) preview.innerHTML = `<table style="border-collapse:collapse;font-size:11px;min-width:${maxC*72}px;">` +
+      previewRows.map((row, ri) => {
+        const isH = ri === 0 && hasHeader;
+        return `<tr style="background:${isH?'#F1F5F9':'white'};border-bottom:1px solid #F1F5F9;">` +
+          Array.from({length:maxC}, (_,ci) =>
+            `<td style="padding:4px 8px;white-space:nowrap;${isH?'font-weight:700;color:#475569;':''}">${row[ci]||''}</td>`
+          ).join('') + '</tr>';
+      }).join('') + '</table>';
+  },
+
+  bcbImportAnalyze() {
+    const selBcb   = parseInt(document.getElementById('bcb-imp-sel-bcb')?.value);
+    const selAcht  = parseInt(document.getElementById('bcb-imp-sel-acheteur')?.value);
+    const selVente = parseInt(document.getElementById('bcb-imp-sel-vente')?.value ?? '-1');
+    const date     = document.getElementById('bcb-imp-date')?.value;
+    if (isNaN(selBcb) || isNaN(selAcht)) { this.toast('Sélectionnez les colonnes requises'); return; }
+    if (!date) { this.toast('Entrez une date de vente'); return; }
+    const hasHeader = document.getElementById('bcb-imp-has-header')?.checked;
+    const dataRows  = hasHeader ? S.bcbImp.rows.slice(1) : S.bcbImp.rows;
+    const lotsMap   = {};
+    S.bcbLots.forEach(l => { lotsMap[l.idBcb.trim().toUpperCase()] = l; });
+    const seen = {}, matched = [];
+    dataRows.forEach(row => {
+      const idBcb    = String(row[selBcb]  || '').trim();
+      const acheteur = String(row[selAcht] || '').trim();
+      const numVente = selVente >= 0 ? String(row[selVente] || '').trim() : '';
+      if (!idBcb) return;
+      const key  = idBcb.toUpperCase();
+      const isDup = !!seen[key]; seen[key] = true;
+      const lot  = lotsMap[key] || null;
+      matched.push({ idBcb, acheteur, numVente, dateVente: date, lot, isDup, alreadyVendu: lot?.vendu||false });
+    });
+    S.bcbImp.matched   = matched;
+    S.bcbImp.notInFile = S.bcbLots.filter(l => !seen[l.idBcb.toUpperCase()]);
+    this._bcbImpShowStep(3);
+    this._bcbImpRenderPreview();
+  },
+
+  _bcbImpRenderPreview() {
+    const { matched, notInFile } = S.bcbImp;
+    const found    = matched.filter(m => m.lot && !m.isDup);
+    const dups     = matched.filter(m => m.isDup);
+    const notFound = matched.filter(m => !m.lot && !m.isDup);
+    const alreadyV = matched.filter(m => m.lot && m.alreadyVendu && !m.isDup);
+    const statsEl  = document.getElementById('bcb-imp-stats');
+    if (statsEl) statsEl.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px;">
+      <div style="background:#D1FAE5;border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:22px;font-weight:800;color:#065F46;">${found.length}</div>
+        <div style="font-size:10px;color:#065F46;font-weight:600;">Lots trouvés</div>
+      </div>
+      <div style="background:${notFound.length?'#FEF3C7':'#F1F5F9'};border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:22px;font-weight:800;color:${notFound.length?'#92400E':'#94A3B8'};">${notFound.length}</div>
+        <div style="font-size:10px;color:${notFound.length?'#92400E':'#94A3B8'};font-weight:600;">Non trouvés</div>
+      </div>
+      ${dups.length?`<div style="background:#FEE2E2;border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:22px;font-weight:800;color:#DC2626;">${dups.length}</div>
+        <div style="font-size:10px;color:#DC2626;font-weight:600;">Doublons fichier</div></div>`:''}
+      ${alreadyV.length?`<div style="background:#EDE9FE;border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:22px;font-weight:800;color:#7C3AED;">${alreadyV.length}</div>
+        <div style="font-size:10px;color:#7C3AED;font-weight:600;">Déjà vendus</div></div>`:''}
+    </div>`;
+    const hasVente = matched.some(m => m.numVente);
+    const tableEl  = document.getElementById('bcb-imp-match-table');
+    if (tableEl) tableEl.innerHTML = `<div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;">Détail — ${matched.length} ligne${matched.length>1?'s':''} fichier</div>
+      <div style="overflow:auto;border:1px solid #E2E8F0;border-radius:10px;max-height:200px;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr style="background:#F8FAFC;border-bottom:1px solid #E2E8F0;">
+            <th style="padding:5px 8px;font-size:10px;text-align:left;color:#64748B;">N° BCB</th>
+            <th style="padding:5px 8px;font-size:10px;text-align:left;color:#64748B;">Acheteur</th>
+            ${hasVente?'<th style="padding:5px 8px;font-size:10px;text-align:left;color:#64748B;">N° vente</th>':''}
+            <th style="padding:5px 8px;font-size:10px;text-align:left;color:#64748B;">Statut</th>
+          </tr></thead><tbody>
+          ${matched.slice(0,60).map(m => {
+            const color = m.isDup?'#DC2626':!m.lot?'#D97706':m.alreadyVendu?'#7C3AED':'#065F46';
+            const icon  = m.isDup?'⚠️ doublon':!m.lot?'❌ inconnu':m.alreadyVendu?'🔄 déjà vendu':'✅';
+            return `<tr style="border-bottom:1px solid #F8FAFC;">
+              <td style="padding:4px 8px;font-size:11px;font-family:monospace;font-weight:600;">${m.idBcb}</td>
+              <td style="padding:4px 8px;font-size:11px;color:#475569;">${m.acheteur}</td>
+              ${hasVente?`<td style="padding:4px 8px;font-size:10px;color:#94A3B8;">${m.numVente}</td>`:''}
+              <td style="padding:4px 8px;font-size:11px;font-weight:600;color:${color};">${icon}</td>
+            </tr>`;
+          }).join('')}
+          ${matched.length>60?`<tr><td colspan="4" style="padding:5px 8px;font-size:10px;color:#94A3B8;text-align:center;">… et ${matched.length-60} autres</td></tr>`:''}
+          </tbody></table></div>`;
+    const unsoldEl = document.getElementById('bcb-imp-unsold');
+    if (unsoldEl) unsoldEl.innerHTML = notInFile.length ? `<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;padding:12px 14px;">
+      <div style="font-size:11px;font-weight:700;color:#92400E;margin-bottom:8px;">⚠️ ${notInFile.length} lot${notInFile.length>1?'s':''} absent${notInFile.length>1?'s':''} du fichier (non vendus)</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;">${notInFile.map(l=>`<span style="background:white;border:1px solid #FED7AA;border-radius:5px;padding:1px 7px;font-size:10px;font-family:monospace;color:#92400E;">${l.idBcb}</span>`).join('')}</div>
+    </div>` : '';
+    const toImport = found.concat(alreadyV);
+    const btn = document.getElementById('bcb-imp-confirm-btn');
+    if (btn) {
+      btn.disabled     = !toImport.length;
+      btn.style.opacity = toImport.length ? '1' : '.4';
+      btn.textContent  = toImport.length ? `✅ Importer ${toImport.length} lot${toImport.length>1?'s':''}` : 'Aucun lot à importer';
+    }
+  },
+
+  async bcbImportConfirm() {
+    const toImport = S.bcbImp.matched.filter(m => m.lot && !m.isDup);
+    if (!toImport.length) return;
+    const btn = document.getElementById('bcb-imp-confirm-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Import en cours…'; }
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ action:'bcb_import_acheteurs', lots: toImport.map(m=>({ idBcb:m.idBcb, acheteur:m.acheteur, numVente:m.numVente, dateVente:m.dateVente })) })
+      }, 30000);
+      const d = await r.json();
+      if (d.status !== 'ok') throw new Error(d.error || 'Erreur serveur');
+      toImport.forEach(m => {
+        const lot = S.bcbLots.find(l => l.idBcb === m.idBcb);
+        if (lot) { lot.acheteur = m.acheteur; lot.vendu = true; lot.dateVente = m.dateVente; lot.numVente = m.numVente; }
+      });
+      this._bcbImpShowStep(4);
+      const resultEl = document.getElementById('bcb-imp-result');
+      if (resultEl) resultEl.innerHTML = `
+        <div style="font-size:48px;margin-bottom:12px;">✅</div>
+        <div style="font-size:20px;font-weight:800;color:#1E293B;margin-bottom:6px;">${d.updated||toImport.length} lot${(d.updated||toImport.length)>1?'s':''} importé${(d.updated||toImport.length)>1?'s':''}</div>
+        ${d.notFound?.length?`<div style="font-size:12px;color:#D97706;margin-top:8px;">⚠️ ${d.notFound.length} N° BCB introuvable${d.notFound.length>1?'s':''} dans le sheet</div>`:''}
+        <div style="font-size:12px;color:#64748B;margin-top:8px;">Statut "vendu", acheteur et date de vente mis à jour dans Google Sheets.</div>`;
+    } catch(e) {
+      if (btn) { btn.disabled = false; btn.textContent = '↩ Réessayer'; }
+      this.toast('Erreur import : ' + e.message);
+    }
+  },
+
+  bcbImportBack2() { this._bcbImpShowStep(2); },
+
+  bcbImportReset() {
+    S.bcbImp = { step:1, rows:[], matched:[], notInFile:[] };
+    const fi = document.getElementById('bcb-imp-file');
+    if (fi) fi.value = '';
+    const errEl = document.getElementById('bcb-imp-s1-error');
+    if (errEl) errEl.style.display = 'none';
+    this._bcbImpShowStep(1);
   },
 
   bcbLotDetail(idx) {
@@ -8882,6 +9465,19 @@ const App = {
     if (rows.length) {
       S.lvu.marchandises = rows;
       this._lvuRenderMarchandises();
+      // Expéditeur : SONOTRAD (toujours pour source loxam)
+      const fExpN = document.getElementById('lvu-f-exp-nom');
+      const fExpA = document.getElementById('lvu-f-exp-adresse');
+      const fExpV = document.getElementById('lvu-f-exp-ville');
+      const fExpP = document.getElementById('lvu-f-exp-pays');
+      if (fExpN && !fExpN.value) fExpN.value = 'SONOTRAD';
+      if (fExpA && !fExpA.value) fExpA.value = '9 Z.A. des Renardières';
+      if (fExpV && !fExpV.value) fExpV.value = '53250 JAVRON-LES-CHAPELLES';
+      if (fExpP && !fExpP.value) fExpP.value = 'FR - France';
+      // Donneur d'ordre : LOXAM 72 CRM
+      const fDon = document.getElementById('lvu-f-donneur');
+      if (fDon && !fDon.value) fDon.value = 'LOXAM 72 CRM';
+      // Destinataire : agence de destination
       if (firstAgence && S.lvu.agencies.length > 0) {
         const ag = S.lvu.agencies.find(a => a.code === firstAgence || a.code === firstAgence.padStart(4,'0') || a.code.replace(/^0+/,'') === firstAgence.replace(/^0+/,''));
         if (ag) {
@@ -10346,12 +10942,89 @@ window.addEventListener('offline', _updateOnline);
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW:', e));
 }
+// ── Pull-to-refresh ──────────────────────────────────────────────────────────
+Object.assign(App, {
+  _ptrSetup() {
+    const mainEl = document.querySelector('.main-content');
+    const ind    = document.getElementById('ptr-indicator');
+    if (!mainEl) return;
+    let startY = 0, startX = 0, pulling = false, refreshing = false;
+    const THRESHOLD = 70;
+
+    const _show = (dy) => {
+      if (!ind) return;
+      const pct = Math.min(dy / THRESHOLD, 1);
+      ind.style.opacity   = String(Math.min(pct * 1.5, 1));
+      ind.style.transform = `translateX(-50%) translateY(${-54 + pct * 54}px)`;
+      const icon = document.getElementById('ptr-icon');
+      if (icon) { icon.style.animation = ''; icon.style.transform = `rotate(${pct * 180}deg)`; icon.textContent = '↓'; }
+    };
+    const _hide = () => {
+      if (!ind) return;
+      ind.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
+      ind.style.opacity    = '0';
+      ind.style.transform  = 'translateX(-50%) translateY(-54px)';
+    };
+
+    mainEl.addEventListener('touchstart', e => {
+      if (refreshing) return;
+      startY = e.touches[0].clientY;
+      startX = e.touches[0].clientX;
+      pulling = mainEl.scrollTop <= 0;
+      if (ind) ind.style.transition = 'none';
+    }, { passive: true });
+
+    mainEl.addEventListener('touchmove', e => {
+      if (!pulling || refreshing) return;
+      const dy = e.touches[0].clientY - startY;
+      const dx = Math.abs(e.touches[0].clientX - startX);
+      if (dx > 30 || dy <= 0) { pulling = false; _hide(); return; }
+      _show(dy);
+    }, { passive: true });
+
+    mainEl.addEventListener('touchend', e => {
+      if (!pulling || refreshing) return;
+      pulling = false;
+      const dy = e.changedTouches[0].clientY - startY;
+      if (dy >= THRESHOLD) {
+        refreshing = true;
+        const icon = document.getElementById('ptr-icon');
+        if (icon) { icon.textContent = '⟳'; icon.style.transform = ''; icon.style.animation = 'spin 0.6s linear infinite'; }
+        if (ind) { ind.style.transition = 'none'; _show(THRESHOLD); }
+        setTimeout(() => {
+          App._ptrRefresh();
+          _hide();
+          setTimeout(() => { refreshing = false; }, 350);
+        }, 350);
+      } else {
+        _hide();
+      }
+    });
+  },
+
+  _ptrRefresh() {
+    const v = S.view;
+    if      (v === 'departures')      this.loadDepartures(true);
+    else if (v === 'arrivals')        this.loadArrivalsData(true);
+    else if (v === 'loxam-menu')      { S.depsLoaded = false; S.arrivalsLoaded = false; this.loxamMenuInit(); }
+    else if (v === 'stock-dashboard') this.loadStockDashboard(true);
+    else if (v === 'stock')           { S.stockLoaded = false; this.loadStockCatalog(); }
+    else if (v === 'stock-history')   this.loadStockHistory(true);
+    else if (v === 'bcb-lots')        this.bcbLotsLoad(true);
+    else if (v === 'bcb-enlevements') this.bcbEnlevementsLoad(true);
+    else if (v === 'lvu-history')     this.lvuLoadHistory();
+    else if (v === 'annuaire')        this.annuaireLoad(true);
+    else                              this.toast('↺ Actualisé');
+  },
+});
+
 document.addEventListener('DOMContentLoaded', () => {
   // Vérifie la session → affiche login ou accueil
   App._initAuth();
   // Détecte le mode TEST via l'API (ADR-007 — non-breaking si GAS actuel)
   App._applyEnvMode();
   _updateOnline();
+  App._ptrSetup();
   // ── Drag-and-drop sur la dropzone XLS ────────────────────────────────────
   const dz = document.getElementById('xls-dropzone');
   if (dz) {
@@ -10435,6 +11108,18 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     </div>
   </div>
+</div>
+
+<!-- Pull-to-refresh indicator -->
+<div id="ptr-indicator"
+  style="position:fixed;top:calc(56px + env(safe-area-inset-top,0px));left:50%;
+         transform:translateX(-50%) translateY(-54px);opacity:0;
+         background:white;border-radius:20px;padding:7px 16px 7px 12px;
+         box-shadow:0 2px 12px rgba(0,0,0,.18);font-size:13px;font-weight:600;
+         color:#475569;display:flex;align-items:center;gap:8px;
+         z-index:500;pointer-events:none;white-space:nowrap;">
+  <span id="ptr-icon" style="display:inline-block;font-size:16px;">↓</span>
+  Actualiser
 </div>
 </body>
 </html>
