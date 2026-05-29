@@ -9025,7 +9025,8 @@ ${bodies}${sansAcheteurBody}
       const now    = new Date();
       const date   = now.toLocaleDateString('fr-FR');
       const chauffeur = [c.prenom, c.nom].filter(Boolean).join(' ');
-      const destination = [c.client, c.clientAdresse, c.clientVille, c.clientPays].filter(Boolean).join(' — ');
+      const clientName  = S.bcbDepartBuyer || c.client;
+      const destination = [clientName, c.clientAdresse, c.clientVille, c.clientPays].filter(Boolean).join(' — ');
       // 2. Construire l'objet enlèvement
       const enlevement = {
         numero, date, chauffeur,
