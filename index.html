@@ -9465,6 +9465,19 @@ ${bodies}${sansAcheteurBody}
     if (rows.length) {
       S.lvu.marchandises = rows;
       this._lvuRenderMarchandises();
+      // Expéditeur : SONOTRAD (toujours pour source loxam)
+      const fExpN = document.getElementById('lvu-f-exp-nom');
+      const fExpA = document.getElementById('lvu-f-exp-adresse');
+      const fExpV = document.getElementById('lvu-f-exp-ville');
+      const fExpP = document.getElementById('lvu-f-exp-pays');
+      if (fExpN && !fExpN.value) fExpN.value = 'SONOTRAD';
+      if (fExpA && !fExpA.value) fExpA.value = '9 Z.A. des Renardières';
+      if (fExpV && !fExpV.value) fExpV.value = '53250 JAVRON-LES-CHAPELLES';
+      if (fExpP && !fExpP.value) fExpP.value = 'FR - France';
+      // Donneur d'ordre : LOXAM 72 CRM
+      const fDon = document.getElementById('lvu-f-donneur');
+      if (fDon && !fDon.value) fDon.value = 'LOXAM 72 CRM';
+      // Destinataire : agence de destination
       if (firstAgence && S.lvu.agencies.length > 0) {
         const ag = S.lvu.agencies.find(a => a.code === firstAgence || a.code === firstAgence.padStart(4,'0') || a.code.replace(/^0+/,'') === firstAgence.replace(/^0+/,''));
         if (ag) {
