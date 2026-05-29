@@ -9747,6 +9747,8 @@ ${bodies}${sansAcheteurBody}
         note: d.note || '', convoi: d.convoi ? 'Oui' : 'Non',
         poids: (d.marchandises || []).reduce((s, r) => s + (parseFloat(r.poids) || 0), 0).toFixed(3),
         ml: parseFloat(d.total?.ml) || '',
+        source: d.source || 'manual',
+        transporteur_id: d.transporteur?.id || '',
         planning_codes: (d.marchandises || []).map(m => m.note).filter(Boolean),
         marchandises_desc: (d.marchandises || []).map(m => m.description).filter(Boolean).join(', '),
         grutage: (S.lvu.loxamItems || []).some(i => {
