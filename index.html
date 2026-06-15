@@ -1084,12 +1084,14 @@
           <span class="activity-badge badge-active">● Actif</span>
         </div>
 
-        <!-- Pointage — actif -->
-        <div class="activity-card" data-ready="true" onclick="App.selectActivity('pointage')">
+        <!-- Pointage — visible uniquement pour role=admin -->
+        <div class="activity-card" id="pointage-home-card" data-ready="true"
+          onclick="App.selectActivity('pointage')"
+          style="display:none;">
           <div class="activity-icon">🕐</div>
           <div class="activity-name">Pointage</div>
           <div class="activity-desc">Entrées &amp; Sorties du personnel</div>
-          <span class="activity-badge badge-active">● Actif</span>
+          <span class="activity-badge" style="background:#FEF3C7;color:#92400E;">Admin</span>
         </div>
 
 <!-- Annuaire — visible uniquement pour role=admin -->
@@ -3134,6 +3136,8 @@ const App = {
     if (adminCard) adminCard.style.display = isAdmin ? '' : 'none';
     const annCard = document.getElementById('annuaire-home-card');
     if (annCard) annCard.style.display = isAdmin ? '' : 'none';
+    const ptgCard = document.getElementById('pointage-home-card');
+    if (ptgCard) ptgCard.style.display = isAdmin ? '' : 'none';
 
     // ── Pastilles de chargement sur les cartes d'accueil ─────────────────
     this._updateHomeCards();
