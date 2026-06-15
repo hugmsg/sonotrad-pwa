@@ -14,6 +14,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="lv-layout-constants.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="supabase.js"></script>
   <style>
     :root { --brand: #1A5276; --accent: #2E86C1; }
     /* Mode TEST : header rouge + badge visible (voir ADR-007 dans sonotrad-api) */
@@ -803,6 +805,66 @@
       padding: 14px 16px; display: none;
     }
   </style>
+  <style>
+    /* ═══════════════════════════════════════════
+       MODULE POINTAGE — ÉCRAN KIOSQUE
+       ═══════════════════════════════════════════ */
+    .ptg-type-btn {
+      padding: 14px 8px;
+      border-radius: 12px;
+      border: 2px solid #E2E8F0;
+      background: #F8FAFC;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      color: #475569;
+      transition: all .15s;
+      text-align: center;
+      line-height: 1.3;
+    }
+    .ptg-type-btn:active { transform: scale(0.97); }
+    .ptg-type-btn.active.type-ENTREE      { background: #DCFCE7; border-color: #15803D; color: #14532D; }
+    .ptg-type-btn.active.type-SORTIE      { background: #FEE2E2; border-color: #DC2626; color: #7F1D1D; }
+    .ptg-type-btn.active.type-PAUSE_DEBUT { background: #FEF3C7; border-color: #D97706; color: #78350F; }
+    .ptg-type-btn.active.type-PAUSE_FIN   { background: #DBEAFE; border-color: #2563EB; color: #1E3A8A; }
+    .ptg-dot {
+      width: 14px; height: 14px; border-radius: 50%;
+      border: 2px solid #CBD5E1; background: transparent;
+      transition: background .12s, border-color .12s, transform .12s;
+    }
+    .ptg-dot.filled { background: var(--brand); border-color: var(--brand); transform: scale(1.1); }
+    @keyframes ptg-shake {
+      0%,100% { transform: translateX(0); }
+      20%,60% { transform: translateX(-8px); }
+      40%,80% { transform: translateX(8px); }
+    }
+    .ptg-dots-row.shake { animation: ptg-shake .38s ease; }
+    .ptg-key {
+      height: 60px; border-radius: 12px; border: none;
+      background: white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.10);
+      color: #1E293B; font-size: 22px; font-weight: 600;
+      cursor: pointer; transition: background .1s;
+      -webkit-tap-highlight-color: transparent;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .ptg-key:active { background: #F1F5F9; }
+    .ptg-key-empty { visibility: hidden; box-shadow: none; }
+    .ptg-feedback-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.88);
+      z-index: 9000;
+      flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: 24px;
+    }
+    .ptg-feedback-overlay.visible { display: flex; }
+    .ptg-service-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px; background: white; border-radius: 10px;
+      margin-bottom: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+  </style>
 </head>
 <body>
 
@@ -1015,6 +1077,14 @@
           <span class="activity-badge badge-active">● Actif</span>
         </div>
 
+        <!-- Pointage — actif -->
+        <div class="activity-card" data-ready="true" onclick="App.selectActivity('pointage')">
+          <div class="activity-icon">🕐</div>
+          <div class="activity-name">Pointage</div>
+          <div class="activity-desc">Entrées &amp; Sorties du personnel</div>
+          <span class="activity-badge badge-active">● Actif</span>
+        </div>
+
 <!-- Annuaire — visible uniquement pour role=admin -->
         <div class="activity-card" id="annuaire-home-card" data-ready="true"
           onclick="App.selectActivity('annuaire')"
@@ -1150,6 +1220,77 @@
       </div>
     </div>
 
+    <!-- ── VIEW : POINTAGE ─────────────────────────────────────────────── -->
+    <div class="view" id="view-pointage">
+
+      <!-- Sélecteur de type -->
+      <div style="margin-bottom:16px;">
+        <p class="label-sm" style="text-align:center;margin-bottom:10px;">Type de pointage</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button class="ptg-type-btn active type-ENTREE" data-type="ENTREE"      onclick="App.ptgSelectType('ENTREE')">🟢 Entrée</button>
+          <button class="ptg-type-btn"                   data-type="SORTIE"       onclick="App.ptgSelectType('SORTIE')">🔴 Sortie</button>
+          <button class="ptg-type-btn"                   data-type="PAUSE_DEBUT"  onclick="App.ptgSelectType('PAUSE_DEBUT')">⏸ Pause début</button>
+          <button class="ptg-type-btn"                   data-type="PAUSE_FIN"    onclick="App.ptgSelectType('PAUSE_FIN')">▶ Pause fin</button>
+        </div>
+      </div>
+
+      <!-- Bloc PIN -->
+      <div style="background:#F8FAFC;border-radius:16px;padding:20px 16px;">
+        <p style="text-align:center;font-size:14px;color:#64748B;margin:0 0 14px;font-weight:500;">Saisissez votre PIN</p>
+
+        <!-- Points de saisie -->
+        <div class="ptg-dots-row" id="ptg-dots-row"
+          style="display:flex;gap:20px;justify-content:center;margin-bottom:14px;">
+          <div class="ptg-dot" id="ptg-dot-0"></div>
+          <div class="ptg-dot" id="ptg-dot-1"></div>
+          <div class="ptg-dot" id="ptg-dot-2"></div>
+          <div class="ptg-dot" id="ptg-dot-3"></div>
+        </div>
+
+        <!-- Message état -->
+        <div id="ptg-msg"
+          style="text-align:center;font-size:13px;min-height:20px;margin-bottom:14px;color:#64748B;font-weight:500;"></div>
+
+        <!-- Clavier numérique -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:280px;margin:0 auto;">
+          <button class="ptg-key" onclick="App.ptgPress('1')">1</button>
+          <button class="ptg-key" onclick="App.ptgPress('2')">2</button>
+          <button class="ptg-key" onclick="App.ptgPress('3')">3</button>
+          <button class="ptg-key" onclick="App.ptgPress('4')">4</button>
+          <button class="ptg-key" onclick="App.ptgPress('5')">5</button>
+          <button class="ptg-key" onclick="App.ptgPress('6')">6</button>
+          <button class="ptg-key" onclick="App.ptgPress('7')">7</button>
+          <button class="ptg-key" onclick="App.ptgPress('8')">8</button>
+          <button class="ptg-key" onclick="App.ptgPress('9')">9</button>
+          <button class="ptg-key ptg-key-empty" disabled aria-hidden="true"></button>
+          <button class="ptg-key" onclick="App.ptgPress('0')">0</button>
+          <button class="ptg-key" onclick="App.ptgDel()" style="font-size:18px;">⌫</button>
+        </div>
+      </div>
+
+      <!-- Liste en service -->
+      <div style="margin-top:20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <p class="label-sm" style="margin:0;">En service actuellement</p>
+          <span id="ptg-en-service-count" style="font-size:11px;color:#94A3B8;"></span>
+        </div>
+        <div id="ptg-en-service-list">
+          <div style="text-align:center;padding:16px;color:#CBD5E1;font-size:13px;">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feedback visuel plein écran (3 s) -->
+    <div id="ptg-feedback" class="ptg-feedback-overlay">
+      <div id="ptg-feedback-icon" style="font-size:72px;margin-bottom:20px;line-height:1;">✅</div>
+      <div id="ptg-feedback-name"
+        style="font-size:30px;font-weight:800;color:white;margin-bottom:10px;letter-spacing:-.3px;"></div>
+      <div id="ptg-feedback-type"
+        style="font-size:18px;color:rgba(255,255,255,0.75);margin-bottom:24px;"></div>
+      <div id="ptg-feedback-time"
+        style="font-size:15px;color:rgba(255,255,255,0.45);"></div>
+    </div>
+
     <!-- ── VIEW : ADMIN ─────────────────────────────────────────────────── -->
     <div class="view" id="view-admin">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
@@ -1179,6 +1320,7 @@
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-agorastore" value="agorastore"       > Agorastore</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-stockage"   value="stockage"         > Stockage</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-lvu"        value="lvu"              > LV/CMR</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-pointage"   value="pointage"         > Pointage</label>
           </div>
         </div>
         <div style="margin-bottom:12px;">
@@ -2817,7 +2959,7 @@ const App = {
     this._render();
   },
   selectActivity(name) {
-    const ready = { loxam: true, stockage: true, bcb: true, lvu: true, annuaire: true };
+    const ready = { loxam: true, stockage: true, bcb: true, lvu: true, annuaire: true, pointage: true };
     if (!ready[name]) {
       this.toast('Cette activité est en cours de développement 🚧');
       return;
@@ -2836,7 +2978,8 @@ const App = {
     if (name === 'stockage') this.go('stock-dashboard');
     if (name === 'bcb')      this.go('bcb-menu');
     if (name === 'lvu')      this.lvuInit();
-    if (name === 'annuaire') this.go('annuaire');
+    if (name === 'annuaire')  this.go('annuaire');
+    if (name === 'pointage')  { this.go('pointage'); this.ptgInit(); }
   },
   _render() {
     const v      = S.view;
@@ -2898,7 +3041,7 @@ const App = {
     const actEl = document.getElementById('breadcrumb-activity');
     if (bcEl) bcEl.style.display = showBreadcrumb ? 'flex' : 'none';
     if (showBreadcrumb && actEl) {
-      const names = { loxam:'LOXAM', bcb:'BCB', stockage:'LOXAM', lvu:'LV / CMR', annuaire:'Annuaire' };
+      const names = { loxam:'LOXAM', bcb:'BCB', stockage:'LOXAM', lvu:'LV / CMR', annuaire:'Annuaire', pointage:'Pointage' };
       actEl.textContent = names[S.activity] || S.activity;
     }
 
@@ -2922,6 +3065,7 @@ const App = {
       stockage: { icon: '📦', title: 'Stockage Pidem', sub: 'Gestion des pièces'  },
       lvu:      { icon: '📄', title: 'LV / CMR',       sub: 'Lettres de voiture'  },
       annuaire: { icon: '📋', title: 'Annuaire',        sub: 'Destinations & agences' },
+      pointage: { icon: '🕐', title: 'Pointage',        sub: 'Entrées & Sorties'       },
     };
     const titleEl    = document.getElementById('header-title');
     const subtitleEl = document.getElementById('header-subtitle');
@@ -3362,7 +3506,7 @@ const App = {
           <div style="margin-bottom:8px;padding:8px 10px;background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:8px;">
             <div style="font-size:11px;font-weight:600;color:#94A3B8;margin-bottom:6px;">ACTIVITÉS</div>
             <div style="display:flex;flex-wrap:wrap;gap:8px;">
-              ${['loxam','bcb','agorastore','stockage','lvu'].map(a => `
+              ${['loxam','bcb','agorastore','stockage','lvu','pointage'].map(a => `
                 <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">
                   <input type="checkbox" id="uact-${u.prenom}-${u.nom}-${a}" value="${a}"
                     ${u.activites.includes(a)?'checked':''}
@@ -3409,7 +3553,7 @@ const App = {
   _hideCreateUserForm() {
     document.getElementById('admin-create-form').style.display = 'none';
     ['nu-prenom','nu-nom','nu-pin'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-    ['loxam','bcb','agorastore','stockage','lvu'].forEach(a => {
+    ['loxam','bcb','agorastore','stockage','lvu','pointage'].forEach(a => {
       const el = document.getElementById('nu-act-' + a);
       if (el) el.checked = (a === 'loxam'); // reset : loxam coché par défaut
     });
@@ -3423,7 +3567,7 @@ const App = {
     const nom    = document.getElementById('nu-nom').value.trim();
     const role   = document.getElementById('nu-role').value;
     const pin    = document.getElementById('nu-pin').value.trim();
-    const activites = ['loxam','bcb','agorastore','stockage','lvu'].filter(a => {
+    const activites = ['loxam','bcb','agorastore','stockage','lvu','pointage'].filter(a => {
       const el = document.getElementById('nu-act-' + a); return el && el.checked;
     });
 
@@ -3497,7 +3641,7 @@ const App = {
   },
 
   async _updateUserActivites(prenom, nom) {
-    const activites = ['loxam','bcb','agorastore','stockage','lvu'].filter(a => {
+    const activites = ['loxam','bcb','agorastore','stockage','lvu','pointage'].filter(a => {
       const el = document.getElementById(`uact-${prenom}-${nom}-${a}`);
       return el && el.checked;
     });
@@ -10353,6 +10497,223 @@ ${bodies}${sansAcheteurBody}
         this.toast('✓ Agence supprimée');
       } else { this.toast('Erreur : ' + (res.error || 'inconnue')); }
     } catch(e) { this.toast('Erreur réseau : ' + e.message); }
+  },
+
+  /* ─ Pointage ─ */
+
+  _ptg: {
+    pin:          '',
+    type:         'ENTREE',
+    feedbackTimer: null,
+    realtimeSub:  null,
+    submitting:   false,
+  },
+
+  ptgInit() {
+    this._ptg.pin       = '';
+    this._ptg.submitting = false;
+    this._ptgRenderDots();
+    this._ptgMsg('');
+    this.ptgSelectType('ENTREE');
+    this._ptgLoadEnService();
+    this._ptgSubscribeRealtime();
+  },
+
+  ptgSelectType(type) {
+    this._ptg.type = type;
+    this._ptg.pin  = '';
+    this._ptg.submitting = false;
+    this._ptgRenderDots();
+    this._ptgMsg('');
+    document.querySelectorAll('.ptg-type-btn').forEach(btn => {
+      btn.classList.remove('active', 'type-ENTREE', 'type-SORTIE', 'type-PAUSE_DEBUT', 'type-PAUSE_FIN');
+    });
+    const btn = document.querySelector(`.ptg-type-btn[data-type="${type}"]`);
+    if (btn) btn.classList.add('active', `type-${type}`);
+  },
+
+  ptgPress(digit) {
+    if (this._ptg.submitting || this._ptg.pin.length >= 4) return;
+    this._ptg.pin += digit;
+    this._ptgRenderDots();
+    if (this._ptg.pin.length === 4) {
+      this._ptg.submitting = true;
+      setTimeout(() => this._ptgSubmit(), 180);
+    }
+  },
+
+  ptgDel() {
+    if (this._ptg.submitting) return;
+    this._ptg.pin = this._ptg.pin.slice(0, -1);
+    this._ptgRenderDots();
+    this._ptgMsg('');
+  },
+
+  _ptgRenderDots() {
+    for (let i = 0; i < 4; i++) {
+      const dot = document.getElementById(`ptg-dot-${i}`);
+      if (dot) dot.classList.toggle('filled', i < this._ptg.pin.length);
+    }
+  },
+
+  _ptgMsg(msg, color = '#64748B') {
+    const el = document.getElementById('ptg-msg');
+    if (el) { el.textContent = msg; el.style.color = color; }
+  },
+
+  async _ptgSubmit() {
+    const db = window.SupabaseDB;
+    if (!db) {
+      this._ptgMsg('⚠ Supabase non configuré — clé anon manquante', '#DC2626');
+      this._ptgReset(1800);
+      return;
+    }
+
+    this._ptgMsg('Vérification…', '#94A3B8');
+
+    // 1. Authentifier par PIN
+    const { data: auth, error: authErr } = await db.rpc('authentifier_par_pin', { p_pin: this._ptg.pin });
+    if (authErr || !auth?.ok) {
+      this._ptgShake();
+      this._ptgMsg(auth?.message || 'Code PIN incorrect.', '#DC2626');
+      this._ptgReset(1600);
+      return;
+    }
+
+    // 2. Vérifier cohérence métier
+    const { data: verif, error: verifErr } = await db.rpc('verifier_pointage', {
+      p_employe_id: auth.id,
+      p_type:       this._ptg.type,
+    });
+    if (verifErr || !verif?.ok) {
+      this._ptgShake();
+      this._ptgMsg(verif?.message || 'Pointage non autorisé.', '#DC2626');
+      this._ptgReset(2000);
+      return;
+    }
+
+    // 3. Insérer le pointage
+    const { error: insertErr } = await db.from('pointages').insert({
+      employe_id: auth.id,
+      type:       this._ptg.type,
+      source:     'kiosque',
+    });
+    if (insertErr) {
+      this._ptgMsg('Erreur lors de l\'enregistrement.', '#DC2626');
+      this._ptgReset(1800);
+      return;
+    }
+
+    // 4. Feedback visuel 3 s
+    this._ptgShowFeedback(auth.nom, auth.prenom, this._ptg.type);
+  },
+
+  _ptgReset(delayMs = 0) {
+    setTimeout(() => {
+      this._ptg.pin        = '';
+      this._ptg.submitting  = false;
+      this._ptgRenderDots();
+      this._ptgMsg('');
+    }, delayMs);
+  },
+
+  _ptgShake() {
+    const row = document.getElementById('ptg-dots-row');
+    if (!row) return;
+    row.classList.add('shake');
+    setTimeout(() => row.classList.remove('shake'), 420);
+  },
+
+  _ptgShowFeedback(nom, prenom, type) {
+    const el = document.getElementById('ptg-feedback');
+    if (!el) return;
+
+    const typeMeta = {
+      ENTREE:      { label: 'Entrée en service',  icon: '✅' },
+      SORTIE:      { label: 'Sortie de service',  icon: '👋' },
+      PAUSE_DEBUT: { label: 'Début de pause',     icon: '⏸' },
+      PAUSE_FIN:   { label: 'Fin de pause',       icon: '▶' },
+    };
+    const meta = typeMeta[type] || { label: type, icon: '✓' };
+
+    document.getElementById('ptg-feedback-name').textContent  = `${prenom} ${nom}`;
+    document.getElementById('ptg-feedback-type').textContent  = meta.label;
+    document.getElementById('ptg-feedback-icon').textContent  = meta.icon;
+    document.getElementById('ptg-feedback-time').textContent  =
+      new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+    el.classList.add('visible');
+
+    clearTimeout(this._ptg.feedbackTimer);
+    this._ptg.feedbackTimer = setTimeout(() => {
+      el.classList.remove('visible');
+      this._ptg.pin        = '';
+      this._ptg.submitting  = false;
+      this._ptgRenderDots();
+      this._ptgMsg('');
+      this._ptgLoadEnService();
+    }, 3000);
+  },
+
+  async _ptgLoadEnService() {
+    const db = window.SupabaseDB;
+    const list  = document.getElementById('ptg-en-service-list');
+    const count = document.getElementById('ptg-en-service-count');
+    if (!list) return;
+
+    if (!db) {
+      list.innerHTML = '<div style="text-align:center;padding:12px;color:#CBD5E1;font-size:12px;">Supabase non configuré</div>';
+      return;
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    // en_service_vue : vue sécurisée sans pin_hash, accessible anon
+    const { data, error } = await db
+      .from('en_service_vue')
+      .select('employe_id, nom, prenom, statut, heure_entree')
+      .eq('date', today)
+      .eq('statut', 'EN_SERVICE')
+      .order('heure_entree');
+
+    if (error || !data?.length) {
+      list.innerHTML = '<div style="text-align:center;padding:16px;color:#CBD5E1;font-size:13px;">Personne en service pour l\'instant</div>';
+      if (count) count.textContent = '';
+      return;
+    }
+
+    if (count) count.textContent = `${data.length} personne${data.length > 1 ? 's' : ''}`;
+    list.innerHTML = data.map(row => {
+      const e = { nom: row.nom, prenom: row.prenom };
+      const since = row.heure_entree
+        ? new Date(row.heure_entree).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+        : '';
+      const initiale = (e.prenom?.[0] || '?').toUpperCase();
+      return `<div class="ptg-service-row">
+        <div style="width:36px;height:36px;border-radius:50%;background:#DCFCE7;
+          display:flex;align-items:center;justify-content:center;
+          font-size:14px;font-weight:700;color:#15803D;flex-shrink:0;">${initiale}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:600;color:#1E293B;">${e.prenom || ''} ${e.nom || ''}</div>
+          ${since ? `<div style="font-size:11px;color:#94A3B8;">Depuis ${since}</div>` : ''}
+        </div>
+        <div style="width:8px;height:8px;border-radius:50%;background:#4ADE80;flex-shrink:0;"></div>
+      </div>`;
+    }).join('');
+  },
+
+  _ptgSubscribeRealtime() {
+    const db = window.SupabaseDB;
+    if (!db) return;
+    if (this._ptg.realtimeSub) {
+      db.removeChannel(this._ptg.realtimeSub);
+      this._ptg.realtimeSub = null;
+    }
+    this._ptg.realtimeSub = db
+      .channel('ptg-pointages-watch')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pointages' }, () => {
+        this._ptgLoadEnService();
+      })
+      .subscribe();
   },
 
   /* ─ Toast ─ */

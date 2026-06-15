@@ -4,13 +4,14 @@
 //             Network-first pour les appels API AppScript
 // ═══════════════════════════════════════════════════════════════════════════
 
-const CACHE_NAME  = 'sonotrad-v2';
+const CACHE_NAME  = 'sonotrad-v3';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
+  './supabase.js',
   'https://cdn.tailwindcss.com',
 ];
 
