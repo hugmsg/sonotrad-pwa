@@ -3624,6 +3624,11 @@ const App = {
       const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
       const data = await resp.json();
       if (data.status === 'ok') {
+        // Sync vers Supabase : même PIN pour l'app et le pointage kiosque
+        if (window.SupabaseDB) {
+          await window.SupabaseDB.rpc('upsert_employe_pointage',
+            { p_nom: nom, p_prenom: prenom, p_pin: pin });
+        }
         this.toast(`✓ ${prenom} ${nom} créé !`);
         this._hideCreateUserForm();
         this.loadAdminUsers();
@@ -3658,6 +3663,11 @@ const App = {
       const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
       const data = await resp.json();
       if (data.status === 'ok') {
+        // Sync vers Supabase : même PIN pour l'app et le pointage kiosque
+        if (window.SupabaseDB) {
+          await window.SupabaseDB.rpc('upsert_employe_pointage',
+            { p_nom: nom, p_prenom: prenom, p_pin: pin });
+        }
         this.toast(`✓ PIN de ${prenom} réinitialisé`);
         document.getElementById(`reset-pin-${prenom}-${nom}`).style.display = 'none';
         this.loadAdminUsers();
