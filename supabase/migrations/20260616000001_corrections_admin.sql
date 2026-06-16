@@ -11,7 +11,7 @@ GRANT SELECT ON employes_actifs_vue TO anon;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- FONCTION : admin_add_pointage
--- Insère un pointage de correction (source='correction').
+-- Insère un pointage de correction (source='admin').
 -- Bypass RLS via SECURITY DEFINER — réservé aux admins côté PWA.
 -- Le trigger _sync_heures_journalieres recalcule automatiquement les totaux.
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -34,7 +34,7 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'message', 'Employe introuvable.');
   END IF;
   INSERT INTO pointages (employe_id, type, horodatage, source, valide, raison_modif, modifie_par)
-  VALUES (p_employe_id, p_type, p_horodatage, 'correction', true, 'Ajout manuel', p_modifie_par);
+  VALUES (p_employe_id, p_type, p_horodatage, 'admin', true, 'Ajout manuel', p_modifie_par);
   RETURN jsonb_build_object('ok', true);
 END;
 $$;

@@ -10934,7 +10934,7 @@ ${bodies}${sansAcheteurBody}
       const annule = !p.valide
         ? '<span style="font-size:10px;font-weight:600;color:#DC2626;background:#FEE2E2;padding:1px 6px;border-radius:8px;margin-left:6px;">annulé</span>'
         : '';
-      const corrBadge = p.source === 'correction'
+      const corrBadge = p.source === 'admin'
         ? '<span title="Ajout manuel" style="font-size:9px;color:#D97706;margin-left:4px;font-weight:700;">✎</span>'
         : '';
       const cancelBtn = p.valide
@@ -10999,71 +10999,86 @@ ${bodies}${sansAcheteurBody}
     const el = document.getElementById('ptg-alertes');
     if (!db || !el) return;
     try {
-      const today   = new Date().toISOString().slice(0, 10);
-      const limit   = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+      const today = new Date().toISOString().slice(0, 10);
+      const limit = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
 
       const [r1, r2] = await Promise.all([
         db.from('heures_rapport_vue')
           .select('nom, prenom, date, statut, heure_entree')
-          .lt('date', today)
-          .gte('date', limit)
+          .lt('date', today).gte('date', limit)
           .in('statut', ['EN_SERVICE', 'EN_PAUSE', 'ANOMALIE'])
           .order('date', { ascending: false }),
         db.from('en_service_vue').select('nom, prenom, heure_entree, statut'),
       ]);
 
-      const oublis = r1.data || [];
-      const longs  = (r2.data || []).filter(e => {
-        if (!e.heure_entree) return false;
-        return (Date.now() - new Date(e.heure_entree)) / 3600000 > 8;
-      });
-      const total = oublis.length + longs.length;
-
-      if (!total) {
-        el.innerHTML = `<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;
-          padding:8px 12px;font-size:12px;font-weight:600;color:#15803D;">
-          ✓ Aucune anomalie détectée
-        </div>`;
-        return;
-      }
+      const oublis   = r1.data || [];
+      const enSvc    = r2.data || [];
+      const longs    = enSvc.filter(e => e.heure_entree &&
+        (Date.now() - new Date(e.heure_entree)) / 3600000 > 8);
 
       const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('fr-FR',
         { weekday: 'short', day: 'numeric', month: 'short' });
       const fmtDur = e => {
-        const h = Math.floor((Date.now() - new Date(e.heure_entree)) / 3600000);
-        const m = Math.floor(((Date.now() - new Date(e.heure_entree)) % 3600000) / 60000);
-        return `en service depuis ${h}h${String(m).padStart(2,'0')}`;
+        const ms = Date.now() - new Date(e.heure_entree);
+        const h  = Math.floor(ms / 3600000);
+        const m  = Math.floor((ms % 3600000) / 60000);
+        return `${h}h${String(m).padStart(2,'0')}`;
       };
 
-      const rows = [
-        ...oublis.map(e => ({
-          bg: '#FFFBEB', border: '#FDE68A', color: '#92400E',
-          text: `<strong>${e.prenom} ${e.nom.toUpperCase()}</strong> — sortie manquante · ${fmtDate(e.date)}`,
-          action: `App.ptgAddModalShow()`, actionLabel: '+ Ajouter',
-        })),
-        ...longs.map(e => ({
-          bg: '#FFF5F5', border: '#FECACA', color: '#DC2626',
-          text: `<strong>${e.prenom} ${e.nom.toUpperCase()}</strong> — ${fmtDur(e)} (> 8h)`,
-          action: null, actionLabel: null,
-        })),
-      ];
+      let html = '';
 
-      el.innerHTML = `<div style="border-radius:10px;overflow:hidden;border:1px solid #FDE68A;margin-bottom:2px;">
-        <div style="background:#FFFBEB;padding:7px 12px;border-bottom:1px solid #FDE68A;
-          display:flex;align-items:center;gap:6px;">
-          <span style="font-size:12px;font-weight:700;color:#92400E;">
-            ⚠ ${total} alerte${total > 1 ? 's' : ''} — contrôle pointages
-          </span>
-        </div>
-        ${rows.map(r => `<div style="background:${r.bg};padding:8px 12px;
-          border-bottom:1px solid ${r.border};display:flex;align-items:center;gap:10px;">
-          <span style="flex:1;font-size:12px;color:${r.color};">${r.text}</span>
-          ${r.action ? `<button onclick="${r.action}"
-            style="background:${r.color};color:white;border:none;border-radius:8px;
-            padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">
-            ${r.actionLabel}</button>` : ''}
-        </div>`).join('')}
-      </div>`;
+      // ── Bloc état du jour ──────────────────────────────────────────────────
+      if (enSvc.length) {
+        const enPause  = enSvc.filter(e => e.statut === 'EN_PAUSE');
+        const enTravail = enSvc.filter(e => e.statut === 'EN_SERVICE');
+        html += `<div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;
+          padding:8px 12px;margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:700;color:#64748B;margin-bottom:6px;letter-spacing:.4px;">
+            ACTUELLEMENT EN SERVICE (${enSvc.length})
+          </div>
+          ${enSvc.map(e => {
+            const dur = e.heure_entree ? fmtDur(e) : '—';
+            const isLong = longs.includes(e);
+            const isPause = e.statut === 'EN_PAUSE';
+            const dot = isPause ? '🟡' : (isLong ? '🔴' : '🟢');
+            return `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;
+              font-size:12px;color:${isLong ? '#DC2626' : '#1E293B'};">
+              <span>${dot}</span>
+              <span style="flex:1;font-weight:600;">${e.prenom} ${e.nom.toUpperCase()}</span>
+              <span style="color:#64748B;">${isPause ? 'En pause' : `En service ${dur}`}${isLong ? ' ⚠' : ''}</span>
+            </div>`;
+          }).join('')}
+        </div>`;
+      }
+
+      // ── Anomalies jours passés ─────────────────────────────────────────────
+      if (oublis.length) {
+        html += `<div style="border-radius:10px;overflow:hidden;border:1px solid #FDE68A;">
+          <div style="background:#FFFBEB;padding:7px 12px;border-bottom:1px solid #FDE68A;">
+            <span style="font-size:12px;font-weight:700;color:#92400E;">
+              ⚠ ${oublis.length} sortie${oublis.length > 1 ? 's' : ''} manquante${oublis.length > 1 ? 's' : ''} (jours passés)
+            </span>
+          </div>
+          ${oublis.map(e => `<div style="background:#FFFBEB;padding:7px 12px;
+            border-bottom:1px solid #FDE68A;display:flex;align-items:center;gap:10px;">
+            <span style="flex:1;font-size:12px;color:#92400E;">
+              <strong>${e.prenom} ${e.nom.toUpperCase()}</strong> · ${fmtDate(e.date)}
+            </span>
+            <button onclick="App.ptgAddModalShow()"
+              style="background:#D97706;color:white;border:none;border-radius:8px;
+              padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;">+ Ajouter</button>
+          </div>`).join('')}
+        </div>`;
+      }
+
+      if (!html) {
+        html = `<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;
+          padding:8px 12px;font-size:12px;font-weight:600;color:#15803D;">
+          ✓ Aucune anomalie — personne en service actuellement
+        </div>`;
+      }
+
+      el.innerHTML = html;
     } catch(err) {
       el.innerHTML = `<div style="background:#FFF5F5;border:1px solid #FECACA;border-radius:10px;
         padding:8px 12px;font-size:12px;color:#DC2626;">Erreur alertes : ${err.message}</div>`;
