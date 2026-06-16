@@ -3063,6 +3063,7 @@ const App = {
     if (view === 'annuaire')      this.annuaireLoad();
     if (view === 'ptg-admin')     this.ptgAdminInit();
     if (view === 'ptg-rapport')   this.ptgRapportInit();
+    if (view === 'pointage')      this._ptgLoadEnService();
   },
   breadcrumbGoActivity() {
     const map = { loxam:'loxam-menu', bcb:'bcb-menu', stockage:'loxam-menu' };
@@ -11008,7 +11009,8 @@ ${bodies}${sansAcheteurBody}
           .lt('date', today).gte('date', limit)
           .in('statut', ['EN_SERVICE', 'EN_PAUSE', 'ANOMALIE'])
           .order('date', { ascending: false }),
-        db.from('en_service_vue').select('nom, prenom, heure_entree, statut'),
+        db.from('en_service_vue').select('nom, prenom, heure_entree, statut')
+          .eq('date', today).in('statut', ['EN_SERVICE', 'EN_PAUSE']),
       ]);
 
       const oublis   = r1.data || [];

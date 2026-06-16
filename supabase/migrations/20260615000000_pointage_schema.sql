@@ -317,11 +317,13 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- Calcul durées et statut
+  -- Statut déterminé par le DERNIER pointage valide (pas par la présence d'une sortie)
+  -- Ceci gère correctement les cycles ENTREE→SORTIE→ENTREE (re-entrée après sortie test).
   IF v_entree IS NULL THEN
     v_statut := 'ABSENT';
+    v_sortie  := NULL;
 
-  ELSIF v_sortie IS NOT NULL THEN
+  ELSIF v_last_type = 'SORTIE' THEN
     v_duree_brute := v_sortie - v_entree;
     v_statut      := 'SORTI';
     -- Convention transport : déduire 20 min si durée > 6h sans aucune pause pointée
@@ -333,9 +335,11 @@ BEGIN
 
   ELSIF v_last_type = 'PAUSE_DEBUT' THEN
     v_statut := 'EN_PAUSE';
+    v_sortie  := NULL;
 
   ELSE
     v_statut := 'EN_SERVICE';
+    v_sortie  := NULL;
   END IF;
 
   -- Upsert heures_journalieres
