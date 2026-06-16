@@ -1301,10 +1301,16 @@
           <h2 style="font-size:18px;font-weight:700;color:#1E293B;margin:0;">Passages du jour</h2>
           <p id="ptg-admin-date" style="font-size:12px;color:#94A3B8;margin:2px 0 0;"></p>
         </div>
-        <button onclick="App.ptgAdminRefresh()"
-          style="background:#F1F5F9;border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;color:#475569;cursor:pointer;">
-          ↻ Actualiser
-        </button>
+        <div style="display:flex;gap:8px;">
+          <button onclick="App.ptgAddModalShow()"
+            style="background:#1E293B;color:white;border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">
+            ＋ Ajouter
+          </button>
+          <button onclick="App.ptgAdminRefresh()"
+            style="background:#F1F5F9;border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;color:#475569;cursor:pointer;">
+            ↻ Actualiser
+          </button>
+        </div>
       </div>
 
       <!-- KPIs -->
@@ -1359,6 +1365,41 @@
       <!-- Tableau résultats -->
       <div id="ptg-rpt-content">
         <div style="text-align:center;padding:40px;color:#CBD5E1;font-size:13px;">Chargement…</div>
+      </div>
+    </div>
+
+    <!-- Modal : ajouter un pointage de correction -->
+    <div id="ptg-add-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.6);z-index:500;align-items:flex-end;justify-content:center;">
+      <div style="background:white;border-radius:16px 16px 0 0;padding:20px 16px 32px;width:100%;max-width:480px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <h3 style="font-size:16px;font-weight:700;color:#1E293B;margin:0;">Ajouter un pointage</h3>
+          <button onclick="App.ptgAddModalHide()" style="background:#F1F5F9;border:none;border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;color:#64748B;">✕</button>
+        </div>
+        <label style="font-size:12px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Employé</label>
+        <select id="ptg-add-emp" style="width:100%;padding:9px 12px;border-radius:10px;border:1px solid #E2E8F0;font-size:13px;margin-bottom:14px;background:white;color:#1E293B;">
+          <option value="">Sélectionner…</option>
+        </select>
+        <label style="font-size:12px;font-weight:600;color:#64748B;display:block;margin-bottom:6px;">Type</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px;">
+          <button onclick="App.ptgAddTypeSelect('ENTREE')"      data-ptgtype="ENTREE"      style="padding:9px;border-radius:10px;border:2px solid #E2E8F0;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#1E293B;transition:all .15s;">▶ Entrée</button>
+          <button onclick="App.ptgAddTypeSelect('SORTIE')"      data-ptgtype="SORTIE"      style="padding:9px;border-radius:10px;border:2px solid #E2E8F0;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#1E293B;transition:all .15s;">■ Sortie</button>
+          <button onclick="App.ptgAddTypeSelect('PAUSE_DEBUT')" data-ptgtype="PAUSE_DEBUT" style="padding:9px;border-radius:10px;border:2px solid #E2E8F0;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#1E293B;transition:all .15s;">☕ Début pause</button>
+          <button onclick="App.ptgAddTypeSelect('PAUSE_FIN')"   data-ptgtype="PAUSE_FIN"   style="padding:9px;border-radius:10px;border:2px solid #E2E8F0;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#1E293B;transition:all .15s;">↩ Fin pause</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px;">
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Date</label>
+            <input type="date" id="ptg-add-date" style="width:100%;padding:9px 12px;border-radius:10px;border:1px solid #E2E8F0;font-size:13px;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Heure</label>
+            <input type="time" id="ptg-add-time" style="width:100%;padding:9px 12px;border-radius:10px;border:1px solid #E2E8F0;font-size:13px;box-sizing:border-box;">
+          </div>
+        </div>
+        <button onclick="App.ptgAddConfirm()"
+          style="width:100%;background:#1E293B;color:white;border:none;border-radius:12px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;">
+          Enregistrer le pointage
+        </button>
       </div>
     </div>
 
@@ -10888,17 +10929,41 @@ ${bodies}${sansAcheteurBody}
       const annule = !p.valide
         ? '<span style="font-size:10px;font-weight:600;color:#DC2626;background:#FEE2E2;padding:1px 6px;border-radius:8px;margin-left:6px;">annulé</span>'
         : '';
-      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;
-          background:${p.valide ? 'white' : '#FAFAFA'};border-radius:10px;margin-bottom:6px;
-          box-shadow:0 1px 3px rgba(0,0,0,0.06);opacity:${p.valide ? 1 : 0.55};">
-        <div style="font-family:'Courier New',monospace;font-size:13px;font-weight:700;color:#64748B;
-            flex-shrink:0;min-width:60px;">${heure}</div>
-        <div style="flex:1;min-width:0;">
-          <span style="font-size:14px;font-weight:600;color:#1E293B;">${p.prenom} ${p.nom}</span>
-          ${annule}
+      const corrBadge = p.source === 'correction'
+        ? '<span title="Ajout manuel" style="font-size:9px;color:#D97706;margin-left:4px;font-weight:700;">✎</span>'
+        : '';
+      const cancelBtn = p.valide
+        ? `<button onclick="App.ptgAnnulerToggle('${p.id}')" title="Annuler ce pointage"
+            style="background:#FEE2E2;border:none;border-radius:8px;width:26px;height:26px;font-size:13px;
+            font-weight:700;color:#DC2626;cursor:pointer;flex-shrink:0;line-height:1;">✕</button>`
+        : '';
+      const inlineForm = p.valide
+        ? `<div id="ptg-annul-${p.id}" style="display:none;padding:8px 12px;background:#FFF5F5;border-top:1px solid #FEE2E2;">
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="text" id="ptg-annul-motif-${p.id}" placeholder="Motif (obligatoire)"
+                style="flex:1;padding:6px 10px;border-radius:8px;border:1px solid #FECACA;font-size:12px;background:white;"
+                onkeydown="if(event.key==='Enter')App.ptgAnnulerConfirm('${p.id}')">
+              <button onclick="App.ptgAnnulerConfirm('${p.id}')"
+                style="background:#DC2626;color:white;border:none;border-radius:8px;padding:6px 12px;
+                font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">Confirmer</button>
+              <button onclick="App.ptgAnnulerToggle('${p.id}')"
+                style="background:#F1F5F9;color:#64748B;border:none;border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;">✕</button>
+            </div>
+          </div>`
+        : '';
+      return `<div style="margin-bottom:6px;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;
+            background:${p.valide ? 'white' : '#FAFAFA'};opacity:${p.valide ? 1 : 0.55};">
+          <div style="font-family:'Courier New',monospace;font-size:13px;font-weight:700;color:#64748B;
+              flex-shrink:0;min-width:60px;">${heure}</div>
+          <div style="flex:1;min-width:0;">
+            <span style="font-size:14px;font-weight:600;color:#1E293B;">${p.prenom} ${p.nom}</span>${annule}${corrBadge}
+          </div>
+          <span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:10px;
+              background:${meta.bg};color:${meta.color};flex-shrink:0;">${meta.label}</span>
+          ${cancelBtn}
         </div>
-        <span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:10px;
-            background:${meta.bg};color:${meta.color};flex-shrink:0;">${meta.label}</span>
+        ${inlineForm}
       </div>`;
     }).join('');
   },
@@ -10921,6 +10986,96 @@ ${bodies}${sansAcheteurBody}
         if (S.view === 'pointage')  this._ptgLoadEnService();
       })
       .subscribe();
+  },
+
+  /* ─── Pointage — Corrections admin ────────────────────────────────────── */
+
+  _ptgAdd: { type: null },
+
+  ptgAnnulerToggle(id) {
+    const form = document.getElementById(`ptg-annul-${id}`);
+    if (!form) return;
+    const isOpen = form.style.display !== 'none';
+    document.querySelectorAll('[id^="ptg-annul-"]').forEach(f => { f.style.display = 'none'; });
+    if (!isOpen) {
+      form.style.display = 'block';
+      document.getElementById(`ptg-annul-motif-${id}`)?.focus();
+    }
+  },
+
+  async ptgAnnulerConfirm(id) {
+    const motif = document.getElementById(`ptg-annul-motif-${id}`)?.value?.trim();
+    if (!motif) { this.toast('Motif obligatoire'); return; }
+    const db = window.SupabaseDB;
+    if (!db) return;
+    const par = S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}` : 'admin';
+    const { data, error } = await db.rpc('admin_annuler_pointage',
+      { p_pointage_id: id, p_motif: motif, p_modifie_par: par });
+    if (error || data?.ok === false) {
+      this.toast('Erreur : ' + (data?.message || error?.message || 'inconnue')); return;
+    }
+    this.toast('✓ Pointage annulé');
+    this._ptgAdminLoad();
+  },
+
+  async ptgAddModalShow() {
+    const modal = document.getElementById('ptg-add-modal');
+    if (!modal) return;
+    const db = window.SupabaseDB;
+    if (db) {
+      const { data } = await db.from('employes_actifs_vue').select('id, nom, prenom');
+      const sel = document.getElementById('ptg-add-emp');
+      if (sel && data) {
+        sel.innerHTML = '<option value="">Sélectionner…</option>' +
+          data.map(e => `<option value="${e.id}">${e.prenom} ${e.nom.toUpperCase()}</option>`).join('');
+      }
+    }
+    const now = new Date();
+    document.getElementById('ptg-add-date').value = now.toISOString().slice(0, 10);
+    document.getElementById('ptg-add-time').value =
+      String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+    document.querySelectorAll('[data-ptgtype]').forEach(b => {
+      b.style.background = 'white'; b.style.borderColor = '#E2E8F0'; b.style.color = '#1E293B';
+    });
+    this._ptgAdd.type = null;
+    modal.style.display = 'flex';
+  },
+
+  ptgAddModalHide() {
+    const modal = document.getElementById('ptg-add-modal');
+    if (modal) modal.style.display = 'none';
+  },
+
+  ptgAddTypeSelect(type) {
+    this._ptgAdd.type = type;
+    document.querySelectorAll('[data-ptgtype]').forEach(b => {
+      const active = b.dataset.ptgtype === type;
+      b.style.background  = active ? '#1E293B'     : 'white';
+      b.style.borderColor = active ? '#1E293B'     : '#E2E8F0';
+      b.style.color       = active ? 'white'       : '#1E293B';
+    });
+  },
+
+  async ptgAddConfirm() {
+    const empId = document.getElementById('ptg-add-emp')?.value;
+    const type  = this._ptgAdd.type;
+    const date  = document.getElementById('ptg-add-date')?.value;
+    const time  = document.getElementById('ptg-add-time')?.value;
+    if (!empId) { this.toast('Sélectionnez un employé'); return; }
+    if (!type)  { this.toast('Sélectionnez un type'); return; }
+    if (!date || !time) { this.toast('Date et heure requises'); return; }
+    const horodatage = new Date(`${date}T${time}:00`).toISOString();
+    const db = window.SupabaseDB;
+    if (!db) return;
+    const par = S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}` : 'admin';
+    const { data, error } = await db.rpc('admin_add_pointage',
+      { p_employe_id: empId, p_type: type, p_horodatage: horodatage, p_modifie_par: par });
+    if (error || data?.ok === false) {
+      this.toast('Erreur : ' + (data?.message || error?.message || 'inconnue')); return;
+    }
+    this.ptgAddModalHide();
+    this.toast('✓ Pointage ajouté');
+    this._ptgAdminLoad();
   },
 
   /* ─── Pointage — Rapports ──────────────────────────────────────────────── */
