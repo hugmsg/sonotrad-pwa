@@ -1071,6 +1071,14 @@
           <span class="activity-badge badge-active">● Actif</span>
         </div>
 
+        <!-- Réception de marchandise — raccourci direct vers le formulaire d'arrivée -->
+        <div class="activity-card" data-ready="true" onclick="App.receptionDirecte()">
+          <div class="activity-icon">📦</div>
+          <div class="activity-name">Réception</div>
+          <div class="activity-desc">Enregistrer une arrivée de matériel</div>
+          <span class="activity-badge badge-active">● Actif</span>
+        </div>
+
         <!-- Agorastore — bientôt -->
         <div class="activity-card" data-ready="false">
           <div class="activity-icon">🏷️</div>
@@ -3109,6 +3117,10 @@ const App = {
     if (name === 'lvu')      this.lvuInit();
     if (name === 'annuaire')  this.go('annuaire');
     if (name === 'pointage')  { this.go('pointage'); this.ptgInit(); }
+  },
+  receptionDirecte() {
+    S.activity = 'loxam';
+    this.startNewArrival();
   },
   _render() {
     const v      = S.view;
