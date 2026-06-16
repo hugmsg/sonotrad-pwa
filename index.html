@@ -10933,12 +10933,12 @@ ${bodies}${sansAcheteurBody}
         ? '<span title="Ajout manuel" style="font-size:9px;color:#D97706;margin-left:4px;font-weight:700;">✎</span>'
         : '';
       const cancelBtn = p.valide
-        ? `<button onclick="App.ptgAnnulerToggle('${p.id}')" title="Annuler ce pointage"
-            style="background:#FEE2E2;border:none;border-radius:8px;width:26px;height:26px;font-size:13px;
-            font-weight:700;color:#DC2626;cursor:pointer;flex-shrink:0;line-height:1;">✕</button>`
+        ? `<button onclick="App.ptgAnnulerToggle('${p.id}')" title="Modifier / annuler"
+            style="background:#F1F5F9;border:none;border-radius:8px;width:28px;height:28px;font-size:14px;
+            color:#64748B;cursor:pointer;flex-shrink:0;line-height:1;">✎</button>`
         : '';
       const inlineForm = p.valide
-        ? `<div id="ptg-annul-${p.id}" style="display:none;padding:8px 12px;background:#FFF5F5;border-top:1px solid #FEE2E2;">
+        ? `<div id="ptg-annul-${p.id}" class="ptg-annul-form" style="display:none;padding:8px 12px;background:#FFF5F5;border-top:1px solid #FEE2E2;">
             <div style="display:flex;gap:8px;align-items:center;">
               <input type="text" id="ptg-annul-motif-${p.id}" placeholder="Motif (obligatoire)"
                 style="flex:1;padding:6px 10px;border-radius:8px;border:1px solid #FECACA;font-size:12px;background:white;"
@@ -10996,7 +10996,7 @@ ${bodies}${sansAcheteurBody}
     const form = document.getElementById(`ptg-annul-${id}`);
     if (!form) return;
     const isOpen = form.style.display !== 'none';
-    document.querySelectorAll('[id^="ptg-annul-"]').forEach(f => { f.style.display = 'none'; });
+    document.querySelectorAll('.ptg-annul-form').forEach(f => { f.style.display = 'none'; });
     if (!isOpen) {
       form.style.display = 'block';
       document.getElementById(`ptg-annul-motif-${id}`)?.focus();
