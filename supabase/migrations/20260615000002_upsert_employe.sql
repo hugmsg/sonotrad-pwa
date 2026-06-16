@@ -23,7 +23,7 @@ CREATE OR REPLACE FUNCTION upsert_employe_pointage(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 BEGIN
   IF length(p_pin) <> 4 OR p_pin !~ '^\d{4}$' THEN
