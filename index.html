@@ -1584,17 +1584,17 @@
           <span style="font-size:30px;line-height:1;">🏗️</span>
           <div><div>LOXAM / PIDEO</div><div style="font-size:12px;font-weight:400;opacity:0.7;margin-top:2px;">Matériel de levage & manutention</div></div>
         </button>
-        <button class="module-btn bcb" onclick="App.selectModule('bcb')">
+        <button class="module-btn bcb" disabled style="opacity:0.38;pointer-events:none;cursor:default;">
           <span style="font-size:30px;line-height:1;">🚛</span>
-          <div><div>BCB</div><div style="font-size:12px;font-weight:400;opacity:0.7;margin-top:2px;">Véhicules & lots industriels</div></div>
+          <div><div>BCB</div><div style="font-size:12px;font-weight:400;opacity:0.7;margin-top:2px;">Bientôt disponible</div></div>
         </button>
-        <button class="module-btn agora" onclick="App.selectModule('agorastore')">
+        <button class="module-btn agora" disabled style="opacity:0.38;pointer-events:none;cursor:default;">
           <span style="font-size:30px;line-height:1;">🏷️</span>
-          <div><div>Agorastore</div><div style="font-size:12px;font-weight:400;opacity:0.7;margin-top:2px;">Enchères & surplus</div></div>
+          <div><div>Agorastore</div><div style="font-size:12px;font-weight:400;opacity:0.7;margin-top:2px;">Bientôt disponible</div></div>
         </button>
-        <button class="module-btn rapido" onclick="App.selectModule('rapido')">
+        <button class="module-btn rapido" disabled style="opacity:0.38;pointer-events:none;cursor:default;">
           <span style="font-size:30px;line-height:1;">⚡</span>
-          <div><div>Rapido</div><div style="font-size:12px;font-weight:400;opacity:0.7;margin-top:2px;">Réception Rapido</div></div>
+          <div><div>Rapido</div><div style="font-size:12px;font-weight:400;opacity:0.7;margin-top:2px;">Bientôt disponible</div></div>
         </button>
       </div>
       <!-- Step 2 : Code + Photos -->
@@ -1647,20 +1647,21 @@
             <label class="label-sm" for="inp-module-type">Type <span style="color:#EF4444;">*</span></label>
             <select id="inp-module-type" class="input-field">
               <option value="">— Sélectionner —</option>
-              <option>MODULOX</option>
-              <option>CONTAINER</option>
-              <option>LC8</option>
-              <option>LC10</option>
-              <option>LC20</option>
-              <option>LC20M</option>
               <option>BATIX</option>
               <option>GRAND BATIX</option>
               <option>ISOLOX</option>
-              <option>SOLFAB PH</option>
-              <option>SOLFAB GH</option>
-              <option>ECOLOX</option>
+              <option>MODULOX</option>
               <option>6020</option>
+              <option>6020 GB</option>
               <option>6021</option>
+              <option>SOLFAB PH</option>
+              <option>SOLFAB GH40</option>
+              <option>SOLFAB GH60</option>
+              <option>ECOLOX</option>
+              <option>LC20</option>
+              <option>LC20M</option>
+              <option>LC10</option>
+              <option>LC8</option>
               <option>AUTRE</option>
             </select>
           </div>
@@ -3077,8 +3078,9 @@ const App = {
     const map = { loxam:'loxam-menu', bcb:'bcb-menu', stockage:'loxam-menu' };
     const dest = map[S.activity];
     if (dest) { if (S.view !== dest) this.go(dest); return; }
-    if (S.activity === 'lvu')      this.lvuInit();
-    else if (S.activity === 'annuaire') this.go('annuaire');
+    if (S.activity === 'lvu')        this.lvuInit();
+    else if (S.activity === 'annuaire')  this.go('annuaire');
+    else if (S.activity === 'reception') this.goHome();
   },
   goBack() {
     if (S.view === 'admin')           { this.goHome(); return; }
@@ -3119,7 +3121,7 @@ const App = {
     if (name === 'pointage')  { this.go('pointage'); this.ptgInit(); }
   },
   receptionDirecte() {
-    S.activity = 'loxam';
+    S.activity = 'reception';
     this.startNewArrival();
   },
   _render() {
@@ -3187,7 +3189,7 @@ const App = {
     const actEl = document.getElementById('breadcrumb-activity');
     if (bcEl) bcEl.style.display = showBreadcrumb ? 'flex' : 'none';
     if (showBreadcrumb && actEl) {
-      const names = { loxam:'LOXAM', bcb:'BCB', stockage:'LOXAM', lvu:'LV / CMR', annuaire:'Annuaire', pointage:'Pointage' };
+      const names = { loxam:'LOXAM', bcb:'BCB', stockage:'LOXAM', lvu:'LV / CMR', annuaire:'Annuaire', pointage:'Pointage', reception:'Réception' };
       actEl.textContent = names[S.activity] || S.activity;
     }
 
@@ -6602,6 +6604,10 @@ const App = {
     }
   },
   _showSuccess(code, offline) {
+    const isReception = S.activity === 'reception';
+    const backBtn = isReception
+      ? `<button class="btn btn-primary" onclick="App.goHome()" style="max-width:220px;margin:0 auto 12px;">← Accueil</button>`
+      : `<button class="btn btn-primary" onclick="App.go('arrivals')" style="max-width:220px;margin:0 auto 12px;">← Arrivées</button>`;
     document.getElementById('step-4').innerHTML = `
       <div style="text-align:center;padding:28px 0;">
         <div style="font-size:60px;margin-bottom:14px;">${offline ? '💾' : '✅'}</div>
@@ -6609,9 +6615,9 @@ const App = {
           ${offline ? 'Sauvegardé localement' : 'Arrivée enregistrée !'}
         </p>
         <div style="font-family:monospace;font-size:28px;font-weight:900;color:var(--brand);letter-spacing:6px;margin:16px 0 20px;">${code}</div>
-        <button class="btn btn-primary" onclick="App.go('arrivals')" style="max-width:220px;margin:0 auto 12px;">← Arrivées</button>
+        ${backBtn}
         <br>
-        <button onclick="App.startNewArrival()" style="background:none;border:none;color:var(--accent);font-size:15px;font-weight:600;cursor:pointer;padding:8px;">+ Nouvelle arrivée</button>
+        <button onclick="App.receptionDirecte()" style="background:none;border:none;color:var(--accent);font-size:15px;font-weight:600;cursor:pointer;padding:8px;">+ Nouvelle arrivée</button>
       </div>`;
   },
   /* ─ LOXAM Menu ─ */
