@@ -149,7 +149,7 @@ CREATE OR REPLACE FUNCTION authentifier_par_pin(p_pin text)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
   v_employe employes%ROWTYPE;
@@ -187,7 +187,7 @@ CREATE OR REPLACE FUNCTION verifier_pointage(p_employe_id uuid, p_type text)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
   v_dernier_type text;
@@ -258,7 +258,7 @@ CREATE OR REPLACE FUNCTION _sync_heures_journalieres()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
   v_tz           text        := 'Europe/Paris';
@@ -380,7 +380,7 @@ CREATE OR REPLACE FUNCTION detecter_anomalies_oubli_sortie()
 RETURNS integer
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
   v_count integer;
