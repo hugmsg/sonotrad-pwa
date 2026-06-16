@@ -71,3 +71,30 @@ BEGIN
 END;
 $$;
 GRANT EXECUTE ON FUNCTION admin_annuler_pointage(uuid, text, text) TO anon;
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- FONCTION : admin_modifier_pointage
+-- Corrige l'horodatage d'un pointage valide existant.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION admin_modifier_pointage(
+  p_pointage_id uuid,
+  p_horodatage  timestamptz,
+  p_modifie_par text DEFAULT 'admin'
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+BEGIN
+  UPDATE pointages
+  SET horodatage = p_horodatage, modifie_par = p_modifie_par, raison_modif = 'Correction heure'
+  WHERE id = p_pointage_id AND valide = true;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('ok', false, 'message', 'Pointage introuvable ou déjà annulé.');
+  END IF;
+  RETURN jsonb_build_object('ok', true);
+END;
+$$;
+GRANT EXECUTE ON FUNCTION admin_modifier_pointage(uuid, timestamptz, text) TO anon;

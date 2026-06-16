@@ -10937,17 +10937,33 @@ ${bodies}${sansAcheteurBody}
             style="background:#F1F5F9;border:none;border-radius:8px;width:28px;height:28px;font-size:14px;
             color:#64748B;cursor:pointer;flex-shrink:0;line-height:1;">✎</button>`
         : '';
+      const dtParis  = new Date(new Date(p.horodatage).toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+      const dateVal  = dtParis.toISOString().slice(0, 10);
+      const timeVal  = String(dtParis.getHours()).padStart(2,'0') + ':' + String(dtParis.getMinutes()).padStart(2,'0');
       const inlineForm = p.valide
-        ? `<div id="ptg-annul-${p.id}" class="ptg-annul-form" style="display:none;padding:8px 12px;background:#FFF5F5;border-top:1px solid #FEE2E2;">
-            <div style="display:flex;gap:8px;align-items:center;">
-              <input type="text" id="ptg-annul-motif-${p.id}" placeholder="Motif (obligatoire)"
-                style="flex:1;padding:6px 10px;border-radius:8px;border:1px solid #FECACA;font-size:12px;background:white;"
-                onkeydown="if(event.key==='Enter')App.ptgAnnulerConfirm('${p.id}')">
-              <button onclick="App.ptgAnnulerConfirm('${p.id}')"
-                style="background:#DC2626;color:white;border:none;border-radius:8px;padding:6px 12px;
-                font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">Confirmer</button>
-              <button onclick="App.ptgAnnulerToggle('${p.id}')"
-                style="background:#F1F5F9;color:#64748B;border:none;border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;">✕</button>
+        ? `<div id="ptg-annul-${p.id}" class="ptg-annul-form" style="display:none;">
+            <div style="padding:8px 12px;background:#EFF6FF;border-top:1px solid #BFDBFE;">
+              <div style="font-size:10px;font-weight:700;color:#2563EB;margin-bottom:6px;letter-spacing:.5px;">CORRIGER L'HEURE</div>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <input type="date" id="ptg-mod-date-${p.id}" value="${dateVal}"
+                  style="padding:5px 8px;border-radius:8px;border:1px solid #BFDBFE;font-size:12px;flex:1;min-width:0;">
+                <input type="time" id="ptg-mod-time-${p.id}" value="${timeVal}"
+                  style="padding:5px 8px;border-radius:8px;border:1px solid #BFDBFE;font-size:12px;width:80px;flex-shrink:0;">
+                <button onclick="App.ptgModifierConfirm('${p.id}')"
+                  style="background:#2563EB;color:white;border:none;border-radius:8px;padding:5px 12px;
+                  font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">✓ Enregistrer</button>
+              </div>
+            </div>
+            <div style="padding:8px 12px;background:#FFF5F5;border-top:1px solid #FEE2E2;">
+              <div style="font-size:10px;font-weight:700;color:#DC2626;margin-bottom:6px;letter-spacing:.5px;">ANNULER LE POINTAGE</div>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <input type="text" id="ptg-annul-motif-${p.id}" placeholder="Motif (obligatoire)"
+                  style="flex:1;padding:5px 8px;border-radius:8px;border:1px solid #FECACA;font-size:12px;background:white;"
+                  onkeydown="if(event.key==='Enter')App.ptgAnnulerConfirm('${p.id}')">
+                <button onclick="App.ptgAnnulerConfirm('${p.id}')"
+                  style="background:#DC2626;color:white;border:none;border-radius:8px;padding:5px 12px;
+                  font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">✕ Annuler</button>
+              </div>
             </div>
           </div>`
         : '';
@@ -11015,6 +11031,23 @@ ${bodies}${sansAcheteurBody}
       this.toast('Erreur : ' + (data?.message || error?.message || 'inconnue')); return;
     }
     this.toast('✓ Pointage annulé');
+    this._ptgAdminLoad();
+  },
+
+  async ptgModifierConfirm(id) {
+    const date = document.getElementById(`ptg-mod-date-${id}`)?.value;
+    const time = document.getElementById(`ptg-mod-time-${id}`)?.value;
+    if (!date || !time) { this.toast('Date et heure requises'); return; }
+    const horodatage = new Date(`${date}T${time}:00`).toISOString();
+    const db = window.SupabaseDB;
+    if (!db) return;
+    const par = S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}` : 'admin';
+    const { data, error } = await db.rpc('admin_modifier_pointage',
+      { p_pointage_id: id, p_horodatage: horodatage, p_modifie_par: par });
+    if (error || data?.ok === false) {
+      this.toast('Erreur : ' + (data?.message || error?.message || 'inconnue')); return;
+    }
+    this.toast('✓ Heure corrigée');
     this._ptgAdminLoad();
   },
 
