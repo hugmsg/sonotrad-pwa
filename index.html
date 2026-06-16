@@ -1313,6 +1313,9 @@
         </div>
       </div>
 
+      <!-- Alertes -->
+      <div id="ptg-alertes" style="margin-bottom:14px;"></div>
+
       <!-- KPIs -->
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;" id="ptg-admin-kpis">
         <div class="dash-kpi ok"  id="ptg-kpi-service"><div class="dash-kpi-val">—</div><div class="dash-kpi-lbl">En service</div></div>
@@ -10853,8 +10856,8 @@ ${bodies}${sansAcheteurBody}
       this._ptg.realtimeSub = null;
     }
     this._ptg.realtimeSub = db
-      .channel('ptg-pointages-watch')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pointages' }, () => {
+      .channel('ptg-hj-kiosk')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'heures_journalieres' }, () => {
         this._ptgLoadEnService();
       })
       .subscribe();
@@ -10868,14 +10871,14 @@ ${bodies}${sansAcheteurBody}
     if (dateEl) dateEl.textContent = new Date().toLocaleDateString('fr-FR', {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
     });
-    await this._ptgAdminLoad();
+    await Promise.all([this._ptgAdminLoad(), this._ptgAlertesLoad()]);
     this._ptgAdminSubscribe();
   },
 
   async ptgAdminRefresh() {
     const btn = document.querySelector('[onclick="App.ptgAdminRefresh()"]');
     if (btn) { btn.textContent = '↻ …'; btn.disabled = true; }
-    await this._ptgAdminLoad();
+    await Promise.all([this._ptgAdminLoad(), this._ptgAlertesLoad()]);
     if (btn) { btn.textContent = '↻ Actualiser'; btn.disabled = false; }
   },
 
@@ -10989,6 +10992,74 @@ ${bodies}${sansAcheteurBody}
     if (el) el.querySelector('.dash-kpi-val').textContent = val;
   },
 
+  async _ptgAlertesLoad() {
+    const db = window.SupabaseDB;
+    const el = document.getElementById('ptg-alertes');
+    if (!db || !el) return;
+
+    const today   = new Date().toISOString().slice(0, 10);
+    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+
+    const [{ data: oublis }, { data: enService }] = await Promise.all([
+      db.from('heures_rapport_vue')
+        .select('nom, prenom, date, statut, heure_entree')
+        .lt('date', today)
+        .gte('date', weekAgo)
+        .in('statut', ['EN_SERVICE', 'EN_PAUSE', 'ANOMALIE'])
+        .order('date', { ascending: false }),
+      db.from('en_service_vue').select('nom, prenom, heure_entree, statut'),
+    ]);
+
+    const longs = (enService || []).filter(e => {
+      if (!e.heure_entree) return false;
+      return (Date.now() - new Date(e.heure_entree)) / 3600000 > 10;
+    });
+
+    const total = (oublis?.length || 0) + longs.length;
+    if (!total) { el.innerHTML = ''; return; }
+
+    const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+    const fmtDur  = e => {
+      const h = Math.floor((Date.now() - new Date(e.heure_entree)) / 3600000);
+      return `en service depuis ${h}h`;
+    };
+
+    const rows = [
+      ...(oublis || []).map(e => ({
+        color: '#D97706', bg: '#FFFBEB', border: '#FDE68A',
+        icon: '⚠',
+        text: `<strong>${e.prenom} ${e.nom.toUpperCase()}</strong> — sortie manquante (${fmtDate(e.date)})`,
+        action: `App.ptgAddModalShow()`,
+        actionLabel: '+ Ajouter sortie',
+      })),
+      ...longs.map(e => ({
+        color: '#DC2626', bg: '#FFF5F5', border: '#FECACA',
+        icon: '🔴',
+        text: `<strong>${e.prenom} ${e.nom.toUpperCase()}</strong> — ${fmtDur(e)} (> 10h)`,
+        action: null, actionLabel: null,
+      })),
+    ];
+
+    el.innerHTML = `
+      <div style="border-radius:10px;overflow:hidden;border:1px solid #FDE68A;">
+        <div style="background:#FFFBEB;padding:7px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #FDE68A;">
+          <span style="font-size:13px;">⚠</span>
+          <span style="font-size:13px;font-weight:700;color:#92400E;">
+            ${total} alerte${total > 1 ? 's' : ''} — contrôle pointages
+          </span>
+        </div>
+        ${rows.map(r => `
+          <div style="background:${r.bg};padding:8px 12px;border-bottom:1px solid ${r.border};
+            display:flex;align-items:center;gap:10px;font-size:12px;color:${r.color};">
+            <span style="flex:1;">${r.text}</span>
+            ${r.action ? `<button onclick="${r.action}"
+              style="background:${r.color};color:white;border:none;border-radius:8px;
+              padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">
+              ${r.actionLabel}</button>` : ''}
+          </div>`).join('')}
+      </div>`;
+  },
+
   _ptgAdminSubscribe() {
     const db = window.SupabaseDB;
     if (!db) return;
@@ -10996,9 +11067,9 @@ ${bodies}${sansAcheteurBody}
       db.removeChannel(this._ptg.realtimeSub);
     }
     this._ptg.realtimeSub = db
-      .channel('ptg-admin-watch')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pointages' }, () => {
-        if (S.view === 'ptg-admin') this._ptgAdminLoad();
+      .channel('ptg-hj-admin')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'heures_journalieres' }, () => {
+        if (S.view === 'ptg-admin') { this._ptgAdminLoad(); this._ptgAlertesLoad(); }
         if (S.view === 'pointage')  this._ptgLoadEnService();
       })
       .subscribe();
