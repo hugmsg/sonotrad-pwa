@@ -981,6 +981,9 @@
     <button class="nav-tab" data-ptgtab="ptg-admin" onclick="App.go('ptg-admin')" style="display:none">
       <span class="icon">📊</span><span>Tableau</span>
     </button>
+    <button class="nav-tab" data-ptgtab="ptg-rapport" onclick="App.go('ptg-rapport')" style="display:none">
+      <span class="icon">📋</span><span>Rapports</span>
+    </button>
     <!-- ── Tabs LVU (masqués hors activité LVU) ──────────────────────────── -->
     <button class="nav-tab" data-lvutab="lvu-form" onclick="App.go('lvu-form')" style="display:none">
       <span class="icon">📝</span><span>Formulaire</span>
@@ -1315,6 +1318,47 @@
       <!-- Liste des passages -->
       <div id="ptg-admin-list">
         <div style="text-align:center;padding:32px;color:#CBD5E1;font-size:13px;">Chargement…</div>
+      </div>
+    </div>
+
+    <!-- ── VIEW : POINTAGE RAPPORTS ────────────────────────────────────── -->
+    <div class="view" id="view-ptg-rapport">
+
+      <!-- Filtres -->
+      <div style="margin-bottom:14px;">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+          <div style="display:flex;background:#F1F5F9;border-radius:10px;padding:3px;gap:2px;">
+            <button id="ptg-rpt-btn-week" onclick="App.ptgRapportSetPeriod('week')"
+              style="border:none;border-radius:8px;padding:6px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;">
+              Semaine
+            </button>
+            <button id="ptg-rpt-btn-month" onclick="App.ptgRapportSetPeriod('month')"
+              style="border:none;border-radius:8px;padding:6px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;">
+              Mois
+            </button>
+          </div>
+          <button onclick="App.ptgRapportNav(-1)"
+            style="background:#F1F5F9;border:none;border-radius:10px;padding:6px 14px;font-size:16px;font-weight:700;color:#475569;cursor:pointer;">←</button>
+          <span id="ptg-rpt-label"
+            style="font-size:13px;font-weight:700;color:#1E293B;flex:1;text-align:center;min-width:160px;"></span>
+          <button onclick="App.ptgRapportNav(+1)"
+            style="background:#F1F5F9;border:none;border-radius:10px;padding:6px 14px;font-size:16px;font-weight:700;color:#475569;cursor:pointer;">→</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <select id="ptg-rpt-employe" onchange="App._ptgRapportLoad()"
+            style="flex:1;padding:8px 12px;border-radius:10px;border:1px solid #E2E8F0;font-size:13px;font-weight:500;color:#1E293B;background:white;">
+            <option value="">Tous les employés</option>
+          </select>
+          <button onclick="App.ptgRapportExport()"
+            style="background:#1E293B;color:white;border:none;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">
+            ⬇ PDF
+          </button>
+        </div>
+      </div>
+
+      <!-- Tableau résultats -->
+      <div id="ptg-rpt-content">
+        <div style="text-align:center;padding:40px;color:#CBD5E1;font-size:13px;">Chargement…</div>
       </div>
     </div>
 
@@ -2974,6 +3018,7 @@ const App = {
     if (view === 'lvu-history')   this.lvuLoadHistory();
     if (view === 'annuaire')      this.annuaireLoad();
     if (view === 'ptg-admin')     this.ptgAdminInit();
+    if (view === 'ptg-rapport')   this.ptgRapportInit();
   },
   breadcrumbGoActivity() {
     const map = { loxam:'loxam-menu', bcb:'bcb-menu', stockage:'loxam-menu' };
@@ -3043,7 +3088,7 @@ const App = {
     });
     document.querySelectorAll('#main-nav .nav-tab[data-ptgtab]').forEach(el => {
       const isAdmin    = S.currentUser?.role === 'admin';
-      const isAdminTab = el.dataset.ptgtab === 'ptg-admin';
+      const isAdminTab = el.dataset.ptgtab === 'ptg-admin' || el.dataset.ptgtab === 'ptg-rapport';
       el.style.display = (S.activity === 'pointage' && (!isAdminTab || isAdmin)) ? '' : 'none';
     });
 
@@ -3630,8 +3675,9 @@ const App = {
       if (data.status === 'ok') {
         // Sync vers Supabase : même PIN pour l'app et le pointage kiosque
         if (window.SupabaseDB) {
-          await window.SupabaseDB.rpc('upsert_employe_pointage',
+          const { error: sbErr } = await window.SupabaseDB.rpc('upsert_employe_pointage',
             { p_nom: nom, p_prenom: prenom, p_pin: pin });
+          if (sbErr) console.error('[Pointage] upsert_employe_pointage:', sbErr);
         }
         this.toast(`✓ ${prenom} ${nom} créé !`);
         this._hideCreateUserForm();
@@ -3669,8 +3715,9 @@ const App = {
       if (data.status === 'ok') {
         // Sync vers Supabase : même PIN pour l'app et le pointage kiosque
         if (window.SupabaseDB) {
-          await window.SupabaseDB.rpc('upsert_employe_pointage',
+          const { error: sbErr } = await window.SupabaseDB.rpc('upsert_employe_pointage',
             { p_nom: nom, p_prenom: prenom, p_pin: pin });
+          if (sbErr) console.error('[Pointage] upsert_employe_pointage:', sbErr);
         }
         this.toast(`✓ PIN de ${prenom} réinitialisé`);
         document.getElementById(`reset-pin-${prenom}-${nom}`).style.display = 'none';
@@ -10874,6 +10921,325 @@ ${bodies}${sansAcheteurBody}
         if (S.view === 'pointage')  this._ptgLoadEnService();
       })
       .subscribe();
+  },
+
+  /* ─── Pointage — Rapports ──────────────────────────────────────────────── */
+
+  _ptgRapport: { mode: 'week', offset: 0, data: [], label: '' },
+
+  async ptgRapportInit() {
+    const r = this._ptgRapport;
+    r.offset = 0;
+    r.mode   = 'week';
+    this._ptgRapportUpdateToggle();
+    await this._ptgRapportFillEmployes();
+    await this._ptgRapportLoad();
+  },
+
+  ptgRapportSetPeriod(mode) {
+    this._ptgRapport.mode   = mode;
+    this._ptgRapport.offset = 0;
+    this._ptgRapportUpdateToggle();
+    this._ptgRapportLoad();
+  },
+
+  ptgRapportNav(dir) {
+    this._ptgRapport.offset += dir;
+    this._ptgRapportLoad();
+  },
+
+  _ptgRapportUpdateToggle() {
+    const mode = this._ptgRapport.mode;
+    const bw = document.getElementById('ptg-rpt-btn-week');
+    const bm = document.getElementById('ptg-rpt-btn-month');
+    if (!bw || !bm) return;
+    bw.style.background = mode === 'week'  ? 'white'       : 'transparent';
+    bw.style.color      = mode === 'week'  ? '#1E293B'     : '#94A3B8';
+    bw.style.boxShadow  = mode === 'week'  ? '0 1px 3px rgba(0,0,0,0.12)' : 'none';
+    bm.style.background = mode === 'month' ? 'white'       : 'transparent';
+    bm.style.color      = mode === 'month' ? '#1E293B'     : '#94A3B8';
+    bm.style.boxShadow  = mode === 'month' ? '0 1px 3px rgba(0,0,0,0.12)' : 'none';
+  },
+
+  _ptgRapportDates() {
+    const { mode, offset } = this._ptgRapport;
+    if (mode === 'week') {
+      const now    = new Date();
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - ((now.getDay() + 6) % 7) + offset * 7);
+      monday.setHours(0, 0, 0, 0);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      const start  = monday.toISOString().slice(0, 10);
+      const end    = sunday.toISOString().slice(0, 10);
+      const wn     = this._ptgWeekNum(monday);
+      const fmtS   = monday.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+      const fmtE   = sunday.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+      return { start, end, label: `Semaine ${wn} — ${fmtS} au ${fmtE}` };
+    } else {
+      const now   = new Date();
+      const first = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+      const last  = new Date(first.getFullYear(), first.getMonth() + 1, 0);
+      const start = first.toISOString().slice(0, 10);
+      const end   = last.toISOString().slice(0, 10);
+      const lbl   = first.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      return { start, end, label: lbl.charAt(0).toUpperCase() + lbl.slice(1) };
+    }
+  },
+
+  _ptgWeekNum(date) {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+    return Math.ceil((((d - new Date(Date.UTC(d.getUTCFullYear(), 0, 1))) / 86400000) + 1) / 7);
+  },
+
+  async _ptgRapportFillEmployes() {
+    const db = window.SupabaseDB;
+    if (!db) return;
+    const { data } = await db.from('heures_rapport_vue')
+      .select('employe_id, nom, prenom').order('nom');
+    if (!data) return;
+    const seen = new Set();
+    const uniq = data.filter(r => {
+      if (seen.has(r.employe_id)) return false;
+      seen.add(r.employe_id); return true;
+    });
+    const sel = document.getElementById('ptg-rpt-employe');
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Tous les employés</option>' +
+      uniq.map(e => `<option value="${e.employe_id}">${e.prenom} ${e.nom.toUpperCase()}</option>`).join('');
+    if (cur) sel.value = cur;
+  },
+
+  async _ptgRapportLoad() {
+    const db      = window.SupabaseDB;
+    const content = document.getElementById('ptg-rpt-content');
+    if (!db || !content) return;
+    const { start, end, label } = this._ptgRapportDates();
+    this._ptgRapport.label = label;
+    const lbl = document.getElementById('ptg-rpt-label');
+    if (lbl) lbl.textContent = label;
+    content.innerHTML = '<div style="text-align:center;padding:32px;color:#CBD5E1;font-size:13px;">Chargement…</div>';
+    let q = db.from('heures_rapport_vue').select('*').gte('date', start).lte('date', end).order('nom').order('date');
+    const emp = document.getElementById('ptg-rpt-employe')?.value;
+    if (emp) q = q.eq('employe_id', emp);
+    const { data, error } = await q;
+    if (error) {
+      content.innerHTML = `<div style="color:#DC2626;padding:16px;font-size:13px;">Erreur : ${error.message}</div>`;
+      return;
+    }
+    this._ptgRapport.data = data || [];
+    this._ptgRapportRender(data || []);
+  },
+
+  _ptgItvMin(iv) {
+    if (!iv) return 0;
+    const p = String(iv).split(':');
+    return p.length >= 2 ? Math.abs(parseInt(p[0], 10)) * 60 + parseInt(p[1], 10) : 0;
+  },
+
+  _ptgHM(min) {
+    if (!min && min !== 0) return '—';
+    return Math.floor(min / 60) + 'h' + String(min % 60).padStart(2, '0');
+  },
+
+  _ptgFmtTime(ts) {
+    if (!ts) return '—';
+    return new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
+  },
+
+  _ptgFmtDate(d) {
+    return new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  },
+
+  _ptgRapportRender(data) {
+    const content = document.getElementById('ptg-rpt-content');
+    if (!content) return;
+    if (!data.length) {
+      content.innerHTML = '<div style="text-align:center;padding:40px;color:#CBD5E1;font-size:13px;">Aucune donnée sur cette période</div>';
+      return;
+    }
+    const groups = new Map();
+    data.forEach(r => {
+      if (!groups.has(r.employe_id)) groups.set(r.employe_id, { nom: r.nom, prenom: r.prenom, rows: [] });
+      groups.get(r.employe_id).rows.push(r);
+    });
+    let html = '', grandTotal = 0;
+    const statutBadge = s => {
+      const m = { SORTI:['#DCFCE7','#15803D','Sorti'], EN_SERVICE:['#DBEAFE','#2563EB','En service'],
+        EN_PAUSE:['#FEF3C7','#D97706','En pause'], ANOMALIE:['#FEE2E2','#DC2626','Anomalie'] };
+      const [bg, col, lbl] = m[s] || ['#F1F5F9','#64748B', s];
+      return `<span style="background:${bg};color:${col};padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;">${lbl}</span>`;
+    };
+    groups.forEach(({ nom, prenom, rows }) => {
+      let tot = 0;
+      const tbody = rows.map((r, i) => {
+        const nm = this._ptgItvMin(r.duree_nette);
+        tot += nm;
+        const legal = r.pause_legale_appliquee ? ' <span title="Conv. transport -20min" style="color:#D97706;font-size:9px;vertical-align:middle;">⚖</span>' : '';
+        return `<tr style="background:${i%2?'#F8FAFC':'white'};border-bottom:1px solid #F1F5F9;">
+          <td style="padding:7px 10px;font-weight:600;color:#1E293B;">${this._ptgFmtDate(r.date)}</td>
+          <td style="padding:7px 10px;text-align:center;">${this._ptgFmtTime(r.heure_entree)}</td>
+          <td style="padding:7px 10px;text-align:center;">${this._ptgFmtTime(r.heure_sortie)}</td>
+          <td style="padding:7px 10px;text-align:center;color:#64748B;">${this._ptgHM(this._ptgItvMin(r.duree_pause))}${legal}</td>
+          <td style="padding:7px 10px;text-align:right;font-weight:700;color:#1E293B;">${this._ptgHM(nm)}</td>
+          <td style="padding:7px 10px;text-align:center;">${statutBadge(r.statut)}</td>
+        </tr>`;
+      }).join('');
+      grandTotal += tot;
+      html += `<div style="margin-bottom:20px;border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+        <div style="background:#1E293B;color:white;padding:9px 14px;font-size:14px;font-weight:700;">
+          ${prenom} ${nom.toUpperCase()}
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr style="background:#F8FAFC;border-bottom:2px solid #E2E8F0;">
+            <th style="padding:7px 10px;text-align:left;color:#64748B;font-weight:600;">Date</th>
+            <th style="padding:7px 10px;text-align:center;color:#64748B;font-weight:600;">Arrivée</th>
+            <th style="padding:7px 10px;text-align:center;color:#64748B;font-weight:600;">Départ</th>
+            <th style="padding:7px 10px;text-align:center;color:#64748B;font-weight:600;">Pauses</th>
+            <th style="padding:7px 10px;text-align:right;color:#64748B;font-weight:600;">Durée nette</th>
+            <th style="padding:7px 10px;text-align:center;color:#64748B;font-weight:600;">Statut</th>
+          </tr></thead>
+          <tbody>${tbody}</tbody>
+          <tfoot><tr style="background:#EFF6FF;border-top:2px solid #BFDBFE;">
+            <td colspan="4" style="padding:8px 12px;font-weight:700;color:#2563EB;font-size:12px;">Total ${prenom} ${nom.toUpperCase()}</td>
+            <td style="padding:8px 12px;text-align:right;font-size:14px;font-weight:800;color:#2563EB;">${this._ptgHM(tot)}</td>
+            <td></td>
+          </tr></tfoot>
+        </table>
+      </div>`;
+    });
+    if (groups.size > 1) {
+      html += `<div style="background:#1E293B;color:white;padding:10px 16px;border-radius:10px;text-align:right;font-size:15px;font-weight:800;">
+        Total général : ${this._ptgHM(grandTotal)}
+      </div>`;
+    }
+    content.innerHTML = html;
+  },
+
+  async ptgRapportExport() {
+    const { data, label } = this._ptgRapport;
+    if (!data.length) { this.toast('Aucune donnée à exporter'); return; }
+    const { jsPDF } = window.jspdf;
+    if (!jsPDF) { this.toast('jsPDF non disponible'); return; }
+    const doc  = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const W    = 210, ml = 14, mr = 14, cw = W - ml - mr;
+    const cols = [50, 22, 22, 22, 26, 0]; // Date Arrivée Départ Pauses DuréeNette Statut(auto)
+    cols[5] = cw - cols.slice(0, 5).reduce((a, b) => a + b, 0);
+    const today = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+    const groups = new Map();
+    data.forEach(r => {
+      if (!groups.has(r.employe_id)) groups.set(r.employe_id, { nom: r.nom, prenom: r.prenom, rows: [] });
+      groups.get(r.employe_id).rows.push(r);
+    });
+    let isFirst = true;
+    groups.forEach(({ nom, prenom, rows }) => {
+      if (!isFirst) doc.addPage();
+      isFirst = false;
+      let y = 18;
+      // En-tête document
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.setTextColor(30, 41, 59);
+      doc.text('SONOTRAD — Relevé de présence', ml, y);
+      y += 7;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139);
+      doc.text(label, ml, y);
+      doc.text(`Édité le ${today}`, W - mr, y, { align: 'right' });
+      y += 8;
+      doc.setDrawColor(226, 232, 240);
+      doc.line(ml, y, W - mr, y);
+      y += 8;
+      // Bloc employé
+      doc.setFillColor(30, 41, 59);
+      doc.roundedRect(ml, y, cw, 9, 2, 2, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.setTextColor(255, 255, 255);
+      doc.text(`${prenom} ${nom.toUpperCase()}`, ml + 4, y + 6.2);
+      y += 13;
+      // En-têtes colonnes
+      const hdrLabels = ['Date', 'Arrivée', 'Départ', 'Pauses', 'Durée nette', 'Statut'];
+      doc.setFillColor(248, 250, 252);
+      doc.rect(ml, y, cw, 7, 'F');
+      doc.setDrawColor(226, 232, 240);
+      doc.rect(ml, y, cw, 7, 'S');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      let cx = ml;
+      hdrLabels.forEach((h, i) => {
+        const align = i === 0 ? 'left' : i === 4 ? 'right' : 'center';
+        const tx = align === 'right' ? cx + cols[i] - 2 : align === 'left' ? cx + 2 : cx + cols[i] / 2;
+        doc.text(h, tx, y + 4.8, { align });
+        cx += cols[i];
+      });
+      y += 7;
+      // Lignes données
+      let tot = 0;
+      rows.forEach((r, i) => {
+        const nm = this._ptgItvMin(r.duree_nette);
+        tot += nm;
+        if (y > 255) { doc.addPage(); y = 18; }
+        doc.setFillColor(i % 2 ? 248 : 255, i % 2 ? 250 : 255, i % 2 ? 252 : 255);
+        doc.rect(ml, y, cw, 6.5, 'F');
+        doc.setDrawColor(241, 245, 249);
+        doc.line(ml, y + 6.5, ml + cw, y + 6.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(30, 41, 59);
+        const vals = [
+          this._ptgFmtDate(r.date),
+          this._ptgFmtTime(r.heure_entree),
+          this._ptgFmtTime(r.heure_sortie),
+          this._ptgHM(this._ptgItvMin(r.duree_pause)) + (r.pause_legale_appliquee ? ' ⚖' : ''),
+          this._ptgHM(nm),
+          { SORTI:'Sorti', EN_SERVICE:'En service', EN_PAUSE:'En pause', ANOMALIE:'Anomalie' }[r.statut] || r.statut,
+        ];
+        cx = ml;
+        vals.forEach((v, j) => {
+          if (j > 0) doc.setFont('helvetica', 'normal');
+          const align = j === 0 ? 'left' : j === 4 ? 'right' : 'center';
+          const tx = align === 'right' ? cx + cols[j] - 2 : align === 'left' ? cx + 2 : cx + cols[j] / 2;
+          doc.text(String(v), tx, y + 4.3, { align });
+          cx += cols[j];
+        });
+        y += 6.5;
+      });
+      // Ligne total employé
+      doc.setFillColor(239, 246, 255);
+      doc.rect(ml, y, cw, 7, 'F');
+      doc.setDrawColor(191, 219, 254);
+      doc.rect(ml, y, cw, 7, 'S');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(37, 99, 235);
+      doc.text(`Total ${prenom} ${nom.toUpperCase()}`, ml + 4, y + 4.8);
+      doc.text(this._ptgHM(tot), ml + cols[0] + cols[1] + cols[2] + cols[3] + cols[4] - 2, y + 4.8, { align: 'right' });
+      y += 13;
+      // Zone émargement
+      if (y > 240) { doc.addPage(); y = 18; }
+      doc.setDrawColor(226, 232, 240);
+      doc.setFillColor(250, 251, 252);
+      doc.roundedRect(ml, y, cw, 34, 2, 2, 'FD');
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8.5);
+      doc.setTextColor(71, 85, 105);
+      const txt = `Je soussigné(e), ${prenom} ${nom.toUpperCase()}, certifie l'exactitude du présent relevé de présence.`;
+      doc.text(txt, ml + 4, y + 7, { maxWidth: cw - 8 });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(30, 41, 59);
+      doc.text('Date : ___________________________', ml + 4, y + 19);
+      doc.text('Signature :', ml + 4, y + 27);
+      doc.setDrawColor(148, 163, 184);
+      doc.line(ml + 28, y + 27, ml + cw - 4, y + 27);
+    });
+    const filename = `releve_presence_${label.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`;
+    doc.save(filename);
   },
 
   /* ─ Toast ─ */
