@@ -981,6 +981,9 @@
     <button class="nav-tab" data-ptgtab="ptg-admin" onclick="App.go('ptg-admin')" style="display:none">
       <span class="icon">📊</span><span>Tableau</span>
     </button>
+    <button class="nav-tab" data-ptgtab="ptg-rapport" onclick="App.go('ptg-rapport')" style="display:none">
+      <span class="icon">📋</span><span>Rapports</span>
+    </button>
     <!-- ── Tabs LVU (masqués hors activité LVU) ──────────────────────────── -->
     <button class="nav-tab" data-lvutab="lvu-form" onclick="App.go('lvu-form')" style="display:none">
       <span class="icon">📝</span><span>Formulaire</span>
@@ -1298,11 +1301,20 @@
           <h2 style="font-size:18px;font-weight:700;color:#1E293B;margin:0;">Passages du jour</h2>
           <p id="ptg-admin-date" style="font-size:12px;color:#94A3B8;margin:2px 0 0;"></p>
         </div>
-        <button onclick="App.ptgAdminRefresh()"
-          style="background:#F1F5F9;border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;color:#475569;cursor:pointer;">
-          ↻ Actualiser
-        </button>
+        <div style="display:flex;gap:8px;">
+          <button onclick="App.ptgAddModalShow()"
+            style="background:#1E293B;color:white;border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">
+            ＋ Ajouter
+          </button>
+          <button onclick="App.ptgAdminRefresh()"
+            style="background:#F1F5F9;border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;color:#475569;cursor:pointer;">
+            ↻ Actualiser
+          </button>
+        </div>
       </div>
+
+      <!-- Alertes -->
+      <div id="ptg-alertes" style="margin-bottom:14px;"></div>
 
       <!-- KPIs -->
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;" id="ptg-admin-kpis">
@@ -1315,6 +1327,82 @@
       <!-- Liste des passages -->
       <div id="ptg-admin-list">
         <div style="text-align:center;padding:32px;color:#CBD5E1;font-size:13px;">Chargement…</div>
+      </div>
+    </div>
+
+    <!-- ── VIEW : POINTAGE RAPPORTS ────────────────────────────────────── -->
+    <div class="view" id="view-ptg-rapport">
+
+      <!-- Filtres -->
+      <div style="margin-bottom:14px;">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+          <div style="display:flex;background:#F1F5F9;border-radius:10px;padding:3px;gap:2px;">
+            <button id="ptg-rpt-btn-week" onclick="App.ptgRapportSetPeriod('week')"
+              style="border:none;border-radius:8px;padding:6px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;">
+              Semaine
+            </button>
+            <button id="ptg-rpt-btn-month" onclick="App.ptgRapportSetPeriod('month')"
+              style="border:none;border-radius:8px;padding:6px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;">
+              Mois
+            </button>
+          </div>
+          <button onclick="App.ptgRapportNav(-1)"
+            style="background:#F1F5F9;border:none;border-radius:10px;padding:6px 14px;font-size:16px;font-weight:700;color:#475569;cursor:pointer;">←</button>
+          <span id="ptg-rpt-label"
+            style="font-size:13px;font-weight:700;color:#1E293B;flex:1;text-align:center;min-width:160px;"></span>
+          <button onclick="App.ptgRapportNav(+1)"
+            style="background:#F1F5F9;border:none;border-radius:10px;padding:6px 14px;font-size:16px;font-weight:700;color:#475569;cursor:pointer;">→</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <select id="ptg-rpt-employe" onchange="App._ptgRapportLoad()"
+            style="flex:1;padding:8px 12px;border-radius:10px;border:1px solid #E2E8F0;font-size:13px;font-weight:500;color:#1E293B;background:white;">
+            <option value="">Tous les employés</option>
+          </select>
+          <button onclick="App.ptgRapportExport()"
+            style="background:#1E293B;color:white;border:none;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">
+            ⬇ PDF
+          </button>
+        </div>
+      </div>
+
+      <!-- Tableau résultats -->
+      <div id="ptg-rpt-content">
+        <div style="text-align:center;padding:40px;color:#CBD5E1;font-size:13px;">Chargement…</div>
+      </div>
+    </div>
+
+    <!-- Modal : ajouter un pointage de correction -->
+    <div id="ptg-add-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.6);z-index:500;align-items:flex-end;justify-content:center;">
+      <div style="background:white;border-radius:16px 16px 0 0;padding:20px 16px 32px;width:100%;max-width:480px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <h3 style="font-size:16px;font-weight:700;color:#1E293B;margin:0;">Ajouter un pointage</h3>
+          <button onclick="App.ptgAddModalHide()" style="background:#F1F5F9;border:none;border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;color:#64748B;">✕</button>
+        </div>
+        <label style="font-size:12px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Employé</label>
+        <select id="ptg-add-emp" style="width:100%;padding:9px 12px;border-radius:10px;border:1px solid #E2E8F0;font-size:13px;margin-bottom:14px;background:white;color:#1E293B;">
+          <option value="">Sélectionner…</option>
+        </select>
+        <label style="font-size:12px;font-weight:600;color:#64748B;display:block;margin-bottom:6px;">Type</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px;">
+          <button onclick="App.ptgAddTypeSelect('ENTREE')"      data-ptgtype="ENTREE"      style="padding:9px;border-radius:10px;border:2px solid #E2E8F0;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#1E293B;transition:all .15s;">▶ Entrée</button>
+          <button onclick="App.ptgAddTypeSelect('SORTIE')"      data-ptgtype="SORTIE"      style="padding:9px;border-radius:10px;border:2px solid #E2E8F0;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#1E293B;transition:all .15s;">■ Sortie</button>
+          <button onclick="App.ptgAddTypeSelect('PAUSE_DEBUT')" data-ptgtype="PAUSE_DEBUT" style="padding:9px;border-radius:10px;border:2px solid #E2E8F0;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#1E293B;transition:all .15s;">☕ Début pause</button>
+          <button onclick="App.ptgAddTypeSelect('PAUSE_FIN')"   data-ptgtype="PAUSE_FIN"   style="padding:9px;border-radius:10px;border:2px solid #E2E8F0;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#1E293B;transition:all .15s;">↩ Fin pause</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px;">
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Date</label>
+            <input type="date" id="ptg-add-date" style="width:100%;padding:9px 12px;border-radius:10px;border:1px solid #E2E8F0;font-size:13px;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Heure</label>
+            <input type="time" id="ptg-add-time" style="width:100%;padding:9px 12px;border-radius:10px;border:1px solid #E2E8F0;font-size:13px;box-sizing:border-box;">
+          </div>
+        </div>
+        <button onclick="App.ptgAddConfirm()"
+          style="width:100%;background:#1E293B;color:white;border:none;border-radius:12px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;">
+          Enregistrer le pointage
+        </button>
       </div>
     </div>
 
@@ -2974,6 +3062,7 @@ const App = {
     if (view === 'lvu-history')   this.lvuLoadHistory();
     if (view === 'annuaire')      this.annuaireLoad();
     if (view === 'ptg-admin')     this.ptgAdminInit();
+    if (view === 'ptg-rapport')   this.ptgRapportInit();
   },
   breadcrumbGoActivity() {
     const map = { loxam:'loxam-menu', bcb:'bcb-menu', stockage:'loxam-menu' };
@@ -3043,7 +3132,7 @@ const App = {
     });
     document.querySelectorAll('#main-nav .nav-tab[data-ptgtab]').forEach(el => {
       const isAdmin    = S.currentUser?.role === 'admin';
-      const isAdminTab = el.dataset.ptgtab === 'ptg-admin';
+      const isAdminTab = el.dataset.ptgtab === 'ptg-admin' || el.dataset.ptgtab === 'ptg-rapport';
       el.style.display = (S.activity === 'pointage' && (!isAdminTab || isAdmin)) ? '' : 'none';
     });
 
@@ -3630,8 +3719,9 @@ const App = {
       if (data.status === 'ok') {
         // Sync vers Supabase : même PIN pour l'app et le pointage kiosque
         if (window.SupabaseDB) {
-          await window.SupabaseDB.rpc('upsert_employe_pointage',
+          const { error: sbErr } = await window.SupabaseDB.rpc('upsert_employe_pointage',
             { p_nom: nom, p_prenom: prenom, p_pin: pin });
+          if (sbErr) console.error('[Pointage] upsert_employe_pointage:', sbErr);
         }
         this.toast(`✓ ${prenom} ${nom} créé !`);
         this._hideCreateUserForm();
@@ -3669,8 +3759,9 @@ const App = {
       if (data.status === 'ok') {
         // Sync vers Supabase : même PIN pour l'app et le pointage kiosque
         if (window.SupabaseDB) {
-          await window.SupabaseDB.rpc('upsert_employe_pointage',
+          const { error: sbErr } = await window.SupabaseDB.rpc('upsert_employe_pointage',
             { p_nom: nom, p_prenom: prenom, p_pin: pin });
+          if (sbErr) console.error('[Pointage] upsert_employe_pointage:', sbErr);
         }
         this.toast(`✓ PIN de ${prenom} réinitialisé`);
         document.getElementById(`reset-pin-${prenom}-${nom}`).style.display = 'none';
@@ -10765,8 +10856,8 @@ ${bodies}${sansAcheteurBody}
       this._ptg.realtimeSub = null;
     }
     this._ptg.realtimeSub = db
-      .channel('ptg-pointages-watch')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pointages' }, () => {
+      .channel('ptg-hj-kiosk')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'heures_journalieres' }, () => {
         this._ptgLoadEnService();
       })
       .subscribe();
@@ -10781,6 +10872,7 @@ ${bodies}${sansAcheteurBody}
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
     });
     await this._ptgAdminLoad();
+    this._ptgAlertesLoad();
     this._ptgAdminSubscribe();
   },
 
@@ -10788,6 +10880,7 @@ ${bodies}${sansAcheteurBody}
     const btn = document.querySelector('[onclick="App.ptgAdminRefresh()"]');
     if (btn) { btn.textContent = '↻ …'; btn.disabled = true; }
     await this._ptgAdminLoad();
+    this._ptgAlertesLoad();
     if (btn) { btn.textContent = '↻ Actualiser'; btn.disabled = false; }
   },
 
@@ -10841,17 +10934,57 @@ ${bodies}${sansAcheteurBody}
       const annule = !p.valide
         ? '<span style="font-size:10px;font-weight:600;color:#DC2626;background:#FEE2E2;padding:1px 6px;border-radius:8px;margin-left:6px;">annulé</span>'
         : '';
-      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;
-          background:${p.valide ? 'white' : '#FAFAFA'};border-radius:10px;margin-bottom:6px;
-          box-shadow:0 1px 3px rgba(0,0,0,0.06);opacity:${p.valide ? 1 : 0.55};">
-        <div style="font-family:'Courier New',monospace;font-size:13px;font-weight:700;color:#64748B;
-            flex-shrink:0;min-width:60px;">${heure}</div>
-        <div style="flex:1;min-width:0;">
-          <span style="font-size:14px;font-weight:600;color:#1E293B;">${p.prenom} ${p.nom}</span>
-          ${annule}
+      const corrBadge = p.source === 'admin'
+        ? '<span title="Ajout manuel" style="font-size:9px;color:#D97706;margin-left:4px;font-weight:700;">✎</span>'
+        : '';
+      const cancelBtn = p.valide
+        ? `<button onclick="App.ptgAnnulerToggle('${p.id}')" title="Modifier / annuler"
+            style="background:#F1F5F9;border:none;border-radius:8px;width:28px;height:28px;font-size:14px;
+            color:#64748B;cursor:pointer;flex-shrink:0;line-height:1;">✎</button>`
+        : '';
+      const dtParis  = new Date(new Date(p.horodatage).toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+      const dateVal  = dtParis.toISOString().slice(0, 10);
+      const timeVal  = String(dtParis.getHours()).padStart(2,'0') + ':' + String(dtParis.getMinutes()).padStart(2,'0');
+      const inlineForm = p.valide
+        ? `<div id="ptg-annul-${p.id}" class="ptg-annul-form" style="display:none;">
+            <div style="padding:8px 12px;background:#EFF6FF;border-top:1px solid #BFDBFE;">
+              <div style="font-size:10px;font-weight:700;color:#2563EB;margin-bottom:6px;letter-spacing:.5px;">CORRIGER L'HEURE</div>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <input type="date" id="ptg-mod-date-${p.id}" value="${dateVal}"
+                  style="padding:5px 8px;border-radius:8px;border:1px solid #BFDBFE;font-size:12px;flex:1;min-width:0;">
+                <input type="time" id="ptg-mod-time-${p.id}" value="${timeVal}"
+                  style="padding:5px 8px;border-radius:8px;border:1px solid #BFDBFE;font-size:12px;width:80px;flex-shrink:0;">
+                <button onclick="App.ptgModifierConfirm('${p.id}')"
+                  style="background:#2563EB;color:white;border:none;border-radius:8px;padding:5px 12px;
+                  font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">✓ Enregistrer</button>
+              </div>
+            </div>
+            <div style="padding:8px 12px;background:#FFF5F5;border-top:1px solid #FEE2E2;">
+              <div style="font-size:10px;font-weight:700;color:#DC2626;margin-bottom:6px;letter-spacing:.5px;">ANNULER LE POINTAGE</div>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <input type="text" id="ptg-annul-motif-${p.id}" placeholder="Motif (obligatoire)"
+                  style="flex:1;padding:5px 8px;border-radius:8px;border:1px solid #FECACA;font-size:12px;background:white;"
+                  onkeydown="if(event.key==='Enter')App.ptgAnnulerConfirm('${p.id}')">
+                <button onclick="App.ptgAnnulerConfirm('${p.id}')"
+                  style="background:#DC2626;color:white;border:none;border-radius:8px;padding:5px 12px;
+                  font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">✕ Annuler</button>
+              </div>
+            </div>
+          </div>`
+        : '';
+      return `<div style="margin-bottom:6px;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;
+            background:${p.valide ? 'white' : '#FAFAFA'};opacity:${p.valide ? 1 : 0.55};">
+          <div style="font-family:'Courier New',monospace;font-size:13px;font-weight:700;color:#64748B;
+              flex-shrink:0;min-width:60px;">${heure}</div>
+          <div style="flex:1;min-width:0;">
+            <span style="font-size:14px;font-weight:600;color:#1E293B;">${p.prenom} ${p.nom}</span>${annule}${corrBadge}
+          </div>
+          <span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:10px;
+              background:${meta.bg};color:${meta.color};flex-shrink:0;">${meta.label}</span>
+          ${cancelBtn}
         </div>
-        <span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:10px;
-            background:${meta.bg};color:${meta.color};flex-shrink:0;">${meta.label}</span>
+        ${inlineForm}
       </div>`;
     }).join('');
   },
@@ -10861,6 +10994,97 @@ ${bodies}${sansAcheteurBody}
     if (el) el.querySelector('.dash-kpi-val').textContent = val;
   },
 
+  async _ptgAlertesLoad() {
+    const db = window.SupabaseDB;
+    const el = document.getElementById('ptg-alertes');
+    if (!db || !el) return;
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const limit = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+
+      const [r1, r2] = await Promise.all([
+        db.from('heures_rapport_vue')
+          .select('nom, prenom, date, statut, heure_entree')
+          .lt('date', today).gte('date', limit)
+          .in('statut', ['EN_SERVICE', 'EN_PAUSE', 'ANOMALIE'])
+          .order('date', { ascending: false }),
+        db.from('en_service_vue').select('nom, prenom, heure_entree, statut'),
+      ]);
+
+      const oublis   = r1.data || [];
+      const enSvc    = r2.data || [];
+      const longs    = enSvc.filter(e => e.heure_entree &&
+        (Date.now() - new Date(e.heure_entree)) / 3600000 > 8);
+
+      const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('fr-FR',
+        { weekday: 'short', day: 'numeric', month: 'short' });
+      const fmtDur = e => {
+        const ms = Date.now() - new Date(e.heure_entree);
+        const h  = Math.floor(ms / 3600000);
+        const m  = Math.floor((ms % 3600000) / 60000);
+        return `${h}h${String(m).padStart(2,'0')}`;
+      };
+
+      let html = '';
+
+      // ── Bloc état du jour ──────────────────────────────────────────────────
+      if (enSvc.length) {
+        const enPause  = enSvc.filter(e => e.statut === 'EN_PAUSE');
+        const enTravail = enSvc.filter(e => e.statut === 'EN_SERVICE');
+        html += `<div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;
+          padding:8px 12px;margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:700;color:#64748B;margin-bottom:6px;letter-spacing:.4px;">
+            ACTUELLEMENT EN SERVICE (${enSvc.length})
+          </div>
+          ${enSvc.map(e => {
+            const dur = e.heure_entree ? fmtDur(e) : '—';
+            const isLong = longs.includes(e);
+            const isPause = e.statut === 'EN_PAUSE';
+            const dot = isPause ? '🟡' : (isLong ? '🔴' : '🟢');
+            return `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;
+              font-size:12px;color:${isLong ? '#DC2626' : '#1E293B'};">
+              <span>${dot}</span>
+              <span style="flex:1;font-weight:600;">${e.prenom} ${e.nom.toUpperCase()}</span>
+              <span style="color:#64748B;">${isPause ? 'En pause' : `En service ${dur}`}${isLong ? ' ⚠' : ''}</span>
+            </div>`;
+          }).join('')}
+        </div>`;
+      }
+
+      // ── Anomalies jours passés ─────────────────────────────────────────────
+      if (oublis.length) {
+        html += `<div style="border-radius:10px;overflow:hidden;border:1px solid #FDE68A;">
+          <div style="background:#FFFBEB;padding:7px 12px;border-bottom:1px solid #FDE68A;">
+            <span style="font-size:12px;font-weight:700;color:#92400E;">
+              ⚠ ${oublis.length} sortie${oublis.length > 1 ? 's' : ''} manquante${oublis.length > 1 ? 's' : ''} (jours passés)
+            </span>
+          </div>
+          ${oublis.map(e => `<div style="background:#FFFBEB;padding:7px 12px;
+            border-bottom:1px solid #FDE68A;display:flex;align-items:center;gap:10px;">
+            <span style="flex:1;font-size:12px;color:#92400E;">
+              <strong>${e.prenom} ${e.nom.toUpperCase()}</strong> · ${fmtDate(e.date)}
+            </span>
+            <button onclick="App.ptgAddModalShow()"
+              style="background:#D97706;color:white;border:none;border-radius:8px;
+              padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;">+ Ajouter</button>
+          </div>`).join('')}
+        </div>`;
+      }
+
+      if (!html) {
+        html = `<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;
+          padding:8px 12px;font-size:12px;font-weight:600;color:#15803D;">
+          ✓ Aucune anomalie — personne en service actuellement
+        </div>`;
+      }
+
+      el.innerHTML = html;
+    } catch(err) {
+      el.innerHTML = `<div style="background:#FFF5F5;border:1px solid #FECACA;border-radius:10px;
+        padding:8px 12px;font-size:12px;color:#DC2626;">Erreur alertes : ${err.message}</div>`;
+    }
+  },
+
   _ptgAdminSubscribe() {
     const db = window.SupabaseDB;
     if (!db) return;
@@ -10868,12 +11092,438 @@ ${bodies}${sansAcheteurBody}
       db.removeChannel(this._ptg.realtimeSub);
     }
     this._ptg.realtimeSub = db
-      .channel('ptg-admin-watch')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pointages' }, () => {
-        if (S.view === 'ptg-admin') this._ptgAdminLoad();
+      .channel('ptg-hj-admin')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'heures_journalieres' }, () => {
+        if (S.view === 'ptg-admin') { this._ptgAdminLoad(); this._ptgAlertesLoad(); }
         if (S.view === 'pointage')  this._ptgLoadEnService();
       })
       .subscribe();
+  },
+
+  /* ─── Pointage — Corrections admin ────────────────────────────────────── */
+
+  _ptgAdd: { type: null },
+
+  ptgAnnulerToggle(id) {
+    const form = document.getElementById(`ptg-annul-${id}`);
+    if (!form) return;
+    const isOpen = form.style.display !== 'none';
+    document.querySelectorAll('.ptg-annul-form').forEach(f => { f.style.display = 'none'; });
+    if (!isOpen) {
+      form.style.display = 'block';
+      document.getElementById(`ptg-annul-motif-${id}`)?.focus();
+    }
+  },
+
+  async ptgAnnulerConfirm(id) {
+    const motif = document.getElementById(`ptg-annul-motif-${id}`)?.value?.trim();
+    if (!motif) { this.toast('Motif obligatoire'); return; }
+    const db = window.SupabaseDB;
+    if (!db) return;
+    const par = S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}` : 'admin';
+    const { data, error } = await db.rpc('admin_annuler_pointage',
+      { p_pointage_id: id, p_motif: motif, p_modifie_par: par });
+    if (error || data?.ok === false) {
+      this.toast('Erreur : ' + (data?.message || error?.message || 'inconnue')); return;
+    }
+    this.toast('✓ Pointage annulé');
+    this._ptgAdminLoad();
+  },
+
+  async ptgModifierConfirm(id) {
+    const date = document.getElementById(`ptg-mod-date-${id}`)?.value;
+    const time = document.getElementById(`ptg-mod-time-${id}`)?.value;
+    if (!date || !time) { this.toast('Date et heure requises'); return; }
+    const horodatage = new Date(`${date}T${time}:00`).toISOString();
+    const db = window.SupabaseDB;
+    if (!db) return;
+    const par = S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}` : 'admin';
+    const { data, error } = await db.rpc('admin_modifier_pointage',
+      { p_pointage_id: id, p_horodatage: horodatage, p_modifie_par: par });
+    if (error || data?.ok === false) {
+      this.toast('Erreur : ' + (data?.message || error?.message || 'inconnue')); return;
+    }
+    this.toast('✓ Heure corrigée');
+    this._ptgAdminLoad();
+  },
+
+  async ptgAddModalShow() {
+    const modal = document.getElementById('ptg-add-modal');
+    if (!modal) return;
+    const db = window.SupabaseDB;
+    if (db) {
+      const { data } = await db.from('employes_actifs_vue').select('id, nom, prenom');
+      const sel = document.getElementById('ptg-add-emp');
+      if (sel && data) {
+        sel.innerHTML = '<option value="">Sélectionner…</option>' +
+          data.map(e => `<option value="${e.id}">${e.prenom} ${e.nom.toUpperCase()}</option>`).join('');
+      }
+    }
+    const now = new Date();
+    document.getElementById('ptg-add-date').value = now.toISOString().slice(0, 10);
+    document.getElementById('ptg-add-time').value =
+      String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+    document.querySelectorAll('[data-ptgtype]').forEach(b => {
+      b.style.background = 'white'; b.style.borderColor = '#E2E8F0'; b.style.color = '#1E293B';
+    });
+    this._ptgAdd.type = null;
+    modal.style.display = 'flex';
+  },
+
+  ptgAddModalHide() {
+    const modal = document.getElementById('ptg-add-modal');
+    if (modal) modal.style.display = 'none';
+  },
+
+  ptgAddTypeSelect(type) {
+    this._ptgAdd.type = type;
+    document.querySelectorAll('[data-ptgtype]').forEach(b => {
+      const active = b.dataset.ptgtype === type;
+      b.style.background  = active ? '#1E293B'     : 'white';
+      b.style.borderColor = active ? '#1E293B'     : '#E2E8F0';
+      b.style.color       = active ? 'white'       : '#1E293B';
+    });
+  },
+
+  async ptgAddConfirm() {
+    const empId = document.getElementById('ptg-add-emp')?.value;
+    const type  = this._ptgAdd.type;
+    const date  = document.getElementById('ptg-add-date')?.value;
+    const time  = document.getElementById('ptg-add-time')?.value;
+    if (!empId) { this.toast('Sélectionnez un employé'); return; }
+    if (!type)  { this.toast('Sélectionnez un type'); return; }
+    if (!date || !time) { this.toast('Date et heure requises'); return; }
+    const horodatage = new Date(`${date}T${time}:00`).toISOString();
+    const db = window.SupabaseDB;
+    if (!db) return;
+    const par = S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}` : 'admin';
+    const { data, error } = await db.rpc('admin_add_pointage',
+      { p_employe_id: empId, p_type: type, p_horodatage: horodatage, p_modifie_par: par });
+    if (error || data?.ok === false) {
+      this.toast('Erreur : ' + (data?.message || error?.message || 'inconnue')); return;
+    }
+    this.ptgAddModalHide();
+    this.toast('✓ Pointage ajouté');
+    this._ptgAdminLoad();
+  },
+
+  /* ─── Pointage — Rapports ──────────────────────────────────────────────── */
+
+  _ptgRapport: { mode: 'week', offset: 0, data: [], label: '' },
+
+  async ptgRapportInit() {
+    const r = this._ptgRapport;
+    r.offset = 0;
+    r.mode   = 'week';
+    this._ptgRapportUpdateToggle();
+    await this._ptgRapportFillEmployes();
+    await this._ptgRapportLoad();
+  },
+
+  ptgRapportSetPeriod(mode) {
+    this._ptgRapport.mode   = mode;
+    this._ptgRapport.offset = 0;
+    this._ptgRapportUpdateToggle();
+    this._ptgRapportLoad();
+  },
+
+  ptgRapportNav(dir) {
+    this._ptgRapport.offset += dir;
+    this._ptgRapportLoad();
+  },
+
+  _ptgRapportUpdateToggle() {
+    const mode = this._ptgRapport.mode;
+    const bw = document.getElementById('ptg-rpt-btn-week');
+    const bm = document.getElementById('ptg-rpt-btn-month');
+    if (!bw || !bm) return;
+    bw.style.background = mode === 'week'  ? 'white'       : 'transparent';
+    bw.style.color      = mode === 'week'  ? '#1E293B'     : '#94A3B8';
+    bw.style.boxShadow  = mode === 'week'  ? '0 1px 3px rgba(0,0,0,0.12)' : 'none';
+    bm.style.background = mode === 'month' ? 'white'       : 'transparent';
+    bm.style.color      = mode === 'month' ? '#1E293B'     : '#94A3B8';
+    bm.style.boxShadow  = mode === 'month' ? '0 1px 3px rgba(0,0,0,0.12)' : 'none';
+  },
+
+  _ptgRapportDates() {
+    const { mode, offset } = this._ptgRapport;
+    if (mode === 'week') {
+      const now    = new Date();
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - ((now.getDay() + 6) % 7) + offset * 7);
+      monday.setHours(0, 0, 0, 0);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      const start  = monday.toISOString().slice(0, 10);
+      const end    = sunday.toISOString().slice(0, 10);
+      const wn     = this._ptgWeekNum(monday);
+      const fmtS   = monday.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+      const fmtE   = sunday.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+      return { start, end, label: `Semaine ${wn} — ${fmtS} au ${fmtE}` };
+    } else {
+      const now   = new Date();
+      const first = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+      const last  = new Date(first.getFullYear(), first.getMonth() + 1, 0);
+      const start = first.toISOString().slice(0, 10);
+      const end   = last.toISOString().slice(0, 10);
+      const lbl   = first.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      return { start, end, label: lbl.charAt(0).toUpperCase() + lbl.slice(1) };
+    }
+  },
+
+  _ptgWeekNum(date) {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+    return Math.ceil((((d - new Date(Date.UTC(d.getUTCFullYear(), 0, 1))) / 86400000) + 1) / 7);
+  },
+
+  async _ptgRapportFillEmployes() {
+    const db = window.SupabaseDB;
+    if (!db) return;
+    const { data } = await db.from('heures_rapport_vue')
+      .select('employe_id, nom, prenom').order('nom');
+    if (!data) return;
+    const seen = new Set();
+    const uniq = data.filter(r => {
+      if (seen.has(r.employe_id)) return false;
+      seen.add(r.employe_id); return true;
+    });
+    const sel = document.getElementById('ptg-rpt-employe');
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Tous les employés</option>' +
+      uniq.map(e => `<option value="${e.employe_id}">${e.prenom} ${e.nom.toUpperCase()}</option>`).join('');
+    if (cur) sel.value = cur;
+  },
+
+  async _ptgRapportLoad() {
+    const db      = window.SupabaseDB;
+    const content = document.getElementById('ptg-rpt-content');
+    if (!db || !content) return;
+    const { start, end, label } = this._ptgRapportDates();
+    this._ptgRapport.label = label;
+    const lbl = document.getElementById('ptg-rpt-label');
+    if (lbl) lbl.textContent = label;
+    content.innerHTML = '<div style="text-align:center;padding:32px;color:#CBD5E1;font-size:13px;">Chargement…</div>';
+    let q = db.from('heures_rapport_vue').select('*').gte('date', start).lte('date', end).order('nom').order('date');
+    const emp = document.getElementById('ptg-rpt-employe')?.value;
+    if (emp) q = q.eq('employe_id', emp);
+    const { data, error } = await q;
+    if (error) {
+      content.innerHTML = `<div style="color:#DC2626;padding:16px;font-size:13px;">Erreur : ${error.message}</div>`;
+      return;
+    }
+    this._ptgRapport.data = data || [];
+    this._ptgRapportRender(data || []);
+  },
+
+  _ptgItvMin(iv) {
+    if (!iv) return 0;
+    const p = String(iv).split(':');
+    return p.length >= 2 ? Math.abs(parseInt(p[0], 10)) * 60 + parseInt(p[1], 10) : 0;
+  },
+
+  _ptgHM(min) {
+    if (!min && min !== 0) return '—';
+    return Math.floor(min / 60) + 'h' + String(min % 60).padStart(2, '0');
+  },
+
+  _ptgFmtTime(ts) {
+    if (!ts) return '—';
+    return new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
+  },
+
+  _ptgFmtDate(d) {
+    return new Date(d + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  },
+
+  _ptgRapportRender(data) {
+    const content = document.getElementById('ptg-rpt-content');
+    if (!content) return;
+    if (!data.length) {
+      content.innerHTML = '<div style="text-align:center;padding:40px;color:#CBD5E1;font-size:13px;">Aucune donnée sur cette période</div>';
+      return;
+    }
+    const groups = new Map();
+    data.forEach(r => {
+      if (!groups.has(r.employe_id)) groups.set(r.employe_id, { nom: r.nom, prenom: r.prenom, rows: [] });
+      groups.get(r.employe_id).rows.push(r);
+    });
+    let html = '', grandTotal = 0;
+    const statutBadge = s => {
+      const m = { SORTI:['#DCFCE7','#15803D','Sorti'], EN_SERVICE:['#DBEAFE','#2563EB','En service'],
+        EN_PAUSE:['#FEF3C7','#D97706','En pause'], ANOMALIE:['#FEE2E2','#DC2626','Anomalie'] };
+      const [bg, col, lbl] = m[s] || ['#F1F5F9','#64748B', s];
+      return `<span style="background:${bg};color:${col};padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700;">${lbl}</span>`;
+    };
+    groups.forEach(({ nom, prenom, rows }) => {
+      let tot = 0;
+      const tbody = rows.map((r, i) => {
+        const nm = this._ptgItvMin(r.duree_nette);
+        tot += nm;
+        const legal = r.pause_legale_appliquee ? ' <span title="Conv. transport -20min" style="color:#D97706;font-size:9px;vertical-align:middle;">⚖</span>' : '';
+        return `<tr style="background:${i%2?'#F8FAFC':'white'};border-bottom:1px solid #F1F5F9;">
+          <td style="padding:7px 10px;font-weight:600;color:#1E293B;">${this._ptgFmtDate(r.date)}</td>
+          <td style="padding:7px 10px;text-align:center;">${this._ptgFmtTime(r.heure_entree)}</td>
+          <td style="padding:7px 10px;text-align:center;">${this._ptgFmtTime(r.heure_sortie)}</td>
+          <td style="padding:7px 10px;text-align:center;color:#64748B;">${this._ptgHM(this._ptgItvMin(r.duree_pause))}${legal}</td>
+          <td style="padding:7px 10px;text-align:right;font-weight:700;color:#1E293B;">${this._ptgHM(nm)}</td>
+          <td style="padding:7px 10px;text-align:center;">${statutBadge(r.statut)}</td>
+        </tr>`;
+      }).join('');
+      grandTotal += tot;
+      html += `<div style="margin-bottom:20px;border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+        <div style="background:#1E293B;color:white;padding:9px 14px;font-size:14px;font-weight:700;">
+          ${prenom} ${nom.toUpperCase()}
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr style="background:#F8FAFC;border-bottom:2px solid #E2E8F0;">
+            <th style="padding:7px 10px;text-align:left;color:#64748B;font-weight:600;">Date</th>
+            <th style="padding:7px 10px;text-align:center;color:#64748B;font-weight:600;">Arrivée</th>
+            <th style="padding:7px 10px;text-align:center;color:#64748B;font-weight:600;">Départ</th>
+            <th style="padding:7px 10px;text-align:center;color:#64748B;font-weight:600;">Pauses</th>
+            <th style="padding:7px 10px;text-align:right;color:#64748B;font-weight:600;">Durée nette</th>
+            <th style="padding:7px 10px;text-align:center;color:#64748B;font-weight:600;">Statut</th>
+          </tr></thead>
+          <tbody>${tbody}</tbody>
+          <tfoot><tr style="background:#EFF6FF;border-top:2px solid #BFDBFE;">
+            <td colspan="4" style="padding:8px 12px;font-weight:700;color:#2563EB;font-size:12px;">Total ${prenom} ${nom.toUpperCase()}</td>
+            <td style="padding:8px 12px;text-align:right;font-size:14px;font-weight:800;color:#2563EB;">${this._ptgHM(tot)}</td>
+            <td></td>
+          </tr></tfoot>
+        </table>
+      </div>`;
+    });
+    if (groups.size > 1) {
+      html += `<div style="background:#1E293B;color:white;padding:10px 16px;border-radius:10px;text-align:right;font-size:15px;font-weight:800;">
+        Total général : ${this._ptgHM(grandTotal)}
+      </div>`;
+    }
+    content.innerHTML = html;
+  },
+
+  async ptgRapportExport() {
+    const { data, label } = this._ptgRapport;
+    if (!data.length) { this.toast('Aucune donnée à exporter'); return; }
+    const { jsPDF } = window.jspdf;
+    if (!jsPDF) { this.toast('jsPDF non disponible'); return; }
+    const doc  = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const W    = 210, ml = 14, mr = 14, cw = W - ml - mr;
+    const cols = [50, 22, 22, 22, 26, 0]; // Date Arrivée Départ Pauses DuréeNette Statut(auto)
+    cols[5] = cw - cols.slice(0, 5).reduce((a, b) => a + b, 0);
+    const today = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+    const groups = new Map();
+    data.forEach(r => {
+      if (!groups.has(r.employe_id)) groups.set(r.employe_id, { nom: r.nom, prenom: r.prenom, rows: [] });
+      groups.get(r.employe_id).rows.push(r);
+    });
+    let isFirst = true;
+    groups.forEach(({ nom, prenom, rows }) => {
+      if (!isFirst) doc.addPage();
+      isFirst = false;
+      let y = 18;
+      // En-tête document
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.setTextColor(30, 41, 59);
+      doc.text('SONOTRAD — Relevé de présence', ml, y);
+      y += 7;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139);
+      doc.text(label, ml, y);
+      doc.text(`Édité le ${today}`, W - mr, y, { align: 'right' });
+      y += 8;
+      doc.setDrawColor(226, 232, 240);
+      doc.line(ml, y, W - mr, y);
+      y += 8;
+      // Bloc employé
+      doc.setFillColor(30, 41, 59);
+      doc.roundedRect(ml, y, cw, 9, 2, 2, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.setTextColor(255, 255, 255);
+      doc.text(`${prenom} ${nom.toUpperCase()}`, ml + 4, y + 6.2);
+      y += 13;
+      // En-têtes colonnes
+      const hdrLabels = ['Date', 'Arrivée', 'Départ', 'Pauses', 'Durée nette', 'Statut'];
+      doc.setFillColor(248, 250, 252);
+      doc.rect(ml, y, cw, 7, 'F');
+      doc.setDrawColor(226, 232, 240);
+      doc.rect(ml, y, cw, 7, 'S');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      let cx = ml;
+      hdrLabels.forEach((h, i) => {
+        const align = i === 0 ? 'left' : i === 4 ? 'right' : 'center';
+        const tx = align === 'right' ? cx + cols[i] - 2 : align === 'left' ? cx + 2 : cx + cols[i] / 2;
+        doc.text(h, tx, y + 4.8, { align });
+        cx += cols[i];
+      });
+      y += 7;
+      // Lignes données
+      let tot = 0;
+      rows.forEach((r, i) => {
+        const nm = this._ptgItvMin(r.duree_nette);
+        tot += nm;
+        if (y > 255) { doc.addPage(); y = 18; }
+        doc.setFillColor(i % 2 ? 248 : 255, i % 2 ? 250 : 255, i % 2 ? 252 : 255);
+        doc.rect(ml, y, cw, 6.5, 'F');
+        doc.setDrawColor(241, 245, 249);
+        doc.line(ml, y + 6.5, ml + cw, y + 6.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(30, 41, 59);
+        const vals = [
+          this._ptgFmtDate(r.date),
+          this._ptgFmtTime(r.heure_entree),
+          this._ptgFmtTime(r.heure_sortie),
+          this._ptgHM(this._ptgItvMin(r.duree_pause)) + (r.pause_legale_appliquee ? ' ⚖' : ''),
+          this._ptgHM(nm),
+          { SORTI:'Sorti', EN_SERVICE:'En service', EN_PAUSE:'En pause', ANOMALIE:'Anomalie' }[r.statut] || r.statut,
+        ];
+        cx = ml;
+        vals.forEach((v, j) => {
+          if (j > 0) doc.setFont('helvetica', 'normal');
+          const align = j === 0 ? 'left' : j === 4 ? 'right' : 'center';
+          const tx = align === 'right' ? cx + cols[j] - 2 : align === 'left' ? cx + 2 : cx + cols[j] / 2;
+          doc.text(String(v), tx, y + 4.3, { align });
+          cx += cols[j];
+        });
+        y += 6.5;
+      });
+      // Ligne total employé
+      doc.setFillColor(239, 246, 255);
+      doc.rect(ml, y, cw, 7, 'F');
+      doc.setDrawColor(191, 219, 254);
+      doc.rect(ml, y, cw, 7, 'S');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(37, 99, 235);
+      doc.text(`Total ${prenom} ${nom.toUpperCase()}`, ml + 4, y + 4.8);
+      doc.text(this._ptgHM(tot), ml + cols[0] + cols[1] + cols[2] + cols[3] + cols[4] - 2, y + 4.8, { align: 'right' });
+      y += 13;
+      // Zone émargement
+      if (y > 240) { doc.addPage(); y = 18; }
+      doc.setDrawColor(226, 232, 240);
+      doc.setFillColor(250, 251, 252);
+      doc.roundedRect(ml, y, cw, 34, 2, 2, 'FD');
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8.5);
+      doc.setTextColor(71, 85, 105);
+      const txt = `Je soussigné(e), ${prenom} ${nom.toUpperCase()}, certifie l'exactitude du présent relevé de présence.`;
+      doc.text(txt, ml + 4, y + 7, { maxWidth: cw - 8 });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(30, 41, 59);
+      doc.text('Date : ___________________________', ml + 4, y + 19);
+      doc.text('Signature :', ml + 4, y + 27);
+      doc.setDrawColor(148, 163, 184);
+      doc.line(ml + 28, y + 27, ml + cw - 4, y + 27);
+    });
+    const filename = `releve_presence_${label.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`;
+    doc.save(filename);
   },
 
   /* ─ Toast ─ */
