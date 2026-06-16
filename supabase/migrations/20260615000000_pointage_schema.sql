@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS pointages (
                            CHECK (source IN ('kiosque', 'nfc', 'admin', 'auto')),
   valide       boolean     NOT NULL DEFAULT true,
   raison_modif text,                  -- obligatoire si valide passe à false
-  modifie_par  uuid        REFERENCES employes(id),
+  modifie_par  text,                      -- nom de l'admin (texte libre)
   modifie_le   timestamptz,
   created_at   timestamptz NOT NULL DEFAULT now()
 );
