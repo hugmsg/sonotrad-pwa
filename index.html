@@ -6625,6 +6625,11 @@ const App = {
         this.toast('La longueur (ml) est obligatoire'); return;
       }
     }
+    // Avertissement photos hors-ligne
+    if (!navigator.onLine && S.arr.photos.length > 0) {
+      const ok = await this._confirmOfflinePhotos(S.arr.photos.length);
+      if (!ok) return;
+    }
     S.submitting = true;
     this.showStep(4);
     const { code, module, moduleType, numModule, lv, agence, chauffeur, date, etat, longueur, photos } = S.arr;
@@ -6634,11 +6639,11 @@ const App = {
     };
     try {
       if (!S.apiUrl) {
-        setMsg('💾 Mode hors-ligne', 'Sauvegardé localement');
+        setMsg('💾 Mode hors-ligne', 'Données sauvegardées localement');
         await _sleep(800);
         S.arr.submitted = true;
-        this._saveHistory({ code, module, chauffeur, date, etat, photos: photos.length, type: 'arrival', offline: true });
-        this._showSuccess(code, true);
+        this._saveHistory({ code, module, chauffeur, date, etat, photos: photos.length, photosLost: photos.length > 0, type: 'arrival', offline: true });
+        this._showSuccess(code, true, photos.length);
         return;
       }
       setMsg('Envoi en cours...', `Code ${code} · ${photos.length} photo(s)`);
@@ -6655,29 +6660,65 @@ const App = {
       console.error(err);
       document.getElementById('send-spinner').style.display = 'none';
       setMsg('⚠️ Erreur d\'envoi', err.message);
-      this._saveHistory({ code, module, chauffeur, date, etat, photos: photos.length, type: 'arrival', error: true });
+      this._saveHistory({ code, module, chauffeur, date, etat, photos: photos.length, photosLost: photos.length > 0, type: 'arrival', error: true });
       await _sleep(3200);
-      this._showSuccess(code, true);
+      this._showSuccess(code, true, photos.length);
     } finally {
       S.submitting = false;
     }
   },
-  _showSuccess(code, offline) {
+  _showSuccess(code, offline, photosCount = 0) {
     const isReception = S.activity === 'reception';
     const backBtn = isReception
       ? `<button class="btn btn-primary" onclick="App.goHome()" style="max-width:220px;margin:0 auto 12px;">← Accueil</button>`
       : `<button class="btn btn-primary" onclick="App.go('arrivals')" style="max-width:220px;margin:0 auto 12px;">← Arrivées</button>`;
+    const photosWarning = (offline && photosCount > 0) ? `
+      <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:10px 14px;margin:0 auto 16px;max-width:280px;text-align:left;">
+        <p style="font-size:12px;font-weight:700;color:#92400E;margin:0 0 4px;">📷 ${photosCount} photo${photosCount > 1 ? 's' : ''} non envoyée${photosCount > 1 ? 's' : ''}</p>
+        <p style="font-size:11px;color:#B45309;margin:0;">À ajouter manuellement depuis la fiche d'arrivée une fois en ligne.</p>
+      </div>` : '';
     document.getElementById('step-4').innerHTML = `
       <div style="text-align:center;padding:28px 0;">
         <div style="font-size:60px;margin-bottom:14px;">${offline ? '💾' : '✅'}</div>
         <p style="font-size:20px;font-weight:700;color:#1E293B;margin-bottom:8px;">
-          ${offline ? 'Sauvegardé localement' : 'Arrivée enregistrée !'}
+          ${offline ? 'Données sauvegardées' : 'Arrivée enregistrée !'}
         </p>
         <div style="font-family:monospace;font-size:28px;font-weight:900;color:var(--brand);letter-spacing:6px;margin:16px 0 20px;">${code}</div>
+        ${photosWarning}
         ${backBtn}
         <br>
         <button onclick="App.receptionDirecte()" style="background:none;border:none;color:var(--accent);font-size:15px;font-weight:600;cursor:pointer;padding:8px;">+ Nouvelle arrivée</button>
       </div>`;
+  },
+  _confirmOfflinePhotos(count) {
+    return new Promise(resolve => {
+      const id = 'modal-offline-photos';
+      const existing = document.getElementById(id);
+      if (existing) existing.remove();
+      const el = document.createElement('div');
+      el.id = id;
+      el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;';
+      el.innerHTML = `
+        <div style="background:white;border-radius:16px;padding:24px;max-width:340px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+          <div style="font-size:36px;text-align:center;margin-bottom:12px;">📷</div>
+          <h3 style="font-size:16px;font-weight:700;color:#1E293B;margin:0 0 8px;text-align:center;">Photos hors ligne</h3>
+          <p style="font-size:13px;color:#475569;margin:0 0 6px;text-align:center;">
+            Vous avez <strong>${count} photo${count > 1 ? 's' : ''}</strong> jointe${count > 1 ? 's' : ''}.
+          </p>
+          <p style="font-size:13px;color:#475569;margin:0 0 20px;text-align:center;">
+            Sans réseau, elles ne peuvent pas être envoyées.<br>
+            Les données texte seront sauvegardées.<br>
+            Les photos seront à ajouter manuellement depuis la fiche une fois en ligne.
+          </p>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <button id="offph-ok" class="btn btn-primary" style="width:100%;">Continuer sans les photos</button>
+            <button id="offph-cancel" class="btn btn-secondary" style="width:100%;">Annuler — attendre le réseau</button>
+          </div>
+        </div>`;
+      document.body.appendChild(el);
+      document.getElementById('offph-ok').onclick     = () => { el.remove(); resolve(true);  };
+      document.getElementById('offph-cancel').onclick = () => { el.remove(); resolve(false); };
+    });
   },
   /* ─ LOXAM Menu ─ */
   async loxamMenuInit() {
