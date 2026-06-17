@@ -1030,6 +1030,7 @@
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+      <span id="code-stock-badge" style="font-size:10px;background:rgba(255,255,255,0.12);border-radius:10px;padding:2px 7px;color:rgba(255,255,255,0.55);letter-spacing:.3px;display:none;" title="Codes pré-chargés disponibles hors ligne"></span>
       <div style="display:flex;align-items:center;gap:5px;font-size:12px;opacity:0.9;">
         <span class="status-dot online" id="status-dot"></span>
         <span id="status-text">En ligne</span>
@@ -2870,10 +2871,11 @@ const MODULES = {
   rapido:     { label: 'Rapido',        icon: '⚡', iconBg: '#F0FDF4' },
 };
 const SK = {
-  API:      'snt_api_url',
-  CODES:    'snt_codes',
-  CODES_TS: 'snt_codes_ts',
-  HISTORY:  'snt_history',
+  API:        'snt_api_url',
+  CODES:      'snt_codes',
+  CODES_TS:   'snt_codes_ts',
+  HISTORY:    'snt_history',
+  CODE_STOCK: 'snt_code_stock',
 };
 const CODES_TTL = 30 * 60 * 1000; // 30 min
 const ARR_SOURCES = {
@@ -2897,6 +2899,7 @@ const S = {
   apiUrl:      localStorage.getItem(SK.API) || '',
   codes:       new Set(JSON.parse(localStorage.getItem(SK.CODES) || '[]')),
   codesTs:     +(localStorage.getItem(SK.CODES_TS) || 0),
+  codeStock:   JSON.parse(localStorage.getItem(SK.CODE_STOCK) || '[]'),
   history:      JSON.parse(localStorage.getItem(SK.HISTORY) || '[]'),
   depPhotosLog: {},   // chargé depuis Drive au démarrage (dep_photos_log.json)
   arrPhotosLog: {},   // chargé depuis Drive au démarrage (arr_photos_log.json)
@@ -6452,16 +6455,64 @@ const App = {
     this._genCode();
     this._renderPhotoGrid('photo-grid-2', S.arr.photos, 'arrival');
   },
+  /* ─ Stock de codes pré-chargés ─ */
+  _renderCodeStockBadge() {
+    const el = document.getElementById('code-stock-badge');
+    if (!el) return;
+    const n = S.codeStock.length;
+    if (n === 0) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    el.textContent   = n < 2 ? `⚠ ${n} code` : `${n} codes`;
+    el.style.color   = n < 2 ? 'rgba(251,191,36,0.95)' : 'rgba(255,255,255,0.55)';
+    el.style.background = n < 2 ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.12)';
+  },
+  async _refillCodeStock() {
+    if (!S.apiUrl || !navigator.onLine) return;
+    const TARGET = 5;
+    const needed = TARGET - S.codeStock.length;
+    if (needed <= 0) return;
+    try {
+      const results = await Promise.all(
+        Array.from({ length: needed }, () =>
+          _fetchWithTimeout(S.apiUrl + '?action=generate_code', {}, 10000)
+            .then(r => r.json())
+            .then(d => (d.status === 'ok' && d.code) ? d.code : null)
+            .catch(() => null)
+        )
+      );
+      const fresh = results.filter(Boolean);
+      if (!fresh.length) return;
+      S.codeStock = [...S.codeStock, ...fresh];
+      localStorage.setItem(SK.CODE_STOCK, JSON.stringify(S.codeStock));
+      this._renderCodeStockBadge();
+    } catch(e) { console.warn('Code stock refill:', e.message); }
+  },
+  _popCodeFromStock() {
+    if (!S.codeStock.length) return null;
+    const code = S.codeStock.shift();
+    localStorage.setItem(SK.CODE_STOCK, JSON.stringify(S.codeStock));
+    this._renderCodeStockBadge();
+    if (S.codeStock.length < 2) this._refillCodeStock();
+    return code;
+  },
   async _genCode() {
     const dispEl = document.getElementById('code-display');
     const statEl = document.getElementById('code-status');
     dispEl.textContent = '· · · · · ·';
-    statEl.textContent = 'Génération…';
 
     let code = null;
     let countMsg = '';
 
-    if (S.apiUrl) {
+    // 1. Stock pré-chargé (offline-ready)
+    code = this._popCodeFromStock();
+    if (code) {
+      const r = S.codeStock.length;
+      countMsg = `✓ Code pré-chargé · ${r} restant${r > 1 ? 's' : ''}`;
+    }
+
+    // 2. Génération live si stock vide
+    if (!code && S.apiUrl) {
+      statEl.textContent = 'Génération…';
       try {
         const r = await _fetchWithTimeout(S.apiUrl + '?action=generate_code', {}, 15000);
         const d = await r.json();
@@ -6472,13 +6523,13 @@ const App = {
       } catch(_) { /* fallback local */ }
     }
 
+    // 3. Fallback local
     if (!code) {
-      // Fallback : génération locale si API indisponible
       if (S.codes.size === 0 && S.apiUrl) await this._fetchCodes();
       let tries = 0;
       do { code = _randCode(); tries++; } while (S.codes.has(code) && tries < 50000);
       S.codes.add(code);
-      countMsg = S.codes.size > 1 ? `✓ Unique parmi ${S.codes.size} codes (mode local)` : '';
+      countMsg = S.codes.size > 1 ? `✓ Local · ${S.codes.size} codes connus` : '⚠ Mode hors-ligne complet';
     }
 
     S.arr.code = code;
@@ -12293,9 +12344,14 @@ function _updateOnline() {
   const t = document.getElementById('status-text');
   if (d) { d.className = 'status-dot ' + (navigator.onLine ? 'online' : 'offline'); }
   if (t) { t.textContent = navigator.onLine ? 'En ligne' : 'Hors ligne'; }
+  if (navigator.onLine) App._refillCodeStock();
 }
 window.addEventListener('online',  _updateOnline);
 window.addEventListener('offline', _updateOnline);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && navigator.onLine) App._refillCodeStock();
+});
+setTimeout(() => App._refillCodeStock(), 1500);
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW:', e));
 }
@@ -12381,6 +12437,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Détecte le mode TEST via l'API (ADR-007 — non-breaking si GAS actuel)
   App._applyEnvMode();
   _updateOnline();
+  App._renderCodeStockBadge();
   App._ptrSetup();
   // ── Drag-and-drop sur la dropzone XLS ────────────────────────────────────
   const dz = document.getElementById('xls-dropzone');
