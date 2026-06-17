@@ -6429,7 +6429,13 @@ const App = {
   },
   /* ─ New arrival ─ */
   startNewArrival() {
-    S.arr = { step: 1, module: null, code: '', photos: [], chauffeur: '', date: todayStr(), etat: '' };
+    // Si un code avait été assigné sans être soumis, on le remet en stock
+    if (S.arr && S.arr.code && !S.arr.submitted) {
+      S.codeStock.unshift(S.arr.code);
+      localStorage.setItem(SK.CODE_STOCK, JSON.stringify(S.codeStock));
+      this._renderCodeStockBadge();
+    }
+    S.arr = { step: 1, module: null, code: '', photos: [], chauffeur: '', date: todayStr(), etat: '', submitted: false };
     this.go('new-arrival');
     this.showStep(1);
   },
@@ -6630,6 +6636,7 @@ const App = {
       if (!S.apiUrl) {
         setMsg('💾 Mode hors-ligne', 'Sauvegardé localement');
         await _sleep(800);
+        S.arr.submitted = true;
         this._saveHistory({ code, module, chauffeur, date, etat, photos: photos.length, type: 'arrival', offline: true });
         this._showSuccess(code, true);
         return;
@@ -6640,6 +6647,7 @@ const App = {
       const res = await _post(S.apiUrl, payload);
       if (res.status !== 'ok' && res.status !== 'success') throw new Error(res.error || 'Réponse inattendue');
       setMsg('✓ Enregistré !', `Code ${code}`);
+      S.arr.submitted = true;
       this._saveHistory({ code, module, chauffeur, date, etat, photos: photos.length, type: 'arrival' });
       await _sleep(700);
       this._showSuccess(code, false);
