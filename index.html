@@ -1030,6 +1030,7 @@
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+      <span id="offline-queue-badge" style="font-size:10px;background:rgba(251,191,36,0.15);border-radius:10px;padding:2px 7px;color:rgba(251,191,36,0.95);letter-spacing:.3px;display:none;cursor:default;" title="Arrivées en attente de synchronisation"></span>
       <span id="code-stock-badge" style="font-size:10px;background:rgba(255,255,255,0.12);border-radius:10px;padding:2px 7px;color:rgba(255,255,255,0.55);letter-spacing:.3px;display:none;" title="Codes pré-chargés disponibles hors ligne"></span>
       <div style="display:flex;align-items:center;gap:5px;font-size:12px;opacity:0.9;">
         <span class="status-dot online" id="status-dot"></span>
@@ -2871,11 +2872,12 @@ const MODULES = {
   rapido:     { label: 'Rapido',        icon: '⚡', iconBg: '#F0FDF4' },
 };
 const SK = {
-  API:        'snt_api_url',
-  CODES:      'snt_codes',
-  CODES_TS:   'snt_codes_ts',
-  HISTORY:    'snt_history',
-  CODE_STOCK: 'snt_code_stock',
+  API:           'snt_api_url',
+  CODES:         'snt_codes',
+  CODES_TS:      'snt_codes_ts',
+  HISTORY:       'snt_history',
+  CODE_STOCK:    'snt_code_stock',
+  OFFLINE_QUEUE: 'snt_offline_queue',
 };
 const CODES_TTL = 30 * 60 * 1000; // 30 min
 const ARR_SOURCES = {
@@ -2899,7 +2901,8 @@ const S = {
   apiUrl:      localStorage.getItem(SK.API) || '',
   codes:       new Set(JSON.parse(localStorage.getItem(SK.CODES) || '[]')),
   codesTs:     +(localStorage.getItem(SK.CODES_TS) || 0),
-  codeStock:   JSON.parse(localStorage.getItem(SK.CODE_STOCK) || '[]'),
+  codeStock:    JSON.parse(localStorage.getItem(SK.CODE_STOCK)    || '[]'),
+  offlineQueue: JSON.parse(localStorage.getItem(SK.OFFLINE_QUEUE) || '[]'),
   history:      JSON.parse(localStorage.getItem(SK.HISTORY) || '[]'),
   depPhotosLog: {},   // chargé depuis Drive au démarrage (dep_photos_log.json)
   arrPhotosLog: {},   // chargé depuis Drive au démarrage (arr_photos_log.json)
@@ -6436,6 +6439,15 @@ const App = {
       this._renderCodeStockBadge();
     }
     S.arr = { step: 1, module: null, code: '', photos: [], chauffeur: '', date: todayStr(), etat: '', submitted: false };
+    // Vide les champs DOM pour ne pas laisser les valeurs du formulaire précédent
+    ['inp-module-type','inp-num-module','inp-lv','inp-agence','inp-longueur','inp-chauffeur','inp-etat'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    const dateEl = document.getElementById('inp-date');
+    if (dateEl) dateEl.value = todayStr();
+    const grid = document.getElementById('photo-grid-2');
+    if (grid) grid.innerHTML = '';
     this.go('new-arrival');
     this.showStep(1);
   },
@@ -6625,8 +6637,9 @@ const App = {
         this.toast('La longueur (ml) est obligatoire'); return;
       }
     }
+    const offline = !navigator.onLine || !S.apiUrl;
     // Avertissement photos hors-ligne
-    if (!navigator.onLine && S.arr.photos.length > 0) {
+    if (offline && S.arr.photos.length > 0) {
       const ok = await this._confirmOfflinePhotos(S.arr.photos.length);
       if (!ok) return;
     }
@@ -6637,17 +6650,18 @@ const App = {
       document.getElementById('send-msg').textContent    = m;
       document.getElementById('send-detail').textContent = d;
     };
+    const user = S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}`.trim() : '';
     try {
-      if (!S.apiUrl) {
-        setMsg('💾 Mode hors-ligne', 'Données sauvegardées localement');
-        await _sleep(800);
+      if (offline) {
+        setMsg('💾 Sauvegarde hors ligne...', `Code ${code}`);
+        await _sleep(600);
+        this._addToOfflineQueue({ action: 'arrival', code, module, moduleType, numModule, lv, agence, chauffeur, date, etat, longueur, saisie_par: user });
         S.arr.submitted = true;
-        this._saveHistory({ code, module, chauffeur, date, etat, photos: photos.length, photosLost: photos.length > 0, type: 'arrival', offline: true });
+        this._saveHistory({ code, module, chauffeur, date, etat, photos: photos.length, photosLost: photos.length > 0, type: 'arrival', offline: true, pending: true });
         this._showSuccess(code, true, photos.length);
         return;
       }
       setMsg('Envoi en cours...', `Code ${code} · ${photos.length} photo(s)`);
-      const user = S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}`.trim() : '';
       const payload = { action: 'arrival', code, module, moduleType, numModule, lv, agence, chauffeur, date, etat, longueur, photos: photos.map(p => p.dataUrl), saisie_par: user };
       const res = await _post(S.apiUrl, payload);
       if (res.status !== 'ok' && res.status !== 'success') throw new Error(res.error || 'Réponse inattendue');
@@ -6659,9 +6673,12 @@ const App = {
     } catch(err) {
       console.error(err);
       document.getElementById('send-spinner').style.display = 'none';
-      setMsg('⚠️ Erreur d\'envoi', err.message);
-      this._saveHistory({ code, module, chauffeur, date, etat, photos: photos.length, photosLost: photos.length > 0, type: 'arrival', error: true });
-      await _sleep(3200);
+      // Échec réseau inattendu : mise en file d'attente pour renvoi automatique
+      this._addToOfflineQueue({ action: 'arrival', code, module, moduleType, numModule, lv, agence, chauffeur, date, etat, longueur, saisie_par: user });
+      S.arr.submitted = true;
+      this._saveHistory({ code, module, chauffeur, date, etat, photos: photos.length, photosLost: photos.length > 0, type: 'arrival', pending: true });
+      setMsg('⚠️ Échec réseau', 'Sauvegardé — renvoi auto au retour réseau');
+      await _sleep(2200);
       this._showSuccess(code, true, photos.length);
     } finally {
       S.submitting = false;
@@ -6719,6 +6736,41 @@ const App = {
       document.getElementById('offph-ok').onclick     = () => { el.remove(); resolve(true);  };
       document.getElementById('offph-cancel').onclick = () => { el.remove(); resolve(false); };
     });
+  },
+  /* ─ File d'attente hors-ligne ─ */
+  _addToOfflineQueue(payload) {
+    const item = { id: `${Date.now()}_${payload.code}`, ts: Date.now(), payload };
+    S.offlineQueue.push(item);
+    localStorage.setItem(SK.OFFLINE_QUEUE, JSON.stringify(S.offlineQueue));
+    this._renderOfflineQueueBadge();
+  },
+  _renderOfflineQueueBadge() {
+    const el = document.getElementById('offline-queue-badge');
+    if (!el) return;
+    const n = S.offlineQueue.length;
+    if (n === 0) { el.style.display = 'none'; return; }
+    el.style.display  = '';
+    el.textContent    = `⏳ ${n}`;
+  },
+  async _processOfflineQueue() {
+    if (!navigator.onLine || !S.apiUrl || !S.offlineQueue.length) return;
+    const queue = [...S.offlineQueue];
+    for (const item of queue) {
+      try {
+        const res = await _post(S.apiUrl, item.payload);
+        if (res.status !== 'ok' && res.status !== 'success') continue;
+        S.offlineQueue = S.offlineQueue.filter(q => q.id !== item.id);
+        localStorage.setItem(SK.OFFLINE_QUEUE, JSON.stringify(S.offlineQueue));
+        this._renderOfflineQueueBadge();
+        this.toast(`✓ Arrivée ${item.payload.code} synchronisée`);
+        // Rafraîchit la liste si on est sur l'écran Arrivées
+        if (document.getElementById('view-arrivals') && document.getElementById('view-arrivals').style.display !== 'none') {
+          this.loadArrivals();
+        }
+      } catch(e) {
+        // On laisse l'item en file, il sera retenté au prochain retour réseau
+      }
+    }
   },
   /* ─ LOXAM Menu ─ */
   async loxamMenuInit() {
@@ -12393,12 +12445,18 @@ function _updateOnline() {
   const t = document.getElementById('status-text');
   if (d) { d.className = 'status-dot ' + (navigator.onLine ? 'online' : 'offline'); }
   if (t) { t.textContent = navigator.onLine ? 'En ligne' : 'Hors ligne'; }
-  if (navigator.onLine) App._refillCodeStock();
+  if (navigator.onLine) {
+    App._refillCodeStock();
+    App._processOfflineQueue();
+  }
 }
 window.addEventListener('online',  _updateOnline);
 window.addEventListener('offline', _updateOnline);
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && navigator.onLine) App._refillCodeStock();
+  if (document.visibilityState === 'visible' && navigator.onLine) {
+    App._refillCodeStock();
+    App._processOfflineQueue();
+  }
 });
 setTimeout(() => App._refillCodeStock(), 1500);
 if ('serviceWorker' in navigator) {
@@ -12487,6 +12545,7 @@ document.addEventListener('DOMContentLoaded', () => {
   App._applyEnvMode();
   _updateOnline();
   App._renderCodeStockBadge();
+  App._renderOfflineQueueBadge();
   App._ptrSetup();
   // ── Drag-and-drop sur la dropzone XLS ────────────────────────────────────
   const dz = document.getElementById('xls-dropzone');
