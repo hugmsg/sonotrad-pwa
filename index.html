@@ -6644,6 +6644,11 @@ const App = {
       if (!ok) return;
     }
     S.submitting = true;
+    // Réinitialise step-4 : _showSuccess() l'a remplacé lors de la soumission précédente
+    document.getElementById('step-4').innerHTML =
+      `<div class="spinner" id="send-spinner"></div>` +
+      `<p style="font-size:17px;font-weight:700;color:#1E293B;" id="send-msg">Envoi en cours...</p>` +
+      `<p style="font-size:13px;color:#64748B;margin-top:4px;" id="send-detail"></p>`;
     this.showStep(4);
     const { code, module, moduleType, numModule, lv, agence, chauffeur, date, etat, longueur, photos } = S.arr;
     const setMsg = (m, d='') => {
