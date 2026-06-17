@@ -1630,7 +1630,10 @@
       </div>
       <!-- Step 3 : Optional info + Submit -->
       <div id="step-3" style="display:none;">
-        <p style="font-size:17px;font-weight:700;color:#1E293B;margin-bottom:4px;">Informations</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+          <p style="font-size:17px;font-weight:700;color:#1E293B;margin:0;">Informations</p>
+          <button id="btn-fill-test" onclick="App._fillTestArrival()" style="display:none;background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;">🧪 Remplir test</button>
+        </div>
         <p style="font-size:13px;color:#64748B;margin-bottom:16px;">Tous les champs sont facultatifs</p>
         <!-- Recap pill -->
         <div id="s3-recap" style="display:flex;align-items:center;gap:10px;padding:10px 13px;background:#F8FAFC;border-radius:8px;border:1px solid #E2E8F0;margin-bottom:18px;">
@@ -3252,6 +3255,8 @@ const App = {
     if (annCard) annCard.style.display = isAdmin ? '' : 'none';
     const ptgCard = document.getElementById('pointage-home-card');
     if (ptgCard) ptgCard.style.display = isAdmin ? '' : 'none';
+    const fillTestBtn = document.getElementById('btn-fill-test');
+    if (fillTestBtn) fillTestBtn.style.display = isAdmin ? '' : 'none';
 
     // ── Pastilles de chargement sur les cartes d'accueil ─────────────────
     this._updateHomeCards();
@@ -7724,9 +7729,50 @@ const App = {
       </div>
       <div style="margin-top:14px;">
         <button class="btn btn-primary" id="btn-arr-submit" onclick="App.submitArrivalPhoto()">📥 Enregistrer les photos d'arrivée</button>
-      </div>`;
+      </div>
+      ${S.currentUser?.role === 'admin' ? `
+      <div style="margin-top:24px;padding-top:16px;border-top:1px solid #FEE2E2;">
+        <button onclick="App.deleteArrival('${a.code}')" style="width:100%;background:#FEF2F2;color:#DC2626;border:1px solid #FCA5A5;border-radius:10px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;">🗑 Supprimer cette arrivée</button>
+      </div>` : ''}`;
     this._renderArrPhotoGrid();
     this._loadDriveLinkForDetail(a.code, 'arrivals', 'arr-drive-section', 'arr-drive-files-panel', 'arr-btn-drive-files');
+  },
+  _fillTestArrival() {
+    const types     = ['BATIX','GRAND BATIX','ISOLOX','MODULOX','6020','6020 GB','6021','SOLFAB PH','SOLFAB GH40','ECOLOX','LC20','LC20M'];
+    const agences   = ['ST QUENTIN','PARIS NORD','LYON SUD','BORDEAUX','NANTES','LILLE','STRASBOURG','RENNES','TOURS','ROUEN'];
+    const noms      = ['MARTIN Pierre','DUPONT Jean','ROBERT Michel','BERNARD Luc','PETIT Marc','THOMAS Eric'];
+    const longueurs = [3, 4.5, 6, 7.5, 9, 10.5, 12, 13.5, 15];
+    const rand      = arr => arr[Math.floor(Math.random() * arr.length)];
+    const randInt   = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
+    const y = new Date().getFullYear();
+    const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    setVal('inp-module-type', rand(types));
+    setVal('inp-num-module',  String(randInt(60000000, 69999999)));
+    setVal('inp-num-serie',   `SN-${y}-${String(randInt(100000, 999999))}`);
+    setVal('inp-lv',          String(randInt(100000, 999999)));
+    setVal('inp-agence',      rand(agences));
+    setVal('inp-longueur',    String(rand(longueurs)));
+    setVal('inp-chauffeur',   rand(noms));
+    setVal('inp-date',        todayStr());
+    setVal('inp-etat',        'TEST - Entrée de test PWA');
+  },
+  async deleteArrival(code) {
+    const confirmed = window.confirm(
+      `Supprimer l'arrivée ${code} ?\n\n• Supprime la ligne du sheet Arrivées\n• Met le dossier Drive à la corbeille\n• Retire le code du masterfile\n\nAction irréversible.`
+    );
+    if (!confirmed) return;
+    try {
+      this.toast('Suppression en cours...');
+      const res = await _post(S.apiUrl, { action: 'delete_arrival', code });
+      if (res.status !== 'ok' && res.status !== 'success') throw new Error(res.error || 'Erreur serveur');
+      S.arrivalsData = S.arrivalsData.filter(a => a.code !== code);
+      S.arrivalsLoaded = false; // force reload at next visit
+      this.toast(`✓ Arrivée ${code} supprimée`);
+      this.go('arrivals');
+      this._filterAndRenderArrivals();
+    } catch(e) {
+      this.toast('Erreur : ' + e.message);
+    }
   },
   _renderDepPhotoGrid() {
     const grid = document.getElementById('dep-photo-grid');
