@@ -1030,6 +1030,8 @@
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+      <span id="offline-queue-badge" style="font-size:10px;background:rgba(251,191,36,0.15);border-radius:10px;padding:2px 7px;color:rgba(251,191,36,0.95);letter-spacing:.3px;display:none;cursor:default;" title="Arrivées en attente de synchronisation"></span>
+      <span id="code-stock-badge" style="font-size:10px;background:rgba(255,255,255,0.12);border-radius:10px;padding:2px 7px;color:rgba(255,255,255,0.55);letter-spacing:.3px;display:none;" title="Codes pré-chargés disponibles hors ligne"></span>
       <div style="display:flex;align-items:center;gap:5px;font-size:12px;opacity:0.9;">
         <span class="status-dot online" id="status-dot"></span>
         <span id="status-text">En ligne</span>
@@ -1668,6 +1670,10 @@
           <div style="margin-bottom:12px;">
             <label class="label-sm" for="inp-num-module">Num module <span style="color:#EF4444;">*</span></label>
             <input type="text" id="inp-num-module" class="input-field" placeholder="ex: 60154532">
+          </div>
+          <div style="margin-bottom:12px;">
+            <label class="label-sm" for="inp-num-serie">N° de série</label>
+            <input type="text" id="inp-num-serie" class="input-field" placeholder="ex: SN-2024-001234">
           </div>
           <div style="display:flex;gap:10px;margin-bottom:12px;">
             <div style="flex:1;">
@@ -2870,10 +2876,12 @@ const MODULES = {
   rapido:     { label: 'Rapido',        icon: '⚡', iconBg: '#F0FDF4' },
 };
 const SK = {
-  API:      'snt_api_url',
-  CODES:    'snt_codes',
-  CODES_TS: 'snt_codes_ts',
-  HISTORY:  'snt_history',
+  API:           'snt_api_url',
+  CODES:         'snt_codes',
+  CODES_TS:      'snt_codes_ts',
+  HISTORY:       'snt_history',
+  CODE_STOCK:    'snt_code_stock',
+  OFFLINE_QUEUE: 'snt_offline_queue',
 };
 const CODES_TTL = 30 * 60 * 1000; // 30 min
 const ARR_SOURCES = {
@@ -2897,6 +2905,8 @@ const S = {
   apiUrl:      localStorage.getItem(SK.API) || '',
   codes:       new Set(JSON.parse(localStorage.getItem(SK.CODES) || '[]')),
   codesTs:     +(localStorage.getItem(SK.CODES_TS) || 0),
+  codeStock:    JSON.parse(localStorage.getItem(SK.CODE_STOCK)    || '[]'),
+  offlineQueue: JSON.parse(localStorage.getItem(SK.OFFLINE_QUEUE) || '[]'),
   history:      JSON.parse(localStorage.getItem(SK.HISTORY) || '[]'),
   depPhotosLog: {},   // chargé depuis Drive au démarrage (dep_photos_log.json)
   arrPhotosLog: {},   // chargé depuis Drive au démarrage (arr_photos_log.json)
@@ -6426,7 +6436,22 @@ const App = {
   },
   /* ─ New arrival ─ */
   startNewArrival() {
-    S.arr = { step: 1, module: null, code: '', photos: [], chauffeur: '', date: todayStr(), etat: '' };
+    // Si un code avait été assigné sans être soumis, on le remet en stock
+    if (S.arr && S.arr.code && !S.arr.submitted) {
+      S.codeStock.unshift(S.arr.code);
+      localStorage.setItem(SK.CODE_STOCK, JSON.stringify(S.codeStock));
+      this._renderCodeStockBadge();
+    }
+    S.arr = { step: 1, module: null, code: '', photos: [], chauffeur: '', date: todayStr(), etat: '', submitted: false };
+    // Vide les champs DOM pour ne pas laisser les valeurs du formulaire précédent
+    ['inp-module-type','inp-num-module','inp-num-serie','inp-lv','inp-agence','inp-longueur','inp-chauffeur','inp-etat'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    const dateEl = document.getElementById('inp-date');
+    if (dateEl) dateEl.value = todayStr();
+    const grid = document.getElementById('photo-grid-2');
+    if (grid) grid.innerHTML = '';
     this.go('new-arrival');
     this.showStep(1);
   },
@@ -6452,16 +6477,64 @@ const App = {
     this._genCode();
     this._renderPhotoGrid('photo-grid-2', S.arr.photos, 'arrival');
   },
+  /* ─ Stock de codes pré-chargés ─ */
+  _renderCodeStockBadge() {
+    const el = document.getElementById('code-stock-badge');
+    if (!el) return;
+    const n = S.codeStock.length;
+    if (n === 0) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    el.textContent   = n < 2 ? `⚠ ${n} code` : `${n} codes`;
+    el.style.color   = n < 2 ? 'rgba(251,191,36,0.95)' : 'rgba(255,255,255,0.55)';
+    el.style.background = n < 2 ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.12)';
+  },
+  async _refillCodeStock() {
+    if (!S.apiUrl || !navigator.onLine) return;
+    const TARGET = 5;
+    const needed = TARGET - S.codeStock.length;
+    if (needed <= 0) return;
+    try {
+      const results = await Promise.all(
+        Array.from({ length: needed }, () =>
+          _fetchWithTimeout(S.apiUrl + '?action=generate_code', {}, 10000)
+            .then(r => r.json())
+            .then(d => (d.status === 'ok' && d.code) ? d.code : null)
+            .catch(() => null)
+        )
+      );
+      const fresh = results.filter(Boolean);
+      if (!fresh.length) return;
+      S.codeStock = [...S.codeStock, ...fresh];
+      localStorage.setItem(SK.CODE_STOCK, JSON.stringify(S.codeStock));
+      this._renderCodeStockBadge();
+    } catch(e) { console.warn('Code stock refill:', e.message); }
+  },
+  _popCodeFromStock() {
+    if (!S.codeStock.length) return null;
+    const code = S.codeStock.shift();
+    localStorage.setItem(SK.CODE_STOCK, JSON.stringify(S.codeStock));
+    this._renderCodeStockBadge();
+    if (S.codeStock.length < 2) this._refillCodeStock();
+    return code;
+  },
   async _genCode() {
     const dispEl = document.getElementById('code-display');
     const statEl = document.getElementById('code-status');
     dispEl.textContent = '· · · · · ·';
-    statEl.textContent = 'Génération…';
 
     let code = null;
     let countMsg = '';
 
-    if (S.apiUrl) {
+    // 1. Stock pré-chargé (offline-ready)
+    code = this._popCodeFromStock();
+    if (code) {
+      const r = S.codeStock.length;
+      countMsg = `✓ Code pré-chargé · ${r} restant${r > 1 ? 's' : ''}`;
+    }
+
+    // 2. Génération live si stock vide
+    if (!code && S.apiUrl) {
+      statEl.textContent = 'Génération…';
       try {
         const r = await _fetchWithTimeout(S.apiUrl + '?action=generate_code', {}, 15000);
         const d = await r.json();
@@ -6472,13 +6545,13 @@ const App = {
       } catch(_) { /* fallback local */ }
     }
 
+    // 3. Fallback local
     if (!code) {
-      // Fallback : génération locale si API indisponible
       if (S.codes.size === 0 && S.apiUrl) await this._fetchCodes();
       let tries = 0;
       do { code = _randCode(); tries++; } while (S.codes.has(code) && tries < 50000);
       S.codes.add(code);
-      countMsg = S.codes.size > 1 ? `✓ Unique parmi ${S.codes.size} codes (mode local)` : '';
+      countMsg = S.codes.size > 1 ? `✓ Local · ${S.codes.size} codes connus` : '⚠ Mode hors-ligne complet';
     }
 
     S.arr.code = code;
@@ -6557,6 +6630,7 @@ const App = {
     if (S.arr.module === 'loxam') {
       S.arr.moduleType = document.getElementById('inp-module-type').value.trim();
       S.arr.numModule  = document.getElementById('inp-num-module').value.trim();
+      S.arr.numSerie   = document.getElementById('inp-num-serie').value.trim();
       S.arr.lv         = document.getElementById('inp-lv').value.trim();
       S.arr.agence     = document.getElementById('inp-agence').value.trim();
       S.arr.longueur   = document.getElementById('inp-longueur').value.trim();
@@ -6568,57 +6642,145 @@ const App = {
         this.toast('La longueur (ml) est obligatoire'); return;
       }
     }
+    const offline = !navigator.onLine || !S.apiUrl;
+    // Avertissement photos hors-ligne
+    if (offline && S.arr.photos.length > 0) {
+      const ok = await this._confirmOfflinePhotos(S.arr.photos.length);
+      if (!ok) return;
+    }
     S.submitting = true;
+    // Réinitialise step-4 : _showSuccess() l'a remplacé lors de la soumission précédente
+    document.getElementById('step-4').innerHTML =
+      `<div class="spinner" id="send-spinner"></div>` +
+      `<p style="font-size:17px;font-weight:700;color:#1E293B;" id="send-msg">Envoi en cours...</p>` +
+      `<p style="font-size:13px;color:#64748B;margin-top:4px;" id="send-detail"></p>`;
     this.showStep(4);
-    const { code, module, moduleType, numModule, lv, agence, chauffeur, date, etat, longueur, photos } = S.arr;
+    const { code, module, moduleType, numModule, numSerie, lv, agence, chauffeur, date, etat, longueur, photos } = S.arr;
     const setMsg = (m, d='') => {
       document.getElementById('send-msg').textContent    = m;
       document.getElementById('send-detail').textContent = d;
     };
+    const user = S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}`.trim() : '';
     try {
-      if (!S.apiUrl) {
-        setMsg('💾 Mode hors-ligne', 'Sauvegardé localement');
-        await _sleep(800);
-        this._saveHistory({ code, module, chauffeur, date, etat, photos: photos.length, type: 'arrival', offline: true });
-        this._showSuccess(code, true);
+      if (offline) {
+        setMsg('💾 Sauvegarde hors ligne...', `Code ${code}`);
+        await _sleep(600);
+        this._addToOfflineQueue({ action: 'arrival', code, module, moduleType, numModule, numSerie, lv, agence, chauffeur, date, etat, longueur, saisie_par: user });
+        S.arr.submitted = true;
+        this._saveHistory({ code, module, chauffeur, date, etat, photos: photos.length, photosLost: photos.length > 0, type: 'arrival', offline: true, pending: true });
+        this._showSuccess(code, true, photos.length);
         return;
       }
       setMsg('Envoi en cours...', `Code ${code} · ${photos.length} photo(s)`);
-      const user = S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}`.trim() : '';
-      const payload = { action: 'arrival', code, module, moduleType, numModule, lv, agence, chauffeur, date, etat, longueur, photos: photos.map(p => p.dataUrl), saisie_par: user };
+      const payload = { action: 'arrival', code, module, moduleType, numModule, numSerie, lv, agence, chauffeur, date, etat, longueur, photos: photos.map(p => p.dataUrl), saisie_par: user };
       const res = await _post(S.apiUrl, payload);
       if (res.status !== 'ok' && res.status !== 'success') throw new Error(res.error || 'Réponse inattendue');
       setMsg('✓ Enregistré !', `Code ${code}`);
+      S.arr.submitted = true;
       this._saveHistory({ code, module, chauffeur, date, etat, photos: photos.length, type: 'arrival' });
       await _sleep(700);
       this._showSuccess(code, false);
     } catch(err) {
       console.error(err);
       document.getElementById('send-spinner').style.display = 'none';
-      setMsg('⚠️ Erreur d\'envoi', err.message);
-      this._saveHistory({ code, module, chauffeur, date, etat, photos: photos.length, type: 'arrival', error: true });
-      await _sleep(3200);
-      this._showSuccess(code, true);
+      // Échec réseau inattendu : mise en file d'attente pour renvoi automatique
+      this._addToOfflineQueue({ action: 'arrival', code, module, moduleType, numModule, numSerie, lv, agence, chauffeur, date, etat, longueur, saisie_par: user });
+      S.arr.submitted = true;
+      this._saveHistory({ code, module, chauffeur, date, etat, photos: photos.length, photosLost: photos.length > 0, type: 'arrival', pending: true });
+      setMsg('⚠️ Échec réseau', 'Sauvegardé — renvoi auto au retour réseau');
+      await _sleep(2200);
+      this._showSuccess(code, true, photos.length);
     } finally {
       S.submitting = false;
     }
   },
-  _showSuccess(code, offline) {
+  _showSuccess(code, offline, photosCount = 0) {
     const isReception = S.activity === 'reception';
     const backBtn = isReception
       ? `<button class="btn btn-primary" onclick="App.goHome()" style="max-width:220px;margin:0 auto 12px;">← Accueil</button>`
       : `<button class="btn btn-primary" onclick="App.go('arrivals')" style="max-width:220px;margin:0 auto 12px;">← Arrivées</button>`;
+    const photosWarning = (offline && photosCount > 0) ? `
+      <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:10px 14px;margin:0 auto 16px;max-width:280px;text-align:left;">
+        <p style="font-size:12px;font-weight:700;color:#92400E;margin:0 0 4px;">📷 ${photosCount} photo${photosCount > 1 ? 's' : ''} non envoyée${photosCount > 1 ? 's' : ''}</p>
+        <p style="font-size:11px;color:#B45309;margin:0;">À ajouter manuellement depuis la fiche d'arrivée une fois en ligne.</p>
+      </div>` : '';
     document.getElementById('step-4').innerHTML = `
       <div style="text-align:center;padding:28px 0;">
         <div style="font-size:60px;margin-bottom:14px;">${offline ? '💾' : '✅'}</div>
         <p style="font-size:20px;font-weight:700;color:#1E293B;margin-bottom:8px;">
-          ${offline ? 'Sauvegardé localement' : 'Arrivée enregistrée !'}
+          ${offline ? 'Données sauvegardées' : 'Arrivée enregistrée !'}
         </p>
         <div style="font-family:monospace;font-size:28px;font-weight:900;color:var(--brand);letter-spacing:6px;margin:16px 0 20px;">${code}</div>
+        ${photosWarning}
         ${backBtn}
         <br>
         <button onclick="App.receptionDirecte()" style="background:none;border:none;color:var(--accent);font-size:15px;font-weight:600;cursor:pointer;padding:8px;">+ Nouvelle arrivée</button>
       </div>`;
+  },
+  _confirmOfflinePhotos(count) {
+    return new Promise(resolve => {
+      const id = 'modal-offline-photos';
+      const existing = document.getElementById(id);
+      if (existing) existing.remove();
+      const el = document.createElement('div');
+      el.id = id;
+      el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;';
+      el.innerHTML = `
+        <div style="background:white;border-radius:16px;padding:24px;max-width:340px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+          <div style="font-size:36px;text-align:center;margin-bottom:12px;">📷</div>
+          <h3 style="font-size:16px;font-weight:700;color:#1E293B;margin:0 0 8px;text-align:center;">Photos hors ligne</h3>
+          <p style="font-size:13px;color:#475569;margin:0 0 6px;text-align:center;">
+            Vous avez <strong>${count} photo${count > 1 ? 's' : ''}</strong> jointe${count > 1 ? 's' : ''}.
+          </p>
+          <p style="font-size:13px;color:#475569;margin:0 0 20px;text-align:center;">
+            Sans réseau, elles ne peuvent pas être envoyées.<br>
+            Les données texte seront sauvegardées.<br>
+            Les photos seront à ajouter manuellement depuis la fiche une fois en ligne.
+          </p>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <button id="offph-ok" class="btn btn-primary" style="width:100%;">Continuer sans les photos</button>
+            <button id="offph-cancel" class="btn btn-secondary" style="width:100%;">Annuler — attendre le réseau</button>
+          </div>
+        </div>`;
+      document.body.appendChild(el);
+      document.getElementById('offph-ok').onclick     = () => { el.remove(); resolve(true);  };
+      document.getElementById('offph-cancel').onclick = () => { el.remove(); resolve(false); };
+    });
+  },
+  /* ─ File d'attente hors-ligne ─ */
+  _addToOfflineQueue(payload) {
+    const item = { id: `${Date.now()}_${payload.code}`, ts: Date.now(), payload };
+    S.offlineQueue.push(item);
+    localStorage.setItem(SK.OFFLINE_QUEUE, JSON.stringify(S.offlineQueue));
+    this._renderOfflineQueueBadge();
+  },
+  _renderOfflineQueueBadge() {
+    const el = document.getElementById('offline-queue-badge');
+    if (!el) return;
+    const n = S.offlineQueue.length;
+    if (n === 0) { el.style.display = 'none'; return; }
+    el.style.display  = '';
+    el.textContent    = `⏳ ${n}`;
+  },
+  async _processOfflineQueue() {
+    if (!navigator.onLine || !S.apiUrl || !S.offlineQueue.length) return;
+    const queue = [...S.offlineQueue];
+    for (const item of queue) {
+      try {
+        const res = await _post(S.apiUrl, item.payload);
+        if (res.status !== 'ok' && res.status !== 'success') continue;
+        S.offlineQueue = S.offlineQueue.filter(q => q.id !== item.id);
+        localStorage.setItem(SK.OFFLINE_QUEUE, JSON.stringify(S.offlineQueue));
+        this._renderOfflineQueueBadge();
+        this.toast(`✓ Arrivée ${item.payload.code} synchronisée`);
+        // Rafraîchit la liste si on est sur l'écran Arrivées
+        if (document.getElementById('view-arrivals') && document.getElementById('view-arrivals').style.display !== 'none') {
+          this.loadArrivals();
+        }
+      } catch(e) {
+        // On laisse l'item en file, il sera retenté au prochain retour réseau
+      }
+    }
   },
   /* ─ LOXAM Menu ─ */
   async loxamMenuInit() {
@@ -12293,9 +12455,20 @@ function _updateOnline() {
   const t = document.getElementById('status-text');
   if (d) { d.className = 'status-dot ' + (navigator.onLine ? 'online' : 'offline'); }
   if (t) { t.textContent = navigator.onLine ? 'En ligne' : 'Hors ligne'; }
+  if (navigator.onLine) {
+    App._refillCodeStock();
+    App._processOfflineQueue();
+  }
 }
 window.addEventListener('online',  _updateOnline);
 window.addEventListener('offline', _updateOnline);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && navigator.onLine) {
+    App._refillCodeStock();
+    App._processOfflineQueue();
+  }
+});
+setTimeout(() => App._refillCodeStock(), 1500);
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW:', e));
 }
@@ -12381,6 +12554,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Détecte le mode TEST via l'API (ADR-007 — non-breaking si GAS actuel)
   App._applyEnvMode();
   _updateOnline();
+  App._renderCodeStockBadge();
+  App._renderOfflineQueueBadge();
   App._ptrSetup();
   // ── Drag-and-drop sur la dropzone XLS ────────────────────────────────────
   const dz = document.getElementById('xls-dropzone');
