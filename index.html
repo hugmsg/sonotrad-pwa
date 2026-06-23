@@ -8588,10 +8588,10 @@ ${bodies}${sansAcheteurBody}
 <script>window.addEventListener('load',function(){setTimeout(function(){window.print();},250)});<\/script>
 </body></html>`;
 
-    const w = window.open('', '_blank');
-    if (!w) { this.toast('⚠ Autorisez les popups pour imprimer'); return; }
-    w.document.write(html);
-    w.document.close();
+    const blobUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    const w = window.open(blobUrl, '_blank');
+    if (!w) { this.toast('⚠ Autorisez les popups pour imprimer'); URL.revokeObjectURL(blobUrl); return; }
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
   },
 
   async bcbLotsLoad(force) {
