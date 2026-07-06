@@ -314,6 +314,7 @@
     .sc-trend.up   { color:#DC2626; }
     .sc-trend.down { color:#15803D; }
     .sc-trend.stable { color:#94A3B8; }
+    .sc-seuil-edit { background:none; border:none; font-size:12px; cursor:pointer; color:#CBD5E1; padding:0 1px; line-height:1; flex-shrink:0; opacity:.7; }
     .sc-rupture  { font-size:9px; font-weight:600; padding:1px 4px; border-radius:8px;
                    background:#FEF2F2; color:#DC2626; white-space:nowrap; }
     .sc-rupture.ok { background:#F0FDF4; color:#15803D; }
@@ -1865,7 +1866,7 @@
       </button>
       <!-- Alertes -->
       <div class="dash-section" id="dash-alerts-section" style="display:none">
-        <div class="dash-section-title">⚠️ Alertes — Mes références</div>
+        <div class="dash-section-title">⚠️ Alertes stock</div>
         <div id="dash-alerts-list"></div>
         <button onclick="App.go('stock')" style="width:100%;margin-top:4px;background:transparent;border:1.5px solid #E2E8F0;color:#475569;padding:7px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
           Voir tout le catalogue →
@@ -4064,6 +4065,7 @@ const App = {
             <span class="sc-ref">${d.ref}</span>
             ${trendArrow ? `<span class="sc-trend ${trendCls}">${trendArrow}</span>` : ''}
             <span class="sc-qty ${qtyClass}">${qtyTxt}</span>
+            <button onclick="event.stopPropagation();App.openSeuilModal('${refSafe}')" class="sc-seuil-edit" title="Modifier seuil d'alerte">✏️</button>
           </div>
           <div class="sc-desc">${desc}</div>
           <div class="sc-foot">
@@ -5235,6 +5237,60 @@ const App = {
     }
   },
 
+  // ── Seuil d'alerte ───────────────────────────────────────────────────────
+  openSeuilModal(ref) {
+    const d = S.stockData.find(x => x.ref === ref);
+    if (!d) return;
+    S._seuilModalRef = ref;
+    const modal = document.getElementById('seuil-modal');
+    const inp   = document.getElementById('seuil-modal-input');
+    const lbl   = document.getElementById('seuil-modal-ref');
+    if (lbl) lbl.textContent = `${ref}${d.description ? ' — ' + d.description.substring(0, 40) + (d.description.length > 40 ? '…' : '') : ''}`;
+    if (inp) { inp.value = d.seuil !== null ? d.seuil : ''; inp.focus(); }
+    if (modal) modal.style.display = 'flex';
+  },
+
+  closeSeuilModal() {
+    const modal = document.getElementById('seuil-modal');
+    if (modal) modal.style.display = 'none';
+    S._seuilModalRef = null;
+  },
+
+  async saveSeuilModal() {
+    const ref = S._seuilModalRef;
+    if (!ref) return;
+    const inp  = document.getElementById('seuil-modal-input');
+    const btn  = document.getElementById('seuil-modal-btn');
+    const raw  = inp ? inp.value.trim() : '';
+    const seuil = raw === '' ? null : parseInt(raw, 10);
+    if (raw !== '' && (isNaN(seuil) || seuil < 0)) { this.toast('Seuil invalide'); return; }
+
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action: 'save_stock_seuil', ref, seuil }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method: 'POST', body: fd }, 15000);
+      const data = await resp.json();
+      if (data.status !== 'ok') throw new Error(data.error || 'Erreur inconnue');
+
+      const item = S.stockData.find(x => x.ref === ref);
+      if (item) {
+        item.seuil = seuil;
+        const qty = this._calcStockActuel(ref, item.qte);
+        item.stockStatus = seuil !== null && qty !== null ? (qty >= seuil ? 'ok' : 'low') : (qty !== null ? 'ok' : 'unknown');
+      }
+      this.toast(`✓ Seuil ${seuil !== null ? 'fixé à ' + seuil : 'supprimé'} pour ${ref}`);
+      this.closeSeuilModal();
+      if (S.view === 'stock') this._renderStockList();
+      if (S.view === 'stock-detail') this._renderStockDetail();
+      if (S.view === 'stock-dashboard') this._renderDashboard();
+    } catch(e) {
+      this.toast('Erreur : ' + e.message);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '✓ Enregistrer'; }
+    }
+  },
+
   // Charge les miniatures des cartes visibles après rendu
   async _loadVisibleThumbnails() {
     if (!S.apiUrl) return;
@@ -5350,6 +5406,10 @@ const App = {
             <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Stock calculé</div>
             <div style="display:flex;align-items:center;margin-top:4px;flex-wrap:wrap;gap:6px;">
               <span class="sc-qty ${qtyClass}" style="font-size:14px;padding:4px 12px;">${calcQty !== null ? calcQty : '—'}${d.seuil !== null ? ' / min ' + d.seuil : ''}</span>
+              <button onclick="App.openSeuilModal('${refSafe}')"
+                style="background:none;border:1.5px solid #E2E8F0;color:#64748B;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">
+                ✏️ Seuil
+              </button>
               ${deltaLabel}
             </div>
             ${hasDelta && d.qte !== null ? `<div style="font-size:10px;color:#94A3B8;margin-top:4px;">PIDEM : ${pidemQty}</div>` : ''}
@@ -5692,15 +5752,13 @@ const App = {
     if (!kpiEl || !mvtEl) return;
 
     const total = S.stockData.length;
-    // Alertes : uniquement sur les références favorites (étoilées)
     const alerts = [];
     S.stockData.forEach(d => {
-      if (!S.stockPrefs.has(d.ref)) return;          // ← favoris uniquement
+      if (!d.seuil || d.seuil <= 0) return;          // seulement les refs avec seuil défini
       const qty = this._calcStockActuel(d.ref, d.qte);
       const days = this._calcDaysToRupture(d.ref, qty);
-      const seuil = d.seuil || 0;
-      if (qty !== null && qty <= 0)                           alerts.push({ ref: d.ref, desc: d.description, type: 'rupture', days: 0 });
-      else if (seuil > 0 && qty !== null && qty <= seuil)     alerts.push({ ref: d.ref, desc: d.description, type: 'low', days });
+      if (qty !== null && qty <= 0)               alerts.push({ ref: d.ref, desc: d.description, type: 'rupture', days: 0 });
+      else if (qty !== null && qty <= d.seuil)    alerts.push({ ref: d.ref, desc: d.description, type: 'low', days });
     });
     // Trier : rupture d'abord, puis par jours croissants
     alerts.sort((a,b) => {
@@ -5735,10 +5793,11 @@ const App = {
 
     // ── Alertes favoris ──
     alertEl.style.display = '';
-    if (S.stockPrefs.size === 0) {
-      alertListEl.innerHTML = `<div style="font-size:12px;color:#94A3B8;padding:8px 0;">Marque des références en ★ dans le catalogue pour les suivre ici.</div>`;
+    const hasSeuils = S.stockData.some(d => d.seuil && d.seuil > 0);
+    if (!hasSeuils) {
+      alertListEl.innerHTML = `<div style="font-size:12px;color:#94A3B8;padding:8px 0;">Aucun seuil configuré. Utilisez ✏️ sur une référence pour définir un seuil d'alerte.</div>`;
     } else if (alerts.length === 0) {
-      alertListEl.innerHTML = `<div style="font-size:12px;color:#15803D;padding:8px 0;">✅ Toutes vos références favorites sont OK.</div>`;
+      alertListEl.innerHTML = `<div style="font-size:12px;color:#15803D;padding:8px 0;">✅ Tous les stocks sont au-dessus de leurs seuils.</div>`;
     } else {
       alertListEl.innerHTML = alerts.slice(0, 8).map(a => {
         const badgeCls = a.type === 'rupture' ? 'rupture' : 'low';
@@ -12685,6 +12744,30 @@ document.addEventListener('DOMContentLoaded', () => {
         Recherchez et ajoutez des références ci-dessus
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ── MODAL : SEUIL D'ALERTE ──────────────────────────────────────────── -->
+<div id="seuil-modal" class="pose-overlay" style="display:none;" onclick="if(event.target===this)App.closeSeuilModal()">
+  <div style="background:white;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;margin:0 auto;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <span style="font-size:20px;">🎯</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:700;color:#1E293B;">Seuil d'alerte</div>
+        <div id="seuil-modal-ref" style="font-size:11px;color:#64748B;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+      </div>
+      <button onclick="App.closeSeuilModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#475569;padding:2px;line-height:1;">✕</button>
+    </div>
+    <label style="font-size:12px;color:#64748B;font-weight:600;display:block;margin-bottom:6px;">
+      Quantité minimum avant alerte (laisser vide = pas d'alerte)
+    </label>
+    <input type="number" id="seuil-modal-input" min="0" step="1" inputmode="numeric"
+      style="width:100%;padding:12px;border:1.5px solid #CBD5E1;border-radius:10px;font-size:18px;text-align:center;box-sizing:border-box;margin-bottom:14px;"
+      onkeydown="if(event.key==='Enter')App.saveSeuilModal()">
+    <button onclick="App.saveSeuilModal()" id="seuil-modal-btn"
+      style="width:100%;padding:13px;border:none;background:var(--brand);color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
+      ✓ Enregistrer
+    </button>
   </div>
 </div>
 
