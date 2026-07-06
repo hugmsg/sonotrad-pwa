@@ -1895,6 +1895,11 @@
             style="background:var(--accent);border:1.5px solid var(--accent);color:white;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
             ★ Mes références
           </button>
+          <!-- Toggle alertes seuil -->
+          <button id="stock-alerts-btn" onclick="App.toggleStockAlerts()"
+            style="background:#F1F5F9;border:1.5px solid #CBD5E1;color:#64748B;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+            ⚠️ Alertes
+          </button>
           <!-- Toggle miniatures -->
           <button id="stock-thumbs-btn" onclick="App.toggleStockThumbs()"
             style="background:#F1F5F9;border:1.5px solid #CBD5E1;color:#64748B;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
@@ -2962,7 +2967,7 @@ const S = {
   catalogLoading: false,
   stockPrefs:    new Set(),// refs marquées "mes références"
   stockFamilles: [],       // valeurs uniques pour le filtre
-  stockFilter: { search: '', famille: '', myRefs: true },
+  stockFilter: { search: '', famille: '', myRefs: true, alerts: false },
   stockPhotos:    {},      // { ref: thumbFileId } — chargé à la demande
   stockShowThumbs: false,  // toggle miniatures
   selStockRef:    null,    // référence ouverte dans la vue détail
@@ -3965,6 +3970,17 @@ const App = {
     this._renderStockList();
   },
 
+  toggleStockAlerts() {
+    S.stockFilter.alerts = !S.stockFilter.alerts;
+    const btn = document.getElementById('stock-alerts-btn');
+    if (btn) {
+      btn.style.background  = S.stockFilter.alerts ? '#FEF3C7' : '#F1F5F9';
+      btn.style.borderColor = S.stockFilter.alerts ? '#D97706' : '#CBD5E1';
+      btn.style.color       = S.stockFilter.alerts ? '#D97706' : '#64748B';
+    }
+    this._renderStockList();
+  },
+
   async toggleStockPref(ref) {
     if (S.stockPrefs.has(ref)) { S.stockPrefs.delete(ref); }
     else                        { S.stockPrefs.add(ref);    }
@@ -3995,10 +4011,15 @@ const App = {
     const list = document.getElementById('stock-list');
     if (!list) return;
 
-    const { search, famille, myRefs } = S.stockFilter;
+    const { search, famille, myRefs, alerts } = S.stockFilter;
     let items = S.stockData;
 
     if (myRefs)   items = items.filter(d => S.stockPrefs.has(d.ref));
+    if (alerts)   items = items.filter(d => {
+      if (!d.seuil || d.seuil <= 0) return false;
+      const qty = this._calcStockActuel(d.ref, d.qte);
+      return qty !== null && qty <= d.seuil;
+    });
     if (famille)  items = items.filter(d => d.famille === famille);
     if (search)   items = items.filter(d =>
       d.ref.toLowerCase().includes(search) ||
