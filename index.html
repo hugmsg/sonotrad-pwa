@@ -2891,6 +2891,7 @@ const SK = {
   HISTORY:       'snt_history',
   CODE_STOCK:    'snt_code_stock',
   OFFLINE_QUEUE: 'snt_offline_queue',
+  STOCK_FILTER:  'snt_stock_filter',
 };
 const CODES_TTL = 30 * 60 * 1000; // 30 min
 const ARR_SOURCES = {
@@ -2967,7 +2968,7 @@ const S = {
   catalogLoading: false,
   stockPrefs:    new Set(),// refs marquées "mes références"
   stockFamilles: [],       // valeurs uniques pour le filtre
-  stockFilter: { search: '', famille: '', myRefs: true, alerts: false },
+  stockFilter: (() => { try { const s = JSON.parse(localStorage.getItem(SK.STOCK_FILTER)||'{}'); return { search:'', famille:'', myRefs:!!s.myRefs, alerts:!!s.alerts }; } catch(e) { return { search:'', famille:'', myRefs:false, alerts:false }; } })(),
   stockPhotos:    {},      // { ref: thumbFileId } — chargé à la demande
   stockShowThumbs: false,  // toggle miniatures
   selStockRef:    null,    // référence ouverte dans la vue détail
@@ -3958,6 +3959,10 @@ const App = {
     this._renderStockList();
   },
 
+  _saveStockFilterPrefs() {
+    try { localStorage.setItem(SK.STOCK_FILTER, JSON.stringify({ myRefs: S.stockFilter.myRefs, alerts: S.stockFilter.alerts })); } catch(e) {}
+  },
+
   toggleStockMyRefs() {
     S.stockFilter.myRefs = !S.stockFilter.myRefs;
     const btn = document.getElementById('stock-myrefs-btn');
@@ -3967,6 +3972,7 @@ const App = {
       btn.style.color         = S.stockFilter.myRefs ? 'white' : '#64748B';
       btn.textContent         = S.stockFilter.myRefs ? '★ Mes références' : '☆ Mes références';
     }
+    this._saveStockFilterPrefs();
     this._renderStockList();
   },
 
@@ -3978,6 +3984,7 @@ const App = {
       btn.style.borderColor = S.stockFilter.alerts ? '#D97706' : '#CBD5E1';
       btn.style.color       = S.stockFilter.alerts ? '#D97706' : '#64748B';
     }
+    this._saveStockFilterPrefs();
     this._renderStockList();
   },
 
@@ -3997,6 +4004,20 @@ const App = {
     const wrap = document.getElementById('stock-famille-filters');
     if (!wrap) return;
     const cur = S.stockFilter.famille;
+    // Synchronise l'état visuel des boutons toggle depuis S.stockFilter (utile au 1er rendu)
+    const myBtn = document.getElementById('stock-myrefs-btn');
+    if (myBtn) {
+      myBtn.style.background  = S.stockFilter.myRefs ? 'var(--accent)' : '#F1F5F9';
+      myBtn.style.borderColor = S.stockFilter.myRefs ? 'var(--accent)' : '#CBD5E1';
+      myBtn.style.color       = S.stockFilter.myRefs ? 'white' : '#64748B';
+      myBtn.textContent       = S.stockFilter.myRefs ? '★ Mes références' : '☆ Mes références';
+    }
+    const alBtn = document.getElementById('stock-alerts-btn');
+    if (alBtn) {
+      alBtn.style.background  = S.stockFilter.alerts ? '#FEF3C7' : '#F1F5F9';
+      alBtn.style.borderColor = S.stockFilter.alerts ? '#D97706' : '#CBD5E1';
+      alBtn.style.color       = S.stockFilter.alerts ? '#D97706' : '#64748B';
+    }
     // Bouton "Toutes"
     const allBtn = document.getElementById('stock-famille-all');
     if (allBtn) allBtn.className = 'stock-famille-btn' + (cur === '' ? ' active' : '');
