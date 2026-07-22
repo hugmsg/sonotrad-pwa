@@ -69,7 +69,35 @@ RLS : aucune écriture directe possible pour `anon` — tout passe par les fonct
 
 ---
 
-## Limites connues du portail actuel
+## Backfill des voyages existants (2026-07-22)
+
+Au moment de la mise en prod, la table `voyages` était vide alors que 35 LV/CMR de l'onglet
+Départs étaient déjà non-partis. Ces 35 voyages ont été importés une fois, manuellement, via
+le MCP Supabase (`execute_sql`), à partir de l'action `lv_history` de l'API existante (limitée
+aux 50 derniers documents — les non-partis plus anciens que ça, comme l'anomalie LV 01498
+citée plus bas, ne sont pas dans ce backfill et devront être ajoutés à la main si besoin, ou
+attendre que Hugo les traite/décoche dans la sheet).
+
+Point d'attention découvert pendant l'import : le champ `date` renvoyé par `lv_history` est
+incohérent selon l'ancienneté de la ligne — les dates récentes sont en `DD/MM/YYYY`, un bloc
+plus ancien (LV 01615 à 01648 environ) était en `MM/DD/YYYY` (bug de génération de date côté
+PWA à l'époque, corrigé depuis). Le script de backfill a résolu l'ambiguïté par continuité
+chronologique (une date ne peut pas être postérieure à la précédente vu que les numéros de LV
+sont strictement croissants dans le temps). Ce backfill n'est pas un script réutilisable dans
+le repo — c'est un import ponctuel exécuté une fois en session ; toute nouvelle LV passe
+normalement par `_syncVoyageSupabase()`.
+
+Le champ `transporteur` et `grutage` n'existent pas dans `lv_history` : les 35 voyages
+backfillés ont `transporteur = NULL` et `grutage = false` par défaut (impossible à reconstituer
+a posteriori de façon fiable).
+
+---
+
+## Carte du portail
+
+La carte affiche désormais un vrai contour de la France métropolitaine (tracé SVG statique,
+projeté avec la même fonction `proj(lat, lon)` que les marqueurs de villes, données de frontière
+issues d'un GeoJSON public simplifié). Avant, c'était un fond blanc avec seulement des points.
 
 - **Carte approximative** : positionnement par ville via une table de correspondance mot-clé → coordonnées codée en dur dans `portail-transporteur.html` (variable `VILLES`). Une nouvelle destination non reconnue apparaît quand même dans la liste, mais sans repère sur la carte. Ajouter une ville = une ligne dans le tableau `VILLES`.
 - **Pas d'authentification** : la page est accessible à quiconque a le lien (cohérent avec la décision "vue commune à tous les transporteurs"). Si un contrôle d'accès devient nécessaire plus tard, il faudra soit un mot de passe partagé simple, soit une vraie fiche transporteur (actuellement le formulaire LV n'a que "Transports Mesnager" ou un champ libre "autre").
