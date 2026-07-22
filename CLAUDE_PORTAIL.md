@@ -73,7 +73,19 @@ RLS : aucune écriture directe possible pour `anon` — tout passe par les fonct
 
 - **Carte approximative** : positionnement par ville via une table de correspondance mot-clé → coordonnées codée en dur dans `portail-transporteur.html` (variable `VILLES`). Une nouvelle destination non reconnue apparaît quand même dans la liste, mais sans repère sur la carte. Ajouter une ville = une ligne dans le tableau `VILLES`.
 - **Pas d'authentification** : la page est accessible à quiconque a le lien (cohérent avec la décision "vue commune à tous les transporteurs"). Si un contrôle d'accès devient nécessaire plus tard, il faudra soit un mot de passe partagé simple, soit une vraie fiche transporteur (actuellement le formulaire LV n'a que "Transports Mesnager" ou un champ libre "autre").
-- **Hébergement** : le fichier `portail-transporteur.html` n'est pas encore déployé publiquement — à héberger (Vercel, comme le reste du projet, ou toute autre solution statique).
+- **Hébergement** : le projet Vercel `sonotrad-pwa` n'a pas de framework configuré (`framework: null`) — chaque fichier statique à la racine est servi tel quel, exactement comme `index.html`. `portail-transporteur.html` sera donc automatiquement accessible à `https://sonotrad-pwa.vercel.app/portail-transporteur.html` (ou `sonotrad-pwa.vercel.app/portail-transporteur`) dès le prochain push sur `dev` — aucune config supplémentaire à faire.
+
+---
+
+## État réel au 2026-07-22 (vérifié en conditions réelles)
+
+- **Migration appliquée** sur le projet Supabase `ajewxwxerrjnnervzjwm` via MCP Supabase, en 2 étapes : `voyages_schema` (tables, RPC, RLS, realtime) puis `voyages_portail_security_invoker` (correction d'un lint sécurité — la vue `voyages_portail` était créée sans `security_invoker`, donc exécutée avec les droits du propriétaire au lieu de l'appelant ; sans impact pratique ici mais corrigé par bonne pratique). Les deux fichiers sont dans `supabase/migrations/`.
+- **Test bout en bout réalisé et nettoyé** : `enregistrer_voyage(...)` insère bien dans `voyages` + `voyages_internes` ; `marquer_parti(...)` met bien à jour `parti`/`parti_le` ; une requête `anon` directe sur `voyages_internes` retourne 0 ligne (RLS bloque, malgré des GRANT larges hérités par défaut du schéma `public` sur ce projet — détail ci-dessous) ; `anon` ne peut ni `UPDATE` ni `DELETE` directement sur `voyages` (seule la lecture est ouverte, l'écriture passe exclusivement par les RPC security definer).
+- **Point de vigilance découvert (pas une régression de cette migration)** : ce projet Supabase a des privilèges par défaut (`ALTER DEFAULT PRIVILEGES ... GRANT ALL ON TABLES`) qui donnent à `anon`/`authenticated` tous les droits SQL bruts (INSERT/UPDATE/DELETE/...) sur toute nouvelle table du schéma `public`, y compris `voyages` et `voyages_internes`. C'est sans conséquence ici car **RLS est activée sans policy d'écriture** sur les deux tables (testé et confirmé), donc ces GRANT restent inertes en pratique — mais si une policy d'écriture était ajoutée un jour sans y penser, elle s'appliquerait immédiatement à `anon`. À garder en tête pour toute évolution future du schéma.
+- **Portail testé en local** (`npx serve`, Chrome piloté) : page servie sans erreur console, requête REST Supabase (`GET .../rest/v1/voyages?select=...`) répond 200, canal Realtime se connecte (`Connecté — mise à jour en direct`). Un voyage de test inséré pendant que la page était ouverte est apparu **instantanément sans rafraîchissement**, avec toutes les colonnes correctement mappées (numero_lv, date, destination, poids, ml, grutage, commentaire).
+- **Refactor index.html appliqué** : le calcul de grutage (dupliqué entre le payload Apps Script et `_syncVoyageSupabase`) est factorisé dans `_lvuCalcGrutage(d)`. Le poids envoyé à Supabase réutilise `d.total.poids` (déjà calculé avec quantités par `_lvuCollectFormData`) au lieu d'être recalculé — le payload Apps Script existant garde lui son propre calcul de poids (sans quantités), volontairement inchangé.
+- **Apps Script** : toujours 100% manuel, aucun `.clasp.json` ni credentials clasp dans ce repo — impossible de pousser automatiquement. Les 3 étapes manuelles restent à faire par Hugo (voir section précédente et l'en-tête de `apps-script/sync-parti-supabase.gs.txt`) : coller le fichier dans l'éditeur Apps Script existant et créer le déclencheur installable `onEditPartiSync`.
+- **MCP Supabase** : reconfiguré en scope `local` pour cette session (`claude mcp add supabase -s local -- ...`, token personnel existant). Fonctionnel et utilisé pour toute la vérification ci-dessus.
 
 ---
 
@@ -83,7 +95,8 @@ RLS : aucune écriture directe possible pour `anon` — tout passe par les fonct
 sonotrad-pwa/
 ├── portail-transporteur.html                        ← page publique, autonome
 ├── supabase/migrations/20260722000000_voyages_schema.sql
+├── supabase/migrations/20260722170839_voyages_portail_security_invoker.sql
 ├── apps-script/sync-parti-supabase.gs.txt            ← à coller à la main dans Apps Script
-├── index.html                                         ← _syncVoyageSupabase() ajoutée après lvuSaveToDrive()
+├── index.html                                         ← _syncVoyageSupabase() + _lvuCalcGrutage() après lvuSaveToDrive()
 └── CLAUDE_PORTAIL.md (ce fichier)
 ```
