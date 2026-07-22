@@ -1,0 +1,70 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// SONOTRAD — Portail transporteur
+// Synchro Supabase : coche "Parti" (colonne J, onglet "Départs")
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Ce fichier n'est PAS déployé automatiquement — il vit uniquement dans ce
+// repo comme référence. À coller à la main dans l'éditeur Apps Script existant
+// (celui derrière l'URL APPSCRIPT_URL utilisée par api/proxy.js) :
+//
+//   1. Ouvrir le fichier "Planning Sonotrad" → Extensions → Apps Script
+//   2. Créer un nouveau fichier .gs (ex: "SyncPartiSupabase.gs")
+//   3. Coller le contenu ci-dessous (sans le .txt)
+//   4. Renseigner SUPABASE_URL / SUPABASE_ANON_KEY (mêmes valeurs que
+//      supabase.js à la racine du repo PWA)
+//   5. Menu Déclencheurs (icône horloge, colonne de gauche) → Ajouter un
+//      déclencheur :
+//        - Fonction à exécuter : onEditPartiSync
+//        - Source de l'événement : À partir de la feuille de calcul
+//        - Type d'événement : Sur modification (onEdit installable, PAS le
+//          onEdit simple — nécessaire pour appeler UrlFetchApp)
+//
+// Pourquoi un déclencheur installable et pas la fonction onEdit() simple ?
+//   Le onEdit simple ne peut pas faire d'appel réseau (UrlFetchApp). Il faut
+//   un déclencheur installable pour pouvoir notifier Supabase.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SUPABASE_URL       = 'https://ajewxwxerrjnnervzjwm.supabase.co';
+const SUPABASE_ANON_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqZXd4d3hlcnJqbm5lcnZ6andtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MDU5MDEsImV4cCI6MjA5NzA4MTkwMX0.NJcm1_tb4BcCSileiODYP0pKJ1LRVXFTIr2idQBrALg';
+const ONGLET_DEPARTS     = 'Départs';
+const COL_NUMERO_LV      = 2;   // colonne B
+const COL_PARTI          = 10;  // colonne J
+
+function onEditPartiSync(e) {
+  try {
+    const sheet = e.range.getSheet();
+    if (sheet.getName() !== ONGLET_DEPARTS) return;
+    if (e.range.getColumn() !== COL_PARTI) return;
+    if (e.range.getNumRows() > 1) return; // édition multi-cellules (collage) : ignorée volontairement, pas de sync en masse
+
+    const row = e.range.getRow();
+    if (row < 3) return; // lignes d'en-tête
+
+    const numeroBrut = sheet.getRange(row, COL_NUMERO_LV).getValue();
+    if (!numeroBrut) return;
+
+    // La colonne B est numérique (1659) mais numero_lv est stocké en 5 chiffres
+    // ('01659') côté Supabase, pour matcher exactement l'affichage LV/CMR.
+    const numeroLv = Utilities.formatString('%05d', Number(numeroBrut));
+    const parti    = e.range.getValue() === true;
+
+    const resp = UrlFetchApp.fetch(SUPABASE_URL + '/rest/v1/rpc/marquer_parti', {
+      method:             'post',
+      contentType:        'application/json',
+      headers: {
+        apikey:           SUPABASE_ANON_KEY,
+        Authorization:    'Bearer ' + SUPABASE_ANON_KEY,
+      },
+      payload: JSON.stringify({ p_numero_lv: numeroLv, p_parti: parti }),
+      muteHttpExceptions: true,
+    });
+
+    const status = resp.getResponseCode();
+    if (status >= 300) {
+      console.error('[sync-parti-supabase] échec (' + status + ') pour LV ' + numeroLv + ' : ' + resp.getContentText());
+    }
+  } catch (err) {
+    console.error('[sync-parti-supabase] erreur : ' + err.message);
+  }
+}

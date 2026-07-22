@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portail transporteur — SONOTRAD</title>
+<style>
+  :root {
+    --navy: #1f3a5f;
+    --navy-light: #dde6f2;
+    --gray-border: #e2e8f0;
+    --gray-text: #64748b;
+    --bg: #f8fafc;
+    --danger: #b91c1c;
+    --danger-bg: #fee2e2;
+    --warn: #92400e;
+    --warn-bg: #fef3c7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: #1e293b;
+  }
+  header {
+    background: var(--navy); color: white; padding: 18px 20px;
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+  }
+  header h1 { font-size: 18px; font-weight: 700; margin: 0; }
+  header p { font-size: 12px; margin: 2px 0 0; color: rgba(255,255,255,0.75); }
+  .status { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
+  .dot.off { background: #ef4444; }
+  main { max-width: 980px; margin: 0 auto; padding: 20px; }
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
+  .card { background: white; border: 1px solid var(--gray-border); border-radius: 10px; padding: 14px 16px; }
+  .card .label { font-size: 12px; color: var(--gray-text); margin: 0 0 4px; }
+  .card .value { font-size: 22px; font-weight: 700; margin: 0; color: var(--navy); }
+  .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .tabs button {
+    font-size: 13px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--gray-border);
+    background: white; cursor: pointer; font-weight: 600; color: #475569;
+  }
+  .tabs button.active { background: var(--navy); color: white; border-color: var(--navy); }
+  table { width: 100%; border-collapse: collapse; background: white; border-radius: 10px; overflow: hidden; font-size: 13px; }
+  thead th { text-align: left; padding: 10px 12px; background: var(--navy-light); color: var(--navy); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; }
+  tbody td { padding: 10px 12px; border-top: 1px solid var(--gray-border); }
+  tbody tr:hover { background: #f8fafc; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+  .badge-grutage { background: var(--warn-bg); color: var(--warn); }
+  .muted { color: #94a3b8; }
+  #map-wrap { background: white; border: 1px solid var(--gray-border); border-radius: 10px; padding: 12px; }
+  #map-wrap svg { width: 100%; height: auto; display: block; }
+  .empty { text-align: center; padding: 40px; color: var(--gray-text); }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 10px 18px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  footer { text-align: center; padding: 20px; font-size: 11px; color: #94a3b8; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Portail transporteur — SONOTRAD</h1>
+    <p>Voyages disponibles en temps réel</p>
+  </div>
+  <div class="status"><span class="dot" id="status-dot"></span><span id="status-text">Connexion…</span></div>
+</header>
+
+<main>
+  <div class="cards">
+    <div class="card"><p class="label">Voyages disponibles</p><p class="value" id="stat-count">—</p></div>
+    <div class="card"><p class="label">Mètres linéaires cumulés</p><p class="value" id="stat-ml">—</p></div>
+    <div class="card"><p class="label">Destinations distinctes</p><p class="value" id="stat-dest">—</p></div>
+  </div>
+
+  <div class="tabs">
+    <button id="btn-list" class="active">Liste</button>
+    <button id="btn-map">Carte</button>
+    <button id="btn-refresh" style="margin-left:auto;">Actualiser</button>
+  </div>
+
+  <div id="panel-list">
+    <table>
+      <thead>
+        <tr>
+          <th>LV</th><th>Créée le</th><th>Destination</th><th>Poids</th><th>ML</th><th>Grutage</th><th>Contrainte</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="empty" id="empty-msg" style="display:none;">Aucun voyage disponible pour le moment.</div>
+  </div>
+
+  <div id="panel-map" style="display:none;">
+    <div id="map-wrap"><svg viewBox="0 0 500 460" id="map"></svg></div>
+    <p style="font-size:12px;color:var(--gray-text);margin-top:8px;">Carte indicative — positionnement approximatif par ville. Taille du repère = nombre de voyages.</p>
+  </div>
+</main>
+
+<footer>SONOTRAD — Javron-les-Chapelles (53) · page mise à jour automatiquement, aucune action requise</footer>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+const SUPABASE_URL  = 'https://ajewxwxerrjnnervzjwm.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqZXd4d3hlcnJqbm5lcnZ6andtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MDU5MDEsImV4cCI6MjA5NzA4MTkwMX0.NJcm1_tb4BcCSileiODYP0pKJ1LRVXFTIr2idQBrALg';
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// Ordre important : mots-clés les plus spécifiques en premier.
+// Pour ajouter une nouvelle destination : une ligne suffit, [mot-clé, ville affichée, lat, lon].
+const VILLES = [
+  ['SAINT BRIEUC', 'Saint-Brieuc', 48.51, -2.77], ['LORIENT', 'Lorient', 47.75, -3.37],
+  ['DIEPPE', 'Dieppe', 49.92, 1.08], ['VANNES', 'Vannes', 47.66, -2.76],
+  ['MORLAIX', 'Morlaix', 48.58, -3.83], ['SAINT AUBIN SUR GAILLON', 'St-Aubin-sur-Gaillon', 49.17, 1.32],
+  ['RITCHIE BROS', 'St-Aubin-sur-Gaillon', 49.17, 1.32], ['SAINT PATERNE', 'Saint-Paterne (Alençon)', 48.43, 0.09],
+  ['ALENÇON', 'Alençon', 48.43, 0.09], ['ALENCON', 'Alençon', 48.43, 0.09],
+  ['BORDEAUX', 'Bordeaux', 44.84, -0.58], ['DINARD', 'Dinard', 48.63, -2.07],
+  ['MANDELIEU', 'Mandelieu-la-Napoule', 43.55, 6.94], ['SAINT MALO', 'Saint-Malo', 48.65, -2.03],
+  ['CLERMONT FERRAND', 'Clermont-Ferrand', 45.78, 3.09], ['PERPIGNAN', 'Perpignan', 42.70, 2.90],
+  ['AMIENS', 'Amiens', 49.89, 2.30], ['TOULON', 'Toulon', 43.12, 5.93],
+  ['BOURGES', 'Bourges', 47.08, 2.40], ['BLOIS', 'Blois', 47.59, 1.33],
+  ['AUXERRE', 'Auxerre', 47.80, 3.57], ['METZ', 'Metz', 49.12, 6.18],
+  ['MONTLUÇON', 'Montluçon', 46.34, 2.61], ['MONTLUCON', 'Montluçon', 46.34, 2.61],
+  ['LIMOGES', 'Limoges', 45.83, 1.26], ['SAINT FLOUR', 'Saint-Flour', 45.03, 3.09],
+  ['MOULINS', 'Moulins', 46.57, 3.33], ['LANNION', 'Lannion', 48.73, -3.46],
+  ['SAINT JACQUES DE LA LANDE', 'St-Jacques-de-la-Lande', 48.08, -1.72], ['RENNES', 'Rennes', 48.11, -1.68],
+  ['ARNAGE', 'Le Mans (Arnage)', 48.00, 0.20], ['LE MANS', 'Le Mans', 48.00, 0.20],
+  ['VAL DE REUIL', 'Val-de-Reuil', 49.27, 1.23], ['ORLEANS', 'Orléans', 47.90, 1.90], ['ORLÉANS', 'Orléans', 47.90, 1.90],
+  ['AVRANCHES', 'Avranches', 48.68, -1.36], ['CARHAIX', 'Carhaix', 48.28, -3.58],
+  ['LE HAVRE', 'Le Havre', 49.49, 0.11], ['LAVAL', 'Laval', 48.07, -0.77],
+  ['LA ROCHE', 'La Roche-sur-Yon', 46.67, -1.43], ['ROANNE', 'Roanne', 46.03, 4.07],
+  ['GRENOBLE', 'Grenoble', 45.19, 5.72], ['MULHOUSE', 'Mulhouse', 47.75, 7.34],
+  ['NEVERS', 'Nevers', 46.99, 3.16], ['AGEN', 'Agen', 44.20, 0.62],
+  ['NANCY', 'Nancy', 48.69, 6.18], ['PERIGUEUX', 'Périgueux', 45.18, 0.72], ['PÉRIGUEUX', 'Périgueux', 45.18, 0.72],
+  ['CHALON', 'Chalon-sur-Saône', 46.78, 4.85], ['LAMBALLE', 'Lamballe', 48.47, -2.52],
+  ['LONS LE SAUNIER', 'Lons-le-Saunier', 46.67, 5.55], ['LA HAGUE', 'La Hague', 49.65, -1.64],
+  ['PONTIVY', 'Pontivy', 48.07, -2.97], ['ROCHEFORT', 'Rochefort', 45.94, -0.96],
+  ['TOURS', 'Tours', 47.39, 0.69], ['GOUSSAINVILLE', 'Goussainville', 49.02, 2.47],
+  ['AULNAY', 'Aulnay-sous-Bois', 48.94, 2.49], ['GENNEVILLIERS', 'Gennevilliers', 48.93, 2.30],
+  ['SAINT JEAN DE VEDAS', 'St-Jean-de-Védas', 43.58, 3.83], ['REDON', 'Redon', 47.65, -2.08],
+  ['SAINT MEMMIE', 'Châlons-en-Champagne', 48.96, 4.37], ['BERGERAC', 'Bergerac', 44.85, 0.48],
+  ['CALAIS', 'Calais', 50.95, 1.86], ['GRANVILLE', 'Granville', 48.84, -1.60],
+  ['COLMAR', 'Colmar', 48.08, 7.36], ['MEAUX', 'Meaux', 48.96, 2.88],
+  ['RODEZ', 'Rodez', 44.35, 2.57], ['VARENNES VAUZELLES', 'Varennes-Vauzelles', 46.99, 3.13],
+  ['JAVRON', 'Javron-les-Chapelles', 48.44, -0.42],
+];
+
+function trouverVille(destination) {
+  const up = (destination || '').toUpperCase();
+  for (const [motCle, ville, lat, lon] of VILLES) {
+    if (up.includes(motCle)) return { ville, lat, lon };
+  }
+  return null;
+}
+
+let currentVoyages = [];
+
+function render() {
+  const dispo = currentVoyages.filter(v => !v.parti);
+  document.getElementById('stat-count').textContent = dispo.length;
+  const totalMl = dispo.reduce((s, v) => s + (Number(v.ml) || 0), 0);
+  document.getElementById('stat-ml').textContent = (Math.round(totalMl * 10) / 10) + ' ml';
+  const villesVues = new Set(dispo.map(v => (trouverVille(v.destination) || {}).ville || v.destination));
+  document.getElementById('stat-dest').textContent = villesVues.size;
+
+  const tbody = document.getElementById('tbody');
+  const emptyMsg = document.getElementById('empty-msg');
+  if (!dispo.length) {
+    tbody.innerHTML = '';
+    emptyMsg.style.display = 'block';
+  } else {
+    emptyMsg.style.display = 'none';
+    tbody.innerHTML = dispo
+      .sort((a, b) => new Date(b.date_creation) - new Date(a.date_creation))
+      .map(v => `
+        <tr>
+          <td>${v.numero_lv}</td>
+          <td class="muted">${new Date(v.date_creation).toLocaleDateString('fr-FR')}</td>
+          <td>${v.destination || '-'}</td>
+          <td>${v.poids ? v.poids + ' t' : '<span class="muted">-</span>'}</td>
+          <td>${v.ml ? v.ml + ' ml' : '<span class="muted">-</span>'}</td>
+          <td>${v.grutage ? '<span class="badge badge-grutage">grutage</span>' : '<span class="muted">-</span>'}</td>
+          <td class="muted" style="font-size:12px;">${v.commentaire || '-'}</td>
+        </tr>`).join('');
+  }
+
+  const cities = {};
+  dispo.forEach(v => {
+    const loc = trouverVille(v.destination);
+    if (!loc) return;
+    const key = loc.ville;
+    if (!cities[key]) cities[key] = { ...loc, count: 0 };
+    cities[key].count++;
+  });
+  const svg = document.getElementById('map');
+  const W = 500, H = 460;
+  const proj = (lat, lon) => [(lon + 5) / 14 * W, H - (lat - 41) / 10.5 * H];
+  let content = '';
+  Object.values(cities).forEach(c => {
+    const [x, y] = proj(c.lat, c.lon);
+    const r = 8 + c.count * 3;
+    content += `<circle cx="${x}" cy="${y}" r="${r}" fill="#1f3a5f" fill-opacity="0.15" stroke="#1f3a5f" stroke-width="1"></circle>`;
+    content += `<circle cx="${x}" cy="${y}" r="3.5" fill="#1f3a5f"></circle>`;
+    content += `<text x="${x + r + 4}" y="${y + 4}" font-size="12" fill="#1e293b">${c.ville} (${c.count})</text>`;
+  });
+  svg.innerHTML = content;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+async function chargerVoyages() {
+  const { data, error } = await db
+    .from('voyages')
+    .select('numero_lv, type, date_creation, destination, poids, ml, grutage, commentaire, parti')
+    .order('date_creation', { ascending: false })
+    .limit(300);
+  if (error) {
+    document.getElementById('status-text').textContent = 'Erreur de chargement';
+    document.getElementById('status-dot').classList.add('off');
+    console.error(error);
+    return;
+  }
+  currentVoyages = data || [];
+  render();
+}
+
+function setupRealtime() {
+  db.channel('voyages-portail')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'voyages' }, payload => {
+      const row = payload.new;
+      if (!row) return;
+      const idx = currentVoyages.findIndex(v => v.numero_lv === row.numero_lv);
+      if (idx >= 0) currentVoyages[idx] = row; else currentVoyages.unshift(row);
+      render();
+      if (payload.eventType === 'INSERT') showToast('Nouveau voyage : LV ' + row.numero_lv);
+      if (payload.eventType === 'UPDATE' && row.parti) showToast('LV ' + row.numero_lv + ' enlevée');
+    })
+    .subscribe(status => {
+      const dot = document.getElementById('status-dot');
+      const txt = document.getElementById('status-text');
+      if (status === 'SUBSCRIBED') { dot.classList.remove('off'); txt.textContent = 'Connecté — mise à jour en direct'; }
+      else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { dot.classList.add('off'); txt.textContent = 'Connexion perdue — réessai…'; }
+    });
+}
+
+document.getElementById('btn-list').addEventListener('click', () => {
+  document.getElementById('panel-list').style.display = '';
+  document.getElementById('panel-map').style.display = 'none';
+  document.getElementById('btn-list').classList.add('active');
+  document.getElementById('btn-map').classList.remove('active');
+});
+document.getElementById('btn-map').addEventListener('click', () => {
+  document.getElementById('panel-list').style.display = 'none';
+  document.getElementById('panel-map').style.display = '';
+  document.getElementById('btn-map').classList.add('active');
+  document.getElementById('btn-list').classList.remove('active');
+});
+document.getElementById('btn-refresh').addEventListener('click', chargerVoyages);
+
+chargerVoyages();
+setupRealtime();
+// Filet de sécurité si la connexion realtime tombe silencieusement : réactualisation périodique
+setInterval(chargerVoyages, 5 * 60 * 1000);
+</script>
+</body>
+</html>

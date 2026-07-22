@@ -10534,10 +10534,7 @@ ${bodies}${sansAcheteurBody}
         transporteur_id: d.transporteur?.id || '',
         planning_codes: (d.marchandises || []).map(m => m.note).filter(Boolean),
         marchandises_desc: (d.marchandises || []).map(m => m.description).filter(Boolean).join(', '),
-        grutage: (S.lvu.loxamItems || []).some(i => {
-          const key = i.code || i.codeModule || i.module || '';
-          return (d.marchandises || []).some(m => m.note === key) && i.status && i.status.grutage;
-        }),
+        grutage: this._lvuCalcGrutage(d),
       };
       const r   = await _fetchWithTimeout(S.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) }, 30000);
       const res = await r.json();
@@ -10547,6 +10544,7 @@ ${bodies}${sansAcheteurBody}
         S.lvu.numero = null; S.lvu.display = null;
         if (document.getElementById('lvu-result-title')) document.getElementById('lvu-result-title').textContent = `✅ ${d.type} N° ${savedDisplay} enregistrée`;
         this.toast(`LV N° ${savedDisplay} enregistrée !`);
+        this._syncVoyageSupabase(d, savedDisplay); // portail transporteur — best-effort, ne bloque jamais le flux principal
         if (S.lvu.fromOpKey) {
           this._saveLvLinkRemote(S.lvu.fromOpKey, savedDisplay, savedDisplay);
           S.lvu.fromOpKey = null; S.lvu.fromOpNote = '';
@@ -10572,6 +10570,40 @@ ${bodies}${sansAcheteurBody}
         if (statusEl) statusEl.textContent = '❌ ' + (res.error || 'erreur inconnue');
       }
     } catch (e) { if (statusEl) statusEl.textContent = '❌ ' + e.message; }
+  },
+
+  // ── Portail transporteur — synchro Supabase (temps réel) ────────────────────
+  // Appelée juste après le succès de l'enregistrement AppScript/Drive existant.
+  // Best-effort : une erreur ici ne doit jamais bloquer ni afficher d'erreur
+  // dans le flux principal de création de LV — seule une trace console suffit.
+  _lvuCalcGrutage(d) {
+    return (S.lvu.loxamItems || []).some(i => {
+      const key = i.code || i.codeModule || i.module || '';
+      return (d.marchandises || []).some(m => m.note === key) && i.status && i.status.grutage;
+    });
+  },
+
+  async _syncVoyageSupabase(d, numero) {
+    if (!window.SupabaseDB || !numero) return;
+    try {
+      // Réutilise d.total.poids (déjà calculé par _lvuCollectFormData, qté incluse)
+      // plutôt que de recalculer — ce total est celui affiché sur la LV générée.
+      const { error } = await window.SupabaseDB.rpc('enregistrer_voyage', {
+        p_numero_lv:    String(numero),
+        p_type:         d.type || 'LV',
+        p_destination:  d.destinataire?.nom || '',
+        p_doc_annexe:   d.doc_annexe || '',
+        p_commande:     d.commande || '',
+        p_commentaire:  d.note || '',
+        p_poids:        parseFloat(d.total?.poids) || null,
+        p_ml:           parseFloat(d.total?.ml) || null,
+        p_grutage:      this._lvuCalcGrutage(d),
+        p_transporteur: d.transporteur?.nom || d.transporteur?.id || '',
+      });
+      if (error) console.warn('[_syncVoyageSupabase] portail non synchronisé :', error.message);
+    } catch (e) {
+      console.warn('[_syncVoyageSupabase] portail non synchronisé :', e.message);
+    }
   },
 
   lvuSelectTransporteur(idx) {
