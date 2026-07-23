@@ -865,6 +865,31 @@
       padding: 9px 12px; background: white; border-radius: 10px;
       margin-bottom: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
     }
+
+    /* ── Historique LV/CMR — tableau ── */
+    .lvu-hist-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .lvu-hist-table thead th {
+      position: sticky; top: 0; z-index: 1;
+      text-align: left; padding: 10px 12px; background: var(--brand); color: white;
+      font-weight: 700; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap;
+    }
+    .lvu-hist-table tbody td { padding: 9px 12px; border-top: 1px solid #E2E8F0; vertical-align: top; }
+    .lvu-hist-table tbody tr { transition: background-color 0.12s; }
+    .lvu-hist-table tbody tr:hover { background: #EFF6FF; }
+    .lvu-hist-table tbody tr.lvu-hist-parti { opacity: 0.55; }
+    .lvu-hist-table .ellipsis { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lvu-hist-table .lvu-hist-type {
+      display: inline-block; font-size: 9.5px; font-weight: 700; letter-spacing: 0.3px;
+      color: var(--brand); background: #EFF6FF; border-radius: 5px; padding: 1px 6px; margin-left: 5px; vertical-align: 1px;
+    }
+    .lvu-hist-table .lvu-hist-action {
+      border: none; border-radius: 6px; padding: 5px 8px; font-size: 11.5px; cursor: pointer;
+      background: #F1F5F9; color: #475569; text-decoration: none; display: inline-flex; align-items: center;
+    }
+    .lvu-hist-table .lvu-hist-action:hover { background: #E2E8F0; }
+    .lvu-hist-table .lvu-hist-action.pdf     { background: #EFF6FF; color: #1D4ED8; border: 1.5px solid #BFDBFE; }
+    .lvu-hist-table .lvu-hist-action.delete  { background: #FEE2E2; color: #B91C1C; }
+    .lvu-hist-table .lvu-hist-action.delete:hover { background: #FECACA; }
   </style>
 </head>
 <body>
@@ -10878,43 +10903,37 @@ ${bodies}${sansAcheteurBody}
       return;
     }
     el.innerHTML = `
-      <div style="overflow-x:auto;">
-      <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+      <div style="overflow-x:auto;max-height:70vh;">
+      <table class="lvu-hist-table">
         <thead>
-          <tr style="background:#EEF2FF;">
+          <tr>
             ${['LV','Créée le','Destinataire','Marchandise','Conducteur','Commande','Note','Grutage','Parti','Actions']
-              .map(h => `<th style="text-align:left;padding:8px 10px;color:#1E293B;font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:0.3px;white-space:nowrap;">${h}</th>`).join('')}
+              .map(h => `<th>${h}</th>`).join('')}
           </tr>
         </thead>
         <tbody>
           ${rows.map(row => {
             const { grutage, commentaire } = this._lvuParseNote(row.note);
-            const dimmed = row.parti ? 'opacity:0.55;' : '';
             return `
-            <tr style="border-top:1px solid #E2E8F0;${dimmed}">
-              <td style="padding:8px 10px;white-space:nowrap;"><strong>${row.numero||'—'}</strong> <span style="font-size:9.5px;font-weight:700;color:#1D4ED8;background:#EFF6FF;border-radius:5px;padding:0 5px;">${row.type||'LV'}</span></td>
-              <td style="padding:8px 10px;white-space:nowrap;color:#64748B;">${row.date||''}</td>
-              <td style="padding:8px 10px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${row.destinataire||''}">
+            <tr class="${row.parti ? 'lvu-hist-parti' : ''}">
+              <td style="white-space:nowrap;"><strong>${row.numero||'—'}</strong><span class="lvu-hist-type">${row.type||'LV'}</span></td>
+              <td style="white-space:nowrap;color:#64748B;">${row.date||''}</td>
+              <td class="ellipsis" title="${row.destinataire||''}">
                 ${row.destinataire||'—'}
                 ${row.expediteur && row.expediteur !== 'SONOTRAD' ? `<div style="font-size:10px;color:#94A3B8;">${row.expediteur}</div>` : ''}
               </td>
-              <td style="padding:8px 10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#475569;" title="${row.marchandises_desc||''}">${row.marchandises_desc||'<span style="color:#CBD5E1;">-</span>'}</td>
-              <td style="padding:8px 10px;white-space:nowrap;color:#94A3B8;">${row.conducteur?`${row.conducteur} · ${row.immat_moteur||''}`:'-'}</td>
-              <td style="padding:8px 10px;white-space:nowrap;color:#94A3B8;">${row.commande||'-'}</td>
-              <td style="padding:8px 10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#92400E;font-style:italic;" title="${commentaire}">${commentaire||'<span style="color:#CBD5E1;font-style:normal;">-</span>'}</td>
-              <td style="padding:8px 10px;white-space:nowrap;">${grutage?'<span style="font-size:10.5px;font-weight:700;background:#FEF3C7;color:#92400E;border-radius:6px;padding:2px 7px;">grutage</span>':'<span style="color:#CBD5E1;">-</span>'}</td>
-              <td style="padding:8px 10px;white-space:nowrap;">${row.parti?'<span style="font-size:10.5px;font-weight:700;color:#64748B;">🚚 Parti</span>':'<span style="font-size:10.5px;font-weight:700;color:#15803D;">✅ Dispo</span>'}</td>
-              <td style="padding:8px 10px;white-space:nowrap;">
+              <td class="ellipsis" style="color:#475569;" title="${row.marchandises_desc||''}">${row.marchandises_desc||'<span style="color:#CBD5E1;">-</span>'}</td>
+              <td style="white-space:nowrap;color:#94A3B8;">${row.conducteur?`${row.conducteur} · ${row.immat_moteur||''}`:'-'}</td>
+              <td style="white-space:nowrap;color:#94A3B8;">${row.commande||'-'}</td>
+              <td class="ellipsis" style="color:#92400E;font-style:italic;" title="${commentaire}">${commentaire||'<span style="color:#CBD5E1;font-style:normal;">-</span>'}</td>
+              <td style="white-space:nowrap;">${grutage?'<span style="font-size:10.5px;font-weight:700;background:#FEF3C7;color:#92400E;border-radius:6px;padding:2px 7px;">grutage</span>':'<span style="color:#CBD5E1;">-</span>'}</td>
+              <td style="white-space:nowrap;">${row.parti?'<span style="font-size:10.5px;font-weight:700;color:#64748B;">🚚 Parti</span>':'<span style="font-size:10.5px;font-weight:700;color:#15803D;">✅ Dispo</span>'}</td>
+              <td style="white-space:nowrap;">
                 <div style="display:flex;align-items:center;gap:6px;">
-                  ${row.pdfUrl?`<a href="${row.pdfUrl}" target="_blank" rel="noopener" title="PDF"
-                    style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:6px;padding:4px 8px;font-size:11px;text-decoration:none;">📄</a>`
-                    :''}
-                  <button onclick="App.openLvNoteModal('${row.numero}')" title="Éditer note/grutage"
-                    style="background:#F1F5F9;color:#475569;border:none;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;">✏️</button>
-                  <button onclick="App.lvuTogglePartiHistory('${row.numero}', ${row.parti===true})" title="${row.parti?'Remettre disponible':'Marquer parti'}"
-                    style="background:#F1F5F9;color:#475569;border:none;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;">${row.parti?'↩':'🚚'}</button>
-                  <button onclick="App.lvuDeleteLv('${row.numero}')" title="Supprimer"
-                    style="background:#FEE2E2;color:#B91C1C;border:none;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;">🗑</button>
+                  ${row.pdfUrl?`<a href="${row.pdfUrl}" target="_blank" rel="noopener" title="PDF" class="lvu-hist-action pdf">📄</a>`:''}
+                  <button onclick="App.openLvNoteModal('${row.numero}')" title="Éditer note/grutage" class="lvu-hist-action">✏️</button>
+                  <button onclick="App.lvuTogglePartiHistory('${row.numero}', ${row.parti===true})" title="${row.parti?'Remettre disponible':'Marquer parti'}" class="lvu-hist-action">${row.parti?'↩':'🚚'}</button>
+                  <button onclick="App.lvuDeleteLv('${row.numero}')" title="Supprimer" class="lvu-hist-action delete">🗑</button>
                 </div>
               </td>
             </tr>`;
