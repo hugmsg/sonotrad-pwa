@@ -1795,7 +1795,7 @@
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
           <span id="dep-lv-count" style="color:#94A3B8;font-weight:600;font-size:12px;flex-shrink:0;"></span>
           <div style="display:flex;gap:8px;flex-shrink:0;">
-            <button onclick="App.depMarkParti()"
+            <button id="dep-mark-parti-btn" onclick="App.depMarkParti()"
               style="background:#10B981;color:white;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">
               ✅ Parti →
             </button>
@@ -7310,27 +7310,38 @@ const App = {
     this._renderDepList();
   },
   toggleDepSelect(code) {
-    const d  = S.deps.find(x => x.code === code);
-    const lv = d && d.lv;
-    const group = lv ? [code, ...this._depLvSiblingCodes(lv, code)] : [code];
-    if (S.depSelected.has(code)) {
-      // Désélectionner tout le groupe (même LV) pour ne jamais laisser une
-      // sélection partielle qui marquerait la LV parti sans tous ses modules.
-      group.forEach(c => S.depSelected.delete(c));
-    } else {
-      group.forEach(c => S.depSelected.add(c));
-      if (group.length > 1) this.toast(`+${group.length - 1} module(s) ajouté(s) automatiquement (même LV n°${lv})`);
-    }
+    // Sélection strictement individuelle — le regroupement par LV n'intervient
+    // qu'au moment de "Parti" (voir depMarkParti/_updateDepLvBar), pas ici,
+    // pour ne pas contraindre la sélection si d'autres actions par module
+    // s'ajoutent un jour.
+    if (S.depSelected.has(code)) S.depSelected.delete(code);
+    else S.depSelected.add(code);
     this._updateDepLvBar();
     this._renderDepList();
   },
+  // Codes réellement envoyés à dep_mark_parti : la sélection de l'utilisateur
+  // + les modules "frères" (même LV) non sélectionnés, pour que le voyage
+  // parte entièrement du Planning même si l'utilisateur n'a coché qu'un module.
+  _depExpandedSelection() {
+    const expanded = new Set(S.depSelected);
+    S.depSelected.forEach(code => {
+      const d = S.deps.find(x => x.code === code);
+      if (d && d.lv) this._depLvSiblingCodes(d.lv, code).forEach(c => expanded.add(c));
+    });
+    return [...expanded];
+  },
   _updateDepLvBar() {
-    const bar   = document.getElementById('dep-lv-bar');
-    const count = document.getElementById('dep-lv-count');
+    const bar     = document.getElementById('dep-lv-bar');
+    const count   = document.getElementById('dep-lv-count');
+    const partiBtn = document.getElementById('dep-mark-parti-btn');
     if (!bar) return;
     const n = S.depSelected.size;
     bar.style.display = (S.depSelectMode && n > 0) ? '' : 'none';
     if (count) count.textContent = `${n} module${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''}`;
+    if (partiBtn) {
+      const extra = this._depExpandedSelection().length - n;
+      partiBtn.textContent = extra > 0 ? `✅ Parti (+${extra}) →` : '✅ Parti →';
+    }
   },
   async depCreateLv() {
     if (!S.depSelected.size) return;
@@ -7370,13 +7381,18 @@ const App = {
   },
   async depMarkParti() {
     if (!S.depSelected.size) return;
-    const codes = [...S.depSelected];
+    // Sélection + modules "frères" (même LV) — le voyage part en entier, même
+    // si l'utilisateur n'a coché qu'un seul module de la LV (voir badge
+    // "Parti (+N)" affiché sur ce bouton par _updateDepLvBar).
+    const codes = this._depExpandedSelection();
+    const extra = codes.length - S.depSelected.size;
     const n = codes.length;
     // Capturé avant l'appel (les codes sont retirés de S.deps après succès) —
     // sert à répercuter sur Supabase pour que le portail transporteur reflète
     // aussi ce départ, pas seulement le tableur.
     const lvNumbers = [...new Set(codes.map(c => S.deps.find(d => d.code === c)?.lv).filter(Boolean))];
-    const ok = window.confirm(`Marquer ${n} module${n > 1 ? 's' : ''} comme parti${n > 1 ? 's' : ''} ?\n\n${codes.join(', ')}`);
+    const extraNote = extra > 0 ? `\n\n(+${extra} module${extra > 1 ? 's' : ''} ajouté${extra > 1 ? 's' : ''} automatiquement, même LV)` : '';
+    const ok = window.confirm(`Marquer ${n} module${n > 1 ? 's' : ''} comme parti${n > 1 ? 's' : ''} ?\n\n${codes.join(', ')}${extraNote}`);
     if (!ok) return;
     this.toast('Mise à jour en cours…');
     try {

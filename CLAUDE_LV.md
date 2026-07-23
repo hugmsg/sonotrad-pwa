@@ -437,16 +437,23 @@ laissait ses "frères" de LV visibles comme actifs dans le Planning (côté Apps
 `lvNum` — mais ne coche `Planning col R` que pour les codes explicitement envoyés), obligeant
 à les rechercher un par un.
 
-Corrigé côté PWA (`index.html`) :
+Corrigé côté PWA (`index.html`) — **révisé le 2026-07-23 suite retour Hugo** : la sélection de
+module reste volontairement individuelle (`toggleDepSelect` ne coche/décoche que le module
+cliqué, sans effet de bord), pour ne pas contraindre la sélection si d'autres actions par
+module s'ajoutent un jour. Le regroupement n'intervient qu'au moment de l'action "Parti" :
 - `_depLvSiblingCodes(lv, excludeCode)` — liste les autres modules actifs partageant la même LV.
-- Badge `📄 {lv} (+N)` sur chaque module dont N > 0 (tooltip explicatif).
-- `toggleDepSelect(code)` sélectionne/désélectionne **tout le groupe LV en un geste** — jamais
-  de sélection partielle d'un groupe (qui laisserait un module non marqué côté Planning malgré
-  la LV globalement parti).
-- Toast informatif au moment de l'auto-ajout ("+N module(s) ajouté(s) automatiquement").
+- Badge `📄 {lv} (+N)` sur chaque module dont N > 0 (tooltip explicatif) — purement informatif,
+  n'affecte pas la sélection.
+- `_depExpandedSelection()` — sélection de l'utilisateur + tous les modules frères (même LV)
+  non cochés. Utilisée uniquement par `_updateDepLvBar()` (affiche "✅ Parti (+N) →" sur le
+  bouton vert quand la sélection actuelle entraînerait des ajouts) et par `depMarkParti()` (les
+  codes réellement envoyés à `dep_mark_parti` sont la sélection étendue, pas la sélection brute
+  — pour que le voyage parte bien en entier du Planning même si un seul module a été coché).
+  Le `window.confirm()` liste les codes envoyés et précise le nombre ajouté automatiquement.
 
-Testé en local : sélectionner un module avec badge "(+1)" sélectionne bien son frère
-automatiquement ; le reclic désélectionne les deux ensemble.
+Testé en local sur données réelles : cocher un seul module d'un groupe de 2 (LV 1633) laisse la
+sélection à 1 ("1 module sélectionné"), le frère reste décoché visuellement, et le bouton
+affiche bien "✅ Parti (+1) →".
 
 ### Actualisation en direct de l'Historique (2026-07-23)
 
