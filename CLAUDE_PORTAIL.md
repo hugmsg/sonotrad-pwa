@@ -42,14 +42,16 @@ Décision prise avec Hugo (2026-07-22) : les équipes continuent de cocher la ca
 
 `apps-script/sync-parti-supabase.gs.txt` (ce repo) reste la copie de référence/historique — la source de vérité est maintenant `sonotrad-scripts/planning/SyncPartiSupabase.js`.
 
-**Dernière étape, 100% manuelle (impossible à automatiser depuis cet environnement)** : le code est poussé mais le déclencheur n'est pas encore actif tant que la fonction d'installation n'a pas tourné au moins une fois. `clasp run` a été tenté et échoue (le projet n'est pas déployé en "API exécutable" — réglage Google Cloud/compte à activer, hors de portée ici).
+**Dernière étape, 100% manuelle (confirmé impossible à automatiser depuis cet environnement)** : le code est poussé mais le déclencheur n'est pas encore actif tant que la fonction d'installation n'a pas tourné au moins une fois.
+
+`clasp run installPartiTrigger` a été tenté à fond (déploiement en "API exécutable" créé, manifest mis à jour) mais échoue toujours : le token OAuth utilisé par clasp n'a pas consenti aux scopes du manifeste du script (Drive, Spreadsheets, Calendar, envoi d'email...) — requis par l'API d'exécution Google, indépendamment du toggle de compte "Google Apps Script API" (déjà activé par Hugo, vérifié). Corriger ça demanderait un `clasp login` avec écran de consentement large — jugé disproportionné pour économiser un clic, décision prise avec Hugo (2026-07-23).
 
 Pour Hugo :
 1. Ouvrir "Planning Sonotrad" → Extensions → Apps Script (projet `planning`)
 2. Sélectionner `installPartiTrigger` dans le menu déroulant des fonctions, cliquer **Exécuter** (autoriser les permissions si demandé — première exécution de cette fonction)
 3. Vérifier dans le menu Déclencheurs (icône horloge) qu'un déclencheur `onEditPartiSync` / "Sur modification" apparaît bien
 
-Pour désactiver/rollback : exécuter `removePartiTrigger` une fois de la même façon.
+Pour désactiver/rollback : exécuter `removePartiTrigger` une fois de la même façon. `listTriggers()` permet de vérifier l'état sans rien modifier.
 
 ---
 
