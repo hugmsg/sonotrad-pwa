@@ -412,6 +412,29 @@ Testé en aller-retour sans changement de contenu sur une LV réelle (01613) ava
 correctif — voir historique git pour le detail du bug initial (vérification `error` seule,
 insuffisante face à un `{ok:false}` métier).
 
+### Carte des 3 sources du statut "Parti" — à tenir à jour
+
+Trois endroits peuvent faire évoluer le statut Parti d'une LV/CMR. **Toute nouvelle fonctionnalité
+touchant le statut Parti doit écrire dans les 3, sinon une désynchro apparaît** (déjà arrivé une
+fois, voir anomalie du 2026-07-23 ci-dessous) :
+
+| Source | Écrit Archive col P ? | Écrit Départs col J ? | Écrit Supabase ? |
+|---|---|---|---|
+| Case à cocher **Planning → Départs col J** (Google Sheets, trigger `onEditPartiSync`) | ✅ depuis le 2026-07-23 | (c'est la source) | ✅ |
+| **Historique PWA**, toggle `lvuTogglePartiHistory` | ✅ | ✅ best-effort (LOXAM seulement) | ✅ |
+| **Départs PWA**, bulk `depMarkParti` → `dep_mark_parti`/`_markParti()` | ✅ | ✅ (+ Mesnager Départs) | ❌ **pas encore** |
+
+Le 3ᵉ chemin (`depMarkParti`, écran opérationnel LOXAM "marquer parti" par sélection de
+modules) ne pousse toujours pas vers Supabase — un voyage marqué parti par ce biais restera
+affiché comme disponible sur le portail transporteur jusqu'à la prochaine sync manuelle
+(coche Départs ou toggle Historique). Pas encore corrigé, à faire si Hugo signale la même
+anomalie depuis cet écran.
+
+**Anomalie corrigée le 2026-07-23** : cocher/décocher la case Parti dans Planning → Départs ne
+mettait à jour que Supabase (portail), jamais l'Archive (Historique PWA) — un voyage marqué
+parti dans le tableur restait visible comme disponible dans l'Historique. `onEditPartiSync`
+écrit désormais aussi l'Archive avant Supabase.
+
 ---
 
 ## Évolutions futures prévues
