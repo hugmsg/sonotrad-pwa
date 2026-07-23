@@ -146,6 +146,13 @@ Le champ `transporteur` et `grutage` n'existent pas dans `lv_history` : les 35 v
 backfillés ont `transporteur = NULL` et `grutage = false` par défaut (impossible à reconstituer
 a posteriori de façon fiable).
 
+**Extension à 100 lignes (2026-07-23)** : Hugo a repéré des voyages non-partis plus anciens que
+la fenêtre initiale de 50. `_getLvHistory()` accepte maintenant `?limit=N` (défaut 50, plafond
+500, déployé en prod v70) — un second backfill avec `limit=100` a ajouté 4 voyages manquants
+(`01610`, `01600` — l'anomalie déjà repérée le 2026-07-22 —, `01578`, `01575`). **`01498` reste
+hors de portée** (au-delà de la fenêtre 100, pas encore rechargé) ; relancer un backfill avec
+`limit=200` ou plus si besoin de le récupérer aussi.
+
 ---
 
 ## Mise en page (2026-07-23) — liste + carte côte à côte
@@ -167,9 +174,19 @@ distinctes) — jugé peu utile par Hugo.
 `marchandises_desc` est une nouvelle colonne sur `voyages` (migration
 `20260723100000_voyages_marchandises_desc.sql`), alimentée par `_syncVoyageSupabase()` dans
 `index.html` (`(d.marchandises || []).map(m => m.description)...`), comme le fait déjà le
-payload envoyé à l'Apps Script pour l'archive PDF. **Elle est `NULL` pour tous les voyages
-backfillés le 2026-07-22** (`lv_history`/l'Archive Google Sheet ne stockent pas cette donnée) —
-seules les nouvelles LV/CMR créées après ce commit l'auront.
+payload envoyé à l'Apps Script pour l'archive PDF.
+
+**Correction 2026-07-23** : Hugo a remarqué que cette info existe bien dans Google Sheets —
+côté Planning Sonotrad → Départs (colonne "Chargement", embarquée dans le libellé "LV n°xxxxx,
+<description>") — mais n'était jamais copiée dans l'onglet **Archive** du fichier LV/CMR (la
+vraie source de `lv_history`, voir plus haut). Corrigé dans `masterfile/pwa_master.js →
+_saveLv()` : la description marchandises est maintenant écrite en colonne R de l'Archive, et
+`_getLvHistory()` la renvoie (`marchandises_desc`) quand elle existe. Déployé en prod (v70).
+
+**Reste `NULL` pour tous les voyages créés avant ce commit** (backfill du 2026-07-22 et 2e
+backfill du 2026-07-23 inclus) — la donnée n'a jamais été écrite dans l'Archive avant le fix,
+donc rien à récupérer rétroactivement pour ces entrées-là. Seules les nouvelles LV/CMR créées
+après le 2026-07-23 auront un extrait visible sur le portail.
 
 ## Carte du portail
 
