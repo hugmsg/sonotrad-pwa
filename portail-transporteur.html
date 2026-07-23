@@ -31,7 +31,7 @@
   .status { display: flex; align-items: center; gap: 6px; font-size: 12px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
   .dot.off { background: #ef4444; }
-  main { max-width: 1280px; margin: 0 auto; padding: 20px; }
+  main { max-width: 1800px; margin: 0 auto; padding: 20px 28px; }
   .cards { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; margin-bottom: 18px; max-width: 420px; }
   .card { background: white; border: 1px solid var(--gray-border); border-radius: 10px; padding: 14px 16px; }
   .card .label { font-size: 12px; color: var(--gray-text); margin: 0 0 4px; }
@@ -63,22 +63,23 @@
 
   #panel-list { background: white; border: 1px solid var(--gray-border); border-radius: 10px; overflow: hidden; }
   #voyage-table-wrap { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12.5px; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13.5px; }
   thead th {
-    text-align: left; padding: 9px 10px; background: var(--navy-light); color: var(--navy);
-    font-weight: 700; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.3px;
+    text-align: left; padding: 11px 14px; background: var(--navy-light); color: var(--navy);
+    font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap;
   }
-  tbody td { padding: 8px 10px; border-top: 1px solid var(--gray-border); vertical-align: top; }
+  tbody td { padding: 11px 14px; border-top: 1px solid var(--gray-border); vertical-align: top; }
   tbody tr { cursor: pointer; transition: background-color 0.12s; }
   tbody tr:hover, tbody tr.row-highlight { background: var(--navy-light); }
-  .col-lv       { width: 13%; }
+  .col-lv       { width: 12%; }
   .col-date     { width: 9%; }
   .col-dest     { width: 19%; }
-  .col-march    { width: 24%; }
-  .col-poids    { width: 8%; }
-  .col-ml       { width: 8%; }
+  .col-march    { width: 27%; }
+  .col-poids    { width: 7%; }
+  .col-ml       { width: 7%; }
   .col-grutage  { width: 9%; }
   .col-contrainte { width: 10%; }
+  .nowrap { white-space: nowrap; }
   .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .voyage-num { font-weight: 700; color: #1e293b; }
   .voyage-type {
@@ -304,13 +305,13 @@ function render() {
         const city = (trouverVille(v.destination) || {}).ville || '';
         return `
         <tr data-numero="${escapeHtml(v.numero_lv)}" data-city="${escapeHtml(city)}">
-          <td class="col-lv"><span class="voyage-num">${escapeHtml(v.numero_lv)}</span><span class="voyage-type">${escapeHtml(v.type || 'LV')}</span></td>
-          <td class="col-date muted">${new Date(v.date_creation).toLocaleDateString('fr-FR')}</td>
+          <td class="col-lv nowrap"><span class="voyage-num">${escapeHtml(v.numero_lv)}</span><span class="voyage-type">${escapeHtml(v.type || 'LV')}</span></td>
+          <td class="col-date muted nowrap">${new Date(v.date_creation).toLocaleDateString('fr-FR')}</td>
           <td class="col-dest ellipsis" title="${escapeHtml(v.destination)}">${escapeHtml(v.destination) || '-'}</td>
           <td class="col-march ellipsis" title="${escapeHtml(marchandise)}">${marchandise ? escapeHtml(marchandise) : '<span class="muted">-</span>'}</td>
-          <td class="col-poids">${v.poids ? escapeHtml(v.poids) + ' t' : '<span class="muted">-</span>'}</td>
-          <td class="col-ml">${v.ml ? escapeHtml(v.ml) + ' ml' : '<span class="muted">-</span>'}</td>
-          <td class="col-grutage">${v.grutage ? '<span class="badge badge-grutage">grutage</span>' : '<span class="muted">-</span>'}</td>
+          <td class="col-poids nowrap">${v.poids ? escapeHtml(v.poids) + ' t' : '<span class="muted">-</span>'}</td>
+          <td class="col-ml nowrap">${v.ml ? escapeHtml(v.ml) + ' ml' : '<span class="muted">-</span>'}</td>
+          <td class="col-grutage nowrap">${v.grutage ? '<span class="badge badge-grutage">grutage</span>' : '<span class="muted">-</span>'}</td>
           <td class="col-contrainte ellipsis constraint-text" title="${escapeHtml(v.commentaire)}">${v.commentaire ? escapeHtml(v.commentaire) : '<span class="muted">-</span>'}</td>
         </tr>`;
       }).join('');
