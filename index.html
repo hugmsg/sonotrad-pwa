@@ -10599,6 +10599,9 @@ ${bodies}${sansAcheteurBody}
         p_ml:           parseFloat(d.total?.ml) || null,
         p_grutage:      this._lvuCalcGrutage(d),
         p_transporteur: d.transporteur?.nom || d.transporteur?.id || '',
+        // BCB : la CMR est créée au moment du départ du matériel (contrairement
+        // à LOXAM, créée en avance) — donc déjà parti à la création.
+        p_parti:        d.source === 'bcb',
       });
       if (error) console.warn('[_syncVoyageSupabase] portail non synchronisé :', error.message);
     } catch (e) {
