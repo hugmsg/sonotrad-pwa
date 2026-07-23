@@ -10,6 +10,24 @@ Portail externe en lecture seule, à partager avec les transporteurs (LOXAM nota
 
 ---
 
+## Amélioration future — marquer "Parti" par voyage depuis la PWA (pas encore fait)
+
+Confirmé avec Hugo (2026-07-23) : le marquage manuel de la case Parti se fait bien dans
+**Planning Sonotrad → onglet Départs, colonne J** (c'est là que `onEditPartiSync` est bindé —
+correct, rien à changer). Le bouton "marquer parti" existant dans la PWA (action
+`dep_mark_parti` / `_markParti()`) n'est en pratique pas utilisé pour ça : les départs se font
+**par voyage** (un camion peut embarquer plusieurs modules/LV en même temps), et retrouver
+manuellement dans la PWA tous les modules d'un même voyage pour les cocher un par un serait plus
+lent et plus source d'erreur que de cocher directement la ou les lignes correspondantes dans le
+tableur.
+
+Piste retenue par Hugo pour plus tard : une vraie fonctionnalité "marquer un voyage entier comme
+parti" dans la PWA (sélection groupée de tous les modules/LV d'un même voyage en un geste),
+pour que ça redevienne plus fiable de le faire depuis la PWA plutôt que depuis le tableur.
+Pas de scope, pas de priorité fixée pour l'instant — juste noté pour ne pas perdre l'idée.
+
+---
+
 ## Pourquoi Supabase et pas une lecture directe de la Google Sheet
 
 **Correction (2026-07-23)** : la vraie source de gestion interne pour TOUS les LV/CMR (LOXAM
