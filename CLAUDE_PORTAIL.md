@@ -163,13 +163,27 @@ empilées verticalement sous 900px de large (une seule colonne, carte au-dessus 
 le flux DOM). La carte est en `position: sticky` côté desktop pour rester visible pendant le
 scroll de la liste.
 
-La liste est passée d'un `<table>` à des cartes (`.voyage-card`) — plus adapté pour afficher un
-extrait de la description marchandises sans exploser en largeur. Chaque carte affiche : n°
-LV + badge type (LV/CMR), date ; destination ; extrait marchandises (`marchandises_desc`,
-tronqué sur une ligne avec ellipsis CSS, `title` avec le texte complet) ; poids/ml/badge
-grutage ; contrainte (`commentaire`) en italique si présente. Le total "Mètres linéaires
-cumulés" a été retiré des cartes statistiques (ne reste que Voyages disponibles / Destinations
-distinctes) — jugé peu utile par Hugo.
+**Révision (2026-07-23, suite retour Hugo)** : passage temporaire à des cartes (une par
+voyage) abandonné — Hugo préfère le `<table>` d'origine (une ligne par voyage, en-tête de
+colonnes), donc revenu à un tableau classique, avec en plus la colonne Marchandise (extrait
+tronqué avec ellipsis CSS, `title` pour le texte complet). Colonnes : LV (+ badge type), Créée
+le, Destination, Marchandise, Poids, ML, Grutage, Contrainte — toutes tronquées sur une ligne
+sauf LV/Poids/ML/Grutage. `table-layout: fixed` avec largeurs en `%` par colonne ;
+`#voyage-table-wrap` scrolle horizontalement en dernier recours sur très petit écran. Le total
+"Mètres linéaires cumulés" reste retiré des cartes statistiques (ne restent que Voyages
+disponibles / Destinations distinctes).
+
+**Sélection croisée liste ↔ carte (2026-07-23)** : un marqueur = une ville, qui peut regrouper
+plusieurs voyages (plusieurs `<tr>` du tableau). `cityMarkers` / `cityToNumeros` / `numeroToCity`
+relient les deux sens :
+- Survoler une ligne du tableau → surligne la ligne + son marqueur (`highlightCity`), aperçu
+  temporaire qui revient à l'état sélectionné (`selectedCity`) à la sortie de la souris.
+- Cliquer une ligne → sélection persistante + `leafletMap.flyTo()` vers le marqueur
+  correspondant (zoom mini 8).
+- Survoler/cliquer un marqueur → surligne toutes les lignes de la même ville ; le clic scrolle
+  en plus la première ligne correspondante dans la vue (`scrollIntoView`).
+- Si la ville sélectionnée disparaît d'un rafraîchissement à l'autre (voyage marqué parti), la
+  sélection est nettoyée automatiquement (`renderMapMarkers`).
 
 `marchandises_desc` est une nouvelle colonne sur `voyages` (migration
 `20260723100000_voyages_marchandises_desc.sql`), alimentée par `_syncVoyageSupabase()` dans

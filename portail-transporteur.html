@@ -61,27 +61,34 @@
   }
   .map-caption { font-size: 12px; color: var(--gray-text); margin-top: 8px; }
 
-  .voyage-list { display: flex; flex-direction: column; gap: 8px; }
-  .voyage-card {
-    background: white; border: 1px solid var(--gray-border); border-radius: 10px;
-    padding: 12px 14px;
+  #panel-list { background: white; border: 1px solid var(--gray-border); border-radius: 10px; overflow: hidden; }
+  #voyage-table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12.5px; }
+  thead th {
+    text-align: left; padding: 9px 10px; background: var(--navy-light); color: var(--navy);
+    font-weight: 700; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.3px;
   }
-  .voyage-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 3px; }
-  .voyage-num { font-size: 14px; font-weight: 700; color: #1e293b; }
+  tbody td { padding: 8px 10px; border-top: 1px solid var(--gray-border); vertical-align: top; }
+  tbody tr { cursor: pointer; transition: background-color 0.12s; }
+  tbody tr:hover, tbody tr.row-highlight { background: var(--navy-light); }
+  .col-lv       { width: 13%; }
+  .col-date     { width: 9%; }
+  .col-dest     { width: 19%; }
+  .col-march    { width: 24%; }
+  .col-poids    { width: 8%; }
+  .col-ml       { width: 8%; }
+  .col-grutage  { width: 9%; }
+  .col-contrainte { width: 10%; }
+  .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .voyage-num { font-weight: 700; color: #1e293b; }
   .voyage-type {
-    display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.3px;
-    color: var(--navy); background: var(--navy-light); border-radius: 5px; padding: 1px 6px; margin-left: 6px;
+    display: inline-block; font-size: 9.5px; font-weight: 700; letter-spacing: 0.3px;
+    color: var(--navy); background: white; border: 1px solid var(--navy-light); border-radius: 5px;
+    padding: 0 5px; margin-left: 4px; vertical-align: 1px;
   }
-  .voyage-date { font-size: 12px; color: var(--gray-text); white-space: nowrap; }
-  .voyage-dest { font-size: 14px; font-weight: 600; color: #1e293b; margin-bottom: 2px; }
-  .voyage-marchandise {
-    font-size: 12.5px; color: #475569; margin-bottom: 6px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .voyage-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; color: var(--gray-text); }
-  .voyage-constraint { font-size: 12px; color: #92400e; margin-top: 6px; font-style: italic; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 6px; font-size: 10.5px; font-weight: 700; }
   .badge-grutage { background: var(--warn-bg); color: var(--warn); }
+  .constraint-text { color: #92400e; font-style: italic; }
   .muted { color: #94a3b8; }
   .empty { text-align: center; padding: 40px; color: var(--gray-text); background: white; border: 1px solid var(--gray-border); border-radius: 10px; }
   .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 10px 18px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
@@ -111,7 +118,18 @@
 
   <div class="layout">
     <div id="panel-list">
-      <div class="voyage-list" id="voyage-list"></div>
+      <div id="voyage-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-lv">LV</th><th class="col-date">Créée le</th><th class="col-dest">Destination</th>
+              <th class="col-march">Marchandise</th><th class="col-poids">Poids</th><th class="col-ml">ML</th>
+              <th class="col-grutage">Grutage</th><th class="col-contrainte">Contrainte</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
       <div class="empty" id="empty-msg" style="display:none;">Aucun voyage disponible pour le moment.</div>
     </div>
 
@@ -189,6 +207,16 @@ let currentVoyages = [];
 let leafletMap = null;
 let markersLayer = null;
 
+// Un marqueur = une ville, qui peut regrouper plusieurs voyages. Ces maps
+// relient les deux sens pour la sélection croisée liste <-> carte.
+let cityMarkers   = {}; // ville -> L.circleMarker
+let cityToNumeros = {}; // ville -> [numero_lv, ...]
+let numeroToCity  = {}; // numero_lv -> ville
+let selectedCity  = null;
+
+const MARKER_STYLE       = { color: '#1f3a5f', weight: 1.5, fillColor: '#1f3a5f', fillOpacity: 0.35 };
+const MARKER_STYLE_HI    = { color: '#1f3a5f', weight: 3,   fillColor: '#f59e0b', fillOpacity: 0.75 };
+
 function initMap() {
   leafletMap = L.map('map').setView([46.6, 2.2], 6);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -198,9 +226,32 @@ function initMap() {
   markersLayer = L.layerGroup().addTo(leafletMap);
 }
 
+// Survol/sélection croisée : met en évidence le marqueur d'une ville + les
+// lignes du tableau correspondantes (highlightCity), ou revient à l'état
+// courant (clearHighlight -> ré-applique selectedCity s'il y en a un).
+function highlightCity(city) {
+  Object.entries(cityMarkers).forEach(([name, marker]) => {
+    marker.setStyle(name === city ? MARKER_STYLE_HI : MARKER_STYLE);
+    if (name === city) marker.bringToFront();
+  });
+  document.querySelectorAll('#tbody tr').forEach(tr => {
+    tr.classList.toggle('row-highlight', !!city && tr.dataset.city === city);
+  });
+}
+function clearHighlight() { highlightCity(selectedCity); }
+
+function selectCity(city, { pan } = {}) {
+  selectedCity = city;
+  highlightCity(city);
+  if (pan && cityMarkers[city]) {
+    leafletMap.flyTo(cityMarkers[city].getLatLng(), Math.max(leafletMap.getZoom(), 8), { duration: 0.5 });
+  }
+}
+
 function renderMapMarkers(dispo) {
   if (!markersLayer) return;
   markersLayer.clearLayers();
+  cityMarkers = {}; cityToNumeros = {}; numeroToCity = {};
   const cities = {};
   dispo.forEach(v => {
     const loc = trouverVille(v.destination);
@@ -208,18 +259,29 @@ function renderMapMarkers(dispo) {
     const key = loc.ville;
     if (!cities[key]) cities[key] = { ...loc, count: 0 };
     cities[key].count++;
+    numeroToCity[v.numero_lv] = key;
+    (cityToNumeros[key] = cityToNumeros[key] || []).push(v.numero_lv);
   });
   Object.values(cities).forEach(c => {
-    L.circleMarker([c.lat, c.lon], {
-      radius: 6 + c.count * 3,
-      color: '#1f3a5f',
-      weight: 1.5,
-      fillColor: '#1f3a5f',
-      fillOpacity: 0.35,
-    })
+    const marker = L.circleMarker([c.lat, c.lon], { radius: 6 + c.count * 3, ...MARKER_STYLE })
       .bindTooltip(`${c.ville} (${c.count})`, { permanent: true, direction: 'right', offset: [8, 0], className: 'city-label' })
+      .on('click',     () => scrollToCity(c.ville))
+      .on('mouseover',  () => highlightCity(c.ville))
+      .on('mouseout',   () => clearHighlight())
       .addTo(markersLayer);
+    cityMarkers[c.ville] = marker;
   });
+  // La sélection courante peut viser une ville qui n'a plus de marqueur
+  // (voyage parti/disparu entre deux rafraîchissements) — on la nettoie.
+  if (selectedCity && !cityMarkers[selectedCity]) selectedCity = null;
+  highlightCity(selectedCity);
+}
+
+function scrollToCity(city) {
+  selectCity(city);
+  const firstNumero = (cityToNumeros[city] || [])[0];
+  const row = firstNumero && document.querySelector(`#tbody tr[data-numero="${CSS.escape(firstNumero)}"]`);
+  if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function render() {
@@ -228,34 +290,38 @@ function render() {
   const villesVues = new Set(dispo.map(v => (trouverVille(v.destination) || {}).ville || v.destination));
   document.getElementById('stat-dest').textContent = villesVues.size;
 
-  const list     = document.getElementById('voyage-list');
+  const tbody    = document.getElementById('tbody');
   const emptyMsg = document.getElementById('empty-msg');
   if (!dispo.length) {
-    list.innerHTML = '';
+    tbody.innerHTML = '';
     emptyMsg.style.display = 'block';
   } else {
     emptyMsg.style.display = 'none';
-    list.innerHTML = dispo
+    tbody.innerHTML = dispo
       .sort((a, b) => new Date(b.date_creation) - new Date(a.date_creation))
       .map(v => {
         const marchandise = (v.marchandises_desc || '').trim();
+        const city = (trouverVille(v.destination) || {}).ville || '';
         return `
-        <div class="voyage-card">
-          <div class="voyage-top">
-            <span><span class="voyage-num">${escapeHtml(v.numero_lv)}</span><span class="voyage-type">${escapeHtml(v.type || 'LV')}</span></span>
-            <span class="voyage-date">${new Date(v.date_creation).toLocaleDateString('fr-FR')}</span>
-          </div>
-          <div class="voyage-dest">${escapeHtml(v.destination) || '-'}</div>
-          ${marchandise ? `<div class="voyage-marchandise" title="${escapeHtml(marchandise)}">${escapeHtml(marchandise)}</div>` : ''}
-          <div class="voyage-meta">
-            <span>${v.poids ? escapeHtml(v.poids) + ' t' : '<span class="muted">poids —</span>'}</span>
-            <span>·</span>
-            <span>${v.ml ? escapeHtml(v.ml) + ' ml' : '<span class="muted">ml —</span>'}</span>
-            ${v.grutage ? '<span class="badge badge-grutage">grutage</span>' : ''}
-          </div>
-          ${v.commentaire ? `<div class="voyage-constraint">${escapeHtml(v.commentaire)}</div>` : ''}
-        </div>`;
+        <tr data-numero="${escapeHtml(v.numero_lv)}" data-city="${escapeHtml(city)}">
+          <td class="col-lv"><span class="voyage-num">${escapeHtml(v.numero_lv)}</span><span class="voyage-type">${escapeHtml(v.type || 'LV')}</span></td>
+          <td class="col-date muted">${new Date(v.date_creation).toLocaleDateString('fr-FR')}</td>
+          <td class="col-dest ellipsis" title="${escapeHtml(v.destination)}">${escapeHtml(v.destination) || '-'}</td>
+          <td class="col-march ellipsis" title="${escapeHtml(marchandise)}">${marchandise ? escapeHtml(marchandise) : '<span class="muted">-</span>'}</td>
+          <td class="col-poids">${v.poids ? escapeHtml(v.poids) + ' t' : '<span class="muted">-</span>'}</td>
+          <td class="col-ml">${v.ml ? escapeHtml(v.ml) + ' ml' : '<span class="muted">-</span>'}</td>
+          <td class="col-grutage">${v.grutage ? '<span class="badge badge-grutage">grutage</span>' : '<span class="muted">-</span>'}</td>
+          <td class="col-contrainte ellipsis constraint-text" title="${escapeHtml(v.commentaire)}">${v.commentaire ? escapeHtml(v.commentaire) : '<span class="muted">-</span>'}</td>
+        </tr>`;
       }).join('');
+
+    tbody.querySelectorAll('tr[data-numero]').forEach(tr => {
+      const city = tr.dataset.city;
+      if (!city) return;
+      tr.addEventListener('mouseenter', () => highlightCity(city));
+      tr.addEventListener('mouseleave', () => clearHighlight());
+      tr.addEventListener('click',      () => selectCity(city, { pan: true }));
+    });
   }
 
   renderMapMarkers(dispo);
