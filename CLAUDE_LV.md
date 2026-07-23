@@ -422,13 +422,44 @@ fois, voir anomalie du 2026-07-23 ci-dessous) :
 |---|---|---|---|
 | Case à cocher **Planning → Départs col J** (Google Sheets, trigger `onEditPartiSync`) | ✅ depuis le 2026-07-23 | (c'est la source) | ✅ |
 | **Historique PWA**, toggle `lvuTogglePartiHistory` | ✅ | ✅ best-effort (LOXAM seulement) | ✅ |
-| **Départs PWA**, bulk `depMarkParti` → `dep_mark_parti`/`_markParti()` | ✅ | ✅ (+ Mesnager Départs) | ❌ **pas encore** |
+| **Départs PWA**, bulk `depMarkParti` → `dep_mark_parti`/`_markParti()` | ✅ | ✅ (+ Mesnager Départs) | ✅ depuis le 2026-07-23 |
 
-Le 3ᵉ chemin (`depMarkParti`, écran opérationnel LOXAM "marquer parti" par sélection de
-modules) ne pousse toujours pas vers Supabase — un voyage marqué parti par ce biais restera
-affiché comme disponible sur le portail transporteur jusqu'à la prochaine sync manuelle
-(coche Départs ou toggle Historique). Pas encore corrigé, à faire si Hugo signale la même
-anomalie depuis cet écran.
+Les 3 chemins écrivent maintenant partout. `depMarkParti()` appelle `marquer_parti` côté
+Supabase pour chaque numéro de LV concerné, en best-effort (comme `_syncVoyageSupabase`) —
+un échec de synchro portail n'annule jamais le départ déjà acté au tableur/Archive.
+
+### Regroupement par LV dans l'écran Départs (2026-07-23)
+
+Plusieurs modules LOXAM peuvent partager la même LV (`d.lv`, colonne V du Planning, déjà
+renvoyée par `_getLoxamProduction()`). Avant ce correctif, marquer un seul module parti
+laissait ses "frères" de LV visibles comme actifs dans le Planning (côté Apps Script,
+`_markParti()` marque bien toute la LV parti au niveau tableur/Archive/Supabase — dédup par
+`lvNum` — mais ne coche `Planning col R` que pour les codes explicitement envoyés), obligeant
+à les rechercher un par un.
+
+Corrigé côté PWA (`index.html`) :
+- `_depLvSiblingCodes(lv, excludeCode)` — liste les autres modules actifs partageant la même LV.
+- Badge `📄 {lv} (+N)` sur chaque module dont N > 0 (tooltip explicatif).
+- `toggleDepSelect(code)` sélectionne/désélectionne **tout le groupe LV en un geste** — jamais
+  de sélection partielle d'un groupe (qui laisserait un module non marqué côté Planning malgré
+  la LV globalement parti).
+- Toast informatif au moment de l'auto-ajout ("+N module(s) ajouté(s) automatiquement").
+
+Testé en local : sélectionner un module avec badge "(+1)" sélectionne bien son frère
+automatiquement ; le reclic désélectionne les deux ensemble.
+
+### Actualisation en direct de l'Historique (2026-07-23)
+
+L'Historique ne se rafraîchissait qu'au chargement de la vue ou au clic sur "Actualiser" — un
+changement fait uniquement via Google Sheets (coche Départs) n'apparaissait pas tant qu'on
+restait sur l'onglet. Corrigé par un abonnement Supabase Realtime sur la table `voyages`
+(`_lvuSubscribeHistoryRealtime()`/`_lvuUnsubscribeHistoryRealtime()`, souscrit à l'entrée sur
+la vue `lvu-history` et désabonné à la sortie, dans `go()`) — même mécanisme que le portail
+transporteur. L'Historique lit l'Archive Google Sheet (pas Supabase) donc le payload Realtime
+ne sert que de **signal** ("quelque chose a changé") ; le code redéclenche un `lvuLoadHistory()`
+complet (debounce 1.2s pour éviter une rafale de refetch si plusieurs lignes changent d'un
+coup), plutôt que d'essayer de fusionner le payload Supabase (champs différents/partiels) dans
+les lignes déjà affichées.
 
 **Anomalie corrigée le 2026-07-23** : cocher/décocher la case Parti dans Planning → Départs ne
 mettait à jour que Supabase (portail), jamais l'Archive (Historique PWA) — un voyage marqué

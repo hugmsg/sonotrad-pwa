@@ -2799,13 +2799,13 @@
         </div>
         <div id="lvu-history-filters" style="display:flex;gap:6px;margin-bottom:12px;">
           <button onclick="App.lvuSetHistoryFilter('tous')" data-filter="tous"
-            style="border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;background:#1E293B;color:white;">Tous</button>
+            style="border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#475569;">Tous</button>
           <button onclick="App.lvuSetHistoryFilter('disponibles')" data-filter="disponibles"
-            style="border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#475569;">Disponibles</button>
+            style="border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;background:#1E293B;color:white;">Disponibles</button>
           <button onclick="App.lvuSetHistoryFilter('partis')" data-filter="partis"
             style="border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#475569;">Partis</button>
         </div>
-        <div id="lvu-history-list" style="overflow-x:auto;">
+        <div id="lvu-history-list" style="background:white;border:1px solid #E2E8F0;border-radius:10px;overflow:hidden;">
           <div style="text-align:center;padding:40px;color:#94A3B8;font-size:14px;">Chargement…</div>
         </div>
       </div>
@@ -3074,6 +3074,7 @@ const App = {
       S.depSelectMode = false;
       S.depSelected.clear();
     }
+    if (S.view === 'lvu-history' && view !== 'lvu-history') this._lvuUnsubscribeHistoryRealtime();
     S.prevView = S.view;
     S.view = view;
     if (view === 'loxam-menu') S.activity = 'loxam'; // reset avant _render pour les tabs nav
@@ -3096,7 +3097,7 @@ const App = {
     if (view === 'bcb-depart')      this.bcbDepartInit();
     if (view === 'bcb-enlevements') this.bcbEnlevementsLoad();
     if (view === 'lvu-form')      this._lvuRenderMarchandises();
-    if (view === 'lvu-history')   this.lvuLoadHistory();
+    if (view === 'lvu-history')   { this.lvuLoadHistory(); this._lvuSubscribeHistoryRealtime(); }
     if (view === 'annuaire')      this.annuaireLoad();
     if (view === 'ptg-admin')     this.ptgAdminInit();
     if (view === 'ptg-rapport')   this.ptgRapportInit();
@@ -7197,6 +7198,7 @@ const App = {
       };
       const chips   = cur ? chipMap[cur] : '';
       const dur     = _duration(d.debut, d.status && d.status.termine ? d.fin : null);
+      const lvSiblingsCount = d.lv ? this._depLvSiblingCodes(d.lv, code).length : 0;
       const onclick = S.depSelectMode ? `App.toggleDepSelect('${code}')` : `App.openDep(${realIdx})`;
       const cbHtml  = S.depSelectMode
         ? `<div style="width:22px;height:22px;border-radius:6px;border:2px solid ${selected?'#1D4ED8':'#CBD5E1'};background:${selected?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;color:white;">${selected?'✓':''}</div>`
@@ -7222,7 +7224,7 @@ const App = {
               ${S.depPhotosLog[code] ? `<span style="font-size:10px;background:#F0FDF4;color:#166534;border-radius:6px;padding:1px 5px;white-space:nowrap;flex-shrink:0;">📷 ${S.depPhotosLog[code].count}</span>` : ''}
             </div>
           </div>
-          ${(d.lv || d.commande) ? `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;min-width:52px;">${d.lv ? `<span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;border-radius:4px;padding:1px 5px;font-weight:600;white-space:nowrap;">📄 ${d.lv}</span>` : ''}${d.commande ? `<span style="font-size:10px;background:#F1F5F9;color:#475569;border-radius:4px;padding:1px 5px;white-space:nowrap;">${d.commande}</span>` : ''}</div>` : ''}
+          ${(d.lv || d.commande) ? `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;min-width:52px;">${d.lv ? `<span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;border-radius:4px;padding:1px 5px;font-weight:600;white-space:nowrap;" title="${lvSiblingsCount ? lvSiblingsCount + ' autre(s) module(s) sur la même LV, marqué(s) parti avec celui-ci' : ''}">📄 ${d.lv}${lvSiblingsCount ? ` (+${lvSiblingsCount})` : ''}</span>` : ''}${d.commande ? `<span style="font-size:10px;background:#F1F5F9;color:#475569;border-radius:4px;padding:1px 5px;white-space:nowrap;">${d.commande}</span>` : ''}</div>` : ''}
           ${S.depSelectMode ? '' : (() => {
             const codeSafe   = code.replace(/'/g, "\\'");
             const modSafe    = (d.codeModule || '').replace(/'/g, "\\'");
@@ -7286,6 +7288,14 @@ const App = {
       }
     }
   },
+  // Codes des autres modules actifs (non partis) qui partagent le même n° de
+  // LV — sur cette LV, marquer un module parti marque toute la LV parti côté
+  // tableur (voir _markParti côté Apps Script, dédup par lvNum), donc ces
+  // modules "partent" ensemble qu'on les sélectionne ou non.
+  _depLvSiblingCodes(lv, excludeCode) {
+    if (!lv) return [];
+    return S.deps.filter(d => d.lv === lv && d.code !== excludeCode).map(d => d.code);
+  },
   toggleDepSelectMode() {
     S.depSelectMode = !S.depSelectMode;
     S.depSelected.clear();
@@ -7300,8 +7310,17 @@ const App = {
     this._renderDepList();
   },
   toggleDepSelect(code) {
-    if (S.depSelected.has(code)) S.depSelected.delete(code);
-    else S.depSelected.add(code);
+    const d  = S.deps.find(x => x.code === code);
+    const lv = d && d.lv;
+    const group = lv ? [code, ...this._depLvSiblingCodes(lv, code)] : [code];
+    if (S.depSelected.has(code)) {
+      // Désélectionner tout le groupe (même LV) pour ne jamais laisser une
+      // sélection partielle qui marquerait la LV parti sans tous ses modules.
+      group.forEach(c => S.depSelected.delete(c));
+    } else {
+      group.forEach(c => S.depSelected.add(c));
+      if (group.length > 1) this.toast(`+${group.length - 1} module(s) ajouté(s) automatiquement (même LV n°${lv})`);
+    }
     this._updateDepLvBar();
     this._renderDepList();
   },
@@ -7353,6 +7372,10 @@ const App = {
     if (!S.depSelected.size) return;
     const codes = [...S.depSelected];
     const n = codes.length;
+    // Capturé avant l'appel (les codes sont retirés de S.deps après succès) —
+    // sert à répercuter sur Supabase pour que le portail transporteur reflète
+    // aussi ce départ, pas seulement le tableur.
+    const lvNumbers = [...new Set(codes.map(c => S.deps.find(d => d.code === c)?.lv).filter(Boolean))];
     const ok = window.confirm(`Marquer ${n} module${n > 1 ? 's' : ''} comme parti${n > 1 ? 's' : ''} ?\n\n${codes.join(', ')}`);
     if (!ok) return;
     this.toast('Mise à jour en cours…');
@@ -7372,6 +7395,19 @@ const App = {
         this._updateDepLvBar();
         this._renderDepList();
         this.toast(`✅ ${res.count} module${res.count > 1 ? 's' : ''} marqué${res.count > 1 ? 's' : ''} parti${res.count > 1 ? 's' : ''}`);
+        // Portail transporteur (Supabase) — best-effort, comme _syncVoyageSupabase :
+        // une erreur ici ne doit jamais remettre en cause le départ déjà acté au tableur.
+        if (window.SupabaseDB) {
+          lvNumbers.forEach(async lv => {
+            try {
+              const { error } = await window.SupabaseDB.rpc('marquer_parti', {
+                p_numero_lv: String(lv).padStart(5, '0'),
+                p_parti:     true,
+              });
+              if (error) console.warn('[depMarkParti] portail non synchronisé pour LV ' + lv + ' :', error.message);
+            } catch (e) { console.warn('[depMarkParti] portail non synchronisé pour LV ' + lv + ' :', e.message); }
+          });
+        }
       } else {
         this.toast('❌ ' + (res.error || 'Erreur inconnue'));
       }
@@ -10756,6 +10792,33 @@ ${bodies}${sansAcheteurBody}
     }
   },
 
+  // ── Actualisation en direct de l'Historique ──────────────────────────────
+  // L'Historique lit l'Archive Google Sheet via Apps Script (pas Supabase),
+  // donc on ne peut pas rendre directement depuis le payload Realtime — mais
+  // les 3 chemins qui touchent le statut Parti (case Départs, toggle
+  // Historique, marquage en masse Départs) écrivent tous dans Supabase, donc
+  // un changement sur la table voyages est un signal fiable pour refaire un
+  // fetch complet (comme le fait le portail transporteur). Débounce léger
+  // pour éviter une rafale de refetch si plusieurs lignes changent d'un coup.
+  _lvuSubscribeHistoryRealtime() {
+    if (S.lvuHistoryRealtimeChannel || !window.SupabaseDB) return;
+    S.lvuHistoryRealtimeChannel = window.SupabaseDB
+      .channel('lvu-history-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'voyages' }, () => {
+        clearTimeout(S.lvuHistoryRealtimeDebounce);
+        S.lvuHistoryRealtimeDebounce = setTimeout(() => this.lvuLoadHistory(), 1200);
+      })
+      .subscribe();
+  },
+
+  _lvuUnsubscribeHistoryRealtime() {
+    clearTimeout(S.lvuHistoryRealtimeDebounce);
+    if (S.lvuHistoryRealtimeChannel) {
+      window.SupabaseDB?.removeChannel(S.lvuHistoryRealtimeChannel);
+      S.lvuHistoryRealtimeChannel = null;
+    }
+  },
+
   // Note encodée en préfixe texte à la création (voir _lvuCollectFormData /
   // masterfile _saveLv) — même convention pour décoder.
   _lvuParseNote(raw) {
@@ -10779,7 +10842,7 @@ ${bodies}${sansAcheteurBody}
 
   _renderLvHistoryList() {
     const el     = document.getElementById('lvu-history-list');
-    const filter = S.lvuHistoryFilter || 'tous';
+    const filter = S.lvuHistoryFilter || 'disponibles';
     const rows   = (S.lvuHistoryRows || []).filter(row => {
       if (filter === 'disponibles') return !row.parti;
       if (filter === 'partis')      return !!row.parti;
@@ -10790,6 +10853,7 @@ ${bodies}${sansAcheteurBody}
       return;
     }
     el.innerHTML = `
+      <div style="overflow-x:auto;">
       <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
         <thead>
           <tr style="background:#EEF2FF;">
@@ -10831,7 +10895,8 @@ ${bodies}${sansAcheteurBody}
             </tr>`;
           }).join('')}
         </tbody>
-      </table>`;
+      </table>
+      </div>`;
   },
 
   async lvuDeleteLv(numero) {
