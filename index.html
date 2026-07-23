@@ -2790,14 +2790,22 @@
     <!-- ── VIEW : LVU — HISTORIQUE ────────────────────────────────────────── -->
     <div class="view" id="view-lvu-history">
       <div style="padding:16px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
           <h2 style="font-size:18px;font-weight:700;color:#1E293B;margin:0;">Historique LV / CMR</h2>
           <button onclick="App.lvuLoadHistory(true)"
             style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;">
             ↻ Actualiser
           </button>
         </div>
-        <div id="lvu-history-list">
+        <div id="lvu-history-filters" style="display:flex;gap:6px;margin-bottom:12px;">
+          <button onclick="App.lvuSetHistoryFilter('tous')" data-filter="tous"
+            style="border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;background:#1E293B;color:white;">Tous</button>
+          <button onclick="App.lvuSetHistoryFilter('disponibles')" data-filter="disponibles"
+            style="border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#475569;">Disponibles</button>
+          <button onclick="App.lvuSetHistoryFilter('partis')" data-filter="partis"
+            style="border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#475569;">Partis</button>
+        </div>
+        <div id="lvu-history-list" style="overflow-x:auto;">
           <div style="text-align:center;padding:40px;color:#94A3B8;font-size:14px;">Chargement…</div>
         </div>
       </div>
@@ -10534,10 +10542,7 @@ ${bodies}${sansAcheteurBody}
         transporteur_id: d.transporteur?.id || '',
         planning_codes: (d.marchandises || []).map(m => m.note).filter(Boolean),
         marchandises_desc: (d.marchandises || []).map(m => m.description).filter(Boolean).join(', '),
-        grutage: (S.lvu.loxamItems || []).some(i => {
-          const key = i.code || i.codeModule || i.module || '';
-          return (d.marchandises || []).some(m => m.note === key) && i.status && i.status.grutage;
-        }),
+        grutage: this._lvuCalcGrutage(d),
       };
       const r   = await _fetchWithTimeout(S.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) }, 30000);
       const res = await r.json();
@@ -10547,6 +10552,7 @@ ${bodies}${sansAcheteurBody}
         S.lvu.numero = null; S.lvu.display = null;
         if (document.getElementById('lvu-result-title')) document.getElementById('lvu-result-title').textContent = `✅ ${d.type} N° ${savedDisplay} enregistrée`;
         this.toast(`LV N° ${savedDisplay} enregistrée !`);
+        this._syncVoyageSupabase(d, savedDisplay); // portail transporteur — best-effort, ne bloque jamais le flux principal
         if (S.lvu.fromOpKey) {
           this._saveLvLinkRemote(S.lvu.fromOpKey, savedDisplay, savedDisplay);
           S.lvu.fromOpKey = null; S.lvu.fromOpNote = '';
@@ -10572,6 +10578,44 @@ ${bodies}${sansAcheteurBody}
         if (statusEl) statusEl.textContent = '❌ ' + (res.error || 'erreur inconnue');
       }
     } catch (e) { if (statusEl) statusEl.textContent = '❌ ' + e.message; }
+  },
+
+  // ── Portail transporteur — synchro Supabase (temps réel) ────────────────────
+  // Appelée juste après le succès de l'enregistrement AppScript/Drive existant.
+  // Best-effort : une erreur ici ne doit jamais bloquer ni afficher d'erreur
+  // dans le flux principal de création de LV — seule une trace console suffit.
+  _lvuCalcGrutage(d) {
+    return (S.lvu.loxamItems || []).some(i => {
+      const key = i.code || i.codeModule || i.module || '';
+      return (d.marchandises || []).some(m => m.note === key) && i.status && i.status.grutage;
+    });
+  },
+
+  async _syncVoyageSupabase(d, numero) {
+    if (!window.SupabaseDB || !numero) return;
+    try {
+      // Réutilise d.total.poids (déjà calculé par _lvuCollectFormData, qté incluse)
+      // plutôt que de recalculer — ce total est celui affiché sur la LV générée.
+      const { error } = await window.SupabaseDB.rpc('enregistrer_voyage', {
+        p_numero_lv:    String(numero),
+        p_type:         d.type || 'LV',
+        p_destination:  d.destinataire?.nom || '',
+        p_doc_annexe:   d.doc_annexe || '',
+        p_commande:     d.commande || '',
+        p_commentaire:  d.note || '',
+        p_poids:        parseFloat(d.total?.poids) || null,
+        p_ml:           parseFloat(d.total?.ml) || null,
+        p_grutage:      this._lvuCalcGrutage(d),
+        p_transporteur: d.transporteur?.nom || d.transporteur?.id || '',
+        // BCB : la CMR est créée au moment du départ du matériel (contrairement
+        // à LOXAM, créée en avance) — donc déjà parti à la création.
+        p_parti:        d.source === 'bcb',
+        p_marchandises_desc: (d.marchandises || []).map(m => m.description).filter(Boolean).join(', '),
+      });
+      if (error) console.warn('[_syncVoyageSupabase] portail non synchronisé :', error.message);
+    } catch (e) {
+      console.warn('[_syncVoyageSupabase] portail non synchronisé :', e.message);
+    }
   },
 
   lvuSelectTransporteur(idx) {
@@ -10703,34 +10747,91 @@ ${bodies}${sansAcheteurBody}
     const el = document.getElementById('lvu-history-list');
     el.innerHTML = '<div style="text-align:center;padding:40px;color:#94A3B8;font-size:14px;">Chargement…</div>';
     try {
-      const r    = await _fetchWithTimeout(S.apiUrl + '?action=lv_history', {}, 15000);
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=lv_history&limit=100', {}, 15000);
       const d    = await r.json();
-      const rows = d.history || d.rows || [];
-      if (!rows.length) {
-        el.innerHTML = '<div style="text-align:center;padding:40px;color:#94A3B8;font-size:14px;">Aucun document trouvé</div>';
-        return;
-      }
-      el.innerHTML = rows.map(row => `
-        <div style="background:white;border-radius:10px;padding:12px 14px;margin-bottom:8px;border:1px solid #E2E8F0;">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
-            <span style="font-size:14px;font-weight:700;color:#1E293B;">${row.type||'LV'} N° ${row.numero||'—'}</span>
-            <span style="font-size:12px;color:#64748B;">${row.date||''}</span>
-          </div>
-          <div style="font-size:13px;color:#475569;">${row.destinataire||'—'}</div>
-          ${row.expediteur && row.expediteur !== 'SONOTRAD' ? `<div style="font-size:11px;color:#94A3B8;margin-top:1px;">${row.expediteur}</div>` : ''}
-          ${row.conducteur?`<div style="font-size:12px;color:#94A3B8;margin-top:2px;">${row.conducteur} · ${row.immat_moteur||''}</div>`:''}
-          ${row.commande?`<div style="font-size:12px;color:#94A3B8;">Cde : ${row.commande}</div>`:''}
-          <div style="display:flex;align-items:center;gap:8px;margin-top:7px;flex-wrap:wrap;">
-            ${row.pdfUrl?`<a href="${row.pdfUrl}" target="_blank" rel="noopener"
-              style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:8px;padding:5px 11px;font-size:11px;font-weight:600;text-decoration:none;">📄 PDF</a>`
-              :'<span style="font-size:11px;color:#CBD5E1;">Pas de PDF</span>'}
-            <button onclick="App.lvuDeleteLv('${row.numero}')"
-              style="background:#FEE2E2;color:#B91C1C;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;">🗑</button>
-          </div>
-        </div>`).join('');
+      S.lvuHistoryRows = d.history || d.rows || [];
+      this._renderLvHistoryList();
     } catch (e) {
       el.innerHTML = `<div style="text-align:center;padding:40px;color:#EF4444;font-size:13px;">Erreur : ${e.message}</div>`;
     }
+  },
+
+  // Note encodée en préfixe texte à la création (voir _lvuCollectFormData /
+  // masterfile _saveLv) — même convention pour décoder.
+  _lvuParseNote(raw) {
+    const marker = '!!! GRUTAGE A LA LIVRAISON !!!';
+    const text = String(raw || '');
+    if (text.startsWith(marker)) {
+      return { grutage: true, commentaire: text.slice(marker.length).replace(/^\n/, '') };
+    }
+    return { grutage: false, commentaire: text };
+  },
+
+  lvuSetHistoryFilter(filter) {
+    S.lvuHistoryFilter = filter;
+    document.querySelectorAll('#lvu-history-filters button').forEach(b => {
+      const active = b.dataset.filter === filter;
+      b.style.background = active ? '#1E293B' : 'white';
+      b.style.color      = active ? 'white'   : '#475569';
+    });
+    this._renderLvHistoryList();
+  },
+
+  _renderLvHistoryList() {
+    const el     = document.getElementById('lvu-history-list');
+    const filter = S.lvuHistoryFilter || 'tous';
+    const rows   = (S.lvuHistoryRows || []).filter(row => {
+      if (filter === 'disponibles') return !row.parti;
+      if (filter === 'partis')      return !!row.parti;
+      return true;
+    });
+    if (!rows.length) {
+      el.innerHTML = '<div style="text-align:center;padding:40px;color:#94A3B8;font-size:14px;">Aucun document trouvé</div>';
+      return;
+    }
+    el.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+        <thead>
+          <tr style="background:#EEF2FF;">
+            ${['LV','Créée le','Destinataire','Marchandise','Conducteur','Commande','Note','Grutage','Parti','Actions']
+              .map(h => `<th style="text-align:left;padding:8px 10px;color:#1E293B;font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:0.3px;white-space:nowrap;">${h}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(row => {
+            const { grutage, commentaire } = this._lvuParseNote(row.note);
+            const dimmed = row.parti ? 'opacity:0.55;' : '';
+            return `
+            <tr style="border-top:1px solid #E2E8F0;${dimmed}">
+              <td style="padding:8px 10px;white-space:nowrap;"><strong>${row.numero||'—'}</strong> <span style="font-size:9.5px;font-weight:700;color:#1D4ED8;background:#EFF6FF;border-radius:5px;padding:0 5px;">${row.type||'LV'}</span></td>
+              <td style="padding:8px 10px;white-space:nowrap;color:#64748B;">${row.date||''}</td>
+              <td style="padding:8px 10px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${row.destinataire||''}">
+                ${row.destinataire||'—'}
+                ${row.expediteur && row.expediteur !== 'SONOTRAD' ? `<div style="font-size:10px;color:#94A3B8;">${row.expediteur}</div>` : ''}
+              </td>
+              <td style="padding:8px 10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#475569;" title="${row.marchandises_desc||''}">${row.marchandises_desc||'<span style="color:#CBD5E1;">-</span>'}</td>
+              <td style="padding:8px 10px;white-space:nowrap;color:#94A3B8;">${row.conducteur?`${row.conducteur} · ${row.immat_moteur||''}`:'-'}</td>
+              <td style="padding:8px 10px;white-space:nowrap;color:#94A3B8;">${row.commande||'-'}</td>
+              <td style="padding:8px 10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#92400E;font-style:italic;" title="${commentaire}">${commentaire||'<span style="color:#CBD5E1;font-style:normal;">-</span>'}</td>
+              <td style="padding:8px 10px;white-space:nowrap;">${grutage?'<span style="font-size:10.5px;font-weight:700;background:#FEF3C7;color:#92400E;border-radius:6px;padding:2px 7px;">grutage</span>':'<span style="color:#CBD5E1;">-</span>'}</td>
+              <td style="padding:8px 10px;white-space:nowrap;">${row.parti?'<span style="font-size:10.5px;font-weight:700;color:#64748B;">🚚 Parti</span>':'<span style="font-size:10.5px;font-weight:700;color:#15803D;">✅ Dispo</span>'}</td>
+              <td style="padding:8px 10px;white-space:nowrap;">
+                <div style="display:flex;align-items:center;gap:6px;">
+                  ${row.pdfUrl?`<a href="${row.pdfUrl}" target="_blank" rel="noopener" title="PDF"
+                    style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:6px;padding:4px 8px;font-size:11px;text-decoration:none;">📄</a>`
+                    :''}
+                  <button onclick="App.openLvNoteModal('${row.numero}')" title="Éditer note/grutage"
+                    style="background:#F1F5F9;color:#475569;border:none;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;">✏️</button>
+                  <button onclick="App.lvuTogglePartiHistory('${row.numero}', ${row.parti===true})" title="${row.parti?'Remettre disponible':'Marquer parti'}"
+                    style="background:#F1F5F9;color:#475569;border:none;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;">${row.parti?'↩':'🚚'}</button>
+                  <button onclick="App.lvuDeleteLv('${row.numero}')" title="Supprimer"
+                    style="background:#FEE2E2;color:#B91C1C;border:none;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;">🗑</button>
+                </div>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
   },
 
   async lvuDeleteLv(numero) {
@@ -10749,6 +10850,100 @@ ${bodies}${sansAcheteurBody}
         this.lvuLoadHistory();
       } else this.toast('Erreur : ' + (d.error || 'inconnue'));
     } catch(e) { this.toast('Erreur : ' + e.message); }
+  },
+
+  // ── Édition note/grutage depuis l'Historique (sans toucher au PDF déjà généré) ──
+  openLvNoteModal(numero) {
+    const row = (S.lvuHistoryRows || []).find(r => String(r.numero) === String(numero));
+    if (!row) return;
+    S._lvNoteModalNumero = numero;
+    const { grutage, commentaire } = this._lvuParseNote(row.note);
+    const refEl = document.getElementById('lvnote-modal-ref');
+    if (refEl) refEl.textContent = `${row.type||'LV'} N° ${row.numero} — ${row.destinataire||''}`;
+    const ta = document.getElementById('lvnote-modal-textarea');
+    if (ta) { ta.value = commentaire; }
+    const cb = document.getElementById('lvnote-modal-grutage');
+    if (cb) cb.checked = grutage;
+    const modal = document.getElementById('lvnote-modal');
+    if (modal) modal.style.display = 'flex';
+  },
+
+  closeLvNoteModal() {
+    const modal = document.getElementById('lvnote-modal');
+    if (modal) modal.style.display = 'none';
+    S._lvNoteModalNumero = null;
+  },
+
+  async saveLvNoteModal() {
+    const numero = S._lvNoteModalNumero;
+    if (!numero) return;
+    const commentaire = document.getElementById('lvnote-modal-textarea')?.value.trim() || '';
+    const grutage     = document.getElementById('lvnote-modal-grutage')?.checked === true;
+    const btn = document.getElementById('lvnote-modal-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'lv_update_note', numero, commentaire, grutage })
+      }, 20000);
+      const d = await r.json();
+      if (d.status !== 'ok') throw new Error(d.error || 'erreur inconnue (tableur)');
+
+      // Portail transporteur (Supabase) — pas best-effort ici : action volontaire
+      // de l'utilisateur, un échec doit rester visible. Le voyage peut ne pas
+      // exister côté Supabase (ex: créé avant _syncVoyageSupabase, ou jamais
+      // synchronisé) — la fonction répond alors {ok:false} sans erreur de
+      // transport, donc on vérifie aussi data.ok (pas seulement `error`).
+      let portailKo = false;
+      if (window.SupabaseDB) {
+        const { data, error } = await window.SupabaseDB.rpc('modifier_voyage_note', {
+          p_numero_lv:   String(numero).padStart(5, '0'),
+          p_commentaire: commentaire,
+          p_grutage:     grutage,
+        });
+        if (error) throw new Error(error.message + ' (portail)');
+        if (data && data.ok === false) portailKo = true;
+      }
+
+      this.toast(portailKo
+        ? 'Note mise à jour (tableur) — portail non synchronisé (voyage inconnu de Supabase)'
+        : 'Note mise à jour pour ' + numero);
+      this.closeLvNoteModal();
+      this.lvuLoadHistory();
+    } catch (e) {
+      this.toast('Erreur : ' + e.message);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '✓ Enregistrer'; }
+    }
+  },
+
+  // ── Marquer/démarquer "Parti" depuis l'Historique ────────────────────────
+  async lvuTogglePartiHistory(numero, currentParti) {
+    const nextParti = !currentParti;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'lv_mark_parti_by_numero', numero, parti: nextParti })
+      }, 20000);
+      const d = await r.json();
+      if (d.status !== 'ok') throw new Error(d.error || 'erreur inconnue (tableur)');
+
+      let portailKo = false;
+      if (window.SupabaseDB) {
+        const { data, error } = await window.SupabaseDB.rpc('marquer_parti', {
+          p_numero_lv: String(numero).padStart(5, '0'),
+          p_parti:     nextParti,
+        });
+        if (error) throw new Error(error.message + ' (portail)');
+        if (data && data.ok === false) portailKo = true;
+      }
+
+      const label = nextParti ? 'LV ' + numero + ' marquée partie' : 'LV ' + numero + ' remise disponible';
+      this.toast(portailKo ? label + ' (tableur) — portail non synchronisé' : label);
+      this.lvuLoadHistory();
+    } catch (e) {
+      this.toast('Erreur : ' + e.message);
+    }
   },
 
   /* ─ Annuaire ─ */
@@ -12807,6 +13002,32 @@ document.addEventListener('DOMContentLoaded', () => {
       style="width:100%;padding:12px;border:1.5px solid #CBD5E1;border-radius:10px;font-size:18px;text-align:center;box-sizing:border-box;margin-bottom:14px;"
       onkeydown="if(event.key==='Enter')App.saveSeuilModal()">
     <button onclick="App.saveSeuilModal()" id="seuil-modal-btn"
+      style="width:100%;padding:13px;border:none;background:var(--brand);color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
+      ✓ Enregistrer
+    </button>
+  </div>
+</div>
+
+<!-- ── MODAL : NOTE DE LIVRAISON / GRUTAGE (Historique LV/CMR) ─────────────── -->
+<div id="lvnote-modal" class="pose-overlay" style="display:none;" onclick="if(event.target===this)App.closeLvNoteModal()">
+  <div style="background:white;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;margin:0 auto;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <span style="font-size:20px;">📝</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:700;color:#1E293B;">Note de livraison</div>
+        <div id="lvnote-modal-ref" style="font-size:11px;color:#64748B;margin-top:1px;"></div>
+      </div>
+      <button onclick="App.closeLvNoteModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#475569;padding:2px;line-height:1;">✕</button>
+    </div>
+    <p style="font-size:11px;color:#94A3B8;margin:0 0 10px;">Ne modifie pas le PDF déjà généré (figé à la création) — seulement le suivi (tableur Archive + portail transporteur).</p>
+    <label style="font-size:12px;color:#64748B;font-weight:600;display:block;margin-bottom:6px;">Note (contrainte de livraison, date, etc.)</label>
+    <textarea id="lvnote-modal-textarea" rows="3"
+      style="width:100%;box-sizing:border-box;border:1.5px solid #CBD5E1;border-radius:10px;padding:10px;font-size:14px;outline:none;resize:vertical;font-family:inherit;margin-bottom:12px;"></textarea>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:16px;">
+      <input type="checkbox" id="lvnote-modal-grutage" style="width:18px;height:18px;">
+      Grutage à la livraison
+    </label>
+    <button onclick="App.saveLvNoteModal()" id="lvnote-modal-btn"
       style="width:100%;padding:13px;border:none;background:var(--brand);color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
       ✓ Enregistrer
     </button>

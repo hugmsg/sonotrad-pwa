@@ -369,6 +369,51 @@ Même si la case INTERNATIONALE n'est pas cochée, l'étiquette "CMR" doit appar
 
 ---
 
+## Onglet Historique — édition ponctuelle note/grutage + statut Parti (2026-07-23)
+
+`lvuLoadHistory()` / `_renderLvHistoryList()` (index.html ~10741-10835) affichent l'historique
+des LV/CMR en tableau (une ligne par document, en-tête de colonnes), avec 3 filtres segmentés
+(Tous / Disponibles / Partis, filtrage en mémoire sur `S.lvuHistoryRows` — pas de nouvel appel
+réseau). Colonnes : LV+type, date, destinataire (+expéditeur si ≠ SONOTRAD), marchandise
+(`marchandises_desc`), conducteur/immat, commande, note, grutage, statut Parti, actions (PDF,
+éditer note, toggle Parti, supprimer). Les lignes `parti === true` sont visuellement atténuées
+(`opacity: 0.55`) — discrètes mais toujours visibles, contrairement au portail qui, lui, les
+masque complètement.
+
+**Édition note/grutage** (`openLvNoteModal`/`closeLvNoteModal`/`saveLvNoteModal`, modal
+`#lvnote-modal`, calqué sur `#seuil-modal`) : permet de corriger la note de livraison et le
+grutage après coup (date de livraison décidée à la dernière minute, grutage non prévu au
+départ), **sans jamais toucher au PDF déjà généré** (figé à la création — volontairement, pas
+de bouton "modifier la LV" complet pour l'instant). Le grutage est encodé en préfixe texte
+dans la note (`!!! GRUTAGE A LA LIVRAISON !!!`), décodé par `_lvuParseNote()` — même convention
+qu'à la création (voir `_lvuCollectFormData` / `masterfile _saveLv`).
+
+Sauvegarde en deux temps, tous deux attendus (pas best-effort comme `_syncVoyageSupabase` — une
+action volontaire de l'utilisateur doit signaler un échec) :
+1. `action: 'lv_update_note'` (Apps Script) — écrit dans l'onglet **Archive** du fichier
+   LV/CMR, colonne Note (M, 13). Fonction `_updateLvNote()` dans
+   `sonotrad-scripts/masterfile/pwa_master.js`.
+2. RPC Supabase `modifier_voyage_note(p_numero_lv, p_commentaire, p_grutage)` — met à jour
+   `voyages.commentaire`/`voyages.grutage`, répercuté en temps réel sur le portail
+   transporteur. **Attention** : si le voyage n'existe pas côté Supabase (créé avant la mise en
+   place de `_syncVoyageSupabase`, ou jamais synchronisé), la fonction répond `{ok:false}` sans
+   erreur de transport JS — le code vérifie explicitement `data.ok` (pas seulement `error`) et
+   affiche un toast différent ("tableur mis à jour, portail non synchronisé").
+
+**Toggle Parti** (`lvuTogglePartiHistory(numero, currentParti)`) : même schéma en deux temps.
+1. `action: 'lv_mark_parti_by_numero'` (Apps Script, fonction `_markPartiByNumero()`) — écrit
+   colonne P (16) de l'Archive, et répercute en best-effort sur **Planning Sonotrad → Départs**
+   colonne J (10) si une ligne correspondante existe (LOXAM uniquement — no-op silencieux pour
+   les CMR BCB, qui n'ont pas de ligne Départs).
+2. RPC Supabase `marquer_parti` (existant, déjà utilisé par le trigger `onEditPartiSync`) —
+   répercuté en temps réel sur le portail transporteur.
+
+Testé en aller-retour sans changement de contenu sur une LV réelle (01613) avant et après ce
+correctif — voir historique git pour le detail du bug initial (vérification `error` seule,
+insuffisante face à un `{ok:false}` métier).
+
+---
+
 ## Évolutions futures prévues
 
 - [ ] **Mode remplissage progressif** : transporteur + expéditeur à l'étape chargement, réserves + destinataire + signatures à la livraison

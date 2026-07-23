@@ -1,0 +1,59 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// SONOTRAD — Portail transporteur
+// Synchro Supabase : coche "Parti" (colonne J, onglet "Départs")
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// DÉPLOYÉ le 2026-07-23 — ce fichier n'est plus la source de vérité.
+// Le code réel est dans sonotrad-scripts/planning/SyncPartiSupabase.js,
+// poussé en HEAD sur le projet Apps Script "planning" via clasp. Cette copie
+// est conservée ici comme référence historique.
+//
+// Il reste UNE étape manuelle pour activer le déclencheur (voir
+// sonotrad-pwa/CLAUDE_PORTAIL.md section "Marquage Parti") : exécuter
+// installPartiTrigger() une fois depuis l'éditeur Apps Script.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SUPABASE_URL       = 'https://ajewxwxerrjnnervzjwm.supabase.co';
+const SUPABASE_ANON_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqZXd4d3hlcnJqbm5lcnZ6andtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MDU5MDEsImV4cCI6MjA5NzA4MTkwMX0.NJcm1_tb4BcCSileiODYP0pKJ1LRVXFTIr2idQBrALg';
+const ONGLET_DEPARTS     = 'Départs';
+const COL_NUMERO_LV      = 2;   // colonne B
+const COL_PARTI          = 10;  // colonne J
+
+function onEditPartiSync(e) {
+  try {
+    const sheet = e.range.getSheet();
+    if (sheet.getName() !== ONGLET_DEPARTS) return;
+    if (e.range.getColumn() !== COL_PARTI) return;
+    if (e.range.getNumRows() > 1) return; // édition multi-cellules (collage) : ignorée volontairement, pas de sync en masse
+
+    const row = e.range.getRow();
+    if (row < 3) return; // lignes d'en-tête
+
+    const numeroBrut = sheet.getRange(row, COL_NUMERO_LV).getValue();
+    if (!numeroBrut) return;
+
+    // La colonne B est numérique (1659) mais numero_lv est stocké en 5 chiffres
+    // ('01659') côté Supabase, pour matcher exactement l'affichage LV/CMR.
+    const numeroLv = Utilities.formatString('%05d', Number(numeroBrut));
+    const parti    = e.range.getValue() === true;
+
+    const resp = UrlFetchApp.fetch(SUPABASE_URL + '/rest/v1/rpc/marquer_parti', {
+      method:             'post',
+      contentType:        'application/json',
+      headers: {
+        apikey:           SUPABASE_ANON_KEY,
+        Authorization:    'Bearer ' + SUPABASE_ANON_KEY,
+      },
+      payload: JSON.stringify({ p_numero_lv: numeroLv, p_parti: parti }),
+      muteHttpExceptions: true,
+    });
+
+    const status = resp.getResponseCode();
+    if (status >= 300) {
+      console.error('[sync-parti-supabase] échec (' + status + ') pour LV ' + numeroLv + ' : ' + resp.getContentText());
+    }
+  } catch (err) {
+    console.error('[sync-parti-supabase] erreur : ' + err.message);
+  }
+}

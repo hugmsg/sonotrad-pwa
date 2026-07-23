@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portail transporteur — SONOTRAD</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<style>
+  :root {
+    --navy: #1f3a5f;
+    --navy-light: #dde6f2;
+    --gray-border: #e2e8f0;
+    --gray-text: #64748b;
+    --bg: #f8fafc;
+    --danger: #b91c1c;
+    --danger-bg: #fee2e2;
+    --warn: #92400e;
+    --warn-bg: #fef3c7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: #1e293b;
+  }
+  header {
+    background: var(--navy); color: white; padding: 18px 20px;
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+  }
+  header h1 { font-size: 18px; font-weight: 700; margin: 0; }
+  header p { font-size: 12px; margin: 2px 0 0; color: rgba(255,255,255,0.75); }
+  .status { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
+  .dot.off { background: #ef4444; }
+  main { max-width: 1800px; margin: 0 auto; padding: 20px 28px; }
+  .cards { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; margin-bottom: 18px; max-width: 420px; }
+  .card { background: white; border: 1px solid var(--gray-border); border-radius: 10px; padding: 14px 16px; }
+  .card .label { font-size: 12px; color: var(--gray-text); margin: 0 0 4px; }
+  .card .value { font-size: 22px; font-weight: 700; margin: 0; color: var(--navy); }
+  .toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+  .toolbar button {
+    font-size: 13px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--gray-border);
+    background: white; cursor: pointer; font-weight: 600; color: #475569;
+  }
+  .toolbar button:hover { background: #f8fafc; }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    main { max-width: 640px; }
+  }
+
+  #panel-map { position: sticky; top: 20px; }
+  @media (max-width: 900px) { #panel-map { position: static; } }
+  #map-wrap { background: white; border: 1px solid var(--gray-border); border-radius: 10px; padding: 12px; }
+  #map { height: 620px; border-radius: 8px; }
+  @media (max-width: 900px) { #map { height: 420px; } }
+  .city-label {
+    background: white; border: 1px solid var(--gray-border); border-radius: 6px;
+    padding: 2px 7px; font-size: 12px; font-weight: 600; color: #1e293b;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  }
+  .map-caption { font-size: 12px; color: var(--gray-text); margin-top: 8px; }
+
+  #panel-list { background: white; border: 1px solid var(--gray-border); border-radius: 10px; overflow: hidden; }
+  #voyage-table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13.5px; }
+  thead th {
+    text-align: left; padding: 11px 14px; background: var(--navy-light); color: var(--navy);
+    font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap;
+  }
+  tbody td { padding: 11px 14px; border-top: 1px solid var(--gray-border); vertical-align: top; }
+  tbody tr { cursor: pointer; transition: background-color 0.12s; }
+  tbody tr:hover, tbody tr.row-highlight { background: var(--navy-light); }
+  .col-lv       { width: 12%; }
+  .col-date     { width: 9%; }
+  .col-dest     { width: 19%; }
+  .col-march    { width: 27%; }
+  .col-poids    { width: 7%; }
+  .col-ml       { width: 7%; }
+  .col-grutage  { width: 9%; }
+  .col-contrainte { width: 10%; }
+  .nowrap { white-space: nowrap; }
+  .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .voyage-num { font-weight: 700; color: #1e293b; }
+  .voyage-type {
+    display: inline-block; font-size: 9.5px; font-weight: 700; letter-spacing: 0.3px;
+    color: var(--navy); background: white; border: 1px solid var(--navy-light); border-radius: 5px;
+    padding: 0 5px; margin-left: 4px; vertical-align: 1px;
+  }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 6px; font-size: 10.5px; font-weight: 700; }
+  .badge-grutage { background: var(--warn-bg); color: var(--warn); }
+  .constraint-text { color: #92400e; font-style: italic; }
+  .muted { color: #94a3b8; }
+  .empty { text-align: center; padding: 40px; color: var(--gray-text); background: white; border: 1px solid var(--gray-border); border-radius: 10px; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 10px 18px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  footer { text-align: center; padding: 20px; font-size: 11px; color: #94a3b8; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Portail transporteur — SONOTRAD</h1>
+    <p>Voyages disponibles en temps réel</p>
+  </div>
+  <div class="status"><span class="dot" id="status-dot"></span><span id="status-text">Connexion…</span></div>
+</header>
+
+<main>
+  <div class="cards">
+    <div class="card"><p class="label">Voyages disponibles</p><p class="value" id="stat-count">—</p></div>
+    <div class="card"><p class="label">Destinations distinctes</p><p class="value" id="stat-dest">—</p></div>
+  </div>
+
+  <div class="toolbar">
+    <button id="btn-refresh">Actualiser</button>
+  </div>
+
+  <div class="layout">
+    <div id="panel-list">
+      <div id="voyage-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-lv">LV</th><th class="col-date">Créée le</th><th class="col-dest">Destination</th>
+              <th class="col-march">Marchandise</th><th class="col-poids">Poids</th><th class="col-ml">ML</th>
+              <th class="col-grutage">Grutage</th><th class="col-contrainte">Contrainte</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="empty-msg" style="display:none;">Aucun voyage disponible pour le moment.</div>
+    </div>
+
+    <div id="panel-map">
+      <div id="map-wrap">
+        <div id="map"></div>
+      </div>
+      <p class="map-caption">Carte interactive (zoom / déplacement) — positionnement par ville, approximatif tant que le géocodage reste basé sur une table de correspondance manuelle. Taille du repère = nombre de voyages.</p>
+    </div>
+  </div>
+</main>
+
+<footer>SONOTRAD — Javron-les-Chapelles (53) · page mise à jour automatiquement, aucune action requise</footer>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+const SUPABASE_URL  = 'https://ajewxwxerrjnnervzjwm.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqZXd4d3hlcnJqbm5lcnZ6andtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MDU5MDEsImV4cCI6MjA5NzA4MTkwMX0.NJcm1_tb4BcCSileiODYP0pKJ1LRVXFTIr2idQBrALg';
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// Ordre important : mots-clés les plus spécifiques en premier.
+// Pour ajouter une nouvelle destination : une ligne suffit, [mot-clé, ville affichée, lat, lon].
+const VILLES = [
+  ['SAINT BRIEUC', 'Saint-Brieuc', 48.51, -2.77], ['LORIENT', 'Lorient', 47.75, -3.37],
+  ['DIEPPE', 'Dieppe', 49.92, 1.08], ['VANNES', 'Vannes', 47.66, -2.76],
+  ['MORLAIX', 'Morlaix', 48.58, -3.83], ['SAINT AUBIN SUR GAILLON', 'St-Aubin-sur-Gaillon', 49.17, 1.32],
+  ['RITCHIE BROS', 'St-Aubin-sur-Gaillon', 49.17, 1.32], ['SAINT PATERNE', 'Saint-Paterne (Alençon)', 48.43, 0.09],
+  ['ALENÇON', 'Alençon', 48.43, 0.09], ['ALENCON', 'Alençon', 48.43, 0.09],
+  ['BORDEAUX', 'Bordeaux', 44.84, -0.58], ['DINARD', 'Dinard', 48.63, -2.07],
+  ['MANDELIEU', 'Mandelieu-la-Napoule', 43.55, 6.94], ['SAINT MALO', 'Saint-Malo', 48.65, -2.03],
+  ['CLERMONT FERRAND', 'Clermont-Ferrand', 45.78, 3.09], ['PERPIGNAN', 'Perpignan', 42.70, 2.90],
+  ['AMIENS', 'Amiens', 49.89, 2.30], ['TOULON', 'Toulon', 43.12, 5.93],
+  ['BOURGES', 'Bourges', 47.08, 2.40], ['BLOIS', 'Blois', 47.59, 1.33],
+  ['AUXERRE', 'Auxerre', 47.80, 3.57], ['METZ', 'Metz', 49.12, 6.18],
+  ['MONTLUÇON', 'Montluçon', 46.34, 2.61], ['MONTLUCON', 'Montluçon', 46.34, 2.61],
+  ['LIMOGES', 'Limoges', 45.83, 1.26], ['SAINT FLOUR', 'Saint-Flour', 45.03, 3.09],
+  ['MOULINS', 'Moulins', 46.57, 3.33], ['LANNION', 'Lannion', 48.73, -3.46],
+  ['SAINT JACQUES DE LA LANDE', 'St-Jacques-de-la-Lande', 48.08, -1.72], ['RENNES', 'Rennes', 48.11, -1.68],
+  ['ARNAGE', 'Le Mans (Arnage)', 48.00, 0.20], ['LE MANS', 'Le Mans', 48.00, 0.20],
+  ['VAL DE REUIL', 'Val-de-Reuil', 49.27, 1.23], ['ORLEANS', 'Orléans', 47.90, 1.90], ['ORLÉANS', 'Orléans', 47.90, 1.90],
+  ['AVRANCHES', 'Avranches', 48.68, -1.36], ['CARHAIX', 'Carhaix', 48.28, -3.58],
+  ['LE HAVRE', 'Le Havre', 49.49, 0.11], ['LAVAL', 'Laval', 48.07, -0.77],
+  ['LA ROCHE', 'La Roche-sur-Yon', 46.67, -1.43], ['ROANNE', 'Roanne', 46.03, 4.07],
+  ['GRENOBLE', 'Grenoble', 45.19, 5.72], ['MULHOUSE', 'Mulhouse', 47.75, 7.34],
+  ['NEVERS', 'Nevers', 46.99, 3.16], ['AGEN', 'Agen', 44.20, 0.62],
+  ['NANCY', 'Nancy', 48.69, 6.18], ['PERIGUEUX', 'Périgueux', 45.18, 0.72], ['PÉRIGUEUX', 'Périgueux', 45.18, 0.72],
+  ['CHALON', 'Chalon-sur-Saône', 46.78, 4.85], ['LAMBALLE', 'Lamballe', 48.47, -2.52],
+  ['LONS LE SAUNIER', 'Lons-le-Saunier', 46.67, 5.55], ['LA HAGUE', 'La Hague', 49.65, -1.64],
+  ['PONTIVY', 'Pontivy', 48.07, -2.97], ['ROCHEFORT', 'Rochefort', 45.94, -0.96],
+  ['TOURS', 'Tours', 47.39, 0.69], ['GOUSSAINVILLE', 'Goussainville', 49.02, 2.47],
+  ['AULNAY', 'Aulnay-sous-Bois', 48.94, 2.49], ['GENNEVILLIERS', 'Gennevilliers', 48.93, 2.30],
+  ['SAINT JEAN DE VEDAS', 'St-Jean-de-Védas', 43.58, 3.83], ['REDON', 'Redon', 47.65, -2.08],
+  ['SAINT MEMMIE', 'Châlons-en-Champagne', 48.96, 4.37], ['BERGERAC', 'Bergerac', 44.85, 0.48],
+  ['CALAIS', 'Calais', 50.95, 1.86], ['GRANVILLE', 'Granville', 48.84, -1.60],
+  ['COLMAR', 'Colmar', 48.08, 7.36], ['MEAUX', 'Meaux', 48.96, 2.88],
+  ['RODEZ', 'Rodez', 44.35, 2.57], ['VARENNES VAUZELLES', 'Varennes-Vauzelles', 46.99, 3.13],
+  ['JAVRON', 'Javron-les-Chapelles', 48.44, -0.42],
+];
+
+function trouverVille(destination) {
+  const up = (destination || '').toUpperCase();
+  for (const [motCle, ville, lat, lon] of VILLES) {
+    if (up.includes(motCle)) return { ville, lat, lon };
+  }
+  return null;
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+
+let currentVoyages = [];
+let leafletMap = null;
+let markersLayer = null;
+
+// Un marqueur = une ville, qui peut regrouper plusieurs voyages. Ces maps
+// relient les deux sens pour la sélection croisée liste <-> carte.
+let cityMarkers   = {}; // ville -> L.circleMarker
+let cityToNumeros = {}; // ville -> [numero_lv, ...]
+let numeroToCity  = {}; // numero_lv -> ville
+let selectedCity  = null;
+
+const MARKER_STYLE       = { color: '#1f3a5f', weight: 1.5, fillColor: '#1f3a5f', fillOpacity: 0.35 };
+const MARKER_STYLE_HI    = { color: '#1f3a5f', weight: 3,   fillColor: '#f59e0b', fillOpacity: 0.75 };
+
+function initMap() {
+  leafletMap = L.map('map').setView([46.6, 2.2], 6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 18,
+  }).addTo(leafletMap);
+  markersLayer = L.layerGroup().addTo(leafletMap);
+}
+
+// Survol/sélection croisée : met en évidence le marqueur d'une ville + les
+// lignes du tableau correspondantes (highlightCity), ou revient à l'état
+// courant (clearHighlight -> ré-applique selectedCity s'il y en a un).
+function highlightCity(city) {
+  Object.entries(cityMarkers).forEach(([name, marker]) => {
+    marker.setStyle(name === city ? MARKER_STYLE_HI : MARKER_STYLE);
+    if (name === city) marker.bringToFront();
+  });
+  document.querySelectorAll('#tbody tr').forEach(tr => {
+    tr.classList.toggle('row-highlight', !!city && tr.dataset.city === city);
+  });
+}
+function clearHighlight() { highlightCity(selectedCity); }
+
+function selectCity(city, { pan } = {}) {
+  selectedCity = city;
+  highlightCity(city);
+  if (pan && cityMarkers[city]) {
+    leafletMap.flyTo(cityMarkers[city].getLatLng(), Math.max(leafletMap.getZoom(), 8), { duration: 0.5 });
+  }
+}
+
+function renderMapMarkers(dispo) {
+  if (!markersLayer) return;
+  markersLayer.clearLayers();
+  cityMarkers = {}; cityToNumeros = {}; numeroToCity = {};
+  const cities = {};
+  dispo.forEach(v => {
+    const loc = trouverVille(v.destination);
+    if (!loc) return;
+    const key = loc.ville;
+    if (!cities[key]) cities[key] = { ...loc, count: 0 };
+    cities[key].count++;
+    numeroToCity[v.numero_lv] = key;
+    (cityToNumeros[key] = cityToNumeros[key] || []).push(v.numero_lv);
+  });
+  Object.values(cities).forEach(c => {
+    const marker = L.circleMarker([c.lat, c.lon], { radius: 6 + c.count * 3, ...MARKER_STYLE })
+      .bindTooltip(`${c.ville} (${c.count})`, { permanent: true, direction: 'right', offset: [8, 0], className: 'city-label' })
+      .on('click',     () => scrollToCity(c.ville))
+      .on('mouseover',  () => highlightCity(c.ville))
+      .on('mouseout',   () => clearHighlight())
+      .addTo(markersLayer);
+    cityMarkers[c.ville] = marker;
+  });
+  // La sélection courante peut viser une ville qui n'a plus de marqueur
+  // (voyage parti/disparu entre deux rafraîchissements) — on la nettoie.
+  if (selectedCity && !cityMarkers[selectedCity]) selectedCity = null;
+  highlightCity(selectedCity);
+}
+
+function scrollToCity(city) {
+  selectCity(city);
+  const firstNumero = (cityToNumeros[city] || [])[0];
+  const row = firstNumero && document.querySelector(`#tbody tr[data-numero="${CSS.escape(firstNumero)}"]`);
+  if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function render() {
+  const dispo = currentVoyages.filter(v => !v.parti);
+  document.getElementById('stat-count').textContent = dispo.length;
+  const villesVues = new Set(dispo.map(v => (trouverVille(v.destination) || {}).ville || v.destination));
+  document.getElementById('stat-dest').textContent = villesVues.size;
+
+  const tbody    = document.getElementById('tbody');
+  const emptyMsg = document.getElementById('empty-msg');
+  if (!dispo.length) {
+    tbody.innerHTML = '';
+    emptyMsg.style.display = 'block';
+  } else {
+    emptyMsg.style.display = 'none';
+    tbody.innerHTML = dispo
+      .sort((a, b) => new Date(b.date_creation) - new Date(a.date_creation))
+      .map(v => {
+        const marchandise = (v.marchandises_desc || '').trim();
+        const city = (trouverVille(v.destination) || {}).ville || '';
+        return `
+        <tr data-numero="${escapeHtml(v.numero_lv)}" data-city="${escapeHtml(city)}">
+          <td class="col-lv nowrap"><span class="voyage-num">${escapeHtml(v.numero_lv)}</span><span class="voyage-type">${escapeHtml(v.type || 'LV')}</span></td>
+          <td class="col-date muted nowrap">${new Date(v.date_creation).toLocaleDateString('fr-FR')}</td>
+          <td class="col-dest ellipsis" title="${escapeHtml(v.destination)}">${escapeHtml(v.destination) || '-'}</td>
+          <td class="col-march ellipsis" title="${escapeHtml(marchandise)}">${marchandise ? escapeHtml(marchandise) : '<span class="muted">-</span>'}</td>
+          <td class="col-poids nowrap">${v.poids ? escapeHtml(v.poids) + ' t' : '<span class="muted">-</span>'}</td>
+          <td class="col-ml nowrap">${v.ml ? escapeHtml(v.ml) + ' ml' : '<span class="muted">-</span>'}</td>
+          <td class="col-grutage nowrap">${v.grutage ? '<span class="badge badge-grutage">grutage</span>' : '<span class="muted">-</span>'}</td>
+          <td class="col-contrainte ellipsis constraint-text" title="${escapeHtml(v.commentaire)}">${v.commentaire ? escapeHtml(v.commentaire) : '<span class="muted">-</span>'}</td>
+        </tr>`;
+      }).join('');
+
+    tbody.querySelectorAll('tr[data-numero]').forEach(tr => {
+      const city = tr.dataset.city;
+      if (!city) return;
+      tr.addEventListener('mouseenter', () => highlightCity(city));
+      tr.addEventListener('mouseleave', () => clearHighlight());
+      tr.addEventListener('click',      () => selectCity(city, { pan: true }));
+    });
+  }
+
+  renderMapMarkers(dispo);
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+async function chargerVoyages() {
+  const { data, error } = await db
+    .from('voyages')
+    .select('numero_lv, type, date_creation, destination, poids, ml, grutage, commentaire, marchandises_desc, parti')
+    .order('date_creation', { ascending: false })
+    .limit(300);
+  if (error) {
+    document.getElementById('status-text').textContent = 'Erreur de chargement';
+    document.getElementById('status-dot').classList.add('off');
+    console.error(error);
+    return;
+  }
+  currentVoyages = data || [];
+  render();
+}
+
+function setupRealtime() {
+  db.channel('voyages-portail')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'voyages' }, payload => {
+      const row = payload.new;
+      if (!row) return;
+      const idx = currentVoyages.findIndex(v => v.numero_lv === row.numero_lv);
+      if (idx >= 0) currentVoyages[idx] = row; else currentVoyages.unshift(row);
+      render();
+      if (payload.eventType === 'INSERT') showToast('Nouveau voyage : LV ' + row.numero_lv);
+      if (payload.eventType === 'UPDATE' && row.parti) showToast('LV ' + row.numero_lv + ' enlevée');
+    })
+    .subscribe(status => {
+      const dot = document.getElementById('status-dot');
+      const txt = document.getElementById('status-text');
+      if (status === 'SUBSCRIBED') { dot.classList.remove('off'); txt.textContent = 'Connecté — mise à jour en direct'; }
+      else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { dot.classList.add('off'); txt.textContent = 'Connexion perdue — réessai…'; }
+    });
+}
+
+document.getElementById('btn-refresh').addEventListener('click', chargerVoyages);
+window.addEventListener('resize', () => { if (leafletMap) leafletMap.invalidateSize(); });
+
+initMap();
+chargerVoyages();
+setupRealtime();
+// Filet de sécurité si la connexion realtime tombe silencieusement : réactualisation périodique
+setInterval(chargerVoyages, 5 * 60 * 1000);
+</script>
+</body>
+</html>
