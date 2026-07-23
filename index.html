@@ -10602,6 +10602,7 @@ ${bodies}${sansAcheteurBody}
         // BCB : la CMR est créée au moment du départ du matériel (contrairement
         // à LOXAM, créée en avance) — donc déjà parti à la création.
         p_parti:        d.source === 'bcb',
+        p_marchandises_desc: (d.marchandises || []).map(m => m.description).filter(Boolean).join(', '),
       });
       if (error) console.warn('[_syncVoyageSupabase] portail non synchronisé :', error.message);
     } catch (e) {

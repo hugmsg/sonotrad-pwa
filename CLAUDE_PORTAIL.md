@@ -148,16 +148,40 @@ a posteriori de façon fiable).
 
 ---
 
+## Mise en page (2026-07-23) — liste + carte côte à côte
+
+Sur demande de Hugo, la page n'a plus d'onglets Liste/Carte : les deux sont affichées en
+permanence, liste à gauche / carte à droite (`.layout { grid-template-columns: 1fr 1fr }`),
+empilées verticalement sous 900px de large (une seule colonne, carte au-dessus de la liste dans
+le flux DOM). La carte est en `position: sticky` côté desktop pour rester visible pendant le
+scroll de la liste.
+
+La liste est passée d'un `<table>` à des cartes (`.voyage-card`) — plus adapté pour afficher un
+extrait de la description marchandises sans exploser en largeur. Chaque carte affiche : n°
+LV + badge type (LV/CMR), date ; destination ; extrait marchandises (`marchandises_desc`,
+tronqué sur une ligne avec ellipsis CSS, `title` avec le texte complet) ; poids/ml/badge
+grutage ; contrainte (`commentaire`) en italique si présente. Le total "Mètres linéaires
+cumulés" a été retiré des cartes statistiques (ne reste que Voyages disponibles / Destinations
+distinctes) — jugé peu utile par Hugo.
+
+`marchandises_desc` est une nouvelle colonne sur `voyages` (migration
+`20260723100000_voyages_marchandises_desc.sql`), alimentée par `_syncVoyageSupabase()` dans
+`index.html` (`(d.marchandises || []).map(m => m.description)...`), comme le fait déjà le
+payload envoyé à l'Apps Script pour l'archive PDF. **Elle est `NULL` pour tous les voyages
+backfillés le 2026-07-22** (`lv_history`/l'Archive Google Sheet ne stockent pas cette donnée) —
+seules les nouvelles LV/CMR créées après ce commit l'auront.
+
 ## Carte du portail
 
-La carte est maintenant une vraie carte interactive **Leaflet + tuiles OpenStreetMap**
+La carte est une vraie carte interactive **Leaflet + tuiles OpenStreetMap**
 (zoom, déplacement, tuiles réelles) — chargée via CDN (`unpkg.com/leaflet@1.9.4`), cohérent
 avec le principe "page statique autonome" : pas de clé API, pas de compte à créer.
 
-- La carte Leaflet est initialisée à la demande (`initMapIfNeeded()`), au premier clic sur
-  l'onglet "Carte" — pas au chargement de la page, pour éviter le bug classique de Leaflet
-  initialisé dans un conteneur `display:none` (tuiles mal dimensionnées). Un
-  `invalidateSize()` est appelé juste après pour être sûr.
+- La carte Leaflet est initialisée directement au chargement de la page (`initMap()`) —
+  possible depuis le passage à la mise en page liste+carte côte à côte (le conteneur n'est
+  plus jamais `display:none`, donc plus besoin d'init lazy + `invalidateSize()` au clic comme
+  avant le 2026-07-23). Un `invalidateSize()` reste appelé au `resize` de la fenêtre (utile pour
+  le passage desktop ↔ mobile).
 - Les marqueurs sont des `L.circleMarker` (taille = nombre de voyages) avec un tooltip
   permanent affichant `Ville (n)`, regénérés à chaque `render()` via `renderMapMarkers()`.
 - Le géocodage reste la table `VILLES` (mot-clé → ville/lat/lon) codée en dur — Leaflet ne

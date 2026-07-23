@@ -31,32 +31,59 @@
   .status { display: flex; align-items: center; gap: 6px; font-size: 12px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
   .dot.off { background: #ef4444; }
-  main { max-width: 980px; margin: 0 auto; padding: 20px; }
-  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
+  main { max-width: 1280px; margin: 0 auto; padding: 20px; }
+  .cards { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; margin-bottom: 18px; max-width: 420px; }
   .card { background: white; border: 1px solid var(--gray-border); border-radius: 10px; padding: 14px 16px; }
   .card .label { font-size: 12px; color: var(--gray-text); margin: 0 0 4px; }
   .card .value { font-size: 22px; font-weight: 700; margin: 0; color: var(--navy); }
-  .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
-  .tabs button {
+  .toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+  .toolbar button {
     font-size: 13px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--gray-border);
     background: white; cursor: pointer; font-weight: 600; color: #475569;
   }
-  .tabs button.active { background: var(--navy); color: white; border-color: var(--navy); }
-  table { width: 100%; border-collapse: collapse; background: white; border-radius: 10px; overflow: hidden; font-size: 13px; }
-  thead th { text-align: left; padding: 10px 12px; background: var(--navy-light); color: var(--navy); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; }
-  tbody td { padding: 10px 12px; border-top: 1px solid var(--gray-border); }
-  tbody tr:hover { background: #f8fafc; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
-  .badge-grutage { background: var(--warn-bg); color: var(--warn); }
-  .muted { color: #94a3b8; }
+  .toolbar button:hover { background: #f8fafc; }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    main { max-width: 640px; }
+  }
+
+  #panel-map { position: sticky; top: 20px; }
+  @media (max-width: 900px) { #panel-map { position: static; } }
   #map-wrap { background: white; border: 1px solid var(--gray-border); border-radius: 10px; padding: 12px; }
-  #map { height: 560px; border-radius: 8px; }
+  #map { height: 620px; border-radius: 8px; }
+  @media (max-width: 900px) { #map { height: 420px; } }
   .city-label {
     background: white; border: 1px solid var(--gray-border); border-radius: 6px;
     padding: 2px 7px; font-size: 12px; font-weight: 600; color: #1e293b;
     box-shadow: 0 1px 3px rgba(0,0,0,0.12);
   }
-  .empty { text-align: center; padding: 40px; color: var(--gray-text); }
+  .map-caption { font-size: 12px; color: var(--gray-text); margin-top: 8px; }
+
+  .voyage-list { display: flex; flex-direction: column; gap: 8px; }
+  .voyage-card {
+    background: white; border: 1px solid var(--gray-border); border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .voyage-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 3px; }
+  .voyage-num { font-size: 14px; font-weight: 700; color: #1e293b; }
+  .voyage-type {
+    display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.3px;
+    color: var(--navy); background: var(--navy-light); border-radius: 5px; padding: 1px 6px; margin-left: 6px;
+  }
+  .voyage-date { font-size: 12px; color: var(--gray-text); white-space: nowrap; }
+  .voyage-dest { font-size: 14px; font-weight: 600; color: #1e293b; margin-bottom: 2px; }
+  .voyage-marchandise {
+    font-size: 12.5px; color: #475569; margin-bottom: 6px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .voyage-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; color: var(--gray-text); }
+  .voyage-constraint { font-size: 12px; color: #92400e; margin-top: 6px; font-style: italic; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+  .badge-grutage { background: var(--warn-bg); color: var(--warn); }
+  .muted { color: #94a3b8; }
+  .empty { text-align: center; padding: 40px; color: var(--gray-text); background: white; border: 1px solid var(--gray-border); border-radius: 10px; }
   .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 10px 18px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
   .toast.show { opacity: 1; }
   footer { text-align: center; padding: 20px; font-size: 11px; color: #94a3b8; }
@@ -75,33 +102,25 @@
 <main>
   <div class="cards">
     <div class="card"><p class="label">Voyages disponibles</p><p class="value" id="stat-count">—</p></div>
-    <div class="card"><p class="label">Mètres linéaires cumulés</p><p class="value" id="stat-ml">—</p></div>
     <div class="card"><p class="label">Destinations distinctes</p><p class="value" id="stat-dest">—</p></div>
   </div>
 
-  <div class="tabs">
-    <button id="btn-list" class="active">Liste</button>
-    <button id="btn-map">Carte</button>
-    <button id="btn-refresh" style="margin-left:auto;">Actualiser</button>
+  <div class="toolbar">
+    <button id="btn-refresh">Actualiser</button>
   </div>
 
-  <div id="panel-list">
-    <table>
-      <thead>
-        <tr>
-          <th>LV</th><th>Créée le</th><th>Destination</th><th>Poids</th><th>ML</th><th>Grutage</th><th>Contrainte</th>
-        </tr>
-      </thead>
-      <tbody id="tbody"></tbody>
-    </table>
-    <div class="empty" id="empty-msg" style="display:none;">Aucun voyage disponible pour le moment.</div>
-  </div>
-
-  <div id="panel-map" style="display:none;">
-    <div id="map-wrap">
-      <div id="map"></div>
+  <div class="layout">
+    <div id="panel-list">
+      <div class="voyage-list" id="voyage-list"></div>
+      <div class="empty" id="empty-msg" style="display:none;">Aucun voyage disponible pour le moment.</div>
     </div>
-    <p style="font-size:12px;color:var(--gray-text);margin-top:8px;">Carte interactive (zoom / déplacement) — positionnement par ville, approximatif tant que le géocodage reste basé sur une table de correspondance manuelle. Taille du repère = nombre de voyages.</p>
+
+    <div id="panel-map">
+      <div id="map-wrap">
+        <div id="map"></div>
+      </div>
+      <p class="map-caption">Carte interactive (zoom / déplacement) — positionnement par ville, approximatif tant que le géocodage reste basé sur une table de correspondance manuelle. Taille du repère = nombre de voyages.</p>
+    </div>
   </div>
 </main>
 
@@ -162,25 +181,26 @@ function trouverVille(destination) {
   return null;
 }
 
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+
 let currentVoyages = [];
 let leafletMap = null;
 let markersLayer = null;
 
-function initMapIfNeeded() {
-  if (leafletMap) return;
+function initMap() {
   leafletMap = L.map('map').setView([46.6, 2.2], 6);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     maxZoom: 18,
   }).addTo(leafletMap);
   markersLayer = L.layerGroup().addTo(leafletMap);
-  renderMapMarkers();
 }
 
-function renderMapMarkers() {
+function renderMapMarkers(dispo) {
   if (!markersLayer) return;
   markersLayer.clearLayers();
-  const dispo = currentVoyages.filter(v => !v.parti);
   const cities = {};
   dispo.forEach(v => {
     const loc = trouverVille(v.destination);
@@ -205,33 +225,40 @@ function renderMapMarkers() {
 function render() {
   const dispo = currentVoyages.filter(v => !v.parti);
   document.getElementById('stat-count').textContent = dispo.length;
-  const totalMl = dispo.reduce((s, v) => s + (Number(v.ml) || 0), 0);
-  document.getElementById('stat-ml').textContent = (Math.round(totalMl * 10) / 10) + ' ml';
   const villesVues = new Set(dispo.map(v => (trouverVille(v.destination) || {}).ville || v.destination));
   document.getElementById('stat-dest').textContent = villesVues.size;
 
-  const tbody = document.getElementById('tbody');
+  const list     = document.getElementById('voyage-list');
   const emptyMsg = document.getElementById('empty-msg');
   if (!dispo.length) {
-    tbody.innerHTML = '';
+    list.innerHTML = '';
     emptyMsg.style.display = 'block';
   } else {
     emptyMsg.style.display = 'none';
-    tbody.innerHTML = dispo
+    list.innerHTML = dispo
       .sort((a, b) => new Date(b.date_creation) - new Date(a.date_creation))
-      .map(v => `
-        <tr>
-          <td>${v.numero_lv}</td>
-          <td class="muted">${new Date(v.date_creation).toLocaleDateString('fr-FR')}</td>
-          <td>${v.destination || '-'}</td>
-          <td>${v.poids ? v.poids + ' t' : '<span class="muted">-</span>'}</td>
-          <td>${v.ml ? v.ml + ' ml' : '<span class="muted">-</span>'}</td>
-          <td>${v.grutage ? '<span class="badge badge-grutage">grutage</span>' : '<span class="muted">-</span>'}</td>
-          <td class="muted" style="font-size:12px;">${v.commentaire || '-'}</td>
-        </tr>`).join('');
+      .map(v => {
+        const marchandise = (v.marchandises_desc || '').trim();
+        return `
+        <div class="voyage-card">
+          <div class="voyage-top">
+            <span><span class="voyage-num">${escapeHtml(v.numero_lv)}</span><span class="voyage-type">${escapeHtml(v.type || 'LV')}</span></span>
+            <span class="voyage-date">${new Date(v.date_creation).toLocaleDateString('fr-FR')}</span>
+          </div>
+          <div class="voyage-dest">${escapeHtml(v.destination) || '-'}</div>
+          ${marchandise ? `<div class="voyage-marchandise" title="${escapeHtml(marchandise)}">${escapeHtml(marchandise)}</div>` : ''}
+          <div class="voyage-meta">
+            <span>${v.poids ? escapeHtml(v.poids) + ' t' : '<span class="muted">poids —</span>'}</span>
+            <span>·</span>
+            <span>${v.ml ? escapeHtml(v.ml) + ' ml' : '<span class="muted">ml —</span>'}</span>
+            ${v.grutage ? '<span class="badge badge-grutage">grutage</span>' : ''}
+          </div>
+          ${v.commentaire ? `<div class="voyage-constraint">${escapeHtml(v.commentaire)}</div>` : ''}
+        </div>`;
+      }).join('');
   }
 
-  renderMapMarkers();
+  renderMapMarkers(dispo);
 }
 
 function showToast(msg) {
@@ -244,7 +271,7 @@ function showToast(msg) {
 async function chargerVoyages() {
   const { data, error } = await db
     .from('voyages')
-    .select('numero_lv, type, date_creation, destination, poids, ml, grutage, commentaire, parti')
+    .select('numero_lv, type, date_creation, destination, poids, ml, grutage, commentaire, marchandises_desc, parti')
     .order('date_creation', { ascending: false })
     .limit(300);
   if (error) {
@@ -276,23 +303,10 @@ function setupRealtime() {
     });
 }
 
-document.getElementById('btn-list').addEventListener('click', () => {
-  document.getElementById('panel-list').style.display = '';
-  document.getElementById('panel-map').style.display = 'none';
-  document.getElementById('btn-list').classList.add('active');
-  document.getElementById('btn-map').classList.remove('active');
-});
-document.getElementById('btn-map').addEventListener('click', () => {
-  document.getElementById('panel-list').style.display = 'none';
-  document.getElementById('panel-map').style.display = '';
-  document.getElementById('btn-map').classList.add('active');
-  document.getElementById('btn-list').classList.remove('active');
-  initMapIfNeeded();
-  // le conteneur était display:none à l'init Leaflet -> recalcule sa taille maintenant qu'il est visible
-  setTimeout(() => leafletMap && leafletMap.invalidateSize(), 0);
-});
 document.getElementById('btn-refresh').addEventListener('click', chargerVoyages);
+window.addEventListener('resize', () => { if (leafletMap) leafletMap.invalidateSize(); });
 
+initMap();
 chargerVoyages();
 setupRealtime();
 // Filet de sécurité si la connexion realtime tombe silencieusement : réactualisation périodique
