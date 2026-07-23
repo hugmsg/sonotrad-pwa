@@ -197,6 +197,32 @@ vraie source de `lv_history`, voir plus haut). Corrigé dans `masterfile/pwa_mas
 _saveLv()` : la description marchandises est maintenant écrite en colonne R de l'Archive, et
 `_getLvHistory()` la renvoie (`marchandises_desc`) quand elle existe. Déployé en prod (v70).
 
+## Mise en page (2026-07-23, suite) — colonnes réordonnées + carte détail au clic
+
+Sur demande de Hugo : la colonne **Contrainte** est déplacée avant Poids/ML/Grutage dans le
+tableau (ordre final : LV, Créée le, Destination, Marchandise, Contrainte, Poids, ML, Grutage).
+
+Cliquer sur une ligne ouvre désormais une **carte de détail** (`#voyage-modal`,
+`openVoyageModal(numero)`/`closeVoyageModal()`) en plus du comportement déjà existant (sélection
+croisée sur la carte) — les deux actions coexistent, le clic déclenche toujours le
+recentrage carte + surlignage ET ouvre la modale. Contenu : destinataire, **adresse de
+livraison complète** (nouveau, voir ci-dessous), marchandise complète (non tronquée),
+contrainte complète, poids/ML/grutage, date de création. Fermeture : bouton ✕, clic en dehors
+de la carte, ou touche Échap.
+
+**Nouvelle colonne `voyages.destination_adresse`** (migration
+`20260723153802_voyages_destination_adresse.sql`) : jusqu'ici seul le *nom* du destinataire
+était synchronisé (`destination`), jamais son adresse. Alimentée par `_syncVoyageSupabase()`
+dans `index.html` (`[d.destinataire?.adresse, d.destinataire?.ville].filter(Boolean).join(', ')`
+— déjà saisies à la création de la LV/CMR, juste jamais transmises avant). **NULL pour tout
+voyage créé avant ce commit** — même limite que `marchandises_desc`, rien à récupérer
+rétroactivement (la donnée n'existe nulle part côté Archive/Sheet dans un format exploitable en
+masse). Le portail affiche "Non renseignée" dans ce cas plutôt qu'un champ vide silencieux.
+
+Testé en local dans Chrome : réordonnancement des colonnes, ouverture/fermeture de la modale,
+recentrage carte simultané, affichage correct du "Non renseignée" sur un voyage historique
+sans adresse.
+
 **Reste `NULL` pour tous les voyages créés avant ce commit** (backfill du 2026-07-22 et 2e
 backfill du 2026-07-23 inclus) — la donnée n'a jamais été écrite dans l'Archive avant le fix,
 donc rien à récupérer rétroactivement pour ces entrées-là. Seules les nouvelles LV/CMR créées
