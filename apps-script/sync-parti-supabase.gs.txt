@@ -3,25 +3,14 @@
 // Synchro Supabase : coche "Parti" (colonne J, onglet "Départs")
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// Ce fichier n'est PAS déployé automatiquement — il vit uniquement dans ce
-// repo comme référence. À coller à la main dans l'éditeur Apps Script existant
-// (celui derrière l'URL APPSCRIPT_URL utilisée par api/proxy.js) :
+// DÉPLOYÉ le 2026-07-23 — ce fichier n'est plus la source de vérité.
+// Le code réel est dans sonotrad-scripts/planning/SyncPartiSupabase.js,
+// poussé en HEAD sur le projet Apps Script "planning" via clasp. Cette copie
+// est conservée ici comme référence historique.
 //
-//   1. Ouvrir le fichier "Planning Sonotrad" → Extensions → Apps Script
-//   2. Créer un nouveau fichier .gs (ex: "SyncPartiSupabase.gs")
-//   3. Coller le contenu ci-dessous (sans le .txt)
-//   4. Renseigner SUPABASE_URL / SUPABASE_ANON_KEY (mêmes valeurs que
-//      supabase.js à la racine du repo PWA)
-//   5. Menu Déclencheurs (icône horloge, colonne de gauche) → Ajouter un
-//      déclencheur :
-//        - Fonction à exécuter : onEditPartiSync
-//        - Source de l'événement : À partir de la feuille de calcul
-//        - Type d'événement : Sur modification (onEdit installable, PAS le
-//          onEdit simple — nécessaire pour appeler UrlFetchApp)
-//
-// Pourquoi un déclencheur installable et pas la fonction onEdit() simple ?
-//   Le onEdit simple ne peut pas faire d'appel réseau (UrlFetchApp). Il faut
-//   un déclencheur installable pour pouvoir notifier Supabase.
+// Il reste UNE étape manuelle pour activer le déclencheur (voir
+// sonotrad-pwa/CLAUDE_PORTAIL.md section "Marquage Parti") : exécuter
+// installPartiTrigger() une fois depuis l'éditeur Apps Script.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 

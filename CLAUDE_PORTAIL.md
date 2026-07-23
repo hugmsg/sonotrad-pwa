@@ -34,18 +34,22 @@ qui appelle le RPC Supabase `enregistrer_voyage(...)` avec les champs déjà cal
 
 **Aucune modification de l'Apps Script existant n'était nécessaire pour cette partie.**
 
-### 2. Marquage "Parti" — reste manuel dans la sheet, à finir de brancher
+### 2. Marquage "Parti" — code déployé, reste 1 clic manuel pour Hugo
 
 Décision prise avec Hugo (2026-07-22) : les équipes continuent de cocher la case Parti (colonne J, onglet Départs) comme aujourd'hui — pas de bouton ajouté dans la PWA pour ça.
 
-Un fichier de référence est prêt : `apps-script/sync-parti-supabase.gs.txt`. Il contient un déclencheur `onEdit` installable qui, dès que la case J est cochée/décochée sur l'onglet Départs, appelle le RPC Supabase `marquer_parti(numero_lv, parti)`.
+**Déployé le 2026-07-23** via le repo `sonotrad-scripts` (accès clasp disponible dans cet environnement, contrairement à ce qu'on pensait au départ) : `planning/SyncPartiSupabase.js` contient le déclencheur `onEditPartiSync` qui, dès que la case J est cochée/décochée sur l'onglet Départs, appelle le RPC Supabase `marquer_parti(numero_lv, parti)`. Poussé en HEAD sur le projet Apps Script `planning` (`clasp push`, commit `9d98e97` dans sonotrad-scripts).
 
-**Ce fichier n'est pas déployé automatiquement** — pas d'accès direct à l'éditeur Apps Script depuis cet environnement. Étapes manuelles restantes pour Hugo :
-1. Ouvrir "Planning Sonotrad" → Extensions → Apps Script
-2. Créer un fichier `.gs`, coller le contenu de `apps-script/sync-parti-supabase.gs.txt`
-3. Ajouter un déclencheur installable (Sur modification) sur la fonction `onEditPartiSync`
+`apps-script/sync-parti-supabase.gs.txt` (ce repo) reste la copie de référence/historique — la source de vérité est maintenant `sonotrad-scripts/planning/SyncPartiSupabase.js`.
 
-Voir les instructions détaillées en tête de ce fichier.
+**Dernière étape, 100% manuelle (impossible à automatiser depuis cet environnement)** : le code est poussé mais le déclencheur n'est pas encore actif tant que la fonction d'installation n'a pas tourné au moins une fois. `clasp run` a été tenté et échoue (le projet n'est pas déployé en "API exécutable" — réglage Google Cloud/compte à activer, hors de portée ici).
+
+Pour Hugo :
+1. Ouvrir "Planning Sonotrad" → Extensions → Apps Script (projet `planning`)
+2. Sélectionner `installPartiTrigger` dans le menu déroulant des fonctions, cliquer **Exécuter** (autoriser les permissions si demandé — première exécution de cette fonction)
+3. Vérifier dans le menu Déclencheurs (icône horloge) qu'un déclencheur `onEditPartiSync` / "Sur modification" apparaît bien
+
+Pour désactiver/rollback : exécuter `removePartiTrigger` une fois de la même façon.
 
 ---
 
