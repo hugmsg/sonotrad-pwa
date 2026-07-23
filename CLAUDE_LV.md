@@ -412,6 +412,67 @@ Testé en aller-retour sans changement de contenu sur une LV réelle (01613) ava
 correctif — voir historique git pour le detail du bug initial (vérification `error` seule,
 insuffisante face à un `{ok:false}` métier).
 
+### Carte des 3 sources du statut "Parti" — à tenir à jour
+
+Trois endroits peuvent faire évoluer le statut Parti d'une LV/CMR. **Toute nouvelle fonctionnalité
+touchant le statut Parti doit écrire dans les 3, sinon une désynchro apparaît** (déjà arrivé une
+fois, voir anomalie du 2026-07-23 ci-dessous) :
+
+| Source | Écrit Archive col P ? | Écrit Départs col J ? | Écrit Supabase ? |
+|---|---|---|---|
+| Case à cocher **Planning → Départs col J** (Google Sheets, trigger `onEditPartiSync`) | ✅ depuis le 2026-07-23 | (c'est la source) | ✅ |
+| **Historique PWA**, toggle `lvuTogglePartiHistory` | ✅ | ✅ best-effort (LOXAM seulement) | ✅ |
+| **Départs PWA**, bulk `depMarkParti` → `dep_mark_parti`/`_markParti()` | ✅ | ✅ (+ Mesnager Départs) | ✅ depuis le 2026-07-23 |
+
+Les 3 chemins écrivent maintenant partout. `depMarkParti()` appelle `marquer_parti` côté
+Supabase pour chaque numéro de LV concerné, en best-effort (comme `_syncVoyageSupabase`) —
+un échec de synchro portail n'annule jamais le départ déjà acté au tableur/Archive.
+
+### Regroupement par LV dans l'écran Départs (2026-07-23)
+
+Plusieurs modules LOXAM peuvent partager la même LV (`d.lv`, colonne V du Planning, déjà
+renvoyée par `_getLoxamProduction()`). Avant ce correctif, marquer un seul module parti
+laissait ses "frères" de LV visibles comme actifs dans le Planning (côté Apps Script,
+`_markParti()` marque bien toute la LV parti au niveau tableur/Archive/Supabase — dédup par
+`lvNum` — mais ne coche `Planning col R` que pour les codes explicitement envoyés), obligeant
+à les rechercher un par un.
+
+Corrigé côté PWA (`index.html`) — **révisé le 2026-07-23 suite retour Hugo** : la sélection de
+module reste volontairement individuelle (`toggleDepSelect` ne coche/décoche que le module
+cliqué, sans effet de bord), pour ne pas contraindre la sélection si d'autres actions par
+module s'ajoutent un jour. Le regroupement n'intervient qu'au moment de l'action "Parti" :
+- `_depLvSiblingCodes(lv, excludeCode)` — liste les autres modules actifs partageant la même LV.
+- Badge `📄 {lv} (+N)` sur chaque module dont N > 0 (tooltip explicatif) — purement informatif,
+  n'affecte pas la sélection.
+- `_depExpandedSelection()` — sélection de l'utilisateur + tous les modules frères (même LV)
+  non cochés. Utilisée uniquement par `_updateDepLvBar()` (affiche "✅ Parti (+N) →" sur le
+  bouton vert quand la sélection actuelle entraînerait des ajouts) et par `depMarkParti()` (les
+  codes réellement envoyés à `dep_mark_parti` sont la sélection étendue, pas la sélection brute
+  — pour que le voyage parte bien en entier du Planning même si un seul module a été coché).
+  Le `window.confirm()` liste les codes envoyés et précise le nombre ajouté automatiquement.
+
+Testé en local sur données réelles : cocher un seul module d'un groupe de 2 (LV 1633) laisse la
+sélection à 1 ("1 module sélectionné"), le frère reste décoché visuellement, et le bouton
+affiche bien "✅ Parti (+1) →".
+
+### Actualisation en direct de l'Historique (2026-07-23)
+
+L'Historique ne se rafraîchissait qu'au chargement de la vue ou au clic sur "Actualiser" — un
+changement fait uniquement via Google Sheets (coche Départs) n'apparaissait pas tant qu'on
+restait sur l'onglet. Corrigé par un abonnement Supabase Realtime sur la table `voyages`
+(`_lvuSubscribeHistoryRealtime()`/`_lvuUnsubscribeHistoryRealtime()`, souscrit à l'entrée sur
+la vue `lvu-history` et désabonné à la sortie, dans `go()`) — même mécanisme que le portail
+transporteur. L'Historique lit l'Archive Google Sheet (pas Supabase) donc le payload Realtime
+ne sert que de **signal** ("quelque chose a changé") ; le code redéclenche un `lvuLoadHistory()`
+complet (debounce 1.2s pour éviter une rafale de refetch si plusieurs lignes changent d'un
+coup), plutôt que d'essayer de fusionner le payload Supabase (champs différents/partiels) dans
+les lignes déjà affichées.
+
+**Anomalie corrigée le 2026-07-23** : cocher/décocher la case Parti dans Planning → Départs ne
+mettait à jour que Supabase (portail), jamais l'Archive (Historique PWA) — un voyage marqué
+parti dans le tableur restait visible comme disponible dans l'Historique. `onEditPartiSync`
+écrit désormais aussi l'Archive avant Supabase.
+
 ---
 
 ## Évolutions futures prévues
