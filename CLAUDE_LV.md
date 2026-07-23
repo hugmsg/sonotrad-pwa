@@ -412,21 +412,42 @@ Testé en aller-retour sans changement de contenu sur une LV réelle (01613) ava
 correctif — voir historique git pour le detail du bug initial (vérification `error` seule,
 insuffisante face à un `{ok:false}` métier).
 
-### Carte des 3 sources du statut "Parti" — à tenir à jour
+### Carte des 4 cibles du statut "Parti" — à tenir à jour
 
-Trois endroits peuvent faire évoluer le statut Parti d'une LV/CMR. **Toute nouvelle fonctionnalité
-touchant le statut Parti doit écrire dans les 3, sinon une désynchro apparaît** (déjà arrivé une
-fois, voir anomalie du 2026-07-23 ci-dessous) :
+Le statut Parti d'un voyage vit à **4 endroits distincts**, et 3 sources peuvent le faire
+évoluer. **Toute nouvelle fonctionnalité touchant le statut Parti doit écrire dans les 4 cibles,
+sinon une désynchro apparaît** (déjà arrivé deux fois, voir anomalies du 2026-07-23 ci-dessous) :
 
-| Source | Écrit Archive col P ? | Écrit Départs col J ? | Écrit Supabase ? |
-|---|---|---|---|
-| Case à cocher **Planning → Départs col J** (Google Sheets, trigger `onEditPartiSync`) | ✅ depuis le 2026-07-23 | (c'est la source) | ✅ |
-| **Historique PWA**, toggle `lvuTogglePartiHistory` | ✅ | ✅ best-effort (LOXAM seulement) | ✅ |
-| **Départs PWA**, bulk `depMarkParti` → `dep_mark_parti`/`_markParti()` | ✅ | ✅ (+ Mesnager Départs) | ✅ depuis le 2026-07-23 |
+| Source | Archive col P | Départs col J (log) | **Planning principal col R (par MODULE)** | Supabase |
+|---|---|---|---|---|
+| Case à cocher **Planning → Départs col J** (Google Sheets, trigger `onEditPartiSync`) | ✅ | (c'est la source) | ✅ depuis le 2026-07-23 | ✅ |
+| **Historique PWA**, toggle `lvuTogglePartiHistory` → `_markPartiByNumero` | ✅ | ✅ best-effort (LOXAM) | ✅ depuis le 2026-07-23 | ✅ |
+| **Départs PWA**, bulk `depMarkParti` → `dep_mark_parti`/`_markParti()` | ✅ | ✅ (+ Mesnager Départs) | ✅ (déjà en place, code historique) | ✅ depuis le 2026-07-23 |
 
-Les 3 chemins écrivent maintenant partout. `depMarkParti()` appelle `marquer_parti` côté
-Supabase pour chaque numéro de LV concerné, en best-effort (comme `_syncVoyageSupabase`) —
-un échec de synchro portail n'annule jamais le départ déjà acté au tableur/Archive.
+**La colonne "Planning principal col R" est la plus facile à oublier** : c'est elle qui
+détermine si un module reste visible comme "actif" dans le Planning LOXAM (PWA *et* Google
+Sheets) — `_getLoxamProduction()` filtre sur cette colonne, pas sur Archive/Départs-log. Elle
+est indexée par **module** (col V = numéro de LV), pas par LV — un seul voyage peut avoir
+plusieurs modules, donc toute écriture doit boucler sur *toutes* les lignes dont col V matche,
+pas s'arrêter à la première trouvée.
+
+**Anomalies corrigées le 2026-07-23** (deux, découvertes coup sur coup) :
+1. Marquer parti depuis l'Historique PWA ou depuis la case Départs Sheet ne touchait jamais
+   cette colonne — les modules restaient visibles comme actifs dans les deux Plannings (PWA et
+   Sheet) malgré leur LV marquée partie ailleurs. Corrigé dans `_markPartiByNumero` (masterfile)
+   et `onEditPartiSync` (planning) : les deux bouclent maintenant sur le Planning principal et
+   cochent col R pour toutes les lignes dont col V = la LV concernée.
+2. Bug annexe découvert en corrigeant le n°1 : le correctif `onEditPartiSync` du matin (case
+   Départs → Archive) comparait avec le numéro **zéro-paddé** ("01659", format Supabase) au lieu
+   du format **brut** stocké par Sheets ("1659", sans le zéro de tête — Sheets convertit
+   silencieusement une cellule "numérique" et perd le zéro de tête) — la comparaison ne trouvait
+   donc jamais la ligne, et l'écriture Archive ne fonctionnait pas réellement malgré le commit
+   précédent. Corrigé en calculant deux représentations (`numeroRaw` pour Archive/Planning,
+   `numeroPadded` pour Supabase) — **piège à ne pas reproduire** dans tout futur code qui
+   compare un numéro de LV entre ces systèmes.
+
+Testé en aller-retour réel sur LV 1600 (module actif DVZCYZ) : marquer parti fait disparaître
+le module de `?action=production`, annuler le fait réapparaître, état identique à avant test.
 
 ### Regroupement par LV dans l'écran Départs (2026-07-23)
 
