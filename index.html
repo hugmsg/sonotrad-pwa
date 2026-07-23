@@ -10808,7 +10808,7 @@ ${bodies}${sansAcheteurBody}
     const el = document.getElementById('lvu-history-list');
     el.innerHTML = '<div style="text-align:center;padding:40px;color:#94A3B8;font-size:14px;">Chargement…</div>';
     try {
-      const r    = await _fetchWithTimeout(S.apiUrl + '?action=lv_history&limit=100', {}, 15000);
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=lv_history_supabase&limit=100', {}, 15000);
       const d    = await r.json();
       S.lvuHistoryRows = d.history || d.rows || [];
       this._renderLvHistoryList();
