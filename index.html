@@ -10604,7 +10604,7 @@ ${bodies}${sansAcheteurBody}
         S.lvu.numero = null; S.lvu.display = null;
         if (document.getElementById('lvu-result-title')) document.getElementById('lvu-result-title').textContent = `✅ ${d.type} N° ${savedDisplay} enregistrée`;
         this.toast(`LV N° ${savedDisplay} enregistrée !`);
-        this._syncVoyageSupabase(d, savedDisplay); // portail transporteur — best-effort, ne bloque jamais le flux principal
+        this._syncVoyageSupabase(d, savedDisplay, res.pdfUrl); // portail transporteur — best-effort, ne bloque jamais le flux principal
         if (S.lvu.fromOpKey) {
           this._saveLvLinkRemote(S.lvu.fromOpKey, savedDisplay, savedDisplay);
           S.lvu.fromOpKey = null; S.lvu.fromOpNote = '';
@@ -10643,7 +10643,7 @@ ${bodies}${sansAcheteurBody}
     });
   },
 
-  async _syncVoyageSupabase(d, numero) {
+  async _syncVoyageSupabase(d, numero, pdfUrl) {
     if (!window.SupabaseDB || !numero) return;
     try {
       // Réutilise d.total.poids (déjà calculé par _lvuCollectFormData, qté incluse)
@@ -10664,6 +10664,14 @@ ${bodies}${sansAcheteurBody}
         p_parti:        d.source === 'bcb',
         p_marchandises_desc:   (d.marchandises || []).map(m => m.description).filter(Boolean).join(', '),
         p_destination_adresse: [d.destinataire?.adresse, d.destinataire?.ville].filter(Boolean).join(', '),
+        // Champs internes (jamais exposés au portail public) — pour l'essai
+        // Historique via Supabase, voir CLAUDE_PORTAIL.md.
+        p_conducteur:   d.conducteur || '',
+        p_immat_moteur: d.immat_moteur || '',
+        p_immat_semi:   d.immat_semi || '',
+        p_expediteur:   d.expediteur?.nom || '',
+        p_convoi:       !!d.convoi,
+        p_pdf_url:      pdfUrl || '',
       });
       if (error) console.warn('[_syncVoyageSupabase] portail non synchronisé :', error.message);
     } catch (e) {
