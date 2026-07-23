@@ -12,7 +12,14 @@ Portail externe en lecture seule, à partager avec les transporteurs (LOXAM nota
 
 ## Pourquoi Supabase et pas une lecture directe de la Google Sheet
 
-Le tableur ("Planning Sonotrad", onglet **Départs**) reste la source de gestion interne (colonnes Date, N° LV, Destination, Doc annexe, Chargement, Commande, Commentaire, Poids, ML, **Parti** en colonne J). Mais une lecture périodique du tableur ne donne pas de vrai temps réel et exposerait des colonnes internes (Commande, BT) au portail public.
+**Correction (2026-07-23)** : la vraie source de gestion interne pour TOUS les LV/CMR (LOXAM
+et BCB confondus) est l'onglet **Archive** du fichier LV/CMR
+(`1yB1QNVcevrOq_KknbpdFWkEbymgPCoCu6HYJLNPaQoI`, colonnes Date, N°LV, Expéditeur, Destination,
+Doc annexe, Chargement, Commande, Type, Convoi, Chauffeur, Immat moteur, Immat semi, Note,
+Poids, ML, **Parti** en colonne P) — pas l'onglet Départs de "Planning Sonotrad" comme indiqué
+initialement dans ce fichier. Ce dernier (`1sXx9_kGs9DGLY6-ra6NRWVtj45WVxyP95ufvZi8n0cY`) n'a
+qu'un miroir partiel, LOXAM uniquement (voir `masterfile/pwa_master.js → _saveLv/_markParti`
+dans sonotrad-scripts). Mais une lecture périodique du tableur ne donne pas de vrai temps réel et exposerait des colonnes internes (Commande, BT) au portail public.
 
 Le choix retenu : une table Supabase `voyages`, alimentée à la source (au moment où la LV est créée dans la PWA), avec Realtime activé — le portail se met à jour à la seconde près, sans repasser par le tableur.
 
@@ -72,6 +79,30 @@ RLS : aucune écriture directe possible pour `anon` — tout passe par les fonct
 - Le champ Poids est presque toujours vide dans l'onglet Départs — mais la PWA calcule bien un poids à la création (somme des lignes marchandises). Une fois `_syncVoyageSupabase` en production, `voyages.poids` sera alimenté même si la colonne Poids de la sheet reste vide.
 - Au moins 2 LV avaient une date de livraison commentée déjà dépassée mais la case Parti jamais cochée (LV 01498, 01600 au 21/07/2026) — probablement oubliées, à vérifier côté équipe.
 - Une cellule ML contenait une date au lieu d'un nombre (LV 01647) — erreur de saisie ponctuelle dans la sheet, sans impact sur `voyages` puisque la valeur vient directement de la PWA.
+
+## Bug corrigé le 2026-07-23 — CMR BCB jamais marquées "parti" à la création
+
+Repéré par Hugo : contrairement à LOXAM (la LV est créée en avance, le vrai départ suit plus
+tard), pour l'activité BCB **la CMR est créée au moment même où le matériel part** — donc
+`parti` aurait toujours dû être `true` dès la création pour ces documents. Ce n'était le cas ni
+dans l'onglet **Archive** du fichier LV/CMR (`1yB1QNVcevrOq_KknbpdFWkEbymgPCoCu6HYJLNPaQoI` —
+et non "Planning Sonotrad" comme supposé au départ, voir section précédente), ni dans
+`enregistrer_voyage()` côté Supabase. Résultat : du matériel BCB déjà parti apparaissait comme
+disponible sur le portail transporteur.
+
+Corrigé aux deux endroits (détection : `expediteur === 'BCB OFF MARKET'` / `source === 'bcb'`) :
+- **masterfile/pwa_master.js → `_saveLv()`** : colonne Parti de l'Archive mise à `true` dès la
+  création si `source === 'bcb'`. Déployé en prod le 2026-07-23 (`clasp redeploy`, v69).
+- **Supabase `enregistrer_voyage()`** : nouveau paramètre `p_parti`, passé par
+  `_syncVoyageSupabase()` dans `index.html` (`p_parti: d.source === 'bcb'`).
+- **Correction rétroactive Supabase** : les 16 voyages BCB déjà backfillés à tort en
+  "disponible" ont été corrigés directement (`parti = true`) le 2026-07-23.
+- **Correction rétroactive Google Sheet (Archive, historique complet, pas seulement les 50
+  dernières lignes)** : fonction `backfillBcbParti()` ajoutée à `masterfile/pwa_master.js` —
+  dry-run par défaut (ne fait qu'un rapport dans les logs), passer `false` en paramètre pour
+  appliquer réellement. **Reste à exécuter manuellement par Hugo** depuis l'éditeur Apps Script
+  du projet `masterfile` (menu Exécuter → `backfillBcbParti`) — même limite `clasp run` que
+  pour `installPartiTrigger` (scopes OAuth insuffisants).
 
 ---
 
