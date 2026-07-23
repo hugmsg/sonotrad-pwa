@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Portail transporteur — SONOTRAD</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 <style>
   :root {
     --navy: #1f3a5f;
@@ -49,7 +50,12 @@
   .badge-grutage { background: var(--warn-bg); color: var(--warn); }
   .muted { color: #94a3b8; }
   #map-wrap { background: white; border: 1px solid var(--gray-border); border-radius: 10px; padding: 12px; }
-  #map-wrap svg { width: 100%; height: auto; display: block; }
+  #map { height: 560px; border-radius: 8px; }
+  .city-label {
+    background: white; border: 1px solid var(--gray-border); border-radius: 6px;
+    padding: 2px 7px; font-size: 12px; font-weight: 600; color: #1e293b;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  }
   .empty { text-align: center; padding: 40px; color: var(--gray-text); }
   .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 10px 18px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
   .toast.show { opacity: 1; }
@@ -93,13 +99,9 @@
 
   <div id="panel-map" style="display:none;">
     <div id="map-wrap">
-      <svg viewBox="0 0 500 460" id="map">
-        <path id="france-outline" fill="var(--navy-light)" stroke="var(--navy)" stroke-width="1.2" stroke-linejoin="round"
-          d="M 306.7,49.1 L 331.6,69.8 L 350.0,66.4 L 381.2,86.3 L 389.2,90.1 L 399.5,89.2 L 416.4,100.7 L 467.8,108.7 L 449.8,138.7 L 445.2,170.0 L 435.4,177.4 L 419.2,173.4 L 420.3,184.5 L 394.2,209.2 L 393.7,229.0 L 410.7,222.1 L 423.0,241.3 L 421.5,253.7 L 432.0,270.2 L 419.6,283.5 L 428.8,317.4 L 448.2,323.0 L 444.1,342.0 L 411.8,366.7 L 341.3,354.9 L 289.3,369.1 L 285.2,395.5 L 243.8,401.1 L 203.6,381.3 L 190.6,390.8 L 124.9,370.9 L 110.7,353.9 L 129.1,327.6 L 135.9,240.3 L 99.1,194.3 L 72.7,172.2 L 18.2,155.3 L 14.6,123.4 L 60.9,113.8 L 120.8,125.1 L 109.5,75.5 L 143.2,94.3 L 226.4,60.1 L 237.1,24.2 L 268.3,15.4 L 273.5,30.8 L 290.1,31.5 L 306.7,49.1 Z" />
-        <g id="map-dots"></g>
-      </svg>
+      <div id="map"></div>
     </div>
-    <p style="font-size:12px;color:var(--gray-text);margin-top:8px;">Carte indicative — positionnement approximatif par ville. Taille du repère = nombre de voyages.</p>
+    <p style="font-size:12px;color:var(--gray-text);margin-top:8px;">Carte interactive (zoom / déplacement) — positionnement par ville, approximatif tant que le géocodage reste basé sur une table de correspondance manuelle. Taille du repère = nombre de voyages.</p>
   </div>
 </main>
 
@@ -107,6 +109,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
 const SUPABASE_URL  = 'https://ajewxwxerrjnnervzjwm.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqZXd4d3hlcnJqbm5lcnZ6andtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MDU5MDEsImV4cCI6MjA5NzA4MTkwMX0.NJcm1_tb4BcCSileiODYP0pKJ1LRVXFTIr2idQBrALg';
@@ -160,6 +163,44 @@ function trouverVille(destination) {
 }
 
 let currentVoyages = [];
+let leafletMap = null;
+let markersLayer = null;
+
+function initMapIfNeeded() {
+  if (leafletMap) return;
+  leafletMap = L.map('map').setView([46.6, 2.2], 6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 18,
+  }).addTo(leafletMap);
+  markersLayer = L.layerGroup().addTo(leafletMap);
+  renderMapMarkers();
+}
+
+function renderMapMarkers() {
+  if (!markersLayer) return;
+  markersLayer.clearLayers();
+  const dispo = currentVoyages.filter(v => !v.parti);
+  const cities = {};
+  dispo.forEach(v => {
+    const loc = trouverVille(v.destination);
+    if (!loc) return;
+    const key = loc.ville;
+    if (!cities[key]) cities[key] = { ...loc, count: 0 };
+    cities[key].count++;
+  });
+  Object.values(cities).forEach(c => {
+    L.circleMarker([c.lat, c.lon], {
+      radius: 6 + c.count * 3,
+      color: '#1f3a5f',
+      weight: 1.5,
+      fillColor: '#1f3a5f',
+      fillOpacity: 0.35,
+    })
+      .bindTooltip(`${c.ville} (${c.count})`, { permanent: true, direction: 'right', offset: [8, 0], className: 'city-label' })
+      .addTo(markersLayer);
+  });
+}
 
 function render() {
   const dispo = currentVoyages.filter(v => !v.parti);
@@ -190,26 +231,7 @@ function render() {
         </tr>`).join('');
   }
 
-  const cities = {};
-  dispo.forEach(v => {
-    const loc = trouverVille(v.destination);
-    if (!loc) return;
-    const key = loc.ville;
-    if (!cities[key]) cities[key] = { ...loc, count: 0 };
-    cities[key].count++;
-  });
-  const dots = document.getElementById('map-dots');
-  const W = 500, H = 460;
-  const proj = (lat, lon) => [(lon + 5) / 14 * W, H - (lat - 41) / 10.5 * H];
-  let content = '';
-  Object.values(cities).forEach(c => {
-    const [x, y] = proj(c.lat, c.lon);
-    const r = 8 + c.count * 3;
-    content += `<circle cx="${x}" cy="${y}" r="${r}" fill="#1f3a5f" fill-opacity="0.25" stroke="#1f3a5f" stroke-width="1"></circle>`;
-    content += `<circle cx="${x}" cy="${y}" r="3.5" fill="#1f3a5f"></circle>`;
-    content += `<text x="${x + r + 4}" y="${y + 4}" font-size="12" fill="#1e293b" style="paint-order:stroke;stroke:white;stroke-width:3px;">${c.ville} (${c.count})</text>`;
-  });
-  dots.innerHTML = content;
+  renderMapMarkers();
 }
 
 function showToast(msg) {
@@ -265,6 +287,9 @@ document.getElementById('btn-map').addEventListener('click', () => {
   document.getElementById('panel-map').style.display = '';
   document.getElementById('btn-map').classList.add('active');
   document.getElementById('btn-list').classList.remove('active');
+  initMapIfNeeded();
+  // le conteneur était display:none à l'init Leaflet -> recalcule sa taille maintenant qu'il est visible
+  setTimeout(() => leafletMap && leafletMap.invalidateSize(), 0);
 });
 document.getElementById('btn-refresh').addEventListener('click', chargerVoyages);
 

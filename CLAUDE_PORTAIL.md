@@ -95,9 +95,22 @@ a posteriori de façon fiable).
 
 ## Carte du portail
 
-La carte affiche désormais un vrai contour de la France métropolitaine (tracé SVG statique,
-projeté avec la même fonction `proj(lat, lon)` que les marqueurs de villes, données de frontière
-issues d'un GeoJSON public simplifié). Avant, c'était un fond blanc avec seulement des points.
+La carte est maintenant une vraie carte interactive **Leaflet + tuiles OpenStreetMap**
+(zoom, déplacement, tuiles réelles) — chargée via CDN (`unpkg.com/leaflet@1.9.4`), cohérent
+avec le principe "page statique autonome" : pas de clé API, pas de compte à créer.
+
+- La carte Leaflet est initialisée à la demande (`initMapIfNeeded()`), au premier clic sur
+  l'onglet "Carte" — pas au chargement de la page, pour éviter le bug classique de Leaflet
+  initialisé dans un conteneur `display:none` (tuiles mal dimensionnées). Un
+  `invalidateSize()` est appelé juste après pour être sûr.
+- Les marqueurs sont des `L.circleMarker` (taille = nombre de voyages) avec un tooltip
+  permanent affichant `Ville (n)`, regénérés à chaque `render()` via `renderMapMarkers()`.
+- Le géocodage reste la table `VILLES` (mot-clé → ville/lat/lon) codée en dur — Leaflet ne
+  résout pas ça tout seul, il affiche juste les coordonnées qu'on lui donne. Limite connue,
+  inchangée par ce passage à Leaflet.
+- Un premier essai avait utilisé un contour SVG statique de la France (dessiné à la main,
+  sans interactivité) — remplacé par la demande explicite de Hugo (2026-07-23) pour une vraie
+  carte zoomable.
 
 - **Carte approximative** : positionnement par ville via une table de correspondance mot-clé → coordonnées codée en dur dans `portail-transporteur.html` (variable `VILLES`). Une nouvelle destination non reconnue apparaît quand même dans la liste, mais sans repère sur la carte. Ajouter une ville = une ligne dans le tableau `VILLES`.
 - **Pas d'authentification** : la page est accessible à quiconque a le lien (cohérent avec la décision "vue commune à tous les transporteurs"). Si un contrôle d'accès devient nécessaire plus tard, il faudra soit un mot de passe partagé simple, soit une vraie fiche transporteur (actuellement le formulaire LV n'a que "Transports Mesnager" ou un champ libre "autre").
