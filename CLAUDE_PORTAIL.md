@@ -224,7 +224,27 @@ avec le principe "page statique autonome" : pas de clé API, pas de compte à cr
 
 - **Carte approximative** : positionnement par ville via une table de correspondance mot-clé → coordonnées codée en dur dans `portail-transporteur.html` (variable `VILLES`). Une nouvelle destination non reconnue apparaît quand même dans la liste, mais sans repère sur la carte. Ajouter une ville = une ligne dans le tableau `VILLES`.
 - **Pas d'authentification** : la page est accessible à quiconque a le lien (cohérent avec la décision "vue commune à tous les transporteurs"). Si un contrôle d'accès devient nécessaire plus tard, il faudra soit un mot de passe partagé simple, soit une vraie fiche transporteur (actuellement le formulaire LV n'a que "Transports Mesnager" ou un champ libre "autre").
-- **Hébergement** : le projet Vercel `sonotrad-pwa` n'a pas de framework configuré (`framework: null`) — chaque fichier statique à la racine est servi tel quel, exactement comme `index.html`. `portail-transporteur.html` sera donc automatiquement accessible à `https://sonotrad-pwa.vercel.app/portail-transporteur.html` (ou `sonotrad-pwa.vercel.app/portail-transporteur`) dès le prochain push sur `dev` — aucune config supplémentaire à faire.
+- **Hébergement — CORRIGÉ le 2026-07-23** : l'affirmation initiale ci-dessus était fausse.
+  Un push sur `dev` du repo `sonotrad-pwa` crée un déploiement Vercel **preview**, protégé par
+  authentification Vercel (SSO) — pas de config de "Deployment Protection" spécifique, c'est le
+  comportement par défaut. Seul un merge vers `main` déclenche un déploiement **production**,
+  qui seul met à jour le domaine public `sonotrad-pwa.vercel.app`. `portail-transporteur.html`
+  n'était donc jamais réellement accessible aux transporteurs tant qu'on ne l'avait pas
+  explicitement publié.
+
+  **Solution retenue (choix de Hugo)** : projet Vercel séparé et indépendant,
+  `sonotrad-portail-transporteur` (pas lié à un repo git, déployé via l'API Vercel/MCP en
+  copiant le contenu du fichier), déployé directement en `production`. URL publique stable :
+  **https://sonotrad-portail-transporteur.vercel.app/** — c'est cette URL qu'il faut partager
+  avec les transporteurs (LOXAM, etc.), pas une URL sur `sonotrad-pwa.vercel.app`.
+
+  **Contrepartie à connaître** : ce déploiement n'est pas lié au repo — il ne se met **pas**
+  à jour automatiquement quand `sonotrad-pwa/portail-transporteur.html` change dans le repo.
+  Après toute modification du fichier, il faut redéployer manuellement ce projet séparé (via
+  `mcp__plugin_vercel_vercel__deploy_to_vercel`, target `production`, même nom de projet
+  `sonotrad-portail-transporteur`, en fournissant le contenu à jour en tant que `index.html`).
+  Ne pas oublier cette étape après un futur changement du portail, sous peine de désynchro
+  entre le fichier du repo et ce qui est réellement affiché aux transporteurs.
 
 ---
 
