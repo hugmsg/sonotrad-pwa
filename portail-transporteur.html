@@ -87,17 +87,18 @@
   thead th {
     position: sticky; top: 0; z-index: 1;
     text-align: left; padding: 11px 14px; background: var(--navy-light); color: var(--navy);
-    font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap;
+    font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   tbody td { padding: 11px 14px; border-top: 1px solid var(--gray-border); vertical-align: top; }
   tbody tr { cursor: pointer; transition: background-color 0.12s; }
   tbody tr:hover, tbody tr.row-highlight { background: var(--navy-light); }
-  .col-num      { width: 4%; }
+  .col-num      { width: 3%; }
   .col-lv       { width: 11%; }
-  .col-date     { width: 8%; }
-  .col-dest     { width: 17%; }
-  .col-march    { width: 20%; }
-  .col-contrainte { width: 12%; }
+  .col-date     { width: 10%; }
+  .col-dest     { width: 19%; }
+  .col-march    { width: 18%; }
+  .col-contrainte { width: 11%; }
   .col-poids    { width: 6%; }
   .col-ml       { width: 6%; }
   .col-grutage  { width: 8%; }
@@ -186,7 +187,7 @@
           <thead>
             <tr>
               <th class="col-num">N°</th>
-              <th class="col-lv">LV</th><th class="col-date">Créée le</th><th class="col-dest">Destination</th>
+              <th class="col-lv">LV</th><th class="col-date">Date</th><th class="col-dest">Destination</th>
               <th class="col-march">Marchandise</th><th class="col-contrainte">Contrainte</th>
               <th class="col-poids">Poids</th><th class="col-ml">ML</th><th class="col-grutage">Grutage</th>
               <th class="col-actions"></th>
@@ -400,7 +401,7 @@ function render() {
         <tr data-numero="${escapeHtml(v.numero_lv)}" data-city="${escapeHtml(city)}">
           <td class="col-num nowrap row-num">${idx + 1}</td>
           <td class="col-lv nowrap"><span class="voyage-num">${escapeHtml(v.numero_lv)}</span><span class="voyage-type">${escapeHtml(v.type || 'LV')}</span></td>
-          <td class="col-date muted nowrap">${new Date(v.date_creation).toLocaleDateString('fr-FR')}</td>
+          <td class="col-date muted ellipsis">${new Date(v.date_creation).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'2-digit' })}</td>
           <td class="col-dest ellipsis" title="${escapeHtml(v.destination)}">${escapeHtml(v.destination) || '-'}</td>
           <td class="col-march ellipsis" title="${escapeHtml(marchandise)}">${marchandise ? escapeHtml(marchandise) : '<span class="muted">-</span>'}</td>
           <td class="col-contrainte ellipsis constraint-text" title="${escapeHtml(v.commentaire)}">${v.commentaire ? escapeHtml(v.commentaire) : '<span class="muted">-</span>'}</td>
