@@ -286,6 +286,98 @@ avec le principe "page statique autonome" : pas de clé API, pas de compte à cr
 
 ---
 
+## Historique LV/CMR via Supabase (2026-07-23)
+
+L'écran Historique de la PWA (`view-lvu-history`, `lvuLoadHistory()`) lit désormais l'Historique
+depuis Supabase plutôt que l'Archive Google Sheets, pour la réactivité — même table `voyages` /
+`voyages_internes` que le portail, pas une base séparée.
+
+### Le problème de fond : données internes vs portail public
+
+`voyages`/`voyages_internes` sont conçues pour un accès `anon` public (le portail, clé anon en
+clair dans le JS). L'Historique interne a besoin de champs sensibles (conducteur, immatriculation,
+lien PDF Drive) que le portail ne doit jamais voir. Sans vrai système d'authentification Supabase
+(jugé disproportionné pour le gain, cf. discussion avec Hugo), la solution retenue : un **secret
+partagé**, connu uniquement d'Apps Script (jamais expédié à un navigateur), qui protège une RPC
+dédiée à la lecture complète.
+
+- **Colonnes ajoutées à `voyages_internes`** : `conducteur`, `immat_moteur`, `immat_semi`,
+  `expediteur`, `convoi` (bool), `pdf_url`. Alimentées par `_syncVoyageSupabase()` (index.html) à
+  la création — mêmes limites que `marchandises_desc`/`destination_adresse` : NULL pour tout ce
+  qui a été créé avant ce commit.
+- **Secret** : stocké dans la table Supabase `config_interne` (`cle`/`valeur`, **jamais** dans un
+  fichier de migration versionné — insertion faite via `execute_sql` direct, hors git) ET dans les
+  Script Properties d'Apps Script (`SUPABASE_HISTORY_SECRET`, Project Settings → Script
+  Properties dans l'éditeur — pas dans le code source `pwa_master.js` non plus).
+- **RPC `lire_historique_voyages(p_secret, p_limit)`** : SECURITY DEFINER, `GRANT EXECUTE TO anon`
+  (nécessaire car Apps Script appelle avec la même anon key que le portail — la protection vient
+  du secret, pas du rôle). Renvoie **tous** les voyages non-partis (volume toujours faible) + les
+  `p_limit` derniers partis, triés par `numero_lv::int DESC` (pas par date, voir bug ci-dessous).
+- **RPC `supprimer_voyage(p_secret, p_numero_lv)`** : même principe, appelée par `_deleteLv()`
+  (Apps Script) après toute suppression Archive — y compris quand la LV n'est déjà plus dans
+  l'Archive (évite les orphelines Supabase, cf. bug ci-dessous).
+- **Apps Script** : nouvelle action `lv_history_supabase` (`_getLvHistorySupabase()` dans
+  `masterfile/pwa_master.js`) — reshape la réponse RPC vers le **même contrat exact** que
+  `lv_history` (Archive Sheets), donc `_renderLvHistoryList()` côté PWA n'a jamais eu besoin de
+  changer. `lv_history` (Sheets) reste intacte, inutilisée par défaut mais toujours fonctionnelle
+  en secours.
+
+### Bugs découverts et corrigés en cours de route
+
+1. **`CREATE OR REPLACE FUNCTION` avec des paramètres en plus crée une nouvelle surcharge
+   Postgres, pas un vrai remplacement**, tant que la liste de paramètres ne matche pas
+   exactement. `enregistrer_voyage()` avait accumulé 4 surcharges (10 à 19 arguments) avant
+   d'être nettoyée en une seule version canonique. **Réflexe à avoir** : toujours `DROP FUNCTION
+   IF EXISTS <ancienne signature exacte>` avant un `CREATE OR REPLACE` qui ajoute des paramètres.
+2. **Bug de locale Google Sheets** : les dates de l'Archive (col A), écrites en texte
+   `dd/MM/yyyy HH:mm` par `_saveLv`, sont parfois auto-converties par Sheets en vraie Date en
+   réinterprétant le texte en `MM/dd/yyyy` — uniquement quand jour ET mois sont tous les deux
+   ≤12 (ambigu). Corrompt `date_creation` pour les entrées backfillées depuis l'Archive (LV
+   01600 affichait "7 janvier" au lieu de "1er juillet"). Les vraies créations (via l'app,
+   `now()` côté serveur) ne sont pas concernées. **Conséquence** : ne jamais trier par une date
+   dérivée de l'Archive Sheets sans vérifier d'abord la cohérence avec l'ordre des `numero_lv`
+   (qui, lui, est un compteur fiable, jamais corrompu). `lire_historique_voyages()` trie
+   désormais par `numero_lv`, pas par date.
+3. **`lv_delete` (suppression d'une LV) ne touchait jamais Supabase** — seulement l'Archive
+   Sheets + Drive. Une LV supprimée restait orpheline (visible portail + Historique), et une
+   deuxième tentative de suppression échouait ("introuvable dans Archive") sans jamais pouvoir
+   nettoyer l'orpheline. Corrigé : `_deleteLv()` appelle systématiquement `supprimer_voyage()`,
+   y compris quand la LV n'est plus dans l'Archive.
+4. **Filtrer après avoir limité une requête peut sous-compter** : la première version de
+   `lire_historique_voyages()` faisait `ORDER BY date DESC LIMIT N` puis le filtre "disponibles"
+   s'appliquait côté client sur ce sous-ensemble — un voyage non-parti ancien pouvait tomber hors
+   de la fenêtre. Corrigé en renvoyant toujours la totalité des non-partis (indépendamment de
+   `p_limit`) + les `p_limit` derniers partis pour l'historique récent.
+
+### Backfill (one-shot, déjà exécuté — pas un mécanisme permanent)
+
+Les 150 dernières lignes de l'Archive ont été réinjectées dans Supabase via une fonction Apps
+Script temporaire (`_backfillHistoriqueSupabase`, déjà retirée du code après exécution) pour
+combler conducteur/immat/expéditeur/pdf_url sur l'historique existant. **Point de sécurité
+important pour toute future opération de ce type** : `voyages` a Realtime activé et est lu par le
+portail public — un backfill en masse (INSERT ou UPDATE) déclenche de faux évènements
+("Nouveau voyage" / "LV enlevée") si le portail est ouvert en direct. Procédure suivie à chaque
+fois : `ALTER PUBLICATION supabase_realtime DROP TABLE voyages` → opération en masse → `ALTER
+PUBLICATION supabase_realtime ADD TABLE voyages`.
+
+### Ce qui reste ouvert / pas fait
+
+- **Realtime direct navigateur pour l'Historique** : actuellement, l'Historique PWA re-fetch
+  entièrement via Apps Script à chaque évènement Realtime détecté sur `voyages`
+  (`_lvuSubscribeHistoryRealtime()`), plutôt que de s'abonner en direct comme le portail. Un vrai
+  Realtime direct navigateur rouvrirait la question du secret (même souci qu'au début : anon key
+  publique ne doit pas donner accès à `voyages_internes`) — pas fait, jugé pas nécessaire pour
+  l'instant (le re-fetch complet reste raisonnable vu le volume).
+- **Filtres Tous/Disponibles/Partis de l'Historique** : observé (pas creusé) qu'ils ne réagissaient
+  pas au clic lors d'un test manuel — signalé par Claude à Hugo, pas encore confirmé comme un
+  vrai bug ni corrigé (possiblement un souci d'automatisation du test, à revérifier en usage réel).
+- Le plan détaillé "refonte Historique" (`~/.claude/plans/squishy-discovering-lightning.md`,
+  session précédente) est largement exécuté : tableau, modal note/grutage, toggle Parti, filtres
+  — tout existait déjà avant cette session. Cette session a ajouté l'axe "lecture Supabase" qui
+  n'était pas dans ce plan initial.
+
+---
+
 ## Fichiers du module Portail
 
 ```
