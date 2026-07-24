@@ -10675,10 +10675,15 @@ ${bodies}${sansAcheteurBody}
   // (max 1 req/s, pas de géocodage répété). Best-effort : si le géocodage
   // échoue ou ne trouve rien, le portail retombe sur la table VILLES.
   async _geocodeAdresse(adresse) {
-    if (!adresse) return null;
+    if (!adresse || !S.apiUrl) return null;
     try {
-      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(adresse)}`;
-      const r = await fetch(url, { headers: { 'Accept-Language': 'fr' } });
+      // Passe par api/geocode.js (même déploiement Vercel que S.apiUrl) plutôt
+      // que d'appeler Nominatim directement depuis le navigateur : le WiFi
+      // SONOTRAD bloque les fetch() vers des domaines externes non familiers
+      // (même raison d'être que api/proxy.js pour Apps Script — voir
+      // CLAUDE_PORTAIL.md).
+      const geocodeUrl = new URL(S.apiUrl).origin + '/api/geocode';
+      const r = await fetch(geocodeUrl + '?q=' + encodeURIComponent(adresse));
       const data = await r.json();
       if (data && data[0]) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
     } catch (e) {
