@@ -92,15 +92,23 @@
   tbody td { padding: 11px 14px; border-top: 1px solid var(--gray-border); vertical-align: top; }
   tbody tr { cursor: pointer; transition: background-color 0.12s; }
   tbody tr:hover, tbody tr.row-highlight { background: var(--navy-light); }
-  .col-lv       { width: 12%; }
-  .col-date     { width: 9%; }
-  .col-dest     { width: 19%; }
-  .col-march    { width: 24%; }
-  .col-contrainte { width: 13%; }
-  .col-poids    { width: 7%; }
-  .col-ml       { width: 7%; }
-  .col-grutage  { width: 9%; }
+  .col-num      { width: 4%; }
+  .col-lv       { width: 11%; }
+  .col-date     { width: 8%; }
+  .col-dest     { width: 17%; }
+  .col-march    { width: 20%; }
+  .col-contrainte { width: 12%; }
+  .col-poids    { width: 6%; }
+  .col-ml       { width: 6%; }
+  .col-grutage  { width: 8%; }
+  .col-actions  { width: 8%; }
   .nowrap { white-space: nowrap; }
+  .row-num { color: #94a3b8; font-size: 12px; }
+  .btn-detail {
+    border: 1px solid var(--gray-border); background: white; color: var(--navy);
+    border-radius: 6px; padding: 4px 9px; font-size: 12px; cursor: pointer;
+  }
+  .btn-detail:hover { background: var(--navy-light); }
   .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .voyage-num { font-weight: 700; color: #1e293b; }
   .voyage-type {
@@ -118,8 +126,12 @@
   footer { text-align: center; padding: 20px; font-size: 11px; color: #94a3b8; }
 
   .modal-overlay {
+    /* z-index élevé nécessaire : les contrôles internes de Leaflet (boutons
+       zoom +/-) montent jusqu'à z-index 1000 et n'établissent pas leur propre
+       contexte d'empilement — sans marge suffisante, la carte passe au-dessus
+       de la modale. */
     display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.5);
-    align-items: center; justify-content: center; padding: 20px; z-index: 100;
+    align-items: center; justify-content: center; padding: 20px; z-index: 5000;
   }
   .modal-overlay.show { display: flex; }
   .modal-card {
@@ -173,9 +185,11 @@
         <table>
           <thead>
             <tr>
+              <th class="col-num">N°</th>
               <th class="col-lv">LV</th><th class="col-date">Créée le</th><th class="col-dest">Destination</th>
               <th class="col-march">Marchandise</th><th class="col-contrainte">Contrainte</th>
               <th class="col-poids">Poids</th><th class="col-ml">ML</th><th class="col-grutage">Grutage</th>
+              <th class="col-actions"></th>
             </tr>
           </thead>
           <tbody id="tbody"></tbody>
@@ -379,11 +393,12 @@ function render() {
     emptyMsg.style.display = 'none';
     tbody.innerHTML = dispo
       .sort((a, b) => new Date(b.date_creation) - new Date(a.date_creation))
-      .map(v => {
+      .map((v, idx) => {
         const marchandise = (v.marchandises_desc || '').trim();
         const city = (resolveLocation(v) || {}).key || '';
         return `
         <tr data-numero="${escapeHtml(v.numero_lv)}" data-city="${escapeHtml(city)}">
+          <td class="col-num nowrap row-num">${idx + 1}</td>
           <td class="col-lv nowrap"><span class="voyage-num">${escapeHtml(v.numero_lv)}</span><span class="voyage-type">${escapeHtml(v.type || 'LV')}</span></td>
           <td class="col-date muted nowrap">${new Date(v.date_creation).toLocaleDateString('fr-FR')}</td>
           <td class="col-dest ellipsis" title="${escapeHtml(v.destination)}">${escapeHtml(v.destination) || '-'}</td>
@@ -392,19 +407,24 @@ function render() {
           <td class="col-poids nowrap">${v.poids ? escapeHtml(v.poids) + ' t' : '<span class="muted">-</span>'}</td>
           <td class="col-ml nowrap">${v.ml ? escapeHtml(v.ml) + ' ml' : '<span class="muted">-</span>'}</td>
           <td class="col-grutage nowrap">${v.grutage ? '<span class="badge badge-grutage">grutage</span>' : '<span class="muted">-</span>'}</td>
+          <td class="col-actions nowrap">
+            <button class="btn-detail" title="Voir la fiche détaillée"
+              onclick="event.stopPropagation(); openVoyageModal('${escapeHtml(v.numero_lv)}')">Détail</button>
+          </td>
         </tr>`;
       }).join('');
 
     tbody.querySelectorAll('tr[data-numero]').forEach(tr => {
-      const city   = tr.dataset.city;
-      const numero = tr.dataset.numero;
+      const city = tr.dataset.city;
       if (city) {
         tr.addEventListener('mouseenter', () => highlightCity(city));
         tr.addEventListener('mouseleave', () => clearHighlight());
       }
+      // Clic sur la ligne = zoomer/centrer la carte sur la destination
+      // uniquement (la fiche détaillée s'ouvre via le bouton "Détail" dédié,
+      // séparé pour ne pas déclencher les deux actions à la fois).
       tr.addEventListener('click', () => {
         if (city) selectCity(city, { pan: true });
-        openVoyageModal(numero);
       });
     });
   }
