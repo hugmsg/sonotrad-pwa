@@ -63,8 +63,29 @@
 
   #panel-list { background: white; border: 1px solid var(--gray-border); border-radius: 10px; overflow: hidden; }
   #voyage-table-wrap { overflow-x: auto; }
+
+  /* ── Desktop (≥901px) : tableau de bord fixe, la page ne défile pas, ── */
+  /* seule la liste défile en interne. Mobile inchangé (défilement normal   */
+  /* de la page, carte/liste empilées) — cf. media queries max-width:900px */
+  /* ci-dessus, elles restent prioritaires en dessous de 901px.            */
+  @media (min-width: 901px) {
+    html, body { height: 100%; }
+    body { display: flex; flex-direction: column; overflow: hidden; }
+    header { flex-shrink: 0; }
+    main { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+    .cards, .toolbar { flex-shrink: 0; }
+    .layout { flex: 1; min-height: 0; align-items: stretch; }
+    #panel-map { position: static; display: flex; flex-direction: column; min-height: 0; }
+    #map-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    #map { flex: 1; min-height: 0; }
+    .map-caption { flex-shrink: 0; }
+    #panel-list { display: flex; flex-direction: column; min-height: 0; }
+    #voyage-table-wrap { flex: 1; min-height: 0; overflow-y: auto; }
+    footer { flex-shrink: 0; padding: 8px 20px; }
+  }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13.5px; }
   thead th {
+    position: sticky; top: 0; z-index: 1;
     text-align: left; padding: 11px 14px; background: var(--navy-light); color: var(--navy);
     font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap;
   }
