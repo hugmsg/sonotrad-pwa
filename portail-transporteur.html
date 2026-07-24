@@ -464,6 +464,17 @@ async function chargerVoyages() {
 function setupRealtime() {
   db.channel('voyages-portail')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'voyages' }, payload => {
+      // DELETE : payload.new est toujours vide (Postgres ne renvoie que
+      // l'ancienne ligne, dans payload.old) — jusqu'ici ignoré, une LV
+      // supprimée restait donc affichée jusqu'au prochain rechargement complet.
+      if (payload.eventType === 'DELETE') {
+        const numero = payload.old?.numero_lv;
+        if (numero) {
+          currentVoyages = currentVoyages.filter(v => v.numero_lv !== numero);
+          render();
+        }
+        return;
+      }
       const row = payload.new;
       if (!row) return;
       const idx = currentVoyages.findIndex(v => v.numero_lv === row.numero_lv);
