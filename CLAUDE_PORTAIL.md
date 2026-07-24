@@ -286,6 +286,26 @@ avec le principe "page statique autonome" : pas de clé API, pas de compte à cr
 
 ---
 
+## Positionnement précis par géocodage (2026-07-24)
+
+Le positionnement carte reposait entièrement sur la table `VILLES` (mots-clés codés en dur,
+testés contre le **nom du destinataire**) — imprécis (centre-ville) et fragile (ne matche que
+si ce nom contient un nom de ville reconnu ; ex. "TRANSPORTS MESNAGER" ne matchait rien).
+
+Ajout de `destination_lat`/`destination_lon` sur `voyages`, alimentés par un géocodage réel
+(Nominatim/OpenStreetMap, même fournisseur que la carte — pas de clé API) de
+`destination_adresse` à la création d'une LV (`_geocodeAdresse()` dans `index.html`, un seul
+appel par création, repli sur la ville seule si l'adresse complète échoue — utile pour les
+formats "ZA ... - B.P ..." fréquents en zone industrielle que Nominatim ne sait pas parser).
+
+Côté portail, `resolveLocation(v)` utilise les coordonnées précises quand disponibles (clé de
+regroupement = coordonnées arrondies à ~3 décimales, ≈110 m, pour que deux voyages à la même
+adresse partagent un marqueur), sinon repli sur `trouverVille()` — **aucune régression** pour
+les voyages créés avant ce commit, qui continuent d'utiliser la table VILLES.
+
+Pas de backfill des voyages existants (risque de dépasser la politique d'usage Nominatim — 1
+req/s max — pour un gain limité vu que la table VILLES reste un repli correct).
+
 ## Historique LV/CMR via Supabase (2026-07-23)
 
 L'écran Historique de la PWA (`view-lvu-history`, `lvuLoadHistory()`) lit désormais l'Historique
