@@ -10668,9 +10668,35 @@ ${bodies}${sansAcheteurBody}
     });
   },
 
+  // Géocodage réel de l'adresse de destination (Nominatim/OpenStreetMap, même
+  // fournisseur que la carte du portail — pas de clé API). Un seul appel par
+  // création de LV (jamais en boucle/bulk), résultat mis en cache dans
+  // Supabase (destination_lat/lon) — respecte la politique d'usage Nominatim
+  // (max 1 req/s, pas de géocodage répété). Best-effort : si le géocodage
+  // échoue ou ne trouve rien, le portail retombe sur la table VILLES.
+  async _geocodeAdresse(adresse) {
+    if (!adresse) return null;
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(adresse)}`;
+      const r = await fetch(url, { headers: { 'Accept-Language': 'fr' } });
+      const data = await r.json();
+      if (data && data[0]) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    } catch (e) {
+      console.warn('[_geocodeAdresse] échec :', e.message);
+    }
+    return null;
+  },
+
   async _syncVoyageSupabase(d, numero, pdfUrl) {
     if (!window.SupabaseDB || !numero) return;
     try {
+      const destinationAdresse = [d.destinataire?.adresse, d.destinataire?.ville].filter(Boolean).join(', ');
+      // Repli sur la ville seule si l'adresse complète ne donne aucun résultat
+      // (formats "ZA ... - B.P ..." fréquents en zone industrielle, que
+      // Nominatim ne sait pas toujours parser) — mieux vaut un point centre-
+      // ville précis que pas de coordonnées du tout.
+      const geo = (await this._geocodeAdresse(destinationAdresse))
+        || (await this._geocodeAdresse(d.destinataire?.ville));
       // Réutilise d.total.poids (déjà calculé par _lvuCollectFormData, qté incluse)
       // plutôt que de recalculer — ce total est celui affiché sur la LV générée.
       const { error } = await window.SupabaseDB.rpc('enregistrer_voyage', {
@@ -10688,7 +10714,9 @@ ${bodies}${sansAcheteurBody}
         // à LOXAM, créée en avance) — donc déjà parti à la création.
         p_parti:        d.source === 'bcb',
         p_marchandises_desc:   (d.marchandises || []).map(m => m.description).filter(Boolean).join(', '),
-        p_destination_adresse: [d.destinataire?.adresse, d.destinataire?.ville].filter(Boolean).join(', '),
+        p_destination_adresse: destinationAdresse,
+        p_destination_lat:     geo?.lat ?? null,
+        p_destination_lon:     geo?.lon ?? null,
         // Champs internes (jamais exposés au portail public) — pour l'essai
         // Historique via Supabase, voir CLAUDE_PORTAIL.md.
         p_conducteur:   d.conducteur || '',

@@ -167,7 +167,7 @@
       <div id="map-wrap">
         <div id="map"></div>
       </div>
-      <p class="map-caption">Carte interactive (zoom / déplacement) — positionnement par ville, approximatif tant que le géocodage reste basé sur une table de correspondance manuelle. Taille du repère = nombre de voyages.</p>
+      <p class="map-caption">Carte interactive (zoom / déplacement) — positionnement géocodé sur l'adresse exacte de livraison (repli approximatif par ville pour les voyages plus anciens). Taille du repère = nombre de voyages.</p>
     </div>
   </div>
 </main>
@@ -239,6 +239,23 @@ function trouverVille(destination) {
   return null;
 }
 
+// Position d'un voyage sur la carte : coordonnées précises (géocodage réel de
+// l'adresse à la création, voir _geocodeAdresse() côté PWA) si disponibles,
+// sinon repli sur la table VILLES (nom du destinataire, centre-ville
+// approximatif — seul signal disponible pour les voyages créés avant l'ajout
+// du géocodage, ou si le géocodage a échoué). La clé de regroupement (arrondi
+// ~3 décimales ≈ 110 m) permet à deux voyages à la même adresse de partager
+// un marqueur, comme avant avec les villes.
+function resolveLocation(v) {
+  if (v.destination_lat != null && v.destination_lon != null) {
+    const lat = Number(v.destination_lat), lon = Number(v.destination_lon);
+    return { key: lat.toFixed(3) + ',' + lon.toFixed(3), lat, lon, label: v.destination || '' };
+  }
+  const loc = trouverVille(v.destination);
+  if (!loc) return null;
+  return { key: loc.ville, lat: loc.lat, lon: loc.lon, label: loc.ville };
+}
+
 function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 }
@@ -247,11 +264,14 @@ let currentVoyages = [];
 let leafletMap = null;
 let markersLayer = null;
 
-// Un marqueur = une ville, qui peut regrouper plusieurs voyages. Ces maps
-// relient les deux sens pour la sélection croisée liste <-> carte.
-let cityMarkers   = {}; // ville -> L.circleMarker
-let cityToNumeros = {}; // ville -> [numero_lv, ...]
-let numeroToCity  = {}; // numero_lv -> ville
+// Un marqueur = un point (adresse géocodée précise, ou ville en repli, voir
+// resolveLocation), qui peut regrouper plusieurs voyages. Ces maps relient
+// les deux sens pour la sélection croisée liste <-> carte. Noms conservés
+// (cityXxx) même si la clé est désormais souvent des coordonnées, pas un nom
+// de ville — évite un renommage massif pour un changement purement sémantique.
+let cityMarkers   = {}; // clé position -> L.circleMarker
+let cityToNumeros = {}; // clé position -> [numero_lv, ...]
+let numeroToCity  = {}; // numero_lv -> clé position
 let selectedCity  = null;
 
 const MARKER_STYLE       = { color: '#1f3a5f', weight: 1.5, fillColor: '#1f3a5f', fillOpacity: 0.35 };
@@ -292,24 +312,23 @@ function renderMapMarkers(dispo) {
   if (!markersLayer) return;
   markersLayer.clearLayers();
   cityMarkers = {}; cityToNumeros = {}; numeroToCity = {};
-  const cities = {};
+  const groups = {};
   dispo.forEach(v => {
-    const loc = trouverVille(v.destination);
+    const loc = resolveLocation(v);
     if (!loc) return;
-    const key = loc.ville;
-    if (!cities[key]) cities[key] = { ...loc, count: 0 };
-    cities[key].count++;
-    numeroToCity[v.numero_lv] = key;
-    (cityToNumeros[key] = cityToNumeros[key] || []).push(v.numero_lv);
+    if (!groups[loc.key]) groups[loc.key] = { ...loc, count: 0 };
+    groups[loc.key].count++;
+    numeroToCity[v.numero_lv] = loc.key;
+    (cityToNumeros[loc.key] = cityToNumeros[loc.key] || []).push(v.numero_lv);
   });
-  Object.values(cities).forEach(c => {
-    const marker = L.circleMarker([c.lat, c.lon], { radius: 6 + c.count * 3, ...MARKER_STYLE })
-      .bindTooltip(`${c.ville} (${c.count})`, { permanent: true, direction: 'right', offset: [8, 0], className: 'city-label' })
-      .on('click',     () => scrollToCity(c.ville))
-      .on('mouseover',  () => highlightCity(c.ville))
+  Object.values(groups).forEach(g => {
+    const marker = L.circleMarker([g.lat, g.lon], { radius: 6 + g.count * 3, ...MARKER_STYLE })
+      .bindTooltip(`${g.label} (${g.count})`, { permanent: true, direction: 'right', offset: [8, 0], className: 'city-label' })
+      .on('click',     () => scrollToCity(g.key))
+      .on('mouseover',  () => highlightCity(g.key))
       .on('mouseout',   () => clearHighlight())
       .addTo(markersLayer);
-    cityMarkers[c.ville] = marker;
+    cityMarkers[g.key] = marker;
   });
   // La sélection courante peut viser une ville qui n'a plus de marqueur
   // (voyage parti/disparu entre deux rafraîchissements) — on la nettoie.
@@ -327,7 +346,7 @@ function scrollToCity(city) {
 function render() {
   const dispo = currentVoyages.filter(v => !v.parti);
   document.getElementById('stat-count').textContent = dispo.length;
-  const villesVues = new Set(dispo.map(v => (trouverVille(v.destination) || {}).ville || v.destination));
+  const villesVues = new Set(dispo.map(v => (resolveLocation(v) || {}).key || v.destination));
   document.getElementById('stat-dest').textContent = villesVues.size;
 
   const tbody    = document.getElementById('tbody');
@@ -341,7 +360,7 @@ function render() {
       .sort((a, b) => new Date(b.date_creation) - new Date(a.date_creation))
       .map(v => {
         const marchandise = (v.marchandises_desc || '').trim();
-        const city = (trouverVille(v.destination) || {}).ville || '';
+        const city = (resolveLocation(v) || {}).key || '';
         return `
         <tr data-numero="${escapeHtml(v.numero_lv)}" data-city="${escapeHtml(city)}">
           <td class="col-lv nowrap"><span class="voyage-num">${escapeHtml(v.numero_lv)}</span><span class="voyage-type">${escapeHtml(v.type || 'LV')}</span></td>
@@ -429,7 +448,7 @@ function showToast(msg) {
 async function chargerVoyages() {
   const { data, error } = await db
     .from('voyages')
-    .select('numero_lv, type, date_creation, destination, destination_adresse, poids, ml, grutage, commentaire, marchandises_desc, parti')
+    .select('numero_lv, type, date_creation, destination, destination_adresse, destination_lat, destination_lon, poids, ml, grutage, commentaire, marchandises_desc, parti')
     .order('date_creation', { ascending: false })
     .limit(300);
   if (error) {
