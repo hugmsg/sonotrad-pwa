@@ -98,23 +98,20 @@
   tbody td { padding: 8px 8px; border-top: 1px solid var(--gray-border); vertical-align: top; }
   tbody tr { cursor: pointer; transition: background-color 0.12s; }
   tbody tr:hover, tbody tr.row-highlight { background: var(--navy-light); }
+  /* Colonnes à contenu court et prévisible (N°, date, poids, ml, grutage) —
+     resserrées volontairement : le nombre de caractères y varie peu, contrairement
+     à destination/marchandise/contrainte qui profitent de l'espace libéré. */
   .col-num      { width: 3%; }
-  .col-lv       { width: 9%; }
-  .col-date     { width: 8%; }
-  .col-dest     { width: 22%; }
-  .col-march    { width: 21%; }
-  .col-contrainte { width: 14%; }
-  .col-poids    { width: 5%; }
-  .col-ml       { width: 5%; }
-  .col-grutage  { width: 6%; }
-  .col-actions  { width: 7%; }
+  .col-lv       { width: 10%; }
+  .col-date     { width: 7%; }
+  .col-dest     { width: 27%; }
+  .col-march    { width: 25%; }
+  .col-contrainte { width: 15%; }
+  .col-poids    { width: 4%; }
+  .col-ml       { width: 4%; }
+  .col-grutage  { width: 5%; }
   .nowrap { white-space: nowrap; }
   .row-num { color: #94a3b8; font-size: 12px; }
-  .btn-detail {
-    border: 1px solid var(--gray-border); background: white; color: var(--navy);
-    border-radius: 6px; padding: 3px 7px; font-size: 11px; cursor: pointer;
-  }
-  .btn-detail:hover { background: var(--navy-light); }
   .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .voyage-num { font-weight: 700; color: #1e293b; }
   .voyage-type {
@@ -195,7 +192,6 @@
               <th class="col-lv">LV</th><th class="col-date">Date</th><th class="col-dest">Destination</th>
               <th class="col-march">Marchandise</th><th class="col-contrainte">Contrainte</th>
               <th class="col-poids">Poids</th><th class="col-ml">ML</th><th class="col-grutage">Grutage</th>
-              <th class="col-actions"></th>
             </tr>
           </thead>
           <tbody id="tbody"></tbody>
@@ -413,25 +409,24 @@ function render() {
           <td class="col-poids nowrap">${v.poids ? escapeHtml(v.poids) + ' t' : '<span class="muted">-</span>'}</td>
           <td class="col-ml nowrap">${v.ml ? escapeHtml(v.ml) + ' ml' : '<span class="muted">-</span>'}</td>
           <td class="col-grutage nowrap">${v.grutage ? '<span class="badge badge-grutage">grutage</span>' : '<span class="muted">-</span>'}</td>
-          <td class="col-actions nowrap">
-            <button class="btn-detail" title="Voir la fiche détaillée"
-              onclick="event.stopPropagation(); openVoyageModal('${escapeHtml(v.numero_lv)}')">Détail</button>
-          </td>
         </tr>`;
       }).join('');
 
     tbody.querySelectorAll('tr[data-numero]').forEach(tr => {
-      const city = tr.dataset.city;
+      const city   = tr.dataset.city;
+      const numero = tr.dataset.numero;
       if (city) {
         tr.addEventListener('mouseenter', () => highlightCity(city));
         tr.addEventListener('mouseleave', () => clearHighlight());
       }
-      // Clic sur la ligne = zoomer/centrer la carte sur la destination
-      // uniquement (la fiche détaillée s'ouvre via le bouton "Détail" dédié,
-      // séparé pour ne pas déclencher les deux actions à la fois).
+      // Simple clic = zoomer/centrer la carte sur la destination. Double-clic
+      // = ouvrir la fiche détaillée (le double-clic déclenche aussi deux
+      // clics simples au passage, donc le zoom se fait également — comportement
+      // volontaire, cohérent avec un double-clic "carte" classique).
       tr.addEventListener('click', () => {
         if (city) selectCity(city, { pan: true });
       });
+      tr.addEventListener('dblclick', () => openVoyageModal(numero));
     });
   }
 
