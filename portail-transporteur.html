@@ -48,7 +48,7 @@
      proche du carré/portrait (vu sa hauteur qui remplit tout le viewport)
      au lieu de s'étirer en paysage — et laisse le maximum de place à la
      liste, qui prend tout le reste (minmax(0, 1fr)). */
-  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(380px, 560px); gap: 14px; align-items: start; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 710px); gap: 14px; align-items: start; }
   @media (max-width: 900px) {
     .layout { grid-template-columns: 1fr; }
     main { max-width: 640px; }
@@ -102,14 +102,14 @@
      resserrées volontairement : le nombre de caractères y varie peu, contrairement
      à destination/marchandise/contrainte qui profitent de l'espace libéré. */
   .col-num      { width: 3%; }
-  .col-lv       { width: 9%; }
+  .col-lv       { width: 8%; }
   .col-date     { width: 7%; }
-  .col-dest     { width: 26%; }
-  .col-march    { width: 23%; }
-  .col-contrainte { width: 15%; }
+  .col-dest     { width: 23%; }
+  .col-march    { width: 28%; }
+  .col-contrainte { width: 14%; }
   .col-poids    { width: 5%; }
-  .col-ml       { width: 6%; }
-  .col-grutage  { width: 6%; }
+  .col-ml       { width: 5%; }
+  .col-grutage  { width: 7%; }
   .nowrap { white-space: nowrap; }
   .row-num { color: #94a3b8; font-size: 12px; }
   /* Poignées de redimensionnement — créées en JS, uniquement en mode ?edit=1
