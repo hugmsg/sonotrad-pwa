@@ -216,7 +216,7 @@
             <tr>
               <th class="col-num">N°</th>
               <th class="col-lv">LV</th><th class="col-date">Date</th><th class="col-dest">Destination</th>
-              <th class="col-march">Marchandise</th><th class="col-contrainte">Contrainte</th>
+              <th class="col-march">Marchandise</th><th class="col-contrainte">Note</th>
               <th class="col-poids">Poids</th><th class="col-ml">ML</th><th class="col-grutage">Grutage</th>
             </tr>
           </thead>
@@ -478,7 +478,7 @@ function openVoyageModal(numero) {
       <div class="modal-value">${marchandise ? escapeHtml(marchandise) : '<span class="muted">Non renseignée</span>'}</div>
     </div>
     <div class="modal-row">
-      <div class="modal-label">Contrainte de livraison</div>
+      <div class="modal-label">Note de livraison</div>
       <div class="modal-value constraint-text">${v.commentaire ? escapeHtml(v.commentaire) : '<span class="muted" style="font-style:normal;">Aucune</span>'}</div>
     </div>
     <div class="modal-row modal-meta">
