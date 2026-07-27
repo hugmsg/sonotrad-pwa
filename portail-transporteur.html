@@ -31,7 +31,7 @@
   .status { display: flex; align-items: center; gap: 6px; font-size: 12px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
   .dot.off { background: #ef4444; }
-  main { max-width: 1800px; margin: 0 auto; padding: 20px 28px; }
+  main { max-width: 1800px; margin: 0 auto; padding: 16px 18px; }
   .cards { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; margin-bottom: 18px; max-width: 420px; }
   .card { background: white; border: 1px solid var(--gray-border); border-radius: 10px; padding: 14px 16px; }
   .card .label { font-size: 12px; color: var(--gray-text); margin: 0 0 4px; }
@@ -43,7 +43,12 @@
   }
   .toolbar button:hover { background: #f8fafc; }
 
-  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  /* La carte est plafonnée en largeur (minmax(320px, 460px)) plutôt que de
+     prendre une fraction fixe de l'écran : sur un écran large, la garde
+     proche du carré/portrait (vu sa hauteur qui remplit tout le viewport)
+     au lieu de s'étirer en paysage — et laisse le maximum de place à la
+     liste, qui prend tout le reste (minmax(0, 1fr)). */
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 460px); gap: 14px; align-items: start; }
   @media (max-width: 900px) {
     .layout { grid-template-columns: 1fr; }
     main { max-width: 640px; }
@@ -83,31 +88,31 @@
     #voyage-table-wrap { flex: 1; min-height: 0; overflow-y: auto; }
     footer { flex-shrink: 0; padding: 8px 20px; }
   }
-  table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13.5px; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
   thead th {
     position: sticky; top: 0; z-index: 1;
-    text-align: left; padding: 11px 14px; background: var(--navy-light); color: var(--navy);
-    font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px;
+    text-align: left; padding: 8px 8px; background: var(--navy-light); color: var(--navy);
+    font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.2px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  tbody td { padding: 11px 14px; border-top: 1px solid var(--gray-border); vertical-align: top; }
+  tbody td { padding: 8px 8px; border-top: 1px solid var(--gray-border); vertical-align: top; }
   tbody tr { cursor: pointer; transition: background-color 0.12s; }
   tbody tr:hover, tbody tr.row-highlight { background: var(--navy-light); }
   .col-num      { width: 3%; }
-  .col-lv       { width: 11%; }
-  .col-date     { width: 10%; }
-  .col-dest     { width: 19%; }
-  .col-march    { width: 18%; }
-  .col-contrainte { width: 11%; }
-  .col-poids    { width: 6%; }
-  .col-ml       { width: 6%; }
-  .col-grutage  { width: 8%; }
-  .col-actions  { width: 8%; }
+  .col-lv       { width: 9%; }
+  .col-date     { width: 8%; }
+  .col-dest     { width: 22%; }
+  .col-march    { width: 21%; }
+  .col-contrainte { width: 14%; }
+  .col-poids    { width: 5%; }
+  .col-ml       { width: 5%; }
+  .col-grutage  { width: 6%; }
+  .col-actions  { width: 7%; }
   .nowrap { white-space: nowrap; }
   .row-num { color: #94a3b8; font-size: 12px; }
   .btn-detail {
     border: 1px solid var(--gray-border); background: white; color: var(--navy);
-    border-radius: 6px; padding: 4px 9px; font-size: 12px; cursor: pointer;
+    border-radius: 6px; padding: 3px 7px; font-size: 11px; cursor: pointer;
   }
   .btn-detail:hover { background: var(--navy-light); }
   .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
