@@ -5830,14 +5830,21 @@ const App = {
     const total = S.stockData.length;
     const alerts = [];
     S.stockData.forEach(d => {
-      if (!d.seuil || d.seuil <= 0) return;          // seulement les refs avec seuil défini
+      const hasSeuil = d.seuil && d.seuil > 0;
       const qty = this._calcStockActuel(d.ref, d.qte);
-      if (qty !== null && qty <= 0)               alerts.push({ ref: d.ref, desc: d.description, type: 'rupture', qty, seuil: d.seuil });
-      else if (qty !== null && qty <= d.seuil)    alerts.push({ ref: d.ref, desc: d.description, type: 'low', qty, seuil: d.seuil });
+      if (hasSeuil) {
+        if (qty !== null && qty <= 0)            alerts.push({ ref: d.ref, desc: d.description, type: 'rupture', qty, seuil: d.seuil });
+        else if (qty !== null && qty <= d.seuil) alerts.push({ ref: d.ref, desc: d.description, type: 'low', qty, seuil: d.seuil });
+      } else if (qty !== null && qty < 0) {
+        // Pas de seuil suivi sur cette réf, mais un stock négatif révèle une
+        // sortie/livraison mal enregistrée quelque part — à signaler même sans seuil.
+        alerts.push({ ref: d.ref, desc: d.description, type: 'rupture', qty, seuil: null });
+      }
     });
-    // Trier : rupture d'abord, puis par ratio qté/seuil croissant (le plus critique en premier)
+    // Trier : rupture d'abord (les plus négatives en tête), puis par ratio qté/seuil croissant
     alerts.sort((a,b) => {
       if (a.type !== b.type) return a.type === 'rupture' ? -1 : 1;
+      if (a.type === 'rupture') return a.qty - b.qty;
       return (a.qty / a.seuil) - (b.qty / b.seuil);
     });
     const ruptures  = alerts.filter(a => a.type === 'rupture').length;
@@ -5866,14 +5873,15 @@ const App = {
     // ── Alertes favoris ──
     alertEl.style.display = '';
     const hasSeuils = S.stockData.some(d => d.seuil && d.seuil > 0);
-    if (!hasSeuils) {
-      alertListEl.innerHTML = `<div style="font-size:12px;color:#94A3B8;padding:8px 0;">Aucun seuil configuré. Utilisez ✏️ sur une référence pour définir un seuil d'alerte.</div>`;
-    } else if (alerts.length === 0) {
-      alertListEl.innerHTML = `<div style="font-size:12px;color:#15803D;padding:8px 0;">✅ Tous les stocks sont au-dessus de leurs seuils.</div>`;
+    if (alerts.length === 0) {
+      alertListEl.innerHTML = hasSeuils
+        ? `<div style="font-size:12px;color:#15803D;padding:8px 0;">✅ Tous les stocks sont au-dessus de leurs seuils.</div>`
+        : `<div style="font-size:12px;color:#94A3B8;padding:8px 0;">Aucun seuil configuré. Utilisez ✏️ sur une référence pour définir un seuil d'alerte.</div>`;
     } else {
       alertListEl.innerHTML = alerts.slice(0, 8).map(a => {
         const badgeCls = a.type === 'rupture' ? 'rupture' : 'low';
-        const badgeTxt = a.type === 'rupture' ? '⛔ Rupture'
+        const badgeTxt = a.type === 'rupture'
+          ? (a.seuil !== null ? '⛔ Rupture' : `⛔ Stock négatif (${a.qty})`)
           : `⚠️ ${a.qty}/${a.seuil}`;
         return `<div class="dash-alert-row" onclick="App.openStockDetail('${a.ref.replace(/'/g,"\\'")}')">
           <div class="dash-alert-ref">${a.ref}</div>
