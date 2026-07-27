@@ -5832,17 +5832,13 @@ const App = {
     S.stockData.forEach(d => {
       if (!d.seuil || d.seuil <= 0) return;          // seulement les refs avec seuil défini
       const qty = this._calcStockActuel(d.ref, d.qte);
-      const days = this._calcDaysToRupture(d.ref, qty);
-      if (qty !== null && qty <= 0)               alerts.push({ ref: d.ref, desc: d.description, type: 'rupture', days: 0 });
-      else if (qty !== null && qty <= d.seuil)    alerts.push({ ref: d.ref, desc: d.description, type: 'low', days });
+      if (qty !== null && qty <= 0)               alerts.push({ ref: d.ref, desc: d.description, type: 'rupture', qty, seuil: d.seuil });
+      else if (qty !== null && qty <= d.seuil)    alerts.push({ ref: d.ref, desc: d.description, type: 'low', qty, seuil: d.seuil });
     });
-    // Trier : rupture d'abord, puis par jours croissants
+    // Trier : rupture d'abord, puis par ratio qté/seuil croissant (le plus critique en premier)
     alerts.sort((a,b) => {
       if (a.type !== b.type) return a.type === 'rupture' ? -1 : 1;
-      if (a.days === null && b.days === null) return 0;
-      if (a.days === null) return 1;
-      if (b.days === null) return -1;
-      return a.days - b.days;
+      return (a.qty / a.seuil) - (b.qty / b.seuil);
     });
     const ruptures  = alerts.filter(a => a.type === 'rupture').length;
     const lowStock  = alerts.filter(a => a.type === 'low').length;
@@ -5878,7 +5874,7 @@ const App = {
       alertListEl.innerHTML = alerts.slice(0, 8).map(a => {
         const badgeCls = a.type === 'rupture' ? 'rupture' : 'low';
         const badgeTxt = a.type === 'rupture' ? '⛔ Rupture'
-          : a.days !== null ? `⚠️ ${a.days}j` : '⚠️ Stock bas';
+          : `⚠️ ${a.qty}/${a.seuil}`;
         return `<div class="dash-alert-row" onclick="App.openStockDetail('${a.ref.replace(/'/g,"\\'")}')">
           <div class="dash-alert-ref">${a.ref}</div>
           <div style="font-size:11px;color:#475569;flex:2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.desc}</div>
