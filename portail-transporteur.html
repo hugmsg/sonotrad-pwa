@@ -119,6 +119,10 @@
     z-index: 2; background: transparent;
   }
   .col-resize-handle:hover, .col-resize-handle.dragging { background: rgba(255,255,255,0.4); }
+  .panel-resize-handle {
+    position: absolute; top: 0; bottom: 0; width: 14px; cursor: col-resize; z-index: 3;
+  }
+  .panel-resize-handle:hover, .panel-resize-handle.dragging { background: rgba(31,58,95,0.15); }
   #btn-copy-widths {
     font-size: 12px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--gray-border);
     background: #fef3c7; color: #92400e; cursor: pointer; font-weight: 600; margin-left: 8px;
@@ -589,11 +593,14 @@ function copyColumnWidths() {
   // "0%" au lieu de leur largeur par défaut issue du CSS).
   const table   = document.querySelector('#voyage-table-wrap table');
   const tableW  = table.clientWidth;
-  const lines = [...document.querySelectorAll('colgroup col[data-key]')].map(col => {
+  const colLines = [...document.querySelectorAll('colgroup col[data-key]')].map(col => {
     const pct = Math.round(col.getBoundingClientRect().width / tableW * 100);
     return `  .col-${col.dataset.key} { width: ${pct}%; }`;
   }).join('\n');
-  navigator.clipboard.writeText(lines).then(() => showToast('Largeurs copiées — collez-les dans le CSS'));
+  const mapW = Math.round(document.getElementById('panel-map').getBoundingClientRect().width);
+  const panelLine = `  .layout { grid-template-columns: minmax(0, 1fr) ${mapW}px; } /* largeur carte figée, ajuster min/max autour si besoin */`;
+  navigator.clipboard.writeText(panelLine + '\n' + colLines)
+    .then(() => showToast('Largeurs copiées — collez-les dans le CSS'));
 }
 
 function setupColumnResize() {
@@ -628,19 +635,74 @@ function setupColumnResize() {
       };
       const onUp = () => {
         handle.classList.remove('dragging');
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
+        document.removeEventListener('mousemove', onMove, true);
+        document.removeEventListener('mouseup', onUp, true);
         saveColumnWidths();
       };
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
+      // capture:true — Leaflet (la carte, juste à côté) intercepte et stoppe
+      // la propagation de ses propres évènements souris ; en phase de capture,
+      // ce listener voit l'évènement AVANT que Leaflet ne puisse le bloquer.
+      // Sans ça, un relâchement de souris au-dessus de la carte ne déclenche
+      // jamais onUp : les listeners s'accumulent et les glissements suivants
+      // se mélangent avec les précédents encore actifs.
+      document.addEventListener('mousemove', onMove, true);
+      document.addEventListener('mouseup', onUp, true);
     });
+  });
+}
+
+function loadSavedPanelWidth() {
+  const saved = localStorage.getItem('portailMapWidth');
+  if (saved) document.querySelector('.layout').style.gridTemplateColumns = `minmax(0,1fr) ${saved}px`;
+}
+
+// Poignée verticale entre la liste et la carte — règle la part donnée à
+// chacune (la liste prend toujours "le reste" via minmax(0,1fr), seule la
+// largeur de la carte est ajustée explicitement).
+function setupPanelResize() {
+  const layoutEl = document.querySelector('.layout');
+  const mapPanel = document.getElementById('panel-map');
+  layoutEl.style.position = 'relative';
+  const handle = document.createElement('div');
+  handle.className = 'panel-resize-handle';
+  layoutEl.appendChild(handle);
+
+  function positionHandle() {
+    const layoutRect = layoutEl.getBoundingClientRect();
+    const mapRect    = mapPanel.getBoundingClientRect();
+    handle.style.left = (mapRect.left - layoutRect.left - 7) + 'px';
+  }
+  positionHandle();
+  window.addEventListener('resize', positionHandle);
+
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    handle.classList.add('dragging');
+    const startX    = e.clientX;
+    const startMapW = mapPanel.getBoundingClientRect().width;
+    const onMove = e2 => {
+      const dx = e2.clientX - startX;
+      const newMapW = Math.max(280, Math.min(900, startMapW - dx));
+      layoutEl.style.gridTemplateColumns = `minmax(0,1fr) ${newMapW}px`;
+      positionHandle();
+    };
+    const onUp = () => {
+      handle.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove, true);
+      document.removeEventListener('mouseup', onUp, true);
+      const currentMapW = mapPanel.getBoundingClientRect().width;
+      localStorage.setItem('portailMapWidth', Math.round(currentMapW));
+    };
+    document.addEventListener('mousemove', onMove, true);
+    document.addEventListener('mouseup', onUp, true);
   });
 }
 
 if (EDIT_MODE) {
   loadSavedColumnWidths();
+  loadSavedPanelWidth();
   setupColumnResize(); // thead/colgroup sont statiques dans le HTML, pas besoin d'attendre chargerVoyages()
+  setupPanelResize();
   const btn = document.createElement('button');
   btn.id = 'btn-copy-widths';
   btn.textContent = '📐 Copier les largeurs';
