@@ -112,6 +112,17 @@
   .col-grutage  { width: 6%; }
   .nowrap { white-space: nowrap; }
   .row-num { color: #94a3b8; font-size: 12px; }
+  /* Poignées de redimensionnement — créées en JS, uniquement en mode ?edit=1
+     (jamais montrées aux transporteurs). */
+  .col-resize-handle {
+    position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: col-resize;
+    z-index: 2; background: transparent;
+  }
+  .col-resize-handle:hover, .col-resize-handle.dragging { background: rgba(255,255,255,0.4); }
+  #btn-copy-widths {
+    font-size: 12px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--gray-border);
+    background: #fef3c7; color: #92400e; cursor: pointer; font-weight: 600; margin-left: 8px;
+  }
   .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .voyage-num { font-weight: 700; color: #1e293b; }
   .voyage-type {
@@ -186,6 +197,17 @@
     <div id="panel-list">
       <div id="voyage-table-wrap">
         <table>
+          <colgroup>
+            <col class="col-num" data-key="num">
+            <col class="col-lv" data-key="lv">
+            <col class="col-date" data-key="date">
+            <col class="col-dest" data-key="dest">
+            <col class="col-march" data-key="march">
+            <col class="col-contrainte" data-key="contrainte">
+            <col class="col-poids" data-key="poids">
+            <col class="col-ml" data-key="ml">
+            <col class="col-grutage" data-key="grutage">
+          </colgroup>
           <thead>
             <tr>
               <th class="col-num">N°</th>
@@ -536,6 +558,95 @@ function setupRealtime() {
 document.getElementById('btn-refresh').addEventListener('click', chargerVoyages);
 window.addEventListener('resize', () => { if (leafletMap) leafletMap.invalidateSize(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeVoyageModal(); });
+
+// ── Mode calibration des colonnes (?edit=1) ──────────────────────────────────
+// Jamais actif par défaut — les transporteurs ne voient ni poignées ni bouton.
+// But : ajuster les largeurs à la souris plutôt que deviner par itérations de
+// chat, puis "Copier les largeurs" donne le CSS exact à figer dans le code.
+const EDIT_MODE = new URLSearchParams(location.search).get('edit') === '1';
+
+function loadSavedColumnWidths() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('portailColWidths') || 'null');
+    if (!saved) return;
+    document.querySelectorAll('colgroup col[data-key]').forEach(col => {
+      if (saved[col.dataset.key] != null) col.style.width = saved[col.dataset.key] + '%';
+    });
+  } catch (e) { /* localStorage indisponible ou JSON corrompu — on ignore */ }
+}
+
+function saveColumnWidths() {
+  const widths = {};
+  document.querySelectorAll('colgroup col[data-key]').forEach(col => {
+    widths[col.dataset.key] = parseFloat(col.style.width) || null;
+  });
+  try { localStorage.setItem('portailColWidths', JSON.stringify(widths)); } catch (e) {}
+}
+
+function copyColumnWidths() {
+  // Largeur réellement rendue (pas seulement col.style.width, vide tant
+  // qu'une colonne n'a jamais été glissée — sinon ces colonnes remontent
+  // "0%" au lieu de leur largeur par défaut issue du CSS).
+  const table   = document.querySelector('#voyage-table-wrap table');
+  const tableW  = table.clientWidth;
+  const lines = [...document.querySelectorAll('colgroup col[data-key]')].map(col => {
+    const pct = Math.round(col.getBoundingClientRect().width / tableW * 100);
+    return `  .col-${col.dataset.key} { width: ${pct}%; }`;
+  }).join('\n');
+  navigator.clipboard.writeText(lines).then(() => showToast('Largeurs copiées — collez-les dans le CSS'));
+}
+
+function setupColumnResize() {
+  const table = document.querySelector('#voyage-table-wrap table');
+  const cols  = [...table.querySelectorAll('colgroup col[data-key]')];
+  const ths   = [...table.querySelectorAll('thead th')];
+  ths.forEach((th, i) => {
+    if (i === ths.length - 1) return; // pas de poignée après la dernière colonne
+    th.style.position = 'relative';
+    const handle = document.createElement('div');
+    handle.className = 'col-resize-handle';
+    th.appendChild(handle);
+    // Évènements souris classiques (pas Pointer Events) — plus robustes avec
+    // certains outils d'automatisation/pilotage à distance qui ne synthétisent
+    // pas toujours des pointerdown/pointermove corrects. Écoute sur document
+    // pendant le drag pour ne pas perdre le mouvement si le curseur sort de
+    // la poignée (équivalent manuel de setPointerCapture).
+    handle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      handle.classList.add('dragging');
+      const startX  = e.clientX;
+      const tableW  = table.clientWidth;
+      const colA    = cols[i], colB = cols[i + 1];
+      const startWA = colA.getBoundingClientRect().width;
+      const startWB = colB.getBoundingClientRect().width;
+      const onMove = e2 => {
+        const dx   = e2.clientX - startX;
+        const newWA = Math.max(24, startWA + dx);
+        const newWB = Math.max(24, startWB - dx);
+        colA.style.width = (newWA / tableW * 100) + '%';
+        colB.style.width = (newWB / tableW * 100) + '%';
+      };
+      const onUp = () => {
+        handle.classList.remove('dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        saveColumnWidths();
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+}
+
+if (EDIT_MODE) {
+  loadSavedColumnWidths();
+  setupColumnResize(); // thead/colgroup sont statiques dans le HTML, pas besoin d'attendre chargerVoyages()
+  const btn = document.createElement('button');
+  btn.id = 'btn-copy-widths';
+  btn.textContent = '📐 Copier les largeurs';
+  btn.onclick = copyColumnWidths;
+  document.querySelector('.toolbar').appendChild(btn);
+}
 
 initMap();
 chargerVoyages();
