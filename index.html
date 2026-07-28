@@ -1465,7 +1465,8 @@
 
       <!-- Formulaire création (masqué par défaut) -->
       <div id="admin-create-form" class="card" style="display:none;margin-bottom:12px;border:2px solid var(--brand);">
-        <p style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:12px;">Nouvel utilisateur</p>
+        <p style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:4px;">Nouvel utilisateur</p>
+        <p id="nu-linked-badge" style="display:none;font-size:11px;color:#1D4ED8;background:#EFF6FF;padding:3px 8px;border-radius:8px;font-weight:600;margin-bottom:8px;">🔗 lié au salarié RH — nom/prénom verrouillés</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
           <input type="text" id="nu-prenom" class="input-field" placeholder="Prénom" style="margin:0;">
           <input type="text" id="nu-nom" class="input-field" placeholder="Nom" style="margin:0;">
@@ -1496,6 +1497,12 @@
             Annuler
           </button>
         </div>
+      </div>
+
+      <!-- Salariés RH (rh-metal) sans compte sonotrad-pwa -->
+      <div id="admin-rh-unlinked" style="display:none;margin-bottom:16px;">
+        <p style="font-size:11px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">Salariés RH sans accès</p>
+        <div id="admin-rh-unlinked-list"></div>
       </div>
 
       <!-- Chargement -->
@@ -3653,6 +3660,31 @@ const App = {
     S.view = 'admin'; S.activity = 'admin'; S.prevView = 'home';
     this._render();
     this.loadAdminUsers();
+    this._subscribeEmployesChanges();
+  },
+
+  // Écoute les changements de la table Supabase `employes` (rh-metal) pour
+  // rafraîchir la liste "salariés RH sans accès" sans reload manuel. Canal
+  // public au payload minimal {op,id} (voir migration employes_broadcast_change) —
+  // jamais de pin_hash/nfc_uid sur ce canal.
+  _subscribeEmployesChanges() {
+    if (S._employesChannel || !window.SupabaseDB) return;
+    S._employesChannel = window.SupabaseDB.channel('employes-changes')
+      .on('broadcast', { event: 'employes_changed' }, () => {
+        if (S.view === 'admin') this.loadAdminUsers();
+      })
+      .subscribe();
+  },
+
+  async _fetchRhEmployes() {
+    if (!window.SupabaseDB) return [];
+    const { data, error } = await window.SupabaseDB.rpc('get_employes_rh');
+    if (error) { console.error('[Admin] get_employes_rh:', error); return []; }
+    return data || [];
+  },
+
+  _normalizeName(s) {
+    return String(s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   },
 
   async loadAdminUsers() {
@@ -3662,15 +3694,60 @@ const App = {
     if (loading) loading.style.display = 'block';
     if (list)    list.innerHTML = '';
     try {
-      const resp = await _fetchWithTimeout(S.apiUrl + '?action=users_list', {}, 15000);
-      const data = await resp.json();
-      if (data.status === 'ok') this._renderAdminUsers(data.users || []);
-      else if (list) list.innerHTML = `<div class="card" style="border-left:4px solid #F87171;"><p style="color:#991B1B;">${data.error || 'Erreur'}</p></div>`;
+      const [gasData, employes] = await Promise.all([
+        _fetchWithTimeout(S.apiUrl + '?action=users_list', {}, 15000).then(r => r.json()),
+        this._fetchRhEmployes(),
+      ]);
+      if (gasData.status === 'ok') {
+        const users = gasData.users || [];
+        this._renderAdminUsers(users);
+        this._renderRhUnlinked(employes, users);
+      } else if (list) {
+        list.innerHTML = `<div class="card" style="border-left:4px solid #F87171;"><p style="color:#991B1B;">${gasData.error || 'Erreur'}</p></div>`;
+      }
     } catch(e) {
       if (list) list.innerHTML = `<div class="card" style="border-left:4px solid #F87171;"><p style="color:#991B1B;">Erreur réseau : ${e.message}</p></div>`;
     } finally {
       if (loading) loading.style.display = 'none';
     }
+  },
+
+  _renderRhUnlinked(employes, gasUsers) {
+    const box  = document.getElementById('admin-rh-unlinked');
+    const list = document.getElementById('admin-rh-unlinked-list');
+    if (!box || !list) return;
+    const linkedIds   = new Set(gasUsers.map(u => u.employeId).filter(Boolean));
+    const linkedNames = new Set(gasUsers.map(u => this._normalizeName(u.prenom) + '|' + this._normalizeName(u.nom)));
+    const unlinked = (employes || []).filter(e => {
+      if (linkedIds.has(e.id)) return false;
+      const key = this._normalizeName(e.prenom) + '|' + this._normalizeName(e.nom);
+      return !linkedNames.has(key);
+    });
+    if (!unlinked.length) { box.style.display = 'none'; list.innerHTML = ''; return; }
+    box.style.display = 'block';
+    list.innerHTML = unlinked.map(e => `
+      <div class="card" style="margin-bottom:8px;display:flex;align-items:center;gap:12px;">
+        <div style="width:36px;height:36px;border-radius:50%;background:#F1F5F9;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">👤</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;color:#1E293B;">${e.prenom} ${e.nom}</div>
+          <div style="font-size:12px;color:#64748B;">${e.poste || 'Fiche RH'} — pas de compte sonotrad-pwa</div>
+        </div>
+        <button onclick="App._activateAccessFor('${e.id}','${String(e.prenom||'').replace(/'/g,"\\'")}','${String(e.nom||'').replace(/'/g,"\\'")}')"
+          style="background:var(--brand);color:white;border:none;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0;">
+          Activer l'accès
+        </button>
+      </div>`).join('');
+  },
+
+  _activateAccessFor(employeId, prenom, nom) {
+    this._showCreateUserForm();
+    S._pendingEmployeId = employeId;
+    const pEl = document.getElementById('nu-prenom');
+    const nEl = document.getElementById('nu-nom');
+    if (pEl) { pEl.value = prenom; pEl.readOnly = true; }
+    if (nEl) { nEl.value = nom;    nEl.readOnly = true; }
+    const badge = document.getElementById('nu-linked-badge');
+    if (badge) badge.style.display = 'block';
   },
 
   _renderAdminUsers(users) {
@@ -3758,7 +3835,10 @@ const App = {
   },
   _hideCreateUserForm() {
     document.getElementById('admin-create-form').style.display = 'none';
-    ['nu-prenom','nu-nom','nu-pin'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    S._pendingEmployeId = null;
+    ['nu-prenom','nu-nom','nu-pin'].forEach(id => { const el = document.getElementById(id); if (el) { el.value = ''; el.readOnly = false; } });
+    const badge = document.getElementById('nu-linked-badge');
+    if (badge) badge.style.display = 'none';
     ['loxam','bcb','agorastore','stockage','lvu','pointage'].forEach(a => {
       const el = document.getElementById('nu-act-' + a);
       if (el) el.checked = (a === 'loxam'); // reset : loxam coché par défaut
@@ -3773,6 +3853,7 @@ const App = {
     const nom    = document.getElementById('nu-nom').value.trim();
     const role   = document.getElementById('nu-role').value;
     const pin    = document.getElementById('nu-pin').value.trim();
+    const employeId = S._pendingEmployeId || '';
     const activites = ['loxam','bcb','agorastore','stockage','lvu','pointage'].filter(a => {
       const el = document.getElementById('nu-act-' + a); return el && el.checked;
     });
@@ -3784,14 +3865,16 @@ const App = {
     const pinHash = await this._hashPin(pin);
     try {
       const fd = new FormData();
-      fd.append('payload', JSON.stringify({ action:'create_user', prenom, nom, role, activites, pinHash }));
+      fd.append('payload', JSON.stringify({ action:'create_user', prenom, nom, role, activites, pinHash, employeId }));
       const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
       const data = await resp.json();
       if (data.status === 'ok') {
-        // Sync vers Supabase : même PIN pour l'app et le pointage kiosque
+        // Sync vers Supabase : même PIN pour l'app et le pointage kiosque —
+        // p_id (si présent) cible la ligne employes exacte au lieu de matcher
+        // sur nom/prénom, pour éviter tout doublon de casse/accents.
         if (window.SupabaseDB) {
           const { error: sbErr } = await window.SupabaseDB.rpc('upsert_employe_pointage',
-            { p_nom: nom, p_prenom: prenom, p_pin: pin });
+            { p_nom: nom, p_prenom: prenom, p_pin: pin, p_id: employeId || null });
           if (sbErr) console.error('[Pointage] upsert_employe_pointage:', sbErr);
         }
         this.toast(`✓ ${prenom} ${nom} créé !`);
