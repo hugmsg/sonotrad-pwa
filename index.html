@@ -3807,7 +3807,7 @@ const App = {
               style="background:${u.actif ? '#FEF2F2' : '#F0FDF4'};border:1.5px solid ${u.actif ? '#FECACA' : '#86EFAC'};color:${u.actif ? '#991B1B' : '#14532D'};padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
               ${u.actif ? 'Désactiver' : 'Réactiver'}
             </button>
-            <button onclick="App._deleteUser('${u.prenom}','${u.nom}')"
+            <button onclick="App._deleteUser('${u.prenom}','${u.nom}','${u.employeId||''}')"
               style="background:#FEF2F2;border:1.5px solid #FECACA;color:#991B1B;padding:8px 10px;border-radius:8px;font-size:14px;cursor:pointer;" title="Supprimer ce compte">
               🗑
             </button>
@@ -3819,7 +3819,7 @@ const App = {
               <input type="number" id="rpin-${u.prenom}-${u.nom}" class="input-field"
                 placeholder="ex : 3947" min="1000" max="9999"
                 style="margin:0;flex:1;letter-spacing:4px;font-size:18px;font-weight:600;">
-              <button onclick="App._applyResetPin('${u.prenom}','${u.nom}')"
+              <button onclick="App._applyResetPin('${u.prenom}','${u.nom}','${u.employeId||''}')"
                 style="background:var(--brand);color:white;border:none;padding:0 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;">
                 OK
               </button>
@@ -3853,7 +3853,7 @@ const App = {
     const nom    = document.getElementById('nu-nom').value.trim();
     const role   = document.getElementById('nu-role').value;
     const pin    = document.getElementById('nu-pin').value.trim();
-    const employeId = S._pendingEmployeId || '';
+    let employeId = S._pendingEmployeId || '';
     const activites = ['loxam','bcb','agorastore','stockage','lvu','pointage'].filter(a => {
       const el = document.getElementById('nu-act-' + a); return el && el.checked;
     });
@@ -3863,20 +3863,25 @@ const App = {
     if (!activites.length)            { this.toast('Sélectionne au moins une activité'); return; }
 
     const pinHash = await this._hashPin(pin);
+
+    // Crée/relie la ligne Supabase employes AVANT le compte GAS, pour
+    // connaître son id dès la création — sinon un compte sans fiche RH créé
+    // ici reste sans employeId, et sa suppression plus tard laisse une ligne
+    // employes orpheline (voir _deleteUser) invisible depuis sonotrad-pwa
+    // mais qui continue d'apparaître côté rh-metal.
+    if (window.SupabaseDB) {
+      const { data: sbData, error: sbErr } = await window.SupabaseDB.rpc('upsert_employe_pointage',
+        { p_nom: nom, p_prenom: prenom, p_pin: pin, p_id: employeId || null });
+      if (sbErr) console.error('[Pointage] upsert_employe_pointage:', sbErr);
+      else if (sbData?.id) employeId = sbData.id;
+    }
+
     try {
       const fd = new FormData();
       fd.append('payload', JSON.stringify({ action:'create_user', prenom, nom, role, activites, pinHash, employeId }));
       const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
       const data = await resp.json();
       if (data.status === 'ok') {
-        // Sync vers Supabase : même PIN pour l'app et le pointage kiosque —
-        // p_id (si présent) cible la ligne employes exacte au lieu de matcher
-        // sur nom/prénom, pour éviter tout doublon de casse/accents.
-        if (window.SupabaseDB) {
-          const { error: sbErr } = await window.SupabaseDB.rpc('upsert_employe_pointage',
-            { p_nom: nom, p_prenom: prenom, p_pin: pin, p_id: employeId || null });
-          if (sbErr) console.error('[Pointage] upsert_employe_pointage:', sbErr);
-        }
         this.toast(`✓ ${prenom} ${nom} créé !`);
         this._hideCreateUserForm();
         this.loadAdminUsers();
@@ -3900,7 +3905,7 @@ const App = {
     if (!isVisible) document.getElementById(`rpin-${prenom}-${nom}`)?.focus();
   },
 
-  async _applyResetPin(prenom, nom) {
+  async _applyResetPin(prenom, nom, employeId) {
     const input = document.getElementById(`rpin-${prenom}-${nom}`);
     const pin   = (input?.value || '').trim();
     if (!pin || pin.length < 4) { this.toast('PIN invalide — 4 chiffres requis'); return; }
@@ -3911,11 +3916,20 @@ const App = {
       const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
       const data = await resp.json();
       if (data.status === 'ok') {
-        // Sync vers Supabase : même PIN pour l'app et le pointage kiosque
+        // Sync vers Supabase : même PIN pour l'app et le pointage kiosque —
+        // p_id (si connu) cible la ligne exacte. Si ce compte n'avait pas
+        // encore de ligne employes (employeId vide, PIN défini pour la 1re
+        // fois hors création), on relie la nouvelle ligne créée au compte
+        // GAS pour que _deleteUser puisse la retrouver plus tard.
         if (window.SupabaseDB) {
-          const { error: sbErr } = await window.SupabaseDB.rpc('upsert_employe_pointage',
-            { p_nom: nom, p_prenom: prenom, p_pin: pin });
+          const { data: sbData, error: sbErr } = await window.SupabaseDB.rpc('upsert_employe_pointage',
+            { p_nom: nom, p_prenom: prenom, p_pin: pin, p_id: employeId || null });
           if (sbErr) console.error('[Pointage] upsert_employe_pointage:', sbErr);
+          else if (!employeId && sbData?.id) {
+            const fd2 = new FormData();
+            fd2.append('payload', JSON.stringify({ action:'update_user_employe_id', prenom, nom, employeId: sbData.id }));
+            _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd2 }, 15000).catch(() => {});
+          }
         }
         this.toast(`✓ PIN de ${prenom} réinitialisé`);
         document.getElementById(`reset-pin-${prenom}-${nom}`).style.display = 'none';
@@ -3978,7 +3992,7 @@ const App = {
     } catch(e) { this.toast('Erreur réseau'); this.loadAdminUsers(); }
   },
 
-  async _deleteUser(prenom, nom) {
+  async _deleteUser(prenom, nom, employeId) {
     if (!window.confirm(`Supprimer définitivement ${prenom} ${nom} ?\nCette action est irréversible.`)) return;
     try {
       const fd = new FormData();
@@ -3986,6 +4000,20 @@ const App = {
       const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
       const data = await resp.json();
       if (data.status === 'ok') {
+        // Si ce compte n'a jamais eu de fiche RH (classe_num vide côté
+        // employes), on retire aussi sa ligne Supabase — sinon elle reste
+        // orpheline et continue d'apparaître côté rh-metal comme "salarié
+        // sans fiche RH". Un salarié RH réel (classe_num renseigné) n'est
+        // lui jamais touché ici : sa suppression relève de rh-metal.
+        if (employeId && window.SupabaseDB) {
+          const { data: rows, error: getErr } = await window.SupabaseDB.rpc('get_employes_rh');
+          if (getErr) console.error('[Pointage] get_employes_rh:', getErr);
+          const row = (rows || []).find(e => e.id === employeId);
+          if (row && (row.classe_num === null || row.classe_num === undefined)) {
+            const { error: delErr } = await window.SupabaseDB.rpc('supprimer_employe_rh', { p_id: employeId });
+            if (delErr) console.error('[Pointage] supprimer_employe_rh:', delErr);
+          }
+        }
         this.toast(`✓ ${prenom} ${nom} supprimé`);
         this.loadAdminUsers();
       } else {
