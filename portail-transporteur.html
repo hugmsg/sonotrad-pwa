@@ -31,7 +31,7 @@
   .status { display: flex; align-items: center; gap: 6px; font-size: 12px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
   .dot.off { background: #ef4444; }
-  main { max-width: 1800px; margin: 0 auto; padding: 16px 18px; }
+  main { max-width: 1800px; margin: 0 auto; padding: 12px 8px; }
   .cards { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; margin-bottom: 18px; max-width: 420px; }
   .card { background: white; border: 1px solid var(--gray-border); border-radius: 10px; padding: 14px 16px; }
   .card .label { font-size: 12px; color: var(--gray-text); margin: 0 0 4px; }
@@ -48,7 +48,7 @@
      proche du carré/portrait (vu sa hauteur qui remplit tout le viewport)
      au lieu de s'étirer en paysage — et laisse le maximum de place à la
      liste, qui prend tout le reste (minmax(0, 1fr)). */
-  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 710px); gap: 14px; align-items: start; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 580px); gap: 14px; align-items: start; }
   @media (max-width: 900px) {
     .layout { grid-template-columns: 1fr; }
     main { max-width: 640px; }
@@ -88,28 +88,29 @@
     #voyage-table-wrap { flex: 1; min-height: 0; overflow-y: auto; }
     footer { flex-shrink: 0; padding: 8px 20px; }
   }
-  table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px; }
   thead th {
     position: sticky; top: 0; z-index: 1;
-    text-align: left; padding: 8px 8px; background: var(--navy-light); color: var(--navy);
-    font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.2px;
+    text-align: left; padding: 6px 6px; background: var(--navy-light); color: var(--navy);
+    font-weight: 700; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.2px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  tbody td { padding: 8px 8px; border-top: 1px solid var(--gray-border); vertical-align: top; }
+  tbody td { padding: 6px 6px; border-top: 1px solid var(--gray-border); vertical-align: top; }
   tbody tr { cursor: pointer; transition: background-color 0.12s; }
   tbody tr:hover, tbody tr.row-highlight { background: var(--navy-light); }
   /* Colonnes à contenu court et prévisible (N°, date, poids, ml, grutage) —
      resserrées volontairement : le nombre de caractères y varie peu, contrairement
      à destination/marchandise/contrainte qui profitent de l'espace libéré. */
   .col-num      { width: 3%; }
-  .col-lv       { width: 8%; }
+  .col-lv       { width: 6%; }
   .col-date     { width: 7%; }
-  .col-dest     { width: 23%; }
-  .col-march    { width: 28%; }
-  .col-contrainte { width: 14%; }
+  .col-dest     { width: 21%; }
+  .col-march    { width: 24%; }
+  .col-contrainte { width: 12%; }
   .col-poids    { width: 5%; }
   .col-ml       { width: 5%; }
-  .col-grutage  { width: 7%; }
+  .col-grutage  { width: 6%; }
+  .col-livraison { width: 11%; }
   .nowrap { white-space: nowrap; }
   .row-num { color: #94a3b8; font-size: 12px; }
   /* Poignées de redimensionnement — créées en JS, uniquement en mode ?edit=1
@@ -129,11 +130,6 @@
   }
   .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .voyage-num { font-weight: 700; color: #1e293b; }
-  .voyage-type {
-    display: inline-block; font-size: 9.5px; font-weight: 700; letter-spacing: 0.3px;
-    color: var(--navy); background: white; border: 1px solid var(--navy-light); border-radius: 5px;
-    padding: 0 5px; margin-left: 4px; vertical-align: 1px;
-  }
   .badge { display: inline-block; padding: 2px 7px; border-radius: 6px; font-size: 10.5px; font-weight: 700; }
   .badge-grutage { background: var(--warn-bg); color: var(--warn); }
   .constraint-text { color: #92400e; font-style: italic; }
@@ -211,6 +207,7 @@
             <col class="col-poids" data-key="poids">
             <col class="col-ml" data-key="ml">
             <col class="col-grutage" data-key="grutage">
+            <col class="col-livraison" data-key="livraison">
           </colgroup>
           <thead>
             <tr>
@@ -218,6 +215,7 @@
               <th class="col-lv">LV</th><th class="col-date">Date</th><th class="col-dest">Destination</th>
               <th class="col-march">Marchandise</th><th class="col-contrainte">Note</th>
               <th class="col-poids">Poids</th><th class="col-ml">ML</th><th class="col-grutage">Grutage</th>
+              <th class="col-livraison">Livraison</th>
             </tr>
           </thead>
           <tbody id="tbody"></tbody>
@@ -427,14 +425,15 @@ function render() {
         return `
         <tr data-numero="${escapeHtml(v.numero_lv)}" data-city="${escapeHtml(city)}">
           <td class="col-num nowrap row-num">${idx + 1}</td>
-          <td class="col-lv nowrap"><span class="voyage-num">${escapeHtml(v.numero_lv)}</span><span class="voyage-type">${escapeHtml(v.type || 'LV')}</span></td>
+          <td class="col-lv nowrap"><span class="voyage-num">${escapeHtml(v.numero_lv)}</span></td>
           <td class="col-date muted ellipsis">${new Date(v.date_creation).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'2-digit' })}</td>
           <td class="col-dest ellipsis" title="${escapeHtml(v.destination)}">${escapeHtml(v.destination) || '-'}</td>
           <td class="col-march ellipsis" title="${escapeHtml(marchandise)}">${marchandise ? escapeHtml(marchandise) : '<span class="muted">-</span>'}</td>
-          <td class="col-contrainte ellipsis constraint-text" title="${escapeHtml(v.commentaire)}">${v.livraison_prevue ? `<span class="badge badge-grutage" style="margin-right:4px;">📅 ${new Date(v.livraison_prevue).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})}</span>` : ''}${v.commentaire ? escapeHtml(v.commentaire) : (v.livraison_prevue ? '' : '<span class="muted">-</span>')}</td>
+          <td class="col-contrainte ellipsis constraint-text" title="${escapeHtml(v.commentaire)}">${v.commentaire ? escapeHtml(v.commentaire) : '<span class="muted">-</span>'}</td>
           <td class="col-poids nowrap">${v.poids ? escapeHtml(v.poids) + ' t' : '<span class="muted">-</span>'}</td>
           <td class="col-ml nowrap">${v.ml ? escapeHtml(v.ml) + ' ml' : '<span class="muted">-</span>'}</td>
           <td class="col-grutage nowrap">${v.grutage ? '<span class="badge badge-grutage">grutage</span>' : '<span class="muted">-</span>'}</td>
+          <td class="col-livraison nowrap">${v.livraison_prevue ? escapeHtml(new Date(v.livraison_prevue).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'})) : '<span class="muted">-</span>'}</td>
         </tr>`;
       }).join('');
 
