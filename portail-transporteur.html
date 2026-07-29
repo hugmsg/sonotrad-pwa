@@ -48,7 +48,7 @@
      proche du carré/portrait (vu sa hauteur qui remplit tout le viewport)
      au lieu de s'étirer en paysage — et laisse le maximum de place à la
      liste, qui prend tout le reste (minmax(0, 1fr)). */
-  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 580px); gap: 14px; align-items: start; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 660px); gap: 14px; align-items: start; }
   @media (max-width: 900px) {
     .layout { grid-template-columns: 1fr; }
     main { max-width: 640px; }
@@ -104,8 +104,8 @@
   .col-num      { width: 3%; }
   .col-lv       { width: 6%; }
   .col-date     { width: 7%; }
-  .col-dest     { width: 23%; }
-  .col-march    { width: 26%; }
+  .col-dest     { width: 18%; }
+  .col-march    { width: 21%; }
   .col-contrainte { width: 12%; }
   .col-poids    { width: 5%; }
   .col-ml       { width: 5%; }
@@ -215,7 +215,7 @@
               <th class="col-lv">LV</th><th class="col-date">Date</th><th class="col-dest">Destination</th>
               <th class="col-march">Marchandise</th><th class="col-contrainte">Note</th>
               <th class="col-poids">Poids</th><th class="col-ml">ML</th><th class="col-grutage">Grutage</th>
-              <th class="col-livraison">Livraison</th>
+              <th class="col-livraison">Liv max</th>
             </tr>
           </thead>
           <tbody id="tbody"></tbody>
