@@ -11188,6 +11188,8 @@ ${bodies}${sansAcheteurBody}
     if (ta) { ta.value = commentaire; }
     const cb = document.getElementById('lvnote-modal-grutage');
     if (cb) cb.checked = grutage;
+    const dateEl = document.getElementById('lvnote-modal-livraison');
+    if (dateEl) dateEl.value = _toIsoDateInput(row.livraison_prevue);
     const modal = document.getElementById('lvnote-modal');
     if (modal) modal.style.display = 'flex';
   },
@@ -11203,12 +11205,13 @@ ${bodies}${sansAcheteurBody}
     if (!numero) return;
     const commentaire = document.getElementById('lvnote-modal-textarea')?.value.trim() || '';
     const grutage     = document.getElementById('lvnote-modal-grutage')?.checked === true;
+    const livraisonPrevue = document.getElementById('lvnote-modal-livraison')?.value || '';
     const btn = document.getElementById('lvnote-modal-btn');
     if (btn) { btn.disabled = true; btn.textContent = '…'; }
     try {
       const r = await _fetchWithTimeout(S.apiUrl, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'lv_update_note', numero, commentaire, grutage })
+        body: JSON.stringify({ action: 'lv_update_note', numero, commentaire, grutage, livraison_prevue: livraisonPrevue })
       }, 20000);
       const d = await r.json();
       if (d.status !== 'ok') throw new Error(d.error || 'erreur inconnue (tableur)');
@@ -11224,6 +11227,7 @@ ${bodies}${sansAcheteurBody}
           p_numero_lv:   String(numero).padStart(5, '0'),
           p_commentaire: commentaire,
           p_grutage:     grutage,
+          p_livraison_prevue: livraisonPrevue || null,
         });
         if (error) throw new Error(error.message + ' (portail)');
         if (data && data.ok === false) portailKo = true;
@@ -13376,6 +13380,9 @@ document.addEventListener('DOMContentLoaded', () => {
       <input type="checkbox" id="lvnote-modal-grutage" style="width:18px;height:18px;">
       Grutage à la livraison
     </label>
+    <label style="font-size:12px;color:#64748B;font-weight:600;display:block;margin-bottom:6px;">Livraison prévue</label>
+    <input id="lvnote-modal-livraison" type="date"
+      style="width:100%;box-sizing:border-box;border:1.5px solid #CBD5E1;border-radius:10px;padding:10px;font-size:14px;outline:none;margin-bottom:16px;">
     <button onclick="App.saveLvNoteModal()" id="lvnote-modal-btn"
       style="width:100%;padding:13px;border:none;background:var(--brand);color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
       ✓ Enregistrer
