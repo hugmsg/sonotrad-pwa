@@ -2776,6 +2776,10 @@
           <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Note de livraison</label>
           <textarea id="lvu-f-note" rows="3"
             style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;resize:vertical;font-family:inherit;margin-bottom:10px;"></textarea>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin-bottom:8px;">
+            <input type="checkbox" id="lvu-f-livraison-check" onchange="App.lvuToggleLivraisonPrevue()"> Livraison prévue
+          </label>
+          <input id="lvu-f-livraison-date" type="date" style="display:none;width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:10px;">
           <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:8px;">Convoi exceptionnel</label>
           <div style="display:flex;gap:10px;">
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
@@ -7360,6 +7364,7 @@ const App = {
             <div style="display:flex;align-items:center;gap:4px;overflow:hidden;flex-wrap:wrap;">
               ${chips}
               ${d.status && d.status.grutage ? `<span class="chip" style="background:#FEF2F2;color:#991B1B;flex-shrink:0;">🏗 Grutage</span>` : ''}
+              ${d.livraisonPrevue ? `<span class="chip" style="background:#EFF6FF;color:#1D4ED8;flex-shrink:0;">📅 ${_fmtDateShort(d.livraisonPrevue)}</span>` : ''}
               ${dur ? `<span style="font-size:10px;color:#94A3B8;white-space:nowrap;flex-shrink:0;">⏱ ${dur}</span>` : ''}
               ${S.depPhotosLog[code] ? `<span style="font-size:10px;background:#F0FDF4;color:#166534;border-radius:6px;padding:1px 5px;white-space:nowrap;flex-shrink:0;">📷 ${S.depPhotosLog[code].count}</span>` : ''}
             </div>
@@ -7605,6 +7610,15 @@ const App = {
         </div>` : ''}
         ${d.lv ? `<div style="font-size:12px;color:#1D4ED8;font-weight:600;margin-top:4px;">📄 LV N° ${d.lv}</div>` : ''}
         ${d.commande ? `<div style="font-size:12px;color:#64748B;margin-top:2px;">🔖 Commande : ${d.commande}</div>` : ''}
+        <div style="font-size:12px;color:#1E293B;margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span>📅 Livraison prévue : ${d.livraisonPrevue ? _fmtDate(d.livraisonPrevue) : 'non renseignée'}</span>
+          ${!S.depFromArchive ? `<button onclick="App.toggleLivraisonPrevueEdit()" style="background:none;border:none;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer;padding:0;">Modifier</button>` : ''}
+        </div>
+        ${!S.depFromArchive ? `
+        <div id="livraison-prevue-edit" style="display:none;gap:6px;align-items:center;margin-top:8px;">
+          <input type="date" id="livraison-prevue-input" value="${_toIsoDateInput(d.livraisonPrevue)}" style="flex:1;padding:8px;border:1px solid #E2E8F0;border-radius:8px;font-size:13px;">
+          <button onclick="App.saveLivraisonPrevue()" style="background:var(--brand);color:white;border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">OK</button>
+        </div>` : ''}
         <div id="dep-drive-section" style="margin-top:12px;">
           <p style="font-size:12px;color:#94A3B8;">🔄 Vérification du dossier Drive…</p>
         </div>
@@ -7629,6 +7643,33 @@ const App = {
       </div>`}`;
     if (!S.depFromArchive) this._renderDepPhotoGrid();
     this._loadDriveLinkForDetail(d.code, S.depFromArchive ? 'archive' : 'production', 'dep-drive-section', 'drive-files-panel', 'btn-drive-files');
+  },
+  toggleLivraisonPrevueEdit() {
+    const box = document.getElementById('livraison-prevue-edit');
+    if (!box) return;
+    box.style.display = box.style.display === 'flex' ? 'none' : 'flex';
+  },
+  async saveLivraisonPrevue() {
+    const d = S.selDep;
+    if (!d) return;
+    const input = document.getElementById('livraison-prevue-input');
+    const date  = input ? input.value : '';
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ action:'dep_set_livraison_prevue', code: d.code, date })
+      }, 20000);
+      const res = await r.json();
+      if (res.status !== 'ok') { this.toast('❌ ' + (res.error || 'Erreur')); return; }
+      d.livraisonPrevue = date;
+      const box = document.getElementById('livraison-prevue-edit');
+      if (box) box.style.display = 'none';
+      this._renderDepDetail();
+      this._renderDepList();
+      this.toast('✅ Livraison prévue mise à jour');
+    } catch(e) {
+      this.toast('❌ Erreur : ' + e.message);
+    }
   },
   async loadDriveFiles(folderId, panelId = 'drive-files-panel', btnId = 'btn-drive-files') {
     if (!folderId) return;
@@ -10428,6 +10469,13 @@ ${bodies}${sansAcheteurBody}
     this._lvuRenderLoxamList();
   },
 
+  lvuToggleLivraisonPrevue() {
+    const cb   = document.getElementById('lvu-f-livraison-check');
+    const date = document.getElementById('lvu-f-livraison-date');
+    if (!cb || !date) return;
+    date.style.display = cb.checked ? 'block' : 'none';
+  },
+
   lvuApplyLoxam() {
     const rows = [];
     let firstAgence = null;
@@ -10484,6 +10532,17 @@ ${bodies}${sansAcheteurBody}
       const fn = document.getElementById('lvu-f-note');
       if (fn && !fn.value.includes('GRUTAGE'))
         fn.value = '!!! GRUTAGE A LA LIVRAISON !!!' + (fn.value ? '\n' + fn.value : '');
+    }
+    // Pré-remplir la date de livraison prévue si connue en Production LOXAM
+    const livPrevue = [...S.lvu.selectedItems]
+      .map(key => S.lvu.loxamItems.find(i => (i.code || i.codeModule || i.module || '') === key))
+      .find(i => i && i.livraisonPrevue)?.livraisonPrevue;
+    const cbLiv = document.getElementById('lvu-f-livraison-check');
+    const dateLiv = document.getElementById('lvu-f-livraison-date');
+    if (livPrevue && cbLiv && dateLiv) {
+      cbLiv.checked = true;
+      dateLiv.value = _toIsoDateInput(livPrevue);
+      dateLiv.style.display = 'block';
     }
     document.getElementById('lvu-loxam-picker').style.display = 'none';
     this.toast(`${rows.length} module(s) importé(s)${anyGrutage ? ' — ⚠️ Grutage' : ''}`);
@@ -10668,6 +10727,7 @@ ${bodies}${sansAcheteurBody}
       doc_annexe:   v('lvu-f-doc'),
       commande:     v('lvu-f-commande'),
       note:         v('lvu-f-note'),
+      livraisonPrevue: (document.getElementById('lvu-f-livraison-check')?.checked && v('lvu-f-livraison-date')) ? v('lvu-f-livraison-date') : '',
       convoi:       document.getElementById('lvu-convoi-oui')?.checked || false,
       source:       S.lvu.source || 'manual',
     };
@@ -10728,6 +10788,7 @@ ${bodies}${sansAcheteurBody}
         expediteur: d.expediteur?.nom || '', destinataire: d.destinataire?.nom || '',
         doc_annexe: d.doc_annexe || '', commande: d.commande || '',
         note: d.note || '', convoi: d.convoi ? 'Oui' : 'Non',
+        livraison_prevue: d.livraisonPrevue || '',
         poids: (d.marchandises || []).reduce((s, r) => s + (parseFloat(r.poids) || 0), 0).toFixed(3),
         ml: parseFloat(d.total?.ml) || '',
         source: d.source || 'manual',
@@ -10845,6 +10906,7 @@ ${bodies}${sansAcheteurBody}
         p_expediteur:   d.expediteur?.nom || '',
         p_convoi:       !!d.convoi,
         p_pdf_url:      pdfUrl || '',
+        p_livraison_prevue: d.livraisonPrevue || null,
       });
       if (error) console.warn('[_syncVoyageSupabase] portail non synchronisé :', error.message);
     } catch (e) {
@@ -10963,11 +11025,15 @@ ${bodies}${sansAcheteurBody}
     ['lvu-f-conducteur','lvu-f-immat-moteur','lvu-f-immat-semi','lvu-f-donneur',
      'lvu-f-exp-nom','lvu-f-exp-adresse','lvu-f-exp-ville','lvu-f-exp-pays',
      'lvu-f-dest-nom','lvu-f-dest-adresse','lvu-f-dest-ville','lvu-f-dest-pays',
-     'lvu-f-doc','lvu-f-commande','lvu-f-note'].forEach(id => {
+     'lvu-f-doc','lvu-f-commande','lvu-f-note','lvu-f-livraison-date'].forEach(id => {
       const el = document.getElementById(id); if (el) el.value = '';
     });
     const nonEl = document.getElementById('lvu-convoi-non');
     if (nonEl) nonEl.checked = true;
+    const livCb = document.getElementById('lvu-f-livraison-check');
+    if (livCb) livCb.checked = false;
+    const livDate = document.getElementById('lvu-f-livraison-date');
+    if (livDate) livDate.style.display = 'none';
     this._lvuRenderMarchandises();
     const v = document.getElementById('view-lvu-form'); if (v) v.scrollTop = 0;
   },
@@ -11055,7 +11121,7 @@ ${bodies}${sansAcheteurBody}
       <table class="lvu-hist-table">
         <thead>
           <tr>
-            ${['LV','Créée le','Destinataire','Marchandise','Conducteur','Commande','Note','Grutage','Parti','Actions']
+            ${['LV','Créée le','Destinataire','Marchandise','Conducteur','Commande','Note','Grutage','Livraison prévue','Parti','Actions']
               .map(h => `<th>${h}</th>`).join('')}
           </tr>
         </thead>
@@ -11075,6 +11141,7 @@ ${bodies}${sansAcheteurBody}
               <td style="white-space:nowrap;color:#94A3B8;">${row.commande||'-'}</td>
               <td class="ellipsis" style="color:#92400E;font-style:italic;" title="${commentaire}">${commentaire||'<span style="color:#CBD5E1;font-style:normal;">-</span>'}</td>
               <td style="white-space:nowrap;">${grutage?'<span style="font-size:10.5px;font-weight:700;background:#FEF3C7;color:#92400E;border-radius:6px;padding:2px 7px;">grutage</span>':'<span style="color:#CBD5E1;">-</span>'}</td>
+              <td style="white-space:nowrap;color:#1D4ED8;">${row.livraison_prevue||'<span style="color:#CBD5E1;">-</span>'}</td>
               <td style="white-space:nowrap;">${row.parti?'<span style="font-size:10.5px;font-weight:700;color:#64748B;">🚚 Parti</span>':'<span style="font-size:10.5px;font-weight:700;color:#15803D;">✅ Dispo</span>'}</td>
               <td style="white-space:nowrap;">
                 <div style="display:flex;align-items:center;gap:6px;">
@@ -12757,17 +12824,19 @@ function _lvuRecto(doc, d, isCMR, band) {
   const cmdStr = d.commande ? 'Cde : ' + d.commande : '';
   if (docStr) tx(docStr, x0 + LV.CELL_PAD_X, y + 7.0);
   if (cmdStr) tx(cmdStr, x0 + LV.CELL_PAD_X, y + (docStr ? 9.5 : 7.0));
+  if (d.livraisonPrevue) tx('Livraison prévue le ' + _fmtDateFR(d.livraisonPrevue), x0 + CW / 2 + LV.CELL_PAD_X, y + 7.0);
   if (d.note) {
     const noteStr = String(d.note);
     const isGrutage = noteStr.startsWith('!!!');
+    const noteY = d.livraisonPrevue ? y + 9.5 : y + 7.0;
     if (isGrutage) {
       doc.setFillColor(255, 230, 0);
-      doc.rect(x0 + CW / 2 + 0.5, y + 4.5, CW / 2 - 1, 5.5, 'F');
+      doc.rect(x0 + CW / 2 + 0.5, noteY - 2.5, CW / 2 - 1, 5.5, 'F');
       tc(185, 28, 28); sf('bold', LV.FONT_BODY);
-      tx(noteStr, x0 + CW / 2 + LV.CELL_PAD_X, y + 7.0);
+      tx(noteStr, x0 + CW / 2 + LV.CELL_PAD_X, noteY);
       tc(0, 0, 0); sf('normal', LV.FONT_BODY);
     } else {
-      tx(noteStr, x0 + CW / 2 + LV.CELL_PAD_X, y + 7.0);
+      tx(noteStr, x0 + CW / 2 + LV.CELL_PAD_X, noteY);
     }
   }
   dc(0, 0, 0); lw(LV.STROKE_INTRA);
@@ -12992,6 +13061,29 @@ function _fmtDate(str) {
   const d = new Date(str);
   if (isNaN(d)) return str;
   return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+// Format court JJ/MM (chips) — retombe sur la chaîne brute si non parsable
+function _fmtDateShort(str) {
+  if (!str) return '';
+  const d = new Date(str);
+  if (isNaN(d)) return str;
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+}
+// Format JJ/MM/AAAA (PDF LV/CMR)
+function _fmtDateFR(str) {
+  if (!str) return '';
+  const d = new Date(str);
+  if (isNaN(d)) return str;
+  const p = n => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+// Convertit une date (string Sheets/ISO) en yyyy-mm-dd pour <input type="date">
+function _toIsoDateInput(str) {
+  if (!str) return '';
+  const d = new Date(str);
+  if (isNaN(d)) return '';
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 // Durée entre debut et (fin ou aujourd'hui), retourne ex: "3j", "2 sem", "1 mois"
 function _duration(debut, fin) {
