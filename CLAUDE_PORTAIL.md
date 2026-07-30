@@ -398,6 +398,94 @@ PUBLICATION supabase_realtime ADD TABLE voyages`.
 
 ---
 
+## Date de livraison prévue LOXAM (2026-07-29/30) — EN PRODUCTION
+
+Nouveau champ de bout en bout : Production LOXAM (colonne "Livraison" déjà existante, jusque-là
+orpheline) → écran Départ PWA (affichage + édition, `dep_set_livraison_prevue`) → formulaire LV
+(case à cocher + date, pré-remplie automatiquement si connue) → PDF (section "Note de livraison")
+→ historique LV (colonne dédiée) → portail transporteur (colonne "Liv max").
+
+**Entièrement déployé en prod** (`main` + backend masterfile @86 + migrations Supabase appliquées) :
+- `sonotrad-scripts/masterfile/pwa_master.js` : `dep_set_livraison_prevue`, `_saveLv` (colonne S
+  Archive), `_getLvHistory`/`_getLvHistorySupabase` (champ `livraison_prevue`), `_updateLvNote`
+  (édition rétroactive).
+- Migrations Supabase : `20260729000000_voyages_livraison_prevue.sql` (colonne + `enregistrer_voyage`
+  + vue), `20260729010000_modifier_voyage_note_livraison_prevue.sql` (édition rétroactive),
+  `20260729020000_historique_livraison_prevue.sql` (fix : `lire_historique_voyages()` ne renvoyait
+  pas le champ, alors que `lv_history` — Archive Sheets, plus utilisée par la PWA — l'avait dès le
+  départ : deux chemins de lecture indépendants, penser aux deux si un champ est ajouté).
+
+**Bug corrigé (important pour toute future manipulation de dates jj/mm/aaaa)** : `new Date("11/07/2026")`
+en JS est ambigu et interprété en `MM/DD/YYYY` (anglo-saxon) → 11/07 devenait le 7 novembre au lieu
+du 11 juillet dans le sélecteur de date de la modale d'édition historique. Toute chaîne au format
+français doit être parsée à la main (voir `_toIsoDateInput()` dans `index.html`), jamais passée
+telle quelle à `new Date()`.
+
+**Édition rétroactive** : le modal "✏️ Éditer note/grutage" de l'Historique LV gère aussi la
+livraison prévue désormais — utile si la date change après création de la LV (déjà poussée au
+portail), ce qui n'était possible nulle part ailleurs (l'édition côté écran Départ ne touche que
+la Production, en amont de la LV).
+
+## Calendrier des livraisons prévues sur le portail — EN COURS, PAS ENCORE MERGÉ (2026-07-30)
+
+**État exact au moment d'écrire** : 6 commits sur `dev`, **aucun mergé sur `main`**, **le projet
+Vercel standalone `sonotrad-portail-transporteur` n'a PAS été redéployé** (il sert donc toujours
+la version sans calendrier). Dernier commit dev : `3d92930`.
+
+```
+ad863f0  calendrier des livraisons prévues + surlignage croisé (1ère version : grille mensuelle 3 mois pleine largeur en bas de page)
+da1e59e  calendrier compact 3 mois glissants + gain de place
+35021e3  calendrier — scroll latéral, cases carrées, badges + jour actuel visibles
+83be058  remplace le calendrier mensuel par une heatmap hebdomadaire compacte (pivot : liste verticale de semaines, colonne latérale sous la carte)
+e6e0edb  heatmap plus lisible — en-tête jours, repère mois, chiffres, légende
+3d92930  retour à une grille mensuelle horizontale (2 mois), flèches + bouton Aujourd'hui (état actuel)
+```
+
+**Design actuel (celui de `3d92930`, à valider par Hugo avant merge)** :
+- Emplacement : colonne latérale, **sous la carte** (pas de section pleine largeur en bas — testé
+  et abandonné, jugé trop encombrant / place mal utilisée).
+- Rendu : grille mensuelle classique (2 mois côte à côte, 1 seul si <900px), en-tête L M M J V S D,
+  jours hors-mois en repli grisé pour une grille toujours à 42 cases (6 semaines) quel que soit le
+  mois réel — évite que la hauteur ne varie en changeant de mois.
+- Chaque case = un jour, coloré façon heatmap (`HEAT_COLORS`, 5 nuances, plus foncé = plus de
+  voyages ce jour), chiffre du jour affiché en contraste (`HEAT_TEXT`). Pas de pastille séparée.
+- Navigation : flèches ‹ › (`#heat-prev`/`#heat-next`, décalent `heatBaseMonth` d'un mois) + bouton
+  "Aujourd'hui" (`#heat-today-btn`, recentre sur le mois calendaire réel, pas sur la prochaine
+  livraison connue — `defaultHeatBaseMonth()` reste le calcul utilisé seulement pour la position
+  initiale au chargement).
+- Surlignage croisé tableau ↔ carte ↔ calendrier dans les deux sens : `highlightNumeros()`
+  généralise `highlightCity()` à un groupe de `numero_lv` (un jour peut regrouper plusieurs voyages
+  vers des destinations différentes) ; `highlightCalDay()`/`clearCalDayHighlight()` pour le sens
+  ligne tableau → case calendrier.
+- `leafletMap.invalidateSize()` appelé après chaque rendu du calendrier (la hauteur de la colonne
+  carte change dynamiquement, plus de `max-height` fixe sur `#panel-heatmap`).
+- En-tête restructuré au passage : stats "disponibles"/"destinations" déplacées dans le bandeau
+  bleu marine (`.header-stats`), bouton "Actualiser" aussi remonté dans l'en-tête (`.header-actions`),
+  légende de la carte retirée (gain de place).
+
+**Itérations abandonnées, pour ne pas les reproposer** :
+- Grille mensuelle 3 mois pleine largeur en bas de page (`ad863f0`→`35021e3`) : jugée trop
+  encombrante, cases trop grandes, hauteur variable selon le mois (corrigé au passage — utile même
+  après le pivot).
+- Liste verticale de semaines avec numéro ISO (`83be058`→`e6e0edb`) : plus compacte mais "ne
+  ressemblait plus à un calendrier" (juste des numéros et des carrés) — le numéro de semaine seul
+  en tête de ligne, en petit gris, a été lu "534" au lieu de "S34" par Hugo. Le concept "case
+  colorée + chiffre du jour" de cette itération est conservé dans le design actuel, juste remonté
+  dans une vraie grille mensuelle.
+
+**Reste à faire, dans l'ordre** :
+1. Hugo teste la preview `dev` (lien stable : `https://sonotrad-pwa-git-dev-hugos-projects-28638a76.vercel.app/portail-transporteur.html`,
+   nécessite un compte Vercel avec accès au projet).
+2. Si validé : merge `dev` → `main` (`git fetch && git merge --no-edit origin/dev`, push `main`) →
+   déploiement production automatique sur `sonotrad-pwa.vercel.app` via Vercel.
+3. **Ne pas oublier** : redéployer ensuite le projet Vercel standalone `sonotrad-portail-transporteur`
+   (celui réellement partagé avec les transporteurs, non lié à Git — voir section "Hébergement"
+   plus haut) via `mcp__plugin_vercel_vercel__deploy_to_vercel`, target `production`, même nom de
+   projet, contenu à jour de `portail-transporteur.html` en tant que `index.html`. Sans cette étape,
+   les transporteurs ne voient jamais les changements malgré le merge sur `main`.
+
+---
+
 ## Fichiers du module Portail
 
 ```
