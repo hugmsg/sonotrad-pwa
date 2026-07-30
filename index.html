@@ -13053,9 +13053,13 @@ function _fmtDateFR(str) {
   const p = n => String(n).padStart(2, '0');
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
-// Convertit une date (string Sheets/ISO) en yyyy-mm-dd pour <input type="date">
+// Convertit une date (string Sheets/ISO/dd-mm-yyyy FR) en yyyy-mm-dd pour <input type="date">
+// new Date("11/07/2026") est ambigu et interprété par JS en MM/DD/YYYY (7 novembre au lieu du
+// 11 juillet) — toute chaîne jj/mm/aaaa doit donc être parsée à la main avant tout fallback.
 function _toIsoDateInput(str) {
   if (!str) return '';
+  const m = String(str).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
   const d = new Date(str);
   if (isNaN(d)) return '';
   const p = n => String(n).padStart(2, '0');
