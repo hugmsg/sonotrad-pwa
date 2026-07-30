@@ -37,13 +37,14 @@
   .hstat { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
   .hstat-value { font-size: 18px; font-weight: 700; color: white; }
   .hstat-label { font-size: 9.5px; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 0.3px; }
-  main { max-width: 1800px; margin: 0 auto; padding: 12px 8px; }
-  .toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
-  .toolbar button {
-    font-size: 13px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--gray-border);
-    background: white; cursor: pointer; font-weight: 600; color: #475569;
+  main { max-width: 1800px; margin: 0 auto; padding: 10px 8px; }
+  /* Bouton Actualiser remonté dans l'en-tête (ex-.toolbar), pour ne plus
+     lui dédier une ligne entière au-dessus de la liste/carte. */
+  .header-actions button {
+    font-size: 12px; padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.35);
+    background: rgba(255,255,255,0.12); cursor: pointer; font-weight: 600; color: white;
   }
-  .toolbar button:hover { background: #f8fafc; }
+  .header-actions button:hover { background: rgba(255,255,255,0.22); }
 
   /* La carte est plafonnée en largeur (minmax(320px, 460px)) plutôt que de
      prendre une fraction fixe de l'écran : sur un écran large, la garde
@@ -66,39 +67,42 @@
     padding: 2px 7px; font-size: 12px; font-weight: 600; color: #1e293b;
     box-shadow: 0 1px 3px rgba(0,0,0,0.12);
   }
-  .map-caption { font-size: 12px; color: var(--gray-text); margin-top: 8px; }
-
-  /* Calendrier des livraisons prévues — section pleine largeur sous liste+carte */
+  /* Calendrier des livraisons prévues — section pleine largeur sous liste+carte.
+     Toujours 6 semaines (42 cellules) par mois, complétées par les jours du
+     mois précédent/suivant en repli grisé : la hauteur du calendrier ne varie
+     donc plus jamais d'un mois à l'autre (4 vs 5 vs 6 semaines réelles). */
   #panel-calendar {
     background: white; border: 1px solid var(--gray-border); border-radius: 10px;
-    padding: 14px 16px; margin-top: 14px;
+    padding: 8px 12px; margin-top: 8px;
   }
-  .cal-header { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 10px; }
+  .cal-header { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 6px; }
   .cal-header button {
-    background: none; border: 1px solid var(--gray-border); border-radius: 8px; width: 28px; height: 28px;
-    cursor: pointer; font-size: 15px; color: var(--navy); line-height: 1;
+    background: none; border: 1px solid var(--gray-border); border-radius: 6px; width: 24px; height: 24px;
+    cursor: pointer; font-size: 13px; color: var(--navy); line-height: 1;
   }
   .cal-header button:hover { background: var(--navy-light); }
-  #cal-title { font-size: 13px; font-weight: 700; color: var(--navy); text-transform: capitalize; min-width: 140px; text-align: center; }
-  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-  .cal-dow { font-size: 10px; font-weight: 700; color: var(--gray-text); text-transform: uppercase; text-align: center; padding: 2px 0 6px; }
+  .cal-months { display: flex; gap: 10px; }
+  .cal-month { flex: 1; min-width: 0; }
+  .cal-month-title { font-size: 10.5px; font-weight: 700; color: var(--navy); text-align: center; text-transform: capitalize; margin-bottom: 3px; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .cal-dow { font-size: 8px; font-weight: 700; color: var(--gray-text); text-transform: uppercase; text-align: center; padding: 1px 0 2px; }
   .cal-day {
-    min-height: 46px; border: 1px solid var(--gray-border); border-radius: 8px; padding: 4px 5px;
-    font-size: 11px; color: #1e293b; position: relative; box-sizing: border-box;
+    min-height: 22px; border: 1px solid var(--gray-border); border-radius: 5px; padding: 1px 3px;
+    font-size: 9.5px; color: #1e293b; position: relative; box-sizing: border-box;
   }
-  .cal-day.cal-empty { border-color: transparent; }
+  .cal-day.cal-muted { color: #cbd5e1; border-color: #f1f5f9; }
   .cal-day.cal-has-voyage { cursor: pointer; border-color: var(--navy-light); }
   .cal-day.cal-has-voyage:hover, .cal-day.cal-highlight { background: var(--navy-light); border-color: var(--navy); }
   .cal-day-num { font-weight: 600; }
   .cal-day.cal-today .cal-day-num { color: #1d4ed8; text-decoration: underline; }
   .cal-day-badge {
-    position: absolute; top: 3px; right: 3px; background: var(--navy); color: white;
-    font-size: 9.5px; font-weight: 700; border-radius: 8px; min-width: 15px; text-align: center; padding: 1px 4px; line-height: 1.3;
+    position: absolute; top: 1px; right: 1px; background: var(--navy); color: white;
+    font-size: 7.5px; font-weight: 700; border-radius: 5px; min-width: 10px; text-align: center; padding: 0 3px; line-height: 1.3;
   }
-  .cal-caption { font-size: 12px; color: var(--gray-text); margin: 8px 0 0; }
   @media (max-width: 900px) {
-    .cal-day { min-height: 38px; font-size: 10px; }
-    #cal-title { min-width: 110px; }
+    .cal-months { flex-wrap: wrap; }
+    .cal-month:nth-child(n+2) { display: none; }
+    .cal-day { min-height: 28px; font-size: 10.5px; }
   }
 
   #panel-list { background: white; border: 1px solid var(--gray-border); border-radius: 10px; overflow: hidden; }
@@ -113,12 +117,11 @@
     body { display: flex; flex-direction: column; overflow: hidden; }
     header { flex-shrink: 0; }
     main { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-    .toolbar, #panel-calendar { flex-shrink: 0; }
+    #panel-calendar { flex-shrink: 0; }
     .layout { flex: 1; min-height: 0; align-items: stretch; }
     #panel-map { position: static; display: flex; flex-direction: column; min-height: 0; }
     #map-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
     #map { flex: 1; min-height: 0; }
-    .map-caption { flex-shrink: 0; }
     #panel-list { display: flex; flex-direction: column; min-height: 0; }
     #voyage-table-wrap { flex: 1; min-height: 0; overflow-y: auto; }
     footer { flex-shrink: 0; padding: 8px 20px; }
@@ -219,14 +222,13 @@
     <div class="hstat"><span class="hstat-value" id="stat-count">—</span><span class="hstat-label">disponibles</span></div>
     <div class="hstat"><span class="hstat-value" id="stat-dest">—</span><span class="hstat-label">destinations</span></div>
   </div>
+  <div class="header-actions">
+    <button id="btn-refresh">Actualiser</button>
+  </div>
   <div class="status"><span class="dot" id="status-dot"></span><span id="status-text">Connexion…</span></div>
 </header>
 
 <main>
-  <div class="toolbar">
-    <button id="btn-refresh">Actualiser</button>
-  </div>
-
   <div class="layout">
     <div id="panel-list">
       <div id="voyage-table-wrap">
@@ -262,18 +264,15 @@
       <div id="map-wrap">
         <div id="map"></div>
       </div>
-      <p class="map-caption">Carte interactive (zoom / déplacement) — positionnement géocodé sur l'adresse exacte de livraison (repli approximatif par ville pour les voyages plus anciens). Taille du repère = nombre de voyages.</p>
     </div>
   </div>
 
   <div id="panel-calendar">
     <div class="cal-header">
       <button id="cal-prev" aria-label="Mois précédent">‹</button>
-      <div id="cal-title">—</div>
       <button id="cal-next" aria-label="Mois suivant">›</button>
     </div>
-    <div class="cal-grid" id="cal-grid"></div>
-    <p class="cal-caption">Dates de livraison prévue (max) des voyages disponibles — survolez un jour pour repérer le(s) voyage(s) correspondant(s) dans la liste et sur la carte (et inversement).</p>
+    <div class="cal-months" id="cal-months"></div>
   </div>
 </main>
 
@@ -456,6 +455,16 @@ function scrollToCity(city) {
 // des destinations différentes — le surlignage doit donc couvrir plusieurs
 // lignes du tableau ET plusieurs marqueurs carte à la fois, contrairement à
 // highlightCity() qui ne cible qu'une seule ville.
+const CAL_MONTHS_VISIBLE = 3; // masqué à 1 seul sous 900px de large (CSS)
+
+// Clé locale "yyyy-mm-dd" — jamais toISOString() ici : elle convertit en UTC
+// et décale la date d'un jour selon l'heure/le fuseau (ex: minuit en France
+// l'été = 22h UTC la veille), ce qui aurait faussé le jour du mois affiché.
+function dateKey(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 function buildCalIndex(dispo) {
   calIndex = {};
   dispo.forEach(v => {
@@ -466,37 +475,63 @@ function buildCalIndex(dispo) {
 }
 
 function defaultCalMonth() {
-  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayKey = dateKey(new Date());
   const upcoming = Object.keys(calIndex).filter(k => k >= todayKey).sort();
   const base = upcoming.length ? upcoming[0] : todayKey;
   const d = new Date(base + 'T00:00:00');
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 
+// Une cellule = un jour réel (y compris hors du mois affiché, en repli grisé
+// "cal-muted") — jamais une case vide : un jour du mois précédent/suivant
+// peut très bien avoir lui-même une livraison prévue.
+function calDayCell(d, todayKey, muted) {
+  const key     = dateKey(d);
+  const numeros = calIndex[key] || [];
+  const classes = ['cal-day'];
+  if (muted) classes.push('cal-muted');
+  if (numeros.length) classes.push('cal-has-voyage');
+  if (key === todayKey) classes.push('cal-today');
+  return `<div class="${classes.join(' ')}" data-key="${key}" data-numeros="${numeros.join(',')}">
+    <div class="cal-day-num">${d.getDate()}</div>
+    ${numeros.length ? `<div class="cal-day-badge">${numeros.length}</div>` : ''}
+  </div>`;
+}
+
+// Grille toujours pleine (6 semaines = 42 cellules), quel que soit le nombre
+// réel de semaines du mois — sinon la hauteur du calendrier varie d'un mois
+// à l'autre (4 à 6 semaines selon le mois), ce qui déplaçait le tableau/la
+// carte au-dessus à chaque navigation.
+function renderCalendarMonth(year, month, todayKey) {
+  const first       = new Date(year, month, 1);
+  const firstDow    = (first.getDay() + 6) % 7; // lundi = 0
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const prevDays    = new Date(year, month, 0).getDate();
+
+  let cells = '';
+  for (let i = 0; i < firstDow; i++) cells += calDayCell(new Date(year, month - 1, prevDays - firstDow + 1 + i), todayKey, true);
+  for (let day = 1; day <= daysInMonth; day++) cells += calDayCell(new Date(year, month, day), todayKey, false);
+  const trailing = 42 - (firstDow + daysInMonth);
+  for (let day = 1; day <= trailing; day++) cells += calDayCell(new Date(year, month + 1, day), todayKey, true);
+
+  const dow = ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(d => `<div class="cal-dow">${d}</div>`).join('');
+  const label = first.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  return `<div class="cal-month">
+    <div class="cal-month-title">${label}</div>
+    <div class="cal-grid">${dow}${cells}</div>
+  </div>`;
+}
+
 function renderCalendar() {
   if (!calMonth) calMonth = defaultCalMonth();
-  const year = calMonth.getFullYear(), month = calMonth.getMonth();
-  document.getElementById('cal-title').textContent =
-    calMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-  const firstDow    = (new Date(year, month, 1).getDay() + 6) % 7; // lundi = 0
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const todayKey    = new Date().toISOString().slice(0, 10);
-
-  let html = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
-    .map(d => `<div class="cal-dow">${d}</div>`).join('');
-  for (let i = 0; i < firstDow; i++) html += `<div class="cal-day cal-empty"></div>`;
-  for (let day = 1; day <= daysInMonth; day++) {
-    const key     = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    const numeros = calIndex[key] || [];
-    html += `<div class="cal-day${numeros.length ? ' cal-has-voyage' : ''}${key === todayKey ? ' cal-today' : ''}"
-      data-key="${key}" data-numeros="${numeros.join(',')}">
-      <div class="cal-day-num">${day}</div>
-      ${numeros.length ? `<div class="cal-day-badge">${numeros.length}</div>` : ''}
-    </div>`;
+  const todayKey = dateKey(new Date());
+  let html = '';
+  for (let m = 0; m < CAL_MONTHS_VISIBLE; m++) {
+    html += renderCalendarMonth(calMonth.getFullYear(), calMonth.getMonth() + m, todayKey);
   }
-  document.getElementById('cal-grid').innerHTML = html;
+  document.getElementById('cal-months').innerHTML = html;
 
-  document.querySelectorAll('#cal-grid .cal-has-voyage').forEach(cell => {
+  document.querySelectorAll('#cal-months .cal-has-voyage').forEach(cell => {
     const numeros = cell.dataset.numeros.split(',').filter(Boolean);
     cell.addEventListener('mouseenter', () => highlightNumeros(numeros, cell));
     cell.addEventListener('mouseleave', () => clearNumeroHighlight());
@@ -523,14 +558,14 @@ function highlightNumeros(numeros, calCell) {
   if (calCell) calCell.classList.add('cal-highlight');
 }
 function clearNumeroHighlight() {
-  document.querySelectorAll('#cal-grid .cal-day.cal-highlight').forEach(c => c.classList.remove('cal-highlight'));
+  document.querySelectorAll('#cal-months .cal-day.cal-highlight').forEach(c => c.classList.remove('cal-highlight'));
   highlightCity(selectedCity); // revient à l'état "ville sélectionnée" normal (ou rien)
 }
 function highlightCalDay(key) {
-  document.querySelectorAll('#cal-grid .cal-day').forEach(c => c.classList.toggle('cal-highlight', c.dataset.key === key));
+  document.querySelectorAll('#cal-months .cal-day').forEach(c => c.classList.toggle('cal-highlight', c.dataset.key === key));
 }
 function clearCalDayHighlight() {
-  document.querySelectorAll('#cal-grid .cal-day.cal-highlight').forEach(c => c.classList.remove('cal-highlight'));
+  document.querySelectorAll('#cal-months .cal-day.cal-highlight').forEach(c => c.classList.remove('cal-highlight'));
 }
 
 function render() {
@@ -859,7 +894,7 @@ if (EDIT_MODE) {
   btn.id = 'btn-copy-widths';
   btn.textContent = '📐 Copier les largeurs';
   btn.onclick = copyColumnWidths;
-  document.querySelector('.toolbar').appendChild(btn);
+  document.querySelector('.header-actions').appendChild(btn);
 }
 
 initMap();
