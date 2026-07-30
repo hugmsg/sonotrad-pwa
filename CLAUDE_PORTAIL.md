@@ -428,18 +428,37 @@ la Production, en amont de la LV).
 
 ## Calendrier des livraisons prévues sur le portail — EN PRODUCTION (2026-07-30)
 
-Mergé sur `main` (commit `aca56cf`) et redéployé sur le projet Vercel standalone
+Mergé sur `main` (dernier commit `7d367cb`) et redéployé sur le projet Vercel standalone
 `sonotrad-portail-transporteur` (celui réellement utilisé par les transporteurs) le 2026-07-30.
 Les deux sont à jour.
 
-```
-ad863f0  calendrier des livraisons prévues + surlignage croisé (1ère version : grille mensuelle 3 mois pleine largeur en bas de page)
-da1e59e  calendrier compact 3 mois glissants + gain de place
-35021e3  calendrier — scroll latéral, cases carrées, badges + jour actuel visibles
-83be058  remplace le calendrier mensuel par une heatmap hebdomadaire compacte (pivot : liste verticale de semaines, colonne latérale sous la carte)
-e6e0edb  heatmap plus lisible — en-tête jours, repère mois, chiffres, légende
-3d92930  retour à une grille mensuelle horizontale (2 mois), flèches + bouton Aujourd'hui (état actuel)
-```
+**Design final** (après plusieurs itérations en direct avec Hugo, voir historique de commits sur
+`dev` du 2026-07-30 si besoin de retracer le détail) :
+- Colonne latérale, sous la carte (`#panel-heatmap`, dans `#panel-map`).
+- Grille mensuelle classique, **3 mois côte à côte** (1 seul sous 900px), en-tête L M M J V S D,
+  jours hors-mois en repli grisé pour une grille toujours à 42 cases (6 semaines) quel que soit le
+  mois réel. Toujours 100% de la largeur disponible (pas de marges/poignée dédiée — testé puis
+  abandonné : une largeur en % fixe laissait des marges qui grandissaient en absolu dès que la
+  colonne carte/calendrier était élargie).
+- Numéro de semaine ISO 8601 discret en tête de chaque ligne (colonne de 16px).
+- Chaque case colorée façon heatmap (`HEAT_COLORS`, 5 nuances) + chiffre du jour affiché en
+  contraste (`HEAT_TEXT`) — pas de pastille séparée. Largeur et hauteur des cases sont
+  **indépendantes** (`grid-template-columns`/`grid-template-rows` explicites, pas d'`aspect-ratio`) :
+  la hauteur du module (`#panel-heatmap`) est réglable séparément de sa largeur.
+- Navigation par flèches ‹ › + bouton "Aujourd'hui" (recentre sur le mois calendaire réel, pas sur
+  la prochaine livraison connue — `defaultHeatBaseMonth()` reste utilisé seulement pour la position
+  initiale au chargement).
+- Surlignage croisé tableau ↔ carte ↔ calendrier dans les deux sens (`highlightNumeros()`,
+  `highlightCalDay()`).
+- Marqueurs carte : `L.circleMarker` classique (pas de divIcon — testé puis abandonné avec la
+  version "chiffre dans le rond", cf. historique de commits), étiquette de ville en tooltip
+  permanent à côté du marqueur.
+
+**Mode `?edit=1` étendu** : en plus des poignées de colonnes du tableau et de largeur carte/liste
+existantes, une **poignée horizontale entre la carte et le calendrier** (`setupMapCalHeightResize()`)
+permet de régler à la souris la hauteur de `#panel-heatmap` (la carte, `flex:1`, récupère le reste).
+"📐 Copier les largeurs" inclut cette hauteur en plus des largeurs de colonnes/carte. Valeurs
+actuellement figées dans le code : carte `minmax(300px, 715px)`, calendrier `height: 271px`.
 
 **Design actuel (celui de `3d92930`, à valider par Hugo avant merge)** :
 - Emplacement : colonne latérale, **sous la carte** (pas de section pleine largeur en bas — testé
