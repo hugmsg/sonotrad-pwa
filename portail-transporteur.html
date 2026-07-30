@@ -51,7 +51,7 @@
      proche du carré/portrait (vu sa hauteur qui remplit tout le viewport)
      au lieu de s'étirer en paysage — et laisse le maximum de place à la
      liste, qui prend tout le reste (minmax(0, 1fr)). */
-  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 660px); gap: 14px; align-items: start; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 715px); gap: 14px; align-items: start; }
   @media (max-width: 900px) {
     .layout { grid-template-columns: 1fr; }
     main { max-width: 640px; }
@@ -79,7 +79,7 @@
   #panel-heatmap {
     background: white; border: 1px solid var(--gray-border); border-radius: 10px;
     padding: 10px 12px; margin-top: 10px; flex-shrink: 0; box-sizing: border-box;
-    height: 260px; display: flex; flex-direction: column;
+    height: 271px; display: flex; flex-direction: column;
   }
   .heat-nav { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 8px; flex-shrink: 0; }
   .heat-nav button {
@@ -162,15 +162,15 @@
      resserrées volontairement : le nombre de caractères y varie peu, contrairement
      à destination/marchandise/contrainte qui profitent de l'espace libéré. */
   .col-num      { width: 3%; }
-  .col-lv       { width: 6%; }
-  .col-date     { width: 7%; }
-  .col-dest     { width: 18%; }
-  .col-march    { width: 21%; }
-  .col-contrainte { width: 12%; }
-  .col-poids    { width: 5%; }
-  .col-ml       { width: 5%; }
-  .col-grutage  { width: 6%; }
-  .col-livraison { width: 7%; }
+  .col-lv       { width: 7%; }
+  .col-date     { width: 8%; }
+  .col-dest     { width: 20%; }
+  .col-march    { width: 23%; }
+  .col-contrainte { width: 13%; }
+  .col-poids    { width: 6%; }
+  .col-ml       { width: 6%; }
+  .col-grutage  { width: 7%; }
+  .col-livraison { width: 8%; }
   .nowrap { white-space: nowrap; }
   .row-num { color: #94a3b8; font-size: 12px; }
   /* Poignées de redimensionnement — créées en JS, uniquement en mode ?edit=1
