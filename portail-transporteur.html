@@ -74,20 +74,33 @@
   #panel-heatmap {
     background: white; border: 1px solid var(--gray-border); border-radius: 10px;
     padding: 8px 10px; margin-top: 10px; flex-shrink: 0;
-    max-height: 168px; overflow-y: auto;
+    max-height: 220px; overflow-y: auto;
     scrollbar-width: thin; scrollbar-color: var(--navy-light) transparent;
   }
   #panel-heatmap::-webkit-scrollbar { width: 5px; }
   #panel-heatmap::-webkit-scrollbar-track { background: transparent; }
   #panel-heatmap::-webkit-scrollbar-thumb { background: var(--navy-light); border-radius: 3px; }
+  /* En-tête jours (L M M J V S D), fixe en haut pendant le défilement vertical */
+  .heat-dow-row { display: flex; align-items: center; gap: 6px; position: sticky; top: 0; background: white; z-index: 1; padding-bottom: 3px; }
+  .heat-dow-row .heat-week-num { visibility: hidden; }
+  .heat-dow { width: 18px; text-align: center; font-size: 8px; font-weight: 700; color: var(--gray-text); text-transform: uppercase; }
+  /* Repère du mois — imprimé une fois à chaque changement, pour que la liste
+     de semaines se lise encore comme un calendrier plutôt qu'une suite de
+     numéros abstraits. */
+  .heat-month-label { font-size: 10px; font-weight: 700; color: var(--navy); text-transform: capitalize; margin: 5px 0 1px 28px; }
   .heat-week { display: flex; align-items: center; gap: 6px; padding: 1.5px 0; }
-  .heat-week-num { font-size: 9px; color: var(--gray-text); font-weight: 700; width: 22px; flex-shrink: 0; }
+  .heat-week-num { font-size: 10px; color: var(--navy); font-weight: 700; width: 22px; flex-shrink: 0; }
   .heat-days { display: flex; gap: 2px; }
-  .heat-day { width: 15px; height: 15px; border-radius: 3px; box-sizing: border-box; }
+  .heat-day {
+    width: 18px; height: 18px; border-radius: 4px; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center; font-size: 8.5px; font-weight: 600;
+  }
   .heat-day.heat-has-voyage { cursor: pointer; }
   .heat-day.heat-today { box-shadow: 0 0 0 2px #1d4ed8; }
   .heat-day.heat-highlight { box-shadow: 0 0 0 2px var(--navy); }
-  @media (max-width: 900px) { #panel-heatmap { max-height: 210px; } }
+  .heat-legend { display: flex; align-items: center; gap: 3px; justify-content: flex-end; margin-top: 6px; font-size: 8.5px; color: var(--gray-text); }
+  .heat-legend .heat-swatch { width: 10px; height: 10px; border-radius: 2px; }
+  @media (max-width: 900px) { #panel-heatmap { max-height: 260px; } }
 
   #panel-list { background: white; border: 1px solid var(--gray-border); border-radius: 10px; overflow: hidden; }
   #voyage-table-wrap { overflow-x: auto; }
@@ -472,8 +485,9 @@ function isoWeekNumber(d) {
 // Plus la couleur est foncée, plus il y a de voyages ce jour-là (façon
 // "heatmap" de contributions) — évite les cases vides à 90% d'une grille
 // classique pour une info aussi simple qu'un simple décompte par jour.
+// HEAT_TEXT donne la couleur du chiffre du jour, en contraste avec le fond.
 const HEAT_COLORS = ['#eef2f6', '#b9d4f0', '#7fb0e0', '#3f7ec9', '#1f3a5f'];
-function heatColor(count) { return HEAT_COLORS[Math.min(count, HEAT_COLORS.length - 1)]; }
+const HEAT_TEXT   = ['#b0bac4', '#1f3a5f', '#ffffff', '#ffffff', '#ffffff'];
 
 const HEAT_WEEKS_BEFORE = 1;
 const HEAT_WEEKS_AFTER  = 25;
@@ -493,30 +507,50 @@ function renderHeatmap() {
   const startMonday = new Date(heatBaseMonday);
   startMonday.setDate(startMonday.getDate() - HEAT_WEEKS_BEFORE * 7);
 
-  let html = '';
+  const dowLabels = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+  let html = `<div class="heat-dow-row"><div class="heat-week-num">S</div><div class="heat-days">
+    ${dowLabels.map(d => `<div class="heat-dow">${d}</div>`).join('')}
+  </div></div>`;
+
+  let lastMonthKey = null;
   const totalWeeks = HEAT_WEEKS_BEFORE + 1 + HEAT_WEEKS_AFTER;
   for (let w = 0; w < totalWeeks; w++) {
     const weekMonday = new Date(startMonday);
     weekMonday.setDate(weekMonday.getDate() + w * 7);
+
+    // Repère de mois : imprimé une fois à chaque changement, pour ancrer la
+    // liste de semaines dans un vrai calendrier plutôt qu'une suite de S+nombre.
+    const monthKey = `${weekMonday.getFullYear()}-${weekMonday.getMonth()}`;
+    if (monthKey !== lastMonthKey) {
+      lastMonthKey = monthKey;
+      html += `<div class="heat-month-label">${weekMonday.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</div>`;
+    }
+
     let daysHtml = '';
     for (let d = 0; d < 7; d++) {
       const day = new Date(weekMonday);
       day.setDate(day.getDate() + d);
       const key     = dateKey(day);
       const numeros = calIndex[key] || [];
+      const level   = Math.min(numeros.length, HEAT_COLORS.length - 1);
       const classes = ['heat-day'];
       if (numeros.length) classes.push('heat-has-voyage');
       if (key === todayKey) classes.push('heat-today');
       const label = day.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' });
-      daysHtml += `<div class="${classes.join(' ')}" style="background:${heatColor(numeros.length)}"
+      daysHtml += `<div class="${classes.join(' ')}" style="background:${HEAT_COLORS[level]};color:${HEAT_TEXT[level]}"
         data-key="${key}" data-numeros="${numeros.join(',')}"
-        title="${label}${numeros.length ? ' — ' + numeros.length + ' voyage(s)' : ''}"></div>`;
+        title="${label}${numeros.length ? ' — ' + numeros.length + ' voyage(s)' : ''}">${day.getDate()}</div>`;
     }
-    html += `<div class="heat-week">
+    const isDefault = w === HEAT_WEEKS_BEFORE;
+    html += `<div class="heat-week"${isDefault ? ' data-default="1"' : ''}>
       <div class="heat-week-num">S${isoWeekNumber(weekMonday)}</div>
       <div class="heat-days">${daysHtml}</div>
     </div>`;
   }
+  html += `<div class="heat-legend"><span>Moins</span>${
+    HEAT_COLORS.map(c => `<span class="heat-swatch" style="background:${c}"></span>`).join('')
+  }<span>Plus</span></div>`;
+
   const container = document.getElementById('heatmap-body');
   container.innerHTML = html;
 
@@ -533,10 +567,12 @@ function renderHeatmap() {
 
   // Positionne le scroll vertical sur la semaine par défaut une seule fois —
   // sinon chaque rafraîchissement (Realtime, filet 5 min) ramènerait la vue
-  // en arrière si le transporteur avait déjà fait défiler ailleurs.
+  // en arrière si le transporteur avait déjà fait défiler ailleurs. Ciblée
+  // par attribut (pas par index d'enfant) car des repères de mois s'intercalent
+  // désormais entre les lignes de semaine.
   if (!heatScrolledOnce) {
     heatScrolledOnce = true;
-    const target = container.children[HEAT_WEEKS_BEFORE];
+    const target = container.querySelector('.heat-week[data-default="1"]');
     if (target) target.scrollIntoView({ block: 'nearest' });
   }
 }
