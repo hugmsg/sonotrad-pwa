@@ -67,45 +67,27 @@
     padding: 2px 7px; font-size: 12px; font-weight: 600; color: #1e293b;
     box-shadow: 0 1px 3px rgba(0,0,0,0.12);
   }
-  /* Calendrier des livraisons prévues — section pleine largeur sous liste+carte.
-     Toujours 6 semaines (42 cellules) par mois, complétées par les jours du
-     mois précédent/suivant en repli grisé : la hauteur du calendrier ne varie
-     donc plus jamais d'un mois à l'autre (4 vs 5 vs 6 semaines réelles). */
-  #panel-calendar {
+  /* Heatmap des livraisons prévues — dans la colonne latérale, sous la carte.
+     Une ligne = une semaine (numéro ISO + 7 carrés colorés L à D), défilement
+     vertical. Pas de case vide/inutile : juste une couleur (plus foncée =
+     plus de voyages ce jour-là), le détail est dans le title (tooltip). */
+  #panel-heatmap {
     background: white; border: 1px solid var(--gray-border); border-radius: 10px;
-    padding: 8px 12px; margin-top: 8px;
-  }
-  /* Défilement latéral (souris/trackpad/tactile) à la place des flèches
-     mois précédent/suivant — scrollbar fine visible en indice, pas de bouton. */
-  .cal-months {
-    display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 6px;
+    padding: 8px 10px; margin-top: 10px; flex-shrink: 0;
+    max-height: 168px; overflow-y: auto;
     scrollbar-width: thin; scrollbar-color: var(--navy-light) transparent;
   }
-  .cal-months::-webkit-scrollbar { height: 5px; }
-  .cal-months::-webkit-scrollbar-track { background: transparent; }
-  .cal-months::-webkit-scrollbar-thumb { background: var(--navy-light); border-radius: 3px; }
-  .cal-months::-webkit-scrollbar-thumb:hover { background: var(--navy); }
-  .cal-month { flex: 0 0 calc(33.333% - 6px); min-width: 190px; scroll-snap-align: start; }
-  .cal-month-title { font-size: 10.5px; font-weight: 700; color: var(--navy); text-align: center; text-transform: capitalize; margin-bottom: 3px; }
-  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-  .cal-dow { font-size: 8px; font-weight: 700; color: var(--gray-text); text-transform: uppercase; text-align: center; padding: 1px 0 2px; }
-  .cal-day {
-    aspect-ratio: 1 / 1; border: 1px solid var(--gray-border); border-radius: 5px; padding: 1px 3px;
-    font-size: 9.5px; color: #1e293b; position: relative; box-sizing: border-box;
-  }
-  .cal-day.cal-muted { color: #cbd5e1; border-color: #f1f5f9; }
-  .cal-day.cal-has-voyage { cursor: pointer; border-color: var(--navy-light); }
-  .cal-day.cal-has-voyage:hover, .cal-day.cal-highlight { background: var(--navy-light); border-color: var(--navy); }
-  .cal-day-num { font-weight: 600; }
-  .cal-day.cal-today { border: 2px solid #1d4ed8; }
-  .cal-day.cal-today .cal-day-num { color: #1d4ed8; }
-  .cal-day-badge {
-    position: absolute; top: 1px; right: 1px; background: #f59e0b; color: white;
-    font-size: 7.5px; font-weight: 700; border-radius: 5px; min-width: 10px; text-align: center; padding: 0 3px; line-height: 1.3;
-  }
-  @media (max-width: 900px) {
-    .cal-month { flex: 0 0 100%; min-width: 0; }
-  }
+  #panel-heatmap::-webkit-scrollbar { width: 5px; }
+  #panel-heatmap::-webkit-scrollbar-track { background: transparent; }
+  #panel-heatmap::-webkit-scrollbar-thumb { background: var(--navy-light); border-radius: 3px; }
+  .heat-week { display: flex; align-items: center; gap: 6px; padding: 1.5px 0; }
+  .heat-week-num { font-size: 9px; color: var(--gray-text); font-weight: 700; width: 22px; flex-shrink: 0; }
+  .heat-days { display: flex; gap: 2px; }
+  .heat-day { width: 15px; height: 15px; border-radius: 3px; box-sizing: border-box; }
+  .heat-day.heat-has-voyage { cursor: pointer; }
+  .heat-day.heat-today { box-shadow: 0 0 0 2px #1d4ed8; }
+  .heat-day.heat-highlight { box-shadow: 0 0 0 2px var(--navy); }
+  @media (max-width: 900px) { #panel-heatmap { max-height: 210px; } }
 
   #panel-list { background: white; border: 1px solid var(--gray-border); border-radius: 10px; overflow: hidden; }
   #voyage-table-wrap { overflow-x: auto; }
@@ -119,7 +101,6 @@
     body { display: flex; flex-direction: column; overflow: hidden; }
     header { flex-shrink: 0; }
     main { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-    #panel-calendar { flex-shrink: 0; }
     .layout { flex: 1; min-height: 0; align-items: stretch; }
     #panel-map { position: static; display: flex; flex-direction: column; min-height: 0; }
     #map-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -266,11 +247,10 @@
       <div id="map-wrap">
         <div id="map"></div>
       </div>
+      <div id="panel-heatmap">
+        <div id="heatmap-body"></div>
+      </div>
     </div>
-  </div>
-
-  <div id="panel-calendar">
-    <div class="cal-months" id="cal-months"></div>
   </div>
 </main>
 
@@ -365,7 +345,6 @@ function escapeHtml(s) {
 let currentVoyages = [];
 let leafletMap = null;
 let markersLayer = null;
-let calMonth = null;    // Date (1er du mois affiché dans le calendrier)
 let calIndex = {};      // dateKey ("yyyy-mm-dd") -> [numero_lv, ...] (voyages disponibles avec livraison prévue)
 
 // Un marqueur = un point (adresse géocodée précise, ou ville en repli, voir
@@ -457,13 +436,9 @@ function scrollToCity(city) {
 // large que l'utilisateur parcourt au scroll latéral (remplace les flèches
 // précédent/suivant) — 1 mois de recul (contexte) + le mois par défaut + 10
 // mois à venir.
-const CAL_MONTHS_BEFORE = 1;
-const CAL_MONTHS_AFTER  = 10;
-let calScrolledOnce = false;
-
 // Clé locale "yyyy-mm-dd" — jamais toISOString() ici : elle convertit en UTC
 // et décale la date d'un jour selon l'heure/le fuseau (ex: minuit en France
-// l'été = 22h UTC la veille), ce qui aurait faussé le jour du mois affiché.
+// l'été = 22h UTC la veille), ce qui aurait faussé le jour affiché.
 function dateKey(d) {
   const p = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
@@ -478,67 +453,74 @@ function buildCalIndex(dispo) {
   });
 }
 
-function defaultCalMonth() {
+// Lundi de la semaine contenant d (minuit local).
+function mondayOf(d) {
+  const r = new Date(d);
+  r.setDate(r.getDate() - ((r.getDay() + 6) % 7));
+  r.setHours(0, 0, 0, 0);
+  return r;
+}
+
+// Numéro de semaine ISO 8601 (semaine qui contient le jeudi de cette semaine).
+function isoWeekNumber(d) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7) + 3);
+  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  return 1 + Math.round((date - firstThursday) / (7 * 86400000));
+}
+
+// Plus la couleur est foncée, plus il y a de voyages ce jour-là (façon
+// "heatmap" de contributions) — évite les cases vides à 90% d'une grille
+// classique pour une info aussi simple qu'un simple décompte par jour.
+const HEAT_COLORS = ['#eef2f6', '#b9d4f0', '#7fb0e0', '#3f7ec9', '#1f3a5f'];
+function heatColor(count) { return HEAT_COLORS[Math.min(count, HEAT_COLORS.length - 1)]; }
+
+const HEAT_WEEKS_BEFORE = 1;
+const HEAT_WEEKS_AFTER  = 25;
+let heatBaseMonday   = null; // lundi de la semaine "par défaut" (prochaine livraison connue, sinon aujourd'hui)
+let heatScrolledOnce = false;
+
+function defaultHeatBase() {
   const todayKey = dateKey(new Date());
   const upcoming = Object.keys(calIndex).filter(k => k >= todayKey).sort();
   const base = upcoming.length ? upcoming[0] : todayKey;
-  const d = new Date(base + 'T00:00:00');
-  return new Date(d.getFullYear(), d.getMonth(), 1);
+  return mondayOf(new Date(base + 'T00:00:00'));
 }
 
-// Une cellule = un jour réel (y compris hors du mois affiché, en repli grisé
-// "cal-muted") — jamais une case vide : un jour du mois précédent/suivant
-// peut très bien avoir lui-même une livraison prévue.
-function calDayCell(d, todayKey, muted) {
-  const key     = dateKey(d);
-  const numeros = calIndex[key] || [];
-  const classes = ['cal-day'];
-  if (muted) classes.push('cal-muted');
-  if (numeros.length) classes.push('cal-has-voyage');
-  if (key === todayKey) classes.push('cal-today');
-  return `<div class="${classes.join(' ')}" data-key="${key}" data-numeros="${numeros.join(',')}">
-    <div class="cal-day-num">${d.getDate()}</div>
-    ${numeros.length ? `<div class="cal-day-badge">${numeros.length}</div>` : ''}
-  </div>`;
-}
+function renderHeatmap() {
+  if (!heatBaseMonday) heatBaseMonday = defaultHeatBase();
+  const todayKey = dateKey(new Date());
+  const startMonday = new Date(heatBaseMonday);
+  startMonday.setDate(startMonday.getDate() - HEAT_WEEKS_BEFORE * 7);
 
-// Grille toujours pleine (6 semaines = 42 cellules), quel que soit le nombre
-// réel de semaines du mois — sinon la hauteur du calendrier varie d'un mois
-// à l'autre (4 à 6 semaines selon le mois), ce qui déplaçait le tableau/la
-// carte au-dessus à chaque navigation.
-function renderCalendarMonth(year, month, todayKey) {
-  const first       = new Date(year, month, 1);
-  const firstDow    = (first.getDay() + 6) % 7; // lundi = 0
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const prevDays    = new Date(year, month, 0).getDate();
-
-  let cells = '';
-  for (let i = 0; i < firstDow; i++) cells += calDayCell(new Date(year, month - 1, prevDays - firstDow + 1 + i), todayKey, true);
-  for (let day = 1; day <= daysInMonth; day++) cells += calDayCell(new Date(year, month, day), todayKey, false);
-  const trailing = 42 - (firstDow + daysInMonth);
-  for (let day = 1; day <= trailing; day++) cells += calDayCell(new Date(year, month + 1, day), todayKey, true);
-
-  const dow = ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(d => `<div class="cal-dow">${d}</div>`).join('');
-  const label = first.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-  return `<div class="cal-month">
-    <div class="cal-month-title">${label}</div>
-    <div class="cal-grid">${dow}${cells}</div>
-  </div>`;
-}
-
-function renderCalendar() {
-  if (!calMonth) calMonth = defaultCalMonth();
-  const todayKey    = dateKey(new Date());
-  const startMonth  = new Date(calMonth.getFullYear(), calMonth.getMonth() - CAL_MONTHS_BEFORE, 1);
-  const totalMonths = CAL_MONTHS_BEFORE + 1 + CAL_MONTHS_AFTER;
   let html = '';
-  for (let m = 0; m < totalMonths; m++) {
-    html += renderCalendarMonth(startMonth.getFullYear(), startMonth.getMonth() + m, todayKey);
+  const totalWeeks = HEAT_WEEKS_BEFORE + 1 + HEAT_WEEKS_AFTER;
+  for (let w = 0; w < totalWeeks; w++) {
+    const weekMonday = new Date(startMonday);
+    weekMonday.setDate(weekMonday.getDate() + w * 7);
+    let daysHtml = '';
+    for (let d = 0; d < 7; d++) {
+      const day = new Date(weekMonday);
+      day.setDate(day.getDate() + d);
+      const key     = dateKey(day);
+      const numeros = calIndex[key] || [];
+      const classes = ['heat-day'];
+      if (numeros.length) classes.push('heat-has-voyage');
+      if (key === todayKey) classes.push('heat-today');
+      const label = day.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+      daysHtml += `<div class="${classes.join(' ')}" style="background:${heatColor(numeros.length)}"
+        data-key="${key}" data-numeros="${numeros.join(',')}"
+        title="${label}${numeros.length ? ' — ' + numeros.length + ' voyage(s)' : ''}"></div>`;
+    }
+    html += `<div class="heat-week">
+      <div class="heat-week-num">S${isoWeekNumber(weekMonday)}</div>
+      <div class="heat-days">${daysHtml}</div>
+    </div>`;
   }
-  const container = document.getElementById('cal-months');
+  const container = document.getElementById('heatmap-body');
   container.innerHTML = html;
 
-  document.querySelectorAll('#cal-months .cal-has-voyage').forEach(cell => {
+  document.querySelectorAll('#heatmap-body .heat-has-voyage').forEach(cell => {
     const numeros = cell.dataset.numeros.split(',').filter(Boolean);
     cell.addEventListener('mouseenter', () => highlightNumeros(numeros, cell));
     cell.addEventListener('mouseleave', () => clearNumeroHighlight());
@@ -549,20 +531,21 @@ function renderCalendar() {
     });
   });
 
-  // Positionne le scroll horizontal sur le mois par défaut une seule fois —
+  // Positionne le scroll vertical sur la semaine par défaut une seule fois —
   // sinon chaque rafraîchissement (Realtime, filet 5 min) ramènerait la vue
   // en arrière si le transporteur avait déjà fait défiler ailleurs.
-  if (!calScrolledOnce) {
-    calScrolledOnce = true;
-    const target = container.children[CAL_MONTHS_BEFORE];
-    if (target) target.scrollIntoView({ inline: 'start', block: 'nearest' });
+  if (!heatScrolledOnce) {
+    heatScrolledOnce = true;
+    const target = container.children[HEAT_WEEKS_BEFORE];
+    if (target) target.scrollIntoView({ block: 'nearest' });
   }
 }
 
-// Surligne un ensemble de voyages (venant d'un jour du calendrier) sur le
-// tableau ET la carte simultanément — généralisation de highlightCity/
-// highlightCity à un groupe de numero_lv plutôt qu'une seule ville.
-function highlightNumeros(numeros, calCell) {
+// Surligne un ensemble de voyages (venant d'un jour de la heatmap) sur le
+// tableau ET la carte simultanément — généralisation de highlightCity à un
+// groupe de numero_lv plutôt qu'une seule ville (un jour peut regrouper
+// plusieurs voyages vers des destinations différentes).
+function highlightNumeros(numeros, heatCell) {
   document.querySelectorAll('#tbody tr[data-numero]').forEach(tr => {
     tr.classList.toggle('row-highlight', numeros.includes(tr.dataset.numero));
   });
@@ -571,17 +554,17 @@ function highlightNumeros(numeros, calCell) {
     marker.setStyle(cities.has(name) ? MARKER_STYLE_HI : MARKER_STYLE);
     if (cities.has(name)) marker.bringToFront();
   });
-  if (calCell) calCell.classList.add('cal-highlight');
+  if (heatCell) heatCell.classList.add('heat-highlight');
 }
 function clearNumeroHighlight() {
-  document.querySelectorAll('#cal-months .cal-day.cal-highlight').forEach(c => c.classList.remove('cal-highlight'));
+  document.querySelectorAll('#heatmap-body .heat-day.heat-highlight').forEach(c => c.classList.remove('heat-highlight'));
   highlightCity(selectedCity); // revient à l'état "ville sélectionnée" normal (ou rien)
 }
 function highlightCalDay(key) {
-  document.querySelectorAll('#cal-months .cal-day').forEach(c => c.classList.toggle('cal-highlight', c.dataset.key === key));
+  document.querySelectorAll('#heatmap-body .heat-day').forEach(c => c.classList.toggle('heat-highlight', c.dataset.key === key));
 }
 function clearCalDayHighlight() {
-  document.querySelectorAll('#cal-months .cal-day.cal-highlight').forEach(c => c.classList.remove('cal-highlight'));
+  document.querySelectorAll('#heatmap-body .heat-day.heat-highlight').forEach(c => c.classList.remove('heat-highlight'));
 }
 
 function render() {
@@ -590,7 +573,7 @@ function render() {
   const villesVues = new Set(dispo.map(v => (resolveLocation(v) || {}).key || v.destination));
   document.getElementById('stat-dest').textContent = villesVues.size;
   buildCalIndex(dispo);
-  renderCalendar();
+  renderHeatmap();
 
   const tbody    = document.getElementById('tbody');
   const emptyMsg = document.getElementById('empty-msg');
