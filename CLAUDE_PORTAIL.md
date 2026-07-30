@@ -549,6 +549,33 @@ utilisateur crée un doublon de numérotation plutôt qu'un vrai retry. Deux ré
 
 ---
 
+## Marqueurs compteur seul + calendrier centré sur le mois en cours — EN PRODUCTION (2026-07-30)
+
+Commit `e1ea6ea` (poussé sur `main`), redéployé le jour même sur le projet Vercel standalone
+`sonotrad-portail-transporteur`.
+
+**Marqueurs carte** : retour à `L.divIcon` (au lieu de `L.circleMarker`) pour afficher le nombre
+de voyages directement dans le rond ; le nom de la ville n'apparaît plus qu'au survol (tooltip
+non permanent). C'était déjà fait une première fois dans le commit `d18c144`
+(2026-07-30 matin), mais annulé par erreur en même temps que l'expérimentation calendrier
+"3 mois réduit" jugée non concluante (`09d7440`) — un revert collatéral, pas un rejet de cette
+demande précise de Hugo. Surlignage (`highlightCity`/`highlightNumeros`) toujours via classe CSS
+`.voyage-marker-hi` + `setZIndexOffset` (pas de `setStyle`/`bringToFront`, propres à
+`circleMarker`).
+
+**Calendrier** : `defaultHeatBaseMonth()` (utilisée à l'ouverture de la page ET par le bouton
+"Aujourd'hui") place désormais le mois en cours **au milieu** des 3 mois affichés (précédent /
+en cours / suivant), au lieu du mois en cours en 1ère colonne — demande explicite de Hugo après
+un premier essai où juillet (mois en cours) était affiché en 1ère position avec août/septembre à
+sa suite. `heatBaseMonth` reste le mois de la 1ère colonne en interne ; seul le calcul par défaut
+recule d'un mois (`t.getMonth() - 1`).
+
+Testé en local (`python -m http.server` + Chrome piloté) avant déploiement : survol marqueur →
+tooltip ville + surlignage croisé carte/tableau OK ; ouverture un 30/07/2026 → calendrier affiche
+juin/juillet/août avec le 30 juillet surligné dans la colonne centrale.
+
+---
+
 ## Fichiers du module Portail
 
 ```
