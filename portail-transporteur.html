@@ -31,17 +31,20 @@
   .status { display: flex; align-items: center; gap: 6px; font-size: 12px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
   .dot.off { background: #ef4444; }
-  main { max-width: 1800px; margin: 0 auto; padding: 12px 8px; }
-  .cards { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; margin-bottom: 18px; max-width: 420px; }
-  .card { background: white; border: 1px solid var(--gray-border); border-radius: 10px; padding: 14px 16px; }
-  .card .label { font-size: 12px; color: var(--gray-text); margin: 0 0 4px; }
-  .card .value { font-size: 22px; font-weight: 700; margin: 0; color: var(--navy); }
-  .toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
-  .toolbar button {
-    font-size: 13px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--gray-border);
-    background: white; cursor: pointer; font-weight: 600; color: #475569;
+  /* Statistiques déplacées dans l'en-tête (ex-.cards) — libère la hauteur
+     qu'occupait ce bloc au-dessus du tableau/de la carte. */
+  .header-stats { display: flex; gap: 18px; }
+  .hstat { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+  .hstat-value { font-size: 18px; font-weight: 700; color: white; }
+  .hstat-label { font-size: 9.5px; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 0.3px; }
+  main { max-width: 1800px; margin: 0 auto; padding: 10px 8px; }
+  /* Bouton Actualiser remonté dans l'en-tête (ex-.toolbar), pour ne plus
+     lui dédier une ligne entière au-dessus de la liste/carte. */
+  .header-actions button {
+    font-size: 12px; padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.35);
+    background: rgba(255,255,255,0.12); cursor: pointer; font-weight: 600; color: white;
   }
-  .toolbar button:hover { background: #f8fafc; }
+  .header-actions button:hover { background: rgba(255,255,255,0.22); }
 
   /* La carte est plafonnée en largeur (minmax(320px, 460px)) plutôt que de
      prendre une fraction fixe de l'écran : sur un écran large, la garde
@@ -64,7 +67,44 @@
     padding: 2px 7px; font-size: 12px; font-weight: 600; color: #1e293b;
     box-shadow: 0 1px 3px rgba(0,0,0,0.12);
   }
-  .map-caption { font-size: 12px; color: var(--gray-text); margin-top: 8px; }
+  /* Heatmap des livraisons prévues — dans la colonne latérale, sous la carte.
+     Vraie grille mensuelle (2 mois côte à côte, en-tête L M M J V S D, jours
+     du mois précédent/suivant en repli grisé pour une hauteur toujours de 6
+     semaines) — mais chaque case est colorée façon "heatmap" (plus foncé =
+     plus de voyages) plutôt qu'un badge séparé : pas de case vide inutile.
+     Pas de max-height/scroll : la grille prend sa hauteur naturelle, la carte
+     (flex:1 au-dessus) se resserre d'autant — plus d'espace mort en bas. */
+  #panel-heatmap {
+    background: white; border: 1px solid var(--gray-border); border-radius: 10px;
+    padding: 10px 12px; margin-top: 10px; flex-shrink: 0;
+  }
+  .heat-nav { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 8px; }
+  .heat-nav button {
+    background: none; border: 1px solid var(--gray-border); border-radius: 6px;
+    cursor: pointer; color: var(--navy); font-weight: 600;
+  }
+  .heat-nav button:hover { background: var(--navy-light); }
+  .heat-arrow { width: 26px; height: 26px; font-size: 14px; line-height: 1; }
+  #heat-today-btn { font-size: 10.5px; padding: 5px 10px; }
+  .heat-months { display: flex; gap: 14px; }
+  .heat-month { flex: 1; min-width: 0; }
+  .heat-month-title { font-size: 11px; font-weight: 700; color: var(--navy); text-align: center; text-transform: capitalize; margin-bottom: 4px; }
+  .heat-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+  .heat-dow { font-size: 8.5px; font-weight: 700; color: var(--gray-text); text-transform: uppercase; text-align: center; padding: 0 0 3px; }
+  .heat-day {
+    aspect-ratio: 1 / 1; border-radius: 5px; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600;
+  }
+  .heat-day.heat-muted { opacity: 0.35; }
+  .heat-day.heat-has-voyage { cursor: pointer; }
+  .heat-day.heat-today { box-shadow: 0 0 0 2px #1d4ed8; }
+  .heat-day.heat-highlight { box-shadow: 0 0 0 2px var(--navy); }
+  .heat-legend { display: flex; align-items: center; gap: 3px; justify-content: flex-end; margin-top: 8px; font-size: 8.5px; color: var(--gray-text); }
+  .heat-legend .heat-swatch { width: 10px; height: 10px; border-radius: 2px; }
+  @media (max-width: 900px) {
+    .heat-months { flex-wrap: wrap; }
+    .heat-month:nth-child(n+2) { display: none; }
+  }
 
   #panel-list { background: white; border: 1px solid var(--gray-border); border-radius: 10px; overflow: hidden; }
   #voyage-table-wrap { overflow-x: auto; }
@@ -78,12 +118,10 @@
     body { display: flex; flex-direction: column; overflow: hidden; }
     header { flex-shrink: 0; }
     main { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-    .cards, .toolbar { flex-shrink: 0; }
     .layout { flex: 1; min-height: 0; align-items: stretch; }
     #panel-map { position: static; display: flex; flex-direction: column; min-height: 0; }
     #map-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
     #map { flex: 1; min-height: 0; }
-    .map-caption { flex-shrink: 0; }
     #panel-list { display: flex; flex-direction: column; min-height: 0; }
     #voyage-table-wrap { flex: 1; min-height: 0; overflow-y: auto; }
     footer { flex-shrink: 0; padding: 8px 20px; }
@@ -180,19 +218,17 @@
     <h1>Portail transporteur — SONOTRAD</h1>
     <p>Voyages disponibles en temps réel</p>
   </div>
+  <div class="header-stats">
+    <div class="hstat"><span class="hstat-value" id="stat-count">—</span><span class="hstat-label">disponibles</span></div>
+    <div class="hstat"><span class="hstat-value" id="stat-dest">—</span><span class="hstat-label">destinations</span></div>
+  </div>
+  <div class="header-actions">
+    <button id="btn-refresh">Actualiser</button>
+  </div>
   <div class="status"><span class="dot" id="status-dot"></span><span id="status-text">Connexion…</span></div>
 </header>
 
 <main>
-  <div class="cards">
-    <div class="card"><p class="label">Voyages disponibles</p><p class="value" id="stat-count">—</p></div>
-    <div class="card"><p class="label">Destinations distinctes</p><p class="value" id="stat-dest">—</p></div>
-  </div>
-
-  <div class="toolbar">
-    <button id="btn-refresh">Actualiser</button>
-  </div>
-
   <div class="layout">
     <div id="panel-list">
       <div id="voyage-table-wrap">
@@ -228,7 +264,15 @@
       <div id="map-wrap">
         <div id="map"></div>
       </div>
-      <p class="map-caption">Carte interactive (zoom / déplacement) — positionnement géocodé sur l'adresse exacte de livraison (repli approximatif par ville pour les voyages plus anciens). Taille du repère = nombre de voyages.</p>
+      <div id="panel-heatmap">
+        <div class="heat-nav">
+          <button class="heat-arrow" id="heat-prev" aria-label="Mois précédent">‹</button>
+          <button id="heat-today-btn">Aujourd'hui</button>
+          <button class="heat-arrow" id="heat-next" aria-label="Mois suivant">›</button>
+        </div>
+        <div class="heat-months" id="heat-months"></div>
+        <div class="heat-legend" id="heat-legend"></div>
+      </div>
     </div>
   </div>
 </main>
@@ -324,6 +368,7 @@ function escapeHtml(s) {
 let currentVoyages = [];
 let leafletMap = null;
 let markersLayer = null;
+let calIndex = {};      // dateKey ("yyyy-mm-dd") -> [numero_lv, ...] (voyages disponibles avec livraison prévue)
 
 // Un marqueur = un point (adresse géocodée précise, ou ville en repli, voir
 // resolveLocation), qui peut regrouper plusieurs voyages. Ces maps relient
@@ -404,11 +449,152 @@ function scrollToCity(city) {
   if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
+// ── Calendrier des livraisons prévues ────────────────────────────────────────
+// Même principe de sélection croisée que la carte (cityMarkers/numeroToCity) :
+// un jour peut regrouper plusieurs voyages (numero_lv), potentiellement vers
+// des destinations différentes — le surlignage doit donc couvrir plusieurs
+// lignes du tableau ET plusieurs marqueurs carte à la fois, contrairement à
+// highlightCity() qui ne cible qu'une seule ville.
+// 3 mois visibles à la fois (1 sous 900px, CSS), mais on rend une bande plus
+// large que l'utilisateur parcourt au scroll latéral (remplace les flèches
+// précédent/suivant) — 1 mois de recul (contexte) + le mois par défaut + 10
+// mois à venir.
+// Clé locale "yyyy-mm-dd" — jamais toISOString() ici : elle convertit en UTC
+// et décale la date d'un jour selon l'heure/le fuseau (ex: minuit en France
+// l'été = 22h UTC la veille), ce qui aurait faussé le jour affiché.
+function dateKey(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+function buildCalIndex(dispo) {
+  calIndex = {};
+  dispo.forEach(v => {
+    if (!v.livraison_prevue) return;
+    const key = String(v.livraison_prevue).slice(0, 10);
+    (calIndex[key] = calIndex[key] || []).push(v.numero_lv);
+  });
+}
+
+// Plus la couleur est foncée, plus il y a de voyages ce jour-là (façon
+// "heatmap" de contributions) au lieu d'une pastille séparée sur une case
+// vide à 90% — HEAT_TEXT donne la couleur du chiffre du jour, en contraste
+// avec le fond.
+const HEAT_COLORS = ['#eef2f6', '#b9d4f0', '#7fb0e0', '#3f7ec9', '#1f3a5f'];
+const HEAT_TEXT   = ['#b0bac4', '#1f3a5f', '#ffffff', '#ffffff', '#ffffff'];
+
+const HEAT_MONTHS_VISIBLE = 2; // 1 seul sous 900px (CSS)
+let heatBaseMonth = null; // Date (1er du mois affiché à gauche)
+
+function defaultHeatBaseMonth() {
+  const todayKey = dateKey(new Date());
+  const upcoming = Object.keys(calIndex).filter(k => k >= todayKey).sort();
+  const base = upcoming.length ? upcoming[0] : todayKey;
+  const d = new Date(base + 'T00:00:00');
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+// Une case = un jour réel (y compris hors du mois affiché, en repli grisé
+// "heat-muted") — jamais une case vide : un jour du mois précédent/suivant
+// peut très bien avoir lui-même une livraison prévue.
+function heatDayCell(d, todayKey, muted) {
+  const key     = dateKey(d);
+  const numeros = calIndex[key] || [];
+  const level   = Math.min(numeros.length, HEAT_COLORS.length - 1);
+  const classes = ['heat-day'];
+  if (muted) classes.push('heat-muted');
+  if (numeros.length) classes.push('heat-has-voyage');
+  if (key === todayKey) classes.push('heat-today');
+  const label = d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+  return `<div class="${classes.join(' ')}" style="background:${HEAT_COLORS[level]};color:${HEAT_TEXT[level]}"
+    data-key="${key}" data-numeros="${numeros.join(',')}"
+    title="${label}${numeros.length ? ' — ' + numeros.length + ' voyage(s)' : ''}">${d.getDate()}</div>`;
+}
+
+// Grille toujours pleine (6 semaines = 42 cases), quel que soit le nombre
+// réel de semaines du mois — sinon la hauteur du calendrier varie d'un mois
+// à l'autre (4 à 6 semaines selon le mois).
+function renderHeatMonth(year, month, todayKey) {
+  const first       = new Date(year, month, 1);
+  const firstDow    = (first.getDay() + 6) % 7; // lundi = 0
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const prevDays    = new Date(year, month, 0).getDate();
+
+  let cells = '';
+  for (let i = 0; i < firstDow; i++) cells += heatDayCell(new Date(year, month - 1, prevDays - firstDow + 1 + i), todayKey, true);
+  for (let day = 1; day <= daysInMonth; day++) cells += heatDayCell(new Date(year, month, day), todayKey, false);
+  const trailing = 42 - (firstDow + daysInMonth);
+  for (let day = 1; day <= trailing; day++) cells += heatDayCell(new Date(year, month + 1, day), todayKey, true);
+
+  const dow = ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(d => `<div class="heat-dow">${d}</div>`).join('');
+  const label = first.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  return `<div class="heat-month">
+    <div class="heat-month-title">${label}</div>
+    <div class="heat-grid">${dow}${cells}</div>
+  </div>`;
+}
+
+function renderHeatmap() {
+  if (!heatBaseMonth) heatBaseMonth = defaultHeatBaseMonth();
+  const todayKey = dateKey(new Date());
+  let html = '';
+  for (let m = 0; m < HEAT_MONTHS_VISIBLE; m++) {
+    html += renderHeatMonth(heatBaseMonth.getFullYear(), heatBaseMonth.getMonth() + m, todayKey);
+  }
+  document.getElementById('heat-months').innerHTML = html;
+  document.getElementById('heat-legend').innerHTML =
+    `<span>Moins</span>${HEAT_COLORS.map(c => `<span class="heat-swatch" style="background:${c}"></span>`).join('')}<span>Plus</span>`;
+
+  document.querySelectorAll('#heat-months .heat-has-voyage').forEach(cell => {
+    const numeros = cell.dataset.numeros.split(',').filter(Boolean);
+    cell.addEventListener('mouseenter', () => highlightNumeros(numeros, cell));
+    cell.addEventListener('mouseleave', () => clearNumeroHighlight());
+    cell.addEventListener('click', () => {
+      if (numeros.length === 1) { openVoyageModal(numeros[0]); return; }
+      const row = document.querySelector(`#tbody tr[data-numero="${CSS.escape(numeros[0])}"]`);
+      if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
+
+  // La hauteur de la colonne carte+calendrier vient de changer (le calendrier
+  // n'a plus de max-height fixe) — sans ça Leaflet garde son ancien canevas
+  // tant que la fenêtre elle-même n'est pas redimensionnée.
+  if (leafletMap) leafletMap.invalidateSize();
+}
+
+// Surligne un ensemble de voyages (venant d'un jour du calendrier) sur le
+// tableau ET la carte simultanément — généralisation de highlightCity à un
+// groupe de numero_lv plutôt qu'une seule ville (un jour peut regrouper
+// plusieurs voyages vers des destinations différentes).
+function highlightNumeros(numeros, heatCell) {
+  document.querySelectorAll('#tbody tr[data-numero]').forEach(tr => {
+    tr.classList.toggle('row-highlight', numeros.includes(tr.dataset.numero));
+  });
+  const cities = new Set(numeros.map(n => numeroToCity[n]).filter(Boolean));
+  Object.entries(cityMarkers).forEach(([name, marker]) => {
+    marker.setStyle(cities.has(name) ? MARKER_STYLE_HI : MARKER_STYLE);
+    if (cities.has(name)) marker.bringToFront();
+  });
+  if (heatCell) heatCell.classList.add('heat-highlight');
+}
+function clearNumeroHighlight() {
+  document.querySelectorAll('#heat-months .heat-day.heat-highlight').forEach(c => c.classList.remove('heat-highlight'));
+  highlightCity(selectedCity); // revient à l'état "ville sélectionnée" normal (ou rien)
+}
+function highlightCalDay(key) {
+  document.querySelectorAll('#heat-months .heat-day').forEach(c => c.classList.toggle('heat-highlight', c.dataset.key === key));
+}
+function clearCalDayHighlight() {
+  document.querySelectorAll('#heat-months .heat-day.heat-highlight').forEach(c => c.classList.remove('heat-highlight'));
+}
+
 function render() {
   const dispo = currentVoyages.filter(v => !v.parti);
   document.getElementById('stat-count').textContent = dispo.length;
   const villesVues = new Set(dispo.map(v => (resolveLocation(v) || {}).key || v.destination));
   document.getElementById('stat-dest').textContent = villesVues.size;
+  buildCalIndex(dispo);
+  renderHeatmap();
 
   const tbody    = document.getElementById('tbody');
   const emptyMsg = document.getElementById('empty-msg');
@@ -422,8 +608,9 @@ function render() {
       .map((v, idx) => {
         const marchandise = (v.marchandises_desc || '').trim();
         const city = (resolveLocation(v) || {}).key || '';
+        const livKey = v.livraison_prevue ? String(v.livraison_prevue).slice(0, 10) : '';
         return `
-        <tr data-numero="${escapeHtml(v.numero_lv)}" data-city="${escapeHtml(city)}">
+        <tr data-numero="${escapeHtml(v.numero_lv)}" data-city="${escapeHtml(city)}" data-livraison="${livKey}">
           <td class="col-num nowrap row-num">${idx + 1}</td>
           <td class="col-lv nowrap"><span class="voyage-num">${escapeHtml(v.numero_lv)}</span></td>
           <td class="col-date muted ellipsis">${new Date(v.date_creation).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'2-digit' })}</td>
@@ -440,9 +627,16 @@ function render() {
     tbody.querySelectorAll('tr[data-numero]').forEach(tr => {
       const city   = tr.dataset.city;
       const numero = tr.dataset.numero;
-      if (city) {
-        tr.addEventListener('mouseenter', () => highlightCity(city));
-        tr.addEventListener('mouseleave', () => clearHighlight());
+      const livKey = tr.dataset.livraison;
+      if (city || livKey) {
+        tr.addEventListener('mouseenter', () => {
+          if (city) highlightCity(city);
+          if (livKey) highlightCalDay(livKey);
+        });
+        tr.addEventListener('mouseleave', () => {
+          clearHighlight();
+          clearCalDayHighlight();
+        });
       }
       // Simple clic = zoomer/centrer la carte sur la destination. Double-clic
       // = ouvrir la fiche détaillée (le double-clic déclenche aussi deux
@@ -565,6 +759,21 @@ function setupRealtime() {
 document.getElementById('btn-refresh').addEventListener('click', chargerVoyages);
 window.addEventListener('resize', () => { if (leafletMap) leafletMap.invalidateSize(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeVoyageModal(); });
+document.getElementById('heat-prev').addEventListener('click', () => {
+  if (!heatBaseMonth) heatBaseMonth = defaultHeatBaseMonth();
+  heatBaseMonth = new Date(heatBaseMonth.getFullYear(), heatBaseMonth.getMonth() - 1, 1);
+  renderHeatmap();
+});
+document.getElementById('heat-next').addEventListener('click', () => {
+  if (!heatBaseMonth) heatBaseMonth = defaultHeatBaseMonth();
+  heatBaseMonth = new Date(heatBaseMonth.getFullYear(), heatBaseMonth.getMonth() + 1, 1);
+  renderHeatmap();
+});
+document.getElementById('heat-today-btn').addEventListener('click', () => {
+  const t = new Date();
+  heatBaseMonth = new Date(t.getFullYear(), t.getMonth(), 1);
+  renderHeatmap();
+});
 
 // ── Mode calibration des colonnes (?edit=1) ──────────────────────────────────
 // Jamais actif par défaut — les transporteurs ne voient ni poignées ni bouton.
@@ -710,7 +919,7 @@ if (EDIT_MODE) {
   btn.id = 'btn-copy-widths';
   btn.textContent = '📐 Copier les largeurs';
   btn.onclick = copyColumnWidths;
-  document.querySelector('.toolbar').appendChild(btn);
+  document.querySelector('.header-actions').appendChild(btn);
 }
 
 initMap();
