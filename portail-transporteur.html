@@ -67,6 +67,17 @@
     padding: 2px 7px; font-size: 12px; font-weight: 600; color: #1e293b;
     box-shadow: 0 1px 3px rgba(0,0,0,0.12);
   }
+  /* Marqueur carte = divIcon (pas circleMarker) pour pouvoir afficher le
+     nombre de voyages directement dedans ; le nom de ville n'apparaît qu'au
+     survol (tooltip non permanent, voir bindTooltip côté JS). */
+  .leaflet-div-icon { background: transparent; border: none; }
+  .voyage-marker {
+    width: 100%; height: 100%; border-radius: 50%; box-sizing: border-box;
+    background: rgba(31,58,95,0.55); border: 1.5px solid #1f3a5f; color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; line-height: 1;
+  }
+  .voyage-marker-hi .voyage-marker { background: #f59e0b; color: #1f3a5f; border-color: #1f3a5f; border-width: 2.5px; }
   /* Heatmap des livraisons prévues — dans la colonne latérale, sous la carte.
      Vraie grille mensuelle (2 mois côte à côte, en-tête L M M J V S D, jours
      du mois précédent/suivant en repli grisé pour une hauteur toujours de 6
@@ -397,13 +408,10 @@ let calIndex = {};      // dateKey ("yyyy-mm-dd") -> [numero_lv, ...] (voyages d
 // les deux sens pour la sélection croisée liste <-> carte. Noms conservés
 // (cityXxx) même si la clé est désormais souvent des coordonnées, pas un nom
 // de ville — évite un renommage massif pour un changement purement sémantique.
-let cityMarkers   = {}; // clé position -> L.circleMarker
+let cityMarkers   = {}; // clé position -> L.marker (divIcon)
 let cityToNumeros = {}; // clé position -> [numero_lv, ...]
 let numeroToCity  = {}; // numero_lv -> clé position
 let selectedCity  = null;
-
-const MARKER_STYLE       = { color: '#1f3a5f', weight: 1.5, fillColor: '#1f3a5f', fillOpacity: 0.35 };
-const MARKER_STYLE_HI    = { color: '#1f3a5f', weight: 3,   fillColor: '#f59e0b', fillOpacity: 0.75 };
 
 function initMap() {
   leafletMap = L.map('map').setView([46.6, 2.2], 6);
@@ -417,10 +425,13 @@ function initMap() {
 // Survol/sélection croisée : met en évidence le marqueur d'une ville + les
 // lignes du tableau correspondantes (highlightCity), ou revient à l'état
 // courant (clearHighlight -> ré-applique selectedCity s'il y en a un).
+// Marqueurs en L.marker/divIcon (pas circleMarker) : pas de setStyle/
+// bringToFront natifs, on bascule une classe CSS sur l'élément DOM + zIndex.
 function highlightCity(city) {
   Object.entries(cityMarkers).forEach(([name, marker]) => {
-    marker.setStyle(name === city ? MARKER_STYLE_HI : MARKER_STYLE);
-    if (name === city) marker.bringToFront();
+    const el = marker.getElement();
+    if (el) el.classList.toggle('voyage-marker-hi', name === city);
+    marker.setZIndexOffset(name === city ? 1000 : 0);
   });
   document.querySelectorAll('#tbody tr').forEach(tr => {
     tr.classList.toggle('row-highlight', !!city && tr.dataset.city === city);
@@ -450,8 +461,18 @@ function renderMapMarkers(dispo) {
     (cityToNumeros[loc.key] = cityToNumeros[loc.key] || []).push(v.numero_lv);
   });
   Object.values(groups).forEach(g => {
-    const marker = L.circleMarker([g.lat, g.lon], { radius: 6 + g.count * 3, ...MARKER_STYLE })
-      .bindTooltip(`${g.label} (${g.count})`, { permanent: true, direction: 'right', offset: [8, 0], className: 'city-label' })
+    // Le nombre de voyages est affiché directement dans le marqueur (divIcon,
+    // pas circleMarker — un cercle SVG seul ne peut pas contenir de texte) ;
+    // le nom de la ville, lui, n'apparaît qu'au survol (tooltip non permanent).
+    const size = 20 + g.count * 7;
+    const icon = L.divIcon({
+      className: 'voyage-marker-icon',
+      html: `<div class="voyage-marker">${g.count}</div>`,
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2],
+    });
+    const marker = L.marker([g.lat, g.lon], { icon })
+      .bindTooltip(`${g.label} (${g.count})`, { direction: 'top', offset: [0, -size / 2], className: 'city-label' })
       .on('click',     () => scrollToCity(g.key))
       .on('mouseover',  () => highlightCity(g.key))
       .on('mouseout',   () => clearHighlight())
@@ -516,12 +537,12 @@ function isoWeekNumber(d) {
   return 1 + Math.round((date - firstThursday) / (7 * 86400000));
 }
 
+// heatBaseMonth est le mois affiché en 1ère colonne (grille sur 3 mois) —
+// on recule d'un mois pour que le mois en cours tombe au milieu (précédent /
+// en cours / suivant), plutôt qu'en 1ère position.
 function defaultHeatBaseMonth() {
-  const todayKey = dateKey(new Date());
-  const upcoming = Object.keys(calIndex).filter(k => k >= todayKey).sort();
-  const base = upcoming.length ? upcoming[0] : todayKey;
-  const d = new Date(base + 'T00:00:00');
-  return new Date(d.getFullYear(), d.getMonth(), 1);
+  const t = new Date();
+  return new Date(t.getFullYear(), t.getMonth() - 1, 1);
 }
 
 // Une case = un jour réel (y compris hors du mois affiché, en repli grisé
@@ -615,8 +636,9 @@ function highlightNumeros(numeros, heatCell) {
   });
   const cities = new Set(numeros.map(n => numeroToCity[n]).filter(Boolean));
   Object.entries(cityMarkers).forEach(([name, marker]) => {
-    marker.setStyle(cities.has(name) ? MARKER_STYLE_HI : MARKER_STYLE);
-    if (cities.has(name)) marker.bringToFront();
+    const el = marker.getElement();
+    if (el) el.classList.toggle('voyage-marker-hi', cities.has(name));
+    marker.setZIndexOffset(cities.has(name) ? 1000 : 0);
   });
   if (heatCell) heatCell.classList.add('heat-highlight');
 }
@@ -813,8 +835,7 @@ document.getElementById('heat-next').addEventListener('click', () => {
   renderHeatmap();
 });
 document.getElementById('heat-today-btn').addEventListener('click', () => {
-  const t = new Date();
-  heatBaseMonth = new Date(t.getFullYear(), t.getMonth(), 1);
+  heatBaseMonth = defaultHeatBaseMonth();
   renderHeatmap();
 });
 
