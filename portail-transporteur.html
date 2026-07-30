@@ -72,13 +72,16 @@
      du mois précédent/suivant en repli grisé pour une hauteur toujours de 6
      semaines) — mais chaque case est colorée façon "heatmap" (plus foncé =
      plus de voyages) plutôt qu'un badge séparé : pas de case vide inutile.
-     Pas de max-height/scroll : la grille prend sa hauteur naturelle, la carte
-     (flex:1 au-dessus) se resserre d'autant — plus d'espace mort en bas. */
+     Largeur et hauteur réglables indépendamment (mode ?edit=1) : la largeur
+     vient de .heat-months (colonnes de la grille), la hauteur de la hauteur
+     explicite de #panel-heatmap (lignes de la grille, grid-template-rows) —
+     pas d'aspect-ratio liant les deux, les cases peuvent être rectangulaires. */
   #panel-heatmap {
     background: white; border: 1px solid var(--gray-border); border-radius: 10px;
-    padding: 10px 12px; margin-top: 10px; flex-shrink: 0;
+    padding: 10px 12px; margin-top: 10px; flex-shrink: 0; box-sizing: border-box;
+    height: 260px; display: flex; flex-direction: column;
   }
-  .heat-nav { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 8px; }
+  .heat-nav { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 8px; flex-shrink: 0; }
   .heat-nav button {
     background: none; border: 1px solid var(--gray-border); border-radius: 6px;
     cursor: pointer; color: var(--navy); font-weight: 600;
@@ -86,30 +89,38 @@
   .heat-nav button:hover { background: var(--navy-light); }
   .heat-arrow { width: 26px; height: 26px; font-size: 14px; line-height: 1; }
   #heat-today-btn { font-size: 10.5px; padding: 5px 10px; }
-  .heat-months { display: flex; gap: 14px; margin: 0 auto; } /* margin:auto : centre si une largeur < 100% est fixée via ?edit=1 */
+  .heat-months { display: flex; gap: 14px; margin: 0 auto; flex: 1; min-height: 0; } /* margin:auto : centre si une largeur < 100% est fixée via ?edit=1 */
   .cal-resize-handle {
     position: absolute; top: 0; width: 12px; cursor: col-resize; z-index: 3;
   }
   .cal-resize-handle:hover, .cal-resize-handle.dragging { background: rgba(31,58,95,0.15); }
-  .heat-month { flex: 1; min-width: 0; }
-  .heat-month-title { font-size: 11px; font-weight: 700; color: var(--navy); text-align: center; text-transform: capitalize; margin-bottom: 4px; }
+  .map-cal-resize-handle {
+    position: absolute; left: 0; right: 0; height: 14px; cursor: row-resize; z-index: 3;
+  }
+  .map-cal-resize-handle:hover, .map-cal-resize-handle.dragging { background: rgba(31,58,95,0.15); }
+  .heat-month { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .heat-month-title { font-size: 11px; font-weight: 700; color: var(--navy); text-align: center; text-transform: capitalize; margin-bottom: 4px; flex-shrink: 0; }
   /* Colonne dédiée (16px) pour le numéro de semaine, discret — avant les 7
-     jours. Header : cellule vide au-dessus (voir dow dans renderHeatMonth). */
-  .heat-grid { display: grid; grid-template-columns: 16px repeat(7, 1fr); gap: 3px; }
+     jours. Header : cellule vide au-dessus (voir dow dans renderHeatMonth).
+     7 lignes (en-tête + 6 semaines) réparties sur la hauteur disponible. */
+  .heat-grid {
+    display: grid; grid-template-columns: 16px repeat(7, 1fr); grid-template-rows: repeat(7, 1fr);
+    gap: 3px; flex: 1; min-height: 0;
+  }
   .heat-dow { font-size: 8.5px; font-weight: 700; color: var(--gray-text); text-transform: uppercase; text-align: center; padding: 0 0 3px; }
   .heat-week-num {
     display: flex; align-items: center; justify-content: center;
     font-size: 7.5px; color: var(--gray-text); font-weight: 600;
   }
   .heat-day {
-    aspect-ratio: 1 / 1; border-radius: 5px; box-sizing: border-box;
+    border-radius: 5px; box-sizing: border-box;
     display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600;
   }
   .heat-day.heat-muted { opacity: 0.35; }
   .heat-day.heat-has-voyage { cursor: pointer; }
   .heat-day.heat-today { box-shadow: 0 0 0 2px #1d4ed8; }
   .heat-day.heat-highlight { box-shadow: 0 0 0 2px var(--navy); }
-  .heat-legend { display: flex; align-items: center; gap: 3px; justify-content: flex-end; margin-top: 8px; font-size: 8.5px; color: var(--gray-text); }
+  .heat-legend { display: flex; align-items: center; gap: 3px; justify-content: flex-end; margin-top: 8px; font-size: 8.5px; color: var(--gray-text); flex-shrink: 0; }
   .heat-legend .heat-swatch { width: 10px; height: 10px; border-radius: 2px; }
   @media (max-width: 900px) {
     .heat-months { flex-wrap: wrap; }
@@ -586,10 +597,12 @@ function renderHeatmap() {
   // n'a plus de max-height fixe) — sans ça Leaflet garde son ancien canevas
   // tant que la fenêtre elle-même n'est pas redimensionnée.
   if (leafletMap) leafletMap.invalidateSize();
-  // Repositionne la poignée de largeur du calendrier (mode ?edit=1) : sa
-  // hauteur dépend du contenu, qui vient de changer (chargement initial,
+  // Repositionne les poignées du mode ?edit=1 : la hauteur du calendrier
+  // (poignée largeur) et la position carte/calendrier (poignée hauteur)
+  // dépendent du contenu, qui vient de changer (chargement initial,
   // navigation mois, Realtime...).
   if (window.__repositionCalHandle) window.__repositionCalHandle();
+  if (window.__repositionMapCalHandle) window.__repositionMapCalHandle();
 }
 
 // Surligne un ensemble de voyages (venant d'un jour du calendrier) sur le
@@ -844,8 +857,10 @@ function copyColumnWidths() {
   const heatMonths = document.querySelector('.heat-months');
   const heatPanel  = document.getElementById('panel-heatmap');
   const calPct     = Math.round(heatMonths.getBoundingClientRect().width / heatPanel.clientWidth * 100);
-  const calLine    = `  .heat-months { width: ${calPct}%; margin: 0 auto; } /* largeur calendrier figée — pilote aussi sa hauteur (cases carrées) */`;
-  navigator.clipboard.writeText(panelLine + '\n' + colLines + '\n' + calLine)
+  const calW       = `  .heat-months { width: ${calPct}%; } /* largeur calendrier figée (indépendante de sa hauteur) */`;
+  const calH       = Math.round(heatPanel.getBoundingClientRect().height);
+  const calHLine   = `  #panel-heatmap { height: ${calH}px; } /* hauteur calendrier figée */`;
+  navigator.clipboard.writeText(panelLine + '\n' + colLines + '\n' + calW + '\n' + calHLine)
     .then(() => showToast('Largeurs copiées — collez-les dans le CSS'));
 }
 
@@ -951,8 +966,8 @@ function loadSavedCalWidth() {
 
 // Poignée à droite de la grille du calendrier — largeur centrée (margin:auto),
 // donc symétrique : déplacer le bord droit de dx change la largeur de 2×dx.
-// Les cases étant carrées (aspect-ratio), réduire la largeur réduit aussi la
-// hauteur du module d'autant — un seul réglage pour les deux.
+// Ne règle QUE la largeur (colonnes de la grille) — la hauteur est
+// indépendante, voir setupMapCalHeightResize().
 function setupCalendarResize() {
   const heatMonths = document.getElementById('heat-months');
   const panel      = document.getElementById('panel-heatmap');
@@ -995,13 +1010,67 @@ function setupCalendarResize() {
   });
 }
 
+function loadSavedCalHeight() {
+  const saved = localStorage.getItem('portailCalHeight');
+  if (saved) document.getElementById('panel-heatmap').style.height = saved + 'px';
+}
+
+// Poignée horizontale entre la carte et le calendrier — règle la hauteur du
+// calendrier (#panel-heatmap), la carte (flex:1 dans #panel-map) récupère le
+// reste. Indépendante de setupCalendarResize() (largeur) : les cases ne sont
+// plus carrées, donc largeur et hauteur se règlent chacune séparément.
+function setupMapCalHeightResize() {
+  const col       = document.getElementById('panel-map');
+  const heatPanel = document.getElementById('panel-heatmap');
+  col.style.position = 'relative';
+  const handle = document.createElement('div');
+  handle.className = 'map-cal-resize-handle';
+  col.appendChild(handle);
+
+  function positionHandle() {
+    const colRect  = col.getBoundingClientRect();
+    const heatRect = heatPanel.getBoundingClientRect();
+    handle.style.top = (heatRect.top - colRect.top - 7) + 'px';
+  }
+  positionHandle();
+  window.addEventListener('resize', positionHandle);
+  window.__repositionMapCalHandle = positionHandle; // rappelé après chaque rendu du calendrier, voir renderHeatmap()
+
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    handle.classList.add('dragging');
+    const startY = e.clientY;
+    const startH = heatPanel.getBoundingClientRect().height;
+    const colH   = col.getBoundingClientRect().height;
+    const onMove = e2 => {
+      const dy   = e2.clientY - startY;
+      // Déplacer la poignée vers le bas (dy > 0) réduit le calendrier ;
+      // borne basse 80px, borne haute : garde au moins 150px à la carte.
+      const newH = Math.max(80, Math.min(colH - 150, startH - dy));
+      heatPanel.style.height = newH + 'px';
+      positionHandle();
+      if (leafletMap) leafletMap.invalidateSize();
+    };
+    const onUp = () => {
+      handle.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove, true);
+      document.removeEventListener('mouseup', onUp, true);
+      localStorage.setItem('portailCalHeight', Math.round(heatPanel.getBoundingClientRect().height));
+    };
+    document.addEventListener('mousemove', onMove, true);
+    document.addEventListener('mouseup', onUp, true);
+  });
+}
+
 if (EDIT_MODE) {
   loadSavedColumnWidths();
   loadSavedPanelWidth();
   loadSavedCalWidth();
+  loadSavedCalHeight();
   setupColumnResize(); // thead/colgroup sont statiques dans le HTML, pas besoin d'attendre chargerVoyages()
   setupPanelResize();
   setupCalendarResize();
+  setupMapCalHeightResize();
   const btn = document.createElement('button');
   btn.id = 'btn-copy-widths';
   btn.textContent = '📐 Copier les largeurs';
