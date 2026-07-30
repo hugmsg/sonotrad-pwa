@@ -68,39 +68,43 @@
     box-shadow: 0 1px 3px rgba(0,0,0,0.12);
   }
   /* Heatmap des livraisons prévues — dans la colonne latérale, sous la carte.
-     Une ligne = une semaine (numéro ISO + 7 carrés colorés L à D), défilement
-     vertical. Pas de case vide/inutile : juste une couleur (plus foncée =
-     plus de voyages ce jour-là), le détail est dans le title (tooltip). */
+     Vraie grille mensuelle (2 mois côte à côte, en-tête L M M J V S D, jours
+     du mois précédent/suivant en repli grisé pour une hauteur toujours de 6
+     semaines) — mais chaque case est colorée façon "heatmap" (plus foncé =
+     plus de voyages) plutôt qu'un badge séparé : pas de case vide inutile.
+     Pas de max-height/scroll : la grille prend sa hauteur naturelle, la carte
+     (flex:1 au-dessus) se resserre d'autant — plus d'espace mort en bas. */
   #panel-heatmap {
     background: white; border: 1px solid var(--gray-border); border-radius: 10px;
-    padding: 8px 10px; margin-top: 10px; flex-shrink: 0;
-    max-height: 220px; overflow-y: auto;
-    scrollbar-width: thin; scrollbar-color: var(--navy-light) transparent;
+    padding: 10px 12px; margin-top: 10px; flex-shrink: 0;
   }
-  #panel-heatmap::-webkit-scrollbar { width: 5px; }
-  #panel-heatmap::-webkit-scrollbar-track { background: transparent; }
-  #panel-heatmap::-webkit-scrollbar-thumb { background: var(--navy-light); border-radius: 3px; }
-  /* En-tête jours (L M M J V S D), fixe en haut pendant le défilement vertical */
-  .heat-dow-row { display: flex; align-items: center; gap: 6px; position: sticky; top: 0; background: white; z-index: 1; padding-bottom: 3px; }
-  .heat-dow-row .heat-week-num { visibility: hidden; }
-  .heat-dow { width: 18px; text-align: center; font-size: 8px; font-weight: 700; color: var(--gray-text); text-transform: uppercase; }
-  /* Repère du mois — imprimé une fois à chaque changement, pour que la liste
-     de semaines se lise encore comme un calendrier plutôt qu'une suite de
-     numéros abstraits. */
-  .heat-month-label { font-size: 10px; font-weight: 700; color: var(--navy); text-transform: capitalize; margin: 5px 0 1px 28px; }
-  .heat-week { display: flex; align-items: center; gap: 6px; padding: 1.5px 0; }
-  .heat-week-num { font-size: 10px; color: var(--navy); font-weight: 700; width: 22px; flex-shrink: 0; }
-  .heat-days { display: flex; gap: 2px; }
+  .heat-nav { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 8px; }
+  .heat-nav button {
+    background: none; border: 1px solid var(--gray-border); border-radius: 6px;
+    cursor: pointer; color: var(--navy); font-weight: 600;
+  }
+  .heat-nav button:hover { background: var(--navy-light); }
+  .heat-arrow { width: 26px; height: 26px; font-size: 14px; line-height: 1; }
+  #heat-today-btn { font-size: 10.5px; padding: 5px 10px; }
+  .heat-months { display: flex; gap: 14px; }
+  .heat-month { flex: 1; min-width: 0; }
+  .heat-month-title { font-size: 11px; font-weight: 700; color: var(--navy); text-align: center; text-transform: capitalize; margin-bottom: 4px; }
+  .heat-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+  .heat-dow { font-size: 8.5px; font-weight: 700; color: var(--gray-text); text-transform: uppercase; text-align: center; padding: 0 0 3px; }
   .heat-day {
-    width: 18px; height: 18px; border-radius: 4px; box-sizing: border-box;
-    display: flex; align-items: center; justify-content: center; font-size: 8.5px; font-weight: 600;
+    aspect-ratio: 1 / 1; border-radius: 5px; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600;
   }
+  .heat-day.heat-muted { opacity: 0.35; }
   .heat-day.heat-has-voyage { cursor: pointer; }
   .heat-day.heat-today { box-shadow: 0 0 0 2px #1d4ed8; }
   .heat-day.heat-highlight { box-shadow: 0 0 0 2px var(--navy); }
-  .heat-legend { display: flex; align-items: center; gap: 3px; justify-content: flex-end; margin-top: 6px; font-size: 8.5px; color: var(--gray-text); }
+  .heat-legend { display: flex; align-items: center; gap: 3px; justify-content: flex-end; margin-top: 8px; font-size: 8.5px; color: var(--gray-text); }
   .heat-legend .heat-swatch { width: 10px; height: 10px; border-radius: 2px; }
-  @media (max-width: 900px) { #panel-heatmap { max-height: 260px; } }
+  @media (max-width: 900px) {
+    .heat-months { flex-wrap: wrap; }
+    .heat-month:nth-child(n+2) { display: none; }
+  }
 
   #panel-list { background: white; border: 1px solid var(--gray-border); border-radius: 10px; overflow: hidden; }
   #voyage-table-wrap { overflow-x: auto; }
@@ -261,7 +265,13 @@
         <div id="map"></div>
       </div>
       <div id="panel-heatmap">
-        <div id="heatmap-body"></div>
+        <div class="heat-nav">
+          <button class="heat-arrow" id="heat-prev" aria-label="Mois précédent">‹</button>
+          <button id="heat-today-btn">Aujourd'hui</button>
+          <button class="heat-arrow" id="heat-next" aria-label="Mois suivant">›</button>
+        </div>
+        <div class="heat-months" id="heat-months"></div>
+        <div class="heat-legend" id="heat-legend"></div>
       </div>
     </div>
   </div>
@@ -466,95 +476,76 @@ function buildCalIndex(dispo) {
   });
 }
 
-// Lundi de la semaine contenant d (minuit local).
-function mondayOf(d) {
-  const r = new Date(d);
-  r.setDate(r.getDate() - ((r.getDay() + 6) % 7));
-  r.setHours(0, 0, 0, 0);
-  return r;
-}
-
-// Numéro de semaine ISO 8601 (semaine qui contient le jeudi de cette semaine).
-function isoWeekNumber(d) {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7) + 3);
-  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
-  return 1 + Math.round((date - firstThursday) / (7 * 86400000));
-}
-
 // Plus la couleur est foncée, plus il y a de voyages ce jour-là (façon
-// "heatmap" de contributions) — évite les cases vides à 90% d'une grille
-// classique pour une info aussi simple qu'un simple décompte par jour.
-// HEAT_TEXT donne la couleur du chiffre du jour, en contraste avec le fond.
+// "heatmap" de contributions) au lieu d'une pastille séparée sur une case
+// vide à 90% — HEAT_TEXT donne la couleur du chiffre du jour, en contraste
+// avec le fond.
 const HEAT_COLORS = ['#eef2f6', '#b9d4f0', '#7fb0e0', '#3f7ec9', '#1f3a5f'];
 const HEAT_TEXT   = ['#b0bac4', '#1f3a5f', '#ffffff', '#ffffff', '#ffffff'];
 
-const HEAT_WEEKS_BEFORE = 1;
-const HEAT_WEEKS_AFTER  = 25;
-let heatBaseMonday   = null; // lundi de la semaine "par défaut" (prochaine livraison connue, sinon aujourd'hui)
-let heatScrolledOnce = false;
+const HEAT_MONTHS_VISIBLE = 2; // 1 seul sous 900px (CSS)
+let heatBaseMonth = null; // Date (1er du mois affiché à gauche)
 
-function defaultHeatBase() {
+function defaultHeatBaseMonth() {
   const todayKey = dateKey(new Date());
   const upcoming = Object.keys(calIndex).filter(k => k >= todayKey).sort();
   const base = upcoming.length ? upcoming[0] : todayKey;
-  return mondayOf(new Date(base + 'T00:00:00'));
+  const d = new Date(base + 'T00:00:00');
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+// Une case = un jour réel (y compris hors du mois affiché, en repli grisé
+// "heat-muted") — jamais une case vide : un jour du mois précédent/suivant
+// peut très bien avoir lui-même une livraison prévue.
+function heatDayCell(d, todayKey, muted) {
+  const key     = dateKey(d);
+  const numeros = calIndex[key] || [];
+  const level   = Math.min(numeros.length, HEAT_COLORS.length - 1);
+  const classes = ['heat-day'];
+  if (muted) classes.push('heat-muted');
+  if (numeros.length) classes.push('heat-has-voyage');
+  if (key === todayKey) classes.push('heat-today');
+  const label = d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+  return `<div class="${classes.join(' ')}" style="background:${HEAT_COLORS[level]};color:${HEAT_TEXT[level]}"
+    data-key="${key}" data-numeros="${numeros.join(',')}"
+    title="${label}${numeros.length ? ' — ' + numeros.length + ' voyage(s)' : ''}">${d.getDate()}</div>`;
+}
+
+// Grille toujours pleine (6 semaines = 42 cases), quel que soit le nombre
+// réel de semaines du mois — sinon la hauteur du calendrier varie d'un mois
+// à l'autre (4 à 6 semaines selon le mois).
+function renderHeatMonth(year, month, todayKey) {
+  const first       = new Date(year, month, 1);
+  const firstDow    = (first.getDay() + 6) % 7; // lundi = 0
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const prevDays    = new Date(year, month, 0).getDate();
+
+  let cells = '';
+  for (let i = 0; i < firstDow; i++) cells += heatDayCell(new Date(year, month - 1, prevDays - firstDow + 1 + i), todayKey, true);
+  for (let day = 1; day <= daysInMonth; day++) cells += heatDayCell(new Date(year, month, day), todayKey, false);
+  const trailing = 42 - (firstDow + daysInMonth);
+  for (let day = 1; day <= trailing; day++) cells += heatDayCell(new Date(year, month + 1, day), todayKey, true);
+
+  const dow = ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(d => `<div class="heat-dow">${d}</div>`).join('');
+  const label = first.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  return `<div class="heat-month">
+    <div class="heat-month-title">${label}</div>
+    <div class="heat-grid">${dow}${cells}</div>
+  </div>`;
 }
 
 function renderHeatmap() {
-  if (!heatBaseMonday) heatBaseMonday = defaultHeatBase();
+  if (!heatBaseMonth) heatBaseMonth = defaultHeatBaseMonth();
   const todayKey = dateKey(new Date());
-  const startMonday = new Date(heatBaseMonday);
-  startMonday.setDate(startMonday.getDate() - HEAT_WEEKS_BEFORE * 7);
-
-  const dowLabels = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
-  let html = `<div class="heat-dow-row"><div class="heat-week-num">S</div><div class="heat-days">
-    ${dowLabels.map(d => `<div class="heat-dow">${d}</div>`).join('')}
-  </div></div>`;
-
-  let lastMonthKey = null;
-  const totalWeeks = HEAT_WEEKS_BEFORE + 1 + HEAT_WEEKS_AFTER;
-  for (let w = 0; w < totalWeeks; w++) {
-    const weekMonday = new Date(startMonday);
-    weekMonday.setDate(weekMonday.getDate() + w * 7);
-
-    // Repère de mois : imprimé une fois à chaque changement, pour ancrer la
-    // liste de semaines dans un vrai calendrier plutôt qu'une suite de S+nombre.
-    const monthKey = `${weekMonday.getFullYear()}-${weekMonday.getMonth()}`;
-    if (monthKey !== lastMonthKey) {
-      lastMonthKey = monthKey;
-      html += `<div class="heat-month-label">${weekMonday.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</div>`;
-    }
-
-    let daysHtml = '';
-    for (let d = 0; d < 7; d++) {
-      const day = new Date(weekMonday);
-      day.setDate(day.getDate() + d);
-      const key     = dateKey(day);
-      const numeros = calIndex[key] || [];
-      const level   = Math.min(numeros.length, HEAT_COLORS.length - 1);
-      const classes = ['heat-day'];
-      if (numeros.length) classes.push('heat-has-voyage');
-      if (key === todayKey) classes.push('heat-today');
-      const label = day.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' });
-      daysHtml += `<div class="${classes.join(' ')}" style="background:${HEAT_COLORS[level]};color:${HEAT_TEXT[level]}"
-        data-key="${key}" data-numeros="${numeros.join(',')}"
-        title="${label}${numeros.length ? ' — ' + numeros.length + ' voyage(s)' : ''}">${day.getDate()}</div>`;
-    }
-    const isDefault = w === HEAT_WEEKS_BEFORE;
-    html += `<div class="heat-week"${isDefault ? ' data-default="1"' : ''}>
-      <div class="heat-week-num">S${isoWeekNumber(weekMonday)}</div>
-      <div class="heat-days">${daysHtml}</div>
-    </div>`;
+  let html = '';
+  for (let m = 0; m < HEAT_MONTHS_VISIBLE; m++) {
+    html += renderHeatMonth(heatBaseMonth.getFullYear(), heatBaseMonth.getMonth() + m, todayKey);
   }
-  html += `<div class="heat-legend"><span>Moins</span>${
-    HEAT_COLORS.map(c => `<span class="heat-swatch" style="background:${c}"></span>`).join('')
-  }<span>Plus</span></div>`;
+  document.getElementById('heat-months').innerHTML = html;
+  document.getElementById('heat-legend').innerHTML =
+    `<span>Moins</span>${HEAT_COLORS.map(c => `<span class="heat-swatch" style="background:${c}"></span>`).join('')}<span>Plus</span>`;
 
-  const container = document.getElementById('heatmap-body');
-  container.innerHTML = html;
-
-  document.querySelectorAll('#heatmap-body .heat-has-voyage').forEach(cell => {
+  document.querySelectorAll('#heat-months .heat-has-voyage').forEach(cell => {
     const numeros = cell.dataset.numeros.split(',').filter(Boolean);
     cell.addEventListener('mouseenter', () => highlightNumeros(numeros, cell));
     cell.addEventListener('mouseleave', () => clearNumeroHighlight());
@@ -565,19 +556,13 @@ function renderHeatmap() {
     });
   });
 
-  // Positionne le scroll vertical sur la semaine par défaut une seule fois —
-  // sinon chaque rafraîchissement (Realtime, filet 5 min) ramènerait la vue
-  // en arrière si le transporteur avait déjà fait défiler ailleurs. Ciblée
-  // par attribut (pas par index d'enfant) car des repères de mois s'intercalent
-  // désormais entre les lignes de semaine.
-  if (!heatScrolledOnce) {
-    heatScrolledOnce = true;
-    const target = container.querySelector('.heat-week[data-default="1"]');
-    if (target) target.scrollIntoView({ block: 'nearest' });
-  }
+  // La hauteur de la colonne carte+calendrier vient de changer (le calendrier
+  // n'a plus de max-height fixe) — sans ça Leaflet garde son ancien canevas
+  // tant que la fenêtre elle-même n'est pas redimensionnée.
+  if (leafletMap) leafletMap.invalidateSize();
 }
 
-// Surligne un ensemble de voyages (venant d'un jour de la heatmap) sur le
+// Surligne un ensemble de voyages (venant d'un jour du calendrier) sur le
 // tableau ET la carte simultanément — généralisation de highlightCity à un
 // groupe de numero_lv plutôt qu'une seule ville (un jour peut regrouper
 // plusieurs voyages vers des destinations différentes).
@@ -593,14 +578,14 @@ function highlightNumeros(numeros, heatCell) {
   if (heatCell) heatCell.classList.add('heat-highlight');
 }
 function clearNumeroHighlight() {
-  document.querySelectorAll('#heatmap-body .heat-day.heat-highlight').forEach(c => c.classList.remove('heat-highlight'));
+  document.querySelectorAll('#heat-months .heat-day.heat-highlight').forEach(c => c.classList.remove('heat-highlight'));
   highlightCity(selectedCity); // revient à l'état "ville sélectionnée" normal (ou rien)
 }
 function highlightCalDay(key) {
-  document.querySelectorAll('#heatmap-body .heat-day').forEach(c => c.classList.toggle('heat-highlight', c.dataset.key === key));
+  document.querySelectorAll('#heat-months .heat-day').forEach(c => c.classList.toggle('heat-highlight', c.dataset.key === key));
 }
 function clearCalDayHighlight() {
-  document.querySelectorAll('#heatmap-body .heat-day.heat-highlight').forEach(c => c.classList.remove('heat-highlight'));
+  document.querySelectorAll('#heat-months .heat-day.heat-highlight').forEach(c => c.classList.remove('heat-highlight'));
 }
 
 function render() {
@@ -774,6 +759,21 @@ function setupRealtime() {
 document.getElementById('btn-refresh').addEventListener('click', chargerVoyages);
 window.addEventListener('resize', () => { if (leafletMap) leafletMap.invalidateSize(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeVoyageModal(); });
+document.getElementById('heat-prev').addEventListener('click', () => {
+  if (!heatBaseMonth) heatBaseMonth = defaultHeatBaseMonth();
+  heatBaseMonth = new Date(heatBaseMonth.getFullYear(), heatBaseMonth.getMonth() - 1, 1);
+  renderHeatmap();
+});
+document.getElementById('heat-next').addEventListener('click', () => {
+  if (!heatBaseMonth) heatBaseMonth = defaultHeatBaseMonth();
+  heatBaseMonth = new Date(heatBaseMonth.getFullYear(), heatBaseMonth.getMonth() + 1, 1);
+  renderHeatmap();
+});
+document.getElementById('heat-today-btn').addEventListener('click', () => {
+  const t = new Date();
+  heatBaseMonth = new Date(t.getFullYear(), t.getMonth(), 1);
+  renderHeatmap();
+});
 
 // ── Mode calibration des colonnes (?edit=1) ──────────────────────────────────
 // Jamais actif par défaut — les transporteurs ne voient ni poignées ni bouton.
