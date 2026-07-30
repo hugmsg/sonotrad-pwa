@@ -86,11 +86,21 @@
   .heat-nav button:hover { background: var(--navy-light); }
   .heat-arrow { width: 26px; height: 26px; font-size: 14px; line-height: 1; }
   #heat-today-btn { font-size: 10.5px; padding: 5px 10px; }
-  .heat-months { display: flex; gap: 14px; }
+  .heat-months { display: flex; gap: 14px; margin: 0 auto; } /* margin:auto : centre si une largeur < 100% est fixée via ?edit=1 */
+  .cal-resize-handle {
+    position: absolute; top: 0; width: 12px; cursor: col-resize; z-index: 3;
+  }
+  .cal-resize-handle:hover, .cal-resize-handle.dragging { background: rgba(31,58,95,0.15); }
   .heat-month { flex: 1; min-width: 0; }
   .heat-month-title { font-size: 11px; font-weight: 700; color: var(--navy); text-align: center; text-transform: capitalize; margin-bottom: 4px; }
-  .heat-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+  /* Colonne dédiée (16px) pour le numéro de semaine, discret — avant les 7
+     jours. Header : cellule vide au-dessus (voir dow dans renderHeatMonth). */
+  .heat-grid { display: grid; grid-template-columns: 16px repeat(7, 1fr); gap: 3px; }
   .heat-dow { font-size: 8.5px; font-weight: 700; color: var(--gray-text); text-transform: uppercase; text-align: center; padding: 0 0 3px; }
+  .heat-week-num {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 7.5px; color: var(--gray-text); font-weight: 600;
+  }
   .heat-day {
     aspect-ratio: 1 / 1; border-radius: 5px; box-sizing: border-box;
     display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600;
@@ -486,6 +496,14 @@ const HEAT_TEXT   = ['#b0bac4', '#1f3a5f', '#ffffff', '#ffffff', '#ffffff'];
 const HEAT_MONTHS_VISIBLE = 2; // 1 seul sous 900px (CSS)
 let heatBaseMonth = null; // Date (1er du mois affiché à gauche)
 
+// Numéro de semaine ISO 8601 (semaine qui contient le jeudi de cette semaine).
+function isoWeekNumber(d) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7) + 3);
+  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  return 1 + Math.round((date - firstThursday) / (7 * 86400000));
+}
+
 function defaultHeatBaseMonth() {
   const todayKey = dateKey(new Date());
   const upcoming = Object.keys(calIndex).filter(k => k >= todayKey).sort();
@@ -513,20 +531,28 @@ function heatDayCell(d, todayKey, muted) {
 
 // Grille toujours pleine (6 semaines = 42 cases), quel que soit le nombre
 // réel de semaines du mois — sinon la hauteur du calendrier varie d'un mois
-// à l'autre (4 à 6 semaines selon le mois).
+// à l'autre (4 à 6 semaines selon le mois). Numéro de semaine discret ajouté
+// en tête de chaque ligne (colonne dédiée, étroite, dans .heat-grid).
 function renderHeatMonth(year, month, todayKey) {
   const first       = new Date(year, month, 1);
   const firstDow    = (first.getDay() + 6) % 7; // lundi = 0
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const prevDays    = new Date(year, month, 0).getDate();
 
-  let cells = '';
-  for (let i = 0; i < firstDow; i++) cells += heatDayCell(new Date(year, month - 1, prevDays - firstDow + 1 + i), todayKey, true);
-  for (let day = 1; day <= daysInMonth; day++) cells += heatDayCell(new Date(year, month, day), todayKey, false);
-  const trailing = 42 - (firstDow + daysInMonth);
-  for (let day = 1; day <= trailing; day++) cells += heatDayCell(new Date(year, month + 1, day), todayKey, true);
+  const days = [];
+  for (let i = 0; i < firstDow; i++) days.push({ d: new Date(year, month - 1, prevDays - firstDow + 1 + i), muted: true });
+  for (let day = 1; day <= daysInMonth; day++) days.push({ d: new Date(year, month, day), muted: false });
+  const trailing = 42 - days.length;
+  for (let day = 1; day <= trailing; day++) days.push({ d: new Date(year, month + 1, day), muted: true });
 
-  const dow = ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(d => `<div class="heat-dow">${d}</div>`).join('');
+  let cells = '';
+  for (let w = 0; w < 6; w++) {
+    const weekDays = days.slice(w * 7, w * 7 + 7);
+    cells += `<div class="heat-week-num">${isoWeekNumber(weekDays[0].d)}</div>`;
+    weekDays.forEach(({ d, muted }) => { cells += heatDayCell(d, todayKey, muted); });
+  }
+
+  const dow = '<div class="heat-dow"></div>' + ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(d => `<div class="heat-dow">${d}</div>`).join('');
   const label = first.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
   return `<div class="heat-month">
     <div class="heat-month-title">${label}</div>
@@ -560,6 +586,10 @@ function renderHeatmap() {
   // n'a plus de max-height fixe) — sans ça Leaflet garde son ancien canevas
   // tant que la fenêtre elle-même n'est pas redimensionnée.
   if (leafletMap) leafletMap.invalidateSize();
+  // Repositionne la poignée de largeur du calendrier (mode ?edit=1) : sa
+  // hauteur dépend du contenu, qui vient de changer (chargement initial,
+  // navigation mois, Realtime...).
+  if (window.__repositionCalHandle) window.__repositionCalHandle();
 }
 
 // Surligne un ensemble de voyages (venant d'un jour du calendrier) sur le
@@ -811,7 +841,11 @@ function copyColumnWidths() {
   }).join('\n');
   const mapW = Math.round(document.getElementById('panel-map').getBoundingClientRect().width);
   const panelLine = `  .layout { grid-template-columns: minmax(0, 1fr) ${mapW}px; } /* largeur carte figée, ajuster min/max autour si besoin */`;
-  navigator.clipboard.writeText(panelLine + '\n' + colLines)
+  const heatMonths = document.querySelector('.heat-months');
+  const heatPanel  = document.getElementById('panel-heatmap');
+  const calPct     = Math.round(heatMonths.getBoundingClientRect().width / heatPanel.clientWidth * 100);
+  const calLine    = `  .heat-months { width: ${calPct}%; margin: 0 auto; } /* largeur calendrier figée — pilote aussi sa hauteur (cases carrées) */`;
+  navigator.clipboard.writeText(panelLine + '\n' + colLines + '\n' + calLine)
     .then(() => showToast('Largeurs copiées — collez-les dans le CSS'));
 }
 
@@ -910,11 +944,64 @@ function setupPanelResize() {
   });
 }
 
+function loadSavedCalWidth() {
+  const saved = localStorage.getItem('portailCalWidth');
+  if (saved) document.getElementById('heat-months').style.width = saved + '%';
+}
+
+// Poignée à droite de la grille du calendrier — largeur centrée (margin:auto),
+// donc symétrique : déplacer le bord droit de dx change la largeur de 2×dx.
+// Les cases étant carrées (aspect-ratio), réduire la largeur réduit aussi la
+// hauteur du module d'autant — un seul réglage pour les deux.
+function setupCalendarResize() {
+  const heatMonths = document.getElementById('heat-months');
+  const panel      = document.getElementById('panel-heatmap');
+  panel.style.position = 'relative';
+  const handle = document.createElement('div');
+  handle.className = 'cal-resize-handle';
+  panel.appendChild(handle);
+
+  function positionHandle() {
+    const panelRect  = panel.getBoundingClientRect();
+    const monthsRect = heatMonths.getBoundingClientRect();
+    handle.style.left   = (monthsRect.right - panelRect.left - 6) + 'px';
+    handle.style.top    = (monthsRect.top - panelRect.top) + 'px';
+    handle.style.height = monthsRect.height + 'px';
+  }
+  positionHandle();
+  window.addEventListener('resize', positionHandle);
+  window.__repositionCalHandle = positionHandle; // rappelé après chaque rendu du calendrier, voir renderHeatmap()
+
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    handle.classList.add('dragging');
+    const startX  = e.clientX;
+    const panelW  = panel.clientWidth;
+    const startW  = heatMonths.getBoundingClientRect().width;
+    const onMove = e2 => {
+      const dx   = e2.clientX - startX;
+      const newW = Math.max(120, Math.min(panelW, startW + dx * 2));
+      heatMonths.style.width = (newW / panelW * 100) + '%';
+      positionHandle();
+    };
+    const onUp = () => {
+      handle.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove, true);
+      document.removeEventListener('mouseup', onUp, true);
+      localStorage.setItem('portailCalWidth', parseFloat(heatMonths.style.width) || 100);
+    };
+    document.addEventListener('mousemove', onMove, true);
+    document.addEventListener('mouseup', onUp, true);
+  });
+}
+
 if (EDIT_MODE) {
   loadSavedColumnWidths();
   loadSavedPanelWidth();
+  loadSavedCalWidth();
   setupColumnResize(); // thead/colgroup sont statiques dans le HTML, pas besoin d'attendre chargerVoyages()
   setupPanelResize();
+  setupCalendarResize();
   const btn = document.createElement('button');
   btn.id = 'btn-copy-widths';
   btn.textContent = '📐 Copier les largeurs';
