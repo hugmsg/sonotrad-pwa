@@ -494,6 +494,61 @@ actuellement figées dans le code : carte `minmax(300px, 715px)`, calendrier `he
 
 ---
 
+## Incident du 2026-07-30 — LV 01683/01684 désynchronisées (RÉSOLU)
+
+**Contexte** : pendant que Claude déployait le portail (session calendrier), la création d'une LV
+LOXAM (modules NAAMFZ/MOFJQI, chantier Mouguerre) a semblé échouer côté navigateur (raison exacte
+inconnue — probablement une requête réseau interrompue par un déploiement Vercel/Apps Script en
+cours au même moment). Hugo a cliqué une seconde fois sur "Enregistrer".
+
+**Ce qui s'est réellement passé** : le premier essai avait en fait **réussi côté serveur**
+jusqu'au bout (`_saveLv()` avait écrit toutes les colonnes de l'Archive, y compris `livraison_prevue`
+en dernière colonne — preuve que la fonction est allée jusqu'au bout, Planning inclus) sous le
+numéro **01683**, mais la réponse HTTP n'est jamais arrivée intacte au navigateur : côté PWA le
+code a cru à un échec et n'a donc jamais appelé `_syncVoyageSupabase()`. Le second clic a généré
+un nouveau numéro (le compteur avait déjà été incrémenté par le premier essai réussi), créant un
+doublon complet (Archive + Planning + Supabase) sous **01684**.
+
+**Symptômes observés par Hugo** :
+- 2 lignes quasi identiques dans l'Archive (01683 et 01684).
+- 01684 réutilisé entretemps par une vraie CMR BCB (Enl. 260730-218) créée séparément →
+  collision de numérotation une fois le doublon LOXAM supprimé de l'Archive par Hugo.
+- Portail transporteur : 01683 absent (jamais synchronisé côté Supabase).
+- Historique LV PWA : 01684 affichait encore les données LOXAM périmées (le upsert Supabase de
+  la vraie CMR BCB n'avait, lui non plus, pas eu lieu — même cause probable : requête interrompue
+  pendant la même fenêtre de déploiement).
+- Planning Sonotrad : colonne LV (V) des modules NAAMFZ/MOFJQI pointait vers 01684 au lieu de
+  01683 (la partie "mise à jour Planning" de `_saveLv()` avait tourné pour le **second** essai,
+  écrasant la référence pour ces modules).
+
+**Corrections appliquées (2026-07-30)** :
+1. **Planning Sonotrad** : colonne V des 2 modules remise à `1683` via une fonction Apps Script
+   temporaire (`_oneFixLv01683`, ajoutée/exécutée/retirée du backend le jour même — voir
+   `clasp deployments`, versions @87/@88 de `masterfile`). Pattern déjà utilisé pour d'autres
+   corrections ponctuelles de ce projet (`backfillBcbParti`, etc.) : jamais laissé en code après
+   exécution.
+2. **Supabase** : `enregistrer_voyage()` appelé manuellement (MCP Supabase) pour créer 01683 avec
+   les bonnes infos (destinataire, marchandises, livraison prévue), puis pour re-synchroniser
+   01684 avec les vraies données BCB (écrasant les données LOXAM périmées — l'upsert
+   `ON CONFLICT (numero_lv) DO UPDATE` rend cette correction propre, sans suppression manuelle).
+3. **Adresse/coordonnées de 01683** complétées après coup via l'annuaire des agences LOXAM
+   (`?action=lv_agencies`, code `457` "Loxam Adour" → "2, rue d'Etxezahar, 64990 MOUGUERRE"),
+   les coordonnées exactes ayant pu être récupérées depuis l'ancien enregistrement Supabase de
+   01684 (avant sa propre correction) qui les avait déjà géocodées pour la même adresse.
+
+**Point de vigilance pour l'avenir** : aucune réconciliation automatique n'existe entre l'Archive
+(source de vérité tableur) et Supabase — si une synchronisation échoue silencieusement côté
+navigateur (réseau, déploiement en cours...), rien ne la rattrape automatiquement, et un retry
+utilisateur crée un doublon de numérotation plutôt qu'un vrai retry. Deux réflexes utiles :
+- **Éviter de déployer sur Vercel/Apps Script pendant qu'une création de LV est probablement en
+  cours côté utilisateur.**
+- **En cas de doute après un déploiement ou une erreur de sauvegarde signalée**, comparer
+  `?action=lv_history` (Archive Sheets) et `?action=lv_history_supabase` (Supabase) pour le(s)
+  numéro(s) concerné(s) — un écart entre les deux indique une synchronisation manquante ou
+  périmée, réparable via `enregistrer_voyage()` (upsert, sans risque à rejouer).
+
+---
+
 ## Fichiers du module Portail
 
 ```
