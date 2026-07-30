@@ -31,11 +31,13 @@
   .status { display: flex; align-items: center; gap: 6px; font-size: 12px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
   .dot.off { background: #ef4444; }
+  /* Statistiques déplacées dans l'en-tête (ex-.cards) — libère la hauteur
+     qu'occupait ce bloc au-dessus du tableau/de la carte. */
+  .header-stats { display: flex; gap: 18px; }
+  .hstat { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+  .hstat-value { font-size: 18px; font-weight: 700; color: white; }
+  .hstat-label { font-size: 9.5px; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 0.3px; }
   main { max-width: 1800px; margin: 0 auto; padding: 12px 8px; }
-  .cards { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; margin-bottom: 18px; max-width: 420px; }
-  .card { background: white; border: 1px solid var(--gray-border); border-radius: 10px; padding: 14px 16px; }
-  .card .label { font-size: 12px; color: var(--gray-text); margin: 0 0 4px; }
-  .card .value { font-size: 22px; font-weight: 700; margin: 0; color: var(--navy); }
   .toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
   .toolbar button {
     font-size: 13px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--gray-border);
@@ -66,6 +68,39 @@
   }
   .map-caption { font-size: 12px; color: var(--gray-text); margin-top: 8px; }
 
+  /* Calendrier des livraisons prévues — section pleine largeur sous liste+carte */
+  #panel-calendar {
+    background: white; border: 1px solid var(--gray-border); border-radius: 10px;
+    padding: 14px 16px; margin-top: 14px;
+  }
+  .cal-header { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 10px; }
+  .cal-header button {
+    background: none; border: 1px solid var(--gray-border); border-radius: 8px; width: 28px; height: 28px;
+    cursor: pointer; font-size: 15px; color: var(--navy); line-height: 1;
+  }
+  .cal-header button:hover { background: var(--navy-light); }
+  #cal-title { font-size: 13px; font-weight: 700; color: var(--navy); text-transform: capitalize; min-width: 140px; text-align: center; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal-dow { font-size: 10px; font-weight: 700; color: var(--gray-text); text-transform: uppercase; text-align: center; padding: 2px 0 6px; }
+  .cal-day {
+    min-height: 46px; border: 1px solid var(--gray-border); border-radius: 8px; padding: 4px 5px;
+    font-size: 11px; color: #1e293b; position: relative; box-sizing: border-box;
+  }
+  .cal-day.cal-empty { border-color: transparent; }
+  .cal-day.cal-has-voyage { cursor: pointer; border-color: var(--navy-light); }
+  .cal-day.cal-has-voyage:hover, .cal-day.cal-highlight { background: var(--navy-light); border-color: var(--navy); }
+  .cal-day-num { font-weight: 600; }
+  .cal-day.cal-today .cal-day-num { color: #1d4ed8; text-decoration: underline; }
+  .cal-day-badge {
+    position: absolute; top: 3px; right: 3px; background: var(--navy); color: white;
+    font-size: 9.5px; font-weight: 700; border-radius: 8px; min-width: 15px; text-align: center; padding: 1px 4px; line-height: 1.3;
+  }
+  .cal-caption { font-size: 12px; color: var(--gray-text); margin: 8px 0 0; }
+  @media (max-width: 900px) {
+    .cal-day { min-height: 38px; font-size: 10px; }
+    #cal-title { min-width: 110px; }
+  }
+
   #panel-list { background: white; border: 1px solid var(--gray-border); border-radius: 10px; overflow: hidden; }
   #voyage-table-wrap { overflow-x: auto; }
 
@@ -78,7 +113,7 @@
     body { display: flex; flex-direction: column; overflow: hidden; }
     header { flex-shrink: 0; }
     main { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-    .cards, .toolbar { flex-shrink: 0; }
+    .toolbar, #panel-calendar { flex-shrink: 0; }
     .layout { flex: 1; min-height: 0; align-items: stretch; }
     #panel-map { position: static; display: flex; flex-direction: column; min-height: 0; }
     #map-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -180,15 +215,14 @@
     <h1>Portail transporteur — SONOTRAD</h1>
     <p>Voyages disponibles en temps réel</p>
   </div>
+  <div class="header-stats">
+    <div class="hstat"><span class="hstat-value" id="stat-count">—</span><span class="hstat-label">disponibles</span></div>
+    <div class="hstat"><span class="hstat-value" id="stat-dest">—</span><span class="hstat-label">destinations</span></div>
+  </div>
   <div class="status"><span class="dot" id="status-dot"></span><span id="status-text">Connexion…</span></div>
 </header>
 
 <main>
-  <div class="cards">
-    <div class="card"><p class="label">Voyages disponibles</p><p class="value" id="stat-count">—</p></div>
-    <div class="card"><p class="label">Destinations distinctes</p><p class="value" id="stat-dest">—</p></div>
-  </div>
-
   <div class="toolbar">
     <button id="btn-refresh">Actualiser</button>
   </div>
@@ -230,6 +264,16 @@
       </div>
       <p class="map-caption">Carte interactive (zoom / déplacement) — positionnement géocodé sur l'adresse exacte de livraison (repli approximatif par ville pour les voyages plus anciens). Taille du repère = nombre de voyages.</p>
     </div>
+  </div>
+
+  <div id="panel-calendar">
+    <div class="cal-header">
+      <button id="cal-prev" aria-label="Mois précédent">‹</button>
+      <div id="cal-title">—</div>
+      <button id="cal-next" aria-label="Mois suivant">›</button>
+    </div>
+    <div class="cal-grid" id="cal-grid"></div>
+    <p class="cal-caption">Dates de livraison prévue (max) des voyages disponibles — survolez un jour pour repérer le(s) voyage(s) correspondant(s) dans la liste et sur la carte (et inversement).</p>
   </div>
 </main>
 
@@ -324,6 +368,8 @@ function escapeHtml(s) {
 let currentVoyages = [];
 let leafletMap = null;
 let markersLayer = null;
+let calMonth = null;    // Date (1er du mois affiché dans le calendrier)
+let calIndex = {};      // dateKey ("yyyy-mm-dd") -> [numero_lv, ...] (voyages disponibles avec livraison prévue)
 
 // Un marqueur = un point (adresse géocodée précise, ou ville en repli, voir
 // resolveLocation), qui peut regrouper plusieurs voyages. Ces maps relient
@@ -404,11 +450,96 @@ function scrollToCity(city) {
   if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
+// ── Calendrier des livraisons prévues ────────────────────────────────────────
+// Même principe de sélection croisée que la carte (cityMarkers/numeroToCity) :
+// un jour peut regrouper plusieurs voyages (numero_lv), potentiellement vers
+// des destinations différentes — le surlignage doit donc couvrir plusieurs
+// lignes du tableau ET plusieurs marqueurs carte à la fois, contrairement à
+// highlightCity() qui ne cible qu'une seule ville.
+function buildCalIndex(dispo) {
+  calIndex = {};
+  dispo.forEach(v => {
+    if (!v.livraison_prevue) return;
+    const key = String(v.livraison_prevue).slice(0, 10);
+    (calIndex[key] = calIndex[key] || []).push(v.numero_lv);
+  });
+}
+
+function defaultCalMonth() {
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const upcoming = Object.keys(calIndex).filter(k => k >= todayKey).sort();
+  const base = upcoming.length ? upcoming[0] : todayKey;
+  const d = new Date(base + 'T00:00:00');
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+function renderCalendar() {
+  if (!calMonth) calMonth = defaultCalMonth();
+  const year = calMonth.getFullYear(), month = calMonth.getMonth();
+  document.getElementById('cal-title').textContent =
+    calMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  const firstDow    = (new Date(year, month, 1).getDay() + 6) % 7; // lundi = 0
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayKey    = new Date().toISOString().slice(0, 10);
+
+  let html = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+    .map(d => `<div class="cal-dow">${d}</div>`).join('');
+  for (let i = 0; i < firstDow; i++) html += `<div class="cal-day cal-empty"></div>`;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const key     = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const numeros = calIndex[key] || [];
+    html += `<div class="cal-day${numeros.length ? ' cal-has-voyage' : ''}${key === todayKey ? ' cal-today' : ''}"
+      data-key="${key}" data-numeros="${numeros.join(',')}">
+      <div class="cal-day-num">${day}</div>
+      ${numeros.length ? `<div class="cal-day-badge">${numeros.length}</div>` : ''}
+    </div>`;
+  }
+  document.getElementById('cal-grid').innerHTML = html;
+
+  document.querySelectorAll('#cal-grid .cal-has-voyage').forEach(cell => {
+    const numeros = cell.dataset.numeros.split(',').filter(Boolean);
+    cell.addEventListener('mouseenter', () => highlightNumeros(numeros, cell));
+    cell.addEventListener('mouseleave', () => clearNumeroHighlight());
+    cell.addEventListener('click', () => {
+      if (numeros.length === 1) { openVoyageModal(numeros[0]); return; }
+      const row = document.querySelector(`#tbody tr[data-numero="${CSS.escape(numeros[0])}"]`);
+      if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
+}
+
+// Surligne un ensemble de voyages (venant d'un jour du calendrier) sur le
+// tableau ET la carte simultanément — généralisation de highlightCity/
+// highlightCity à un groupe de numero_lv plutôt qu'une seule ville.
+function highlightNumeros(numeros, calCell) {
+  document.querySelectorAll('#tbody tr[data-numero]').forEach(tr => {
+    tr.classList.toggle('row-highlight', numeros.includes(tr.dataset.numero));
+  });
+  const cities = new Set(numeros.map(n => numeroToCity[n]).filter(Boolean));
+  Object.entries(cityMarkers).forEach(([name, marker]) => {
+    marker.setStyle(cities.has(name) ? MARKER_STYLE_HI : MARKER_STYLE);
+    if (cities.has(name)) marker.bringToFront();
+  });
+  if (calCell) calCell.classList.add('cal-highlight');
+}
+function clearNumeroHighlight() {
+  document.querySelectorAll('#cal-grid .cal-day.cal-highlight').forEach(c => c.classList.remove('cal-highlight'));
+  highlightCity(selectedCity); // revient à l'état "ville sélectionnée" normal (ou rien)
+}
+function highlightCalDay(key) {
+  document.querySelectorAll('#cal-grid .cal-day').forEach(c => c.classList.toggle('cal-highlight', c.dataset.key === key));
+}
+function clearCalDayHighlight() {
+  document.querySelectorAll('#cal-grid .cal-day.cal-highlight').forEach(c => c.classList.remove('cal-highlight'));
+}
+
 function render() {
   const dispo = currentVoyages.filter(v => !v.parti);
   document.getElementById('stat-count').textContent = dispo.length;
   const villesVues = new Set(dispo.map(v => (resolveLocation(v) || {}).key || v.destination));
   document.getElementById('stat-dest').textContent = villesVues.size;
+  buildCalIndex(dispo);
+  renderCalendar();
 
   const tbody    = document.getElementById('tbody');
   const emptyMsg = document.getElementById('empty-msg');
@@ -422,8 +553,9 @@ function render() {
       .map((v, idx) => {
         const marchandise = (v.marchandises_desc || '').trim();
         const city = (resolveLocation(v) || {}).key || '';
+        const livKey = v.livraison_prevue ? String(v.livraison_prevue).slice(0, 10) : '';
         return `
-        <tr data-numero="${escapeHtml(v.numero_lv)}" data-city="${escapeHtml(city)}">
+        <tr data-numero="${escapeHtml(v.numero_lv)}" data-city="${escapeHtml(city)}" data-livraison="${livKey}">
           <td class="col-num nowrap row-num">${idx + 1}</td>
           <td class="col-lv nowrap"><span class="voyage-num">${escapeHtml(v.numero_lv)}</span></td>
           <td class="col-date muted ellipsis">${new Date(v.date_creation).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'2-digit' })}</td>
@@ -440,9 +572,16 @@ function render() {
     tbody.querySelectorAll('tr[data-numero]').forEach(tr => {
       const city   = tr.dataset.city;
       const numero = tr.dataset.numero;
-      if (city) {
-        tr.addEventListener('mouseenter', () => highlightCity(city));
-        tr.addEventListener('mouseleave', () => clearHighlight());
+      const livKey = tr.dataset.livraison;
+      if (city || livKey) {
+        tr.addEventListener('mouseenter', () => {
+          if (city) highlightCity(city);
+          if (livKey) highlightCalDay(livKey);
+        });
+        tr.addEventListener('mouseleave', () => {
+          clearHighlight();
+          clearCalDayHighlight();
+        });
       }
       // Simple clic = zoomer/centrer la carte sur la destination. Double-clic
       // = ouvrir la fiche détaillée (le double-clic déclenche aussi deux
@@ -565,6 +704,16 @@ function setupRealtime() {
 document.getElementById('btn-refresh').addEventListener('click', chargerVoyages);
 window.addEventListener('resize', () => { if (leafletMap) leafletMap.invalidateSize(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeVoyageModal(); });
+document.getElementById('cal-prev').addEventListener('click', () => {
+  if (!calMonth) calMonth = defaultCalMonth();
+  calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1);
+  renderCalendar();
+});
+document.getElementById('cal-next').addEventListener('click', () => {
+  if (!calMonth) calMonth = defaultCalMonth();
+  calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1);
+  renderCalendar();
+});
 
 // ── Mode calibration des colonnes (?edit=1) ──────────────────────────────────
 // Jamais actif par défaut — les transporteurs ne voient ni poignées ni bouton.
