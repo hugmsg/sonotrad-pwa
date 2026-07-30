@@ -75,34 +75,36 @@
     background: white; border: 1px solid var(--gray-border); border-radius: 10px;
     padding: 8px 12px; margin-top: 8px;
   }
-  .cal-header { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 6px; }
-  .cal-header button {
-    background: none; border: 1px solid var(--gray-border); border-radius: 6px; width: 24px; height: 24px;
-    cursor: pointer; font-size: 13px; color: var(--navy); line-height: 1;
+  /* Défilement latéral (souris/trackpad/tactile) à la place des flèches
+     mois précédent/suivant — scrollbar fine visible en indice, pas de bouton. */
+  .cal-months {
+    display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 6px;
+    scrollbar-width: thin; scrollbar-color: var(--navy-light) transparent;
   }
-  .cal-header button:hover { background: var(--navy-light); }
-  .cal-months { display: flex; gap: 10px; }
-  .cal-month { flex: 1; min-width: 0; }
+  .cal-months::-webkit-scrollbar { height: 5px; }
+  .cal-months::-webkit-scrollbar-track { background: transparent; }
+  .cal-months::-webkit-scrollbar-thumb { background: var(--navy-light); border-radius: 3px; }
+  .cal-months::-webkit-scrollbar-thumb:hover { background: var(--navy); }
+  .cal-month { flex: 0 0 calc(33.333% - 6px); min-width: 190px; scroll-snap-align: start; }
   .cal-month-title { font-size: 10.5px; font-weight: 700; color: var(--navy); text-align: center; text-transform: capitalize; margin-bottom: 3px; }
   .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
   .cal-dow { font-size: 8px; font-weight: 700; color: var(--gray-text); text-transform: uppercase; text-align: center; padding: 1px 0 2px; }
   .cal-day {
-    min-height: 22px; border: 1px solid var(--gray-border); border-radius: 5px; padding: 1px 3px;
+    aspect-ratio: 1 / 1; border: 1px solid var(--gray-border); border-radius: 5px; padding: 1px 3px;
     font-size: 9.5px; color: #1e293b; position: relative; box-sizing: border-box;
   }
   .cal-day.cal-muted { color: #cbd5e1; border-color: #f1f5f9; }
   .cal-day.cal-has-voyage { cursor: pointer; border-color: var(--navy-light); }
   .cal-day.cal-has-voyage:hover, .cal-day.cal-highlight { background: var(--navy-light); border-color: var(--navy); }
   .cal-day-num { font-weight: 600; }
-  .cal-day.cal-today .cal-day-num { color: #1d4ed8; text-decoration: underline; }
+  .cal-day.cal-today { border: 2px solid #1d4ed8; }
+  .cal-day.cal-today .cal-day-num { color: #1d4ed8; }
   .cal-day-badge {
-    position: absolute; top: 1px; right: 1px; background: var(--navy); color: white;
+    position: absolute; top: 1px; right: 1px; background: #f59e0b; color: white;
     font-size: 7.5px; font-weight: 700; border-radius: 5px; min-width: 10px; text-align: center; padding: 0 3px; line-height: 1.3;
   }
   @media (max-width: 900px) {
-    .cal-months { flex-wrap: wrap; }
-    .cal-month:nth-child(n+2) { display: none; }
-    .cal-day { min-height: 28px; font-size: 10.5px; }
+    .cal-month { flex: 0 0 100%; min-width: 0; }
   }
 
   #panel-list { background: white; border: 1px solid var(--gray-border); border-radius: 10px; overflow: hidden; }
@@ -268,10 +270,6 @@
   </div>
 
   <div id="panel-calendar">
-    <div class="cal-header">
-      <button id="cal-prev" aria-label="Mois précédent">‹</button>
-      <button id="cal-next" aria-label="Mois suivant">›</button>
-    </div>
     <div class="cal-months" id="cal-months"></div>
   </div>
 </main>
@@ -455,7 +453,13 @@ function scrollToCity(city) {
 // des destinations différentes — le surlignage doit donc couvrir plusieurs
 // lignes du tableau ET plusieurs marqueurs carte à la fois, contrairement à
 // highlightCity() qui ne cible qu'une seule ville.
-const CAL_MONTHS_VISIBLE = 3; // masqué à 1 seul sous 900px de large (CSS)
+// 3 mois visibles à la fois (1 sous 900px, CSS), mais on rend une bande plus
+// large que l'utilisateur parcourt au scroll latéral (remplace les flèches
+// précédent/suivant) — 1 mois de recul (contexte) + le mois par défaut + 10
+// mois à venir.
+const CAL_MONTHS_BEFORE = 1;
+const CAL_MONTHS_AFTER  = 10;
+let calScrolledOnce = false;
 
 // Clé locale "yyyy-mm-dd" — jamais toISOString() ici : elle convertit en UTC
 // et décale la date d'un jour selon l'heure/le fuseau (ex: minuit en France
@@ -524,12 +528,15 @@ function renderCalendarMonth(year, month, todayKey) {
 
 function renderCalendar() {
   if (!calMonth) calMonth = defaultCalMonth();
-  const todayKey = dateKey(new Date());
+  const todayKey    = dateKey(new Date());
+  const startMonth  = new Date(calMonth.getFullYear(), calMonth.getMonth() - CAL_MONTHS_BEFORE, 1);
+  const totalMonths = CAL_MONTHS_BEFORE + 1 + CAL_MONTHS_AFTER;
   let html = '';
-  for (let m = 0; m < CAL_MONTHS_VISIBLE; m++) {
-    html += renderCalendarMonth(calMonth.getFullYear(), calMonth.getMonth() + m, todayKey);
+  for (let m = 0; m < totalMonths; m++) {
+    html += renderCalendarMonth(startMonth.getFullYear(), startMonth.getMonth() + m, todayKey);
   }
-  document.getElementById('cal-months').innerHTML = html;
+  const container = document.getElementById('cal-months');
+  container.innerHTML = html;
 
   document.querySelectorAll('#cal-months .cal-has-voyage').forEach(cell => {
     const numeros = cell.dataset.numeros.split(',').filter(Boolean);
@@ -541,6 +548,15 @@ function renderCalendar() {
       if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
   });
+
+  // Positionne le scroll horizontal sur le mois par défaut une seule fois —
+  // sinon chaque rafraîchissement (Realtime, filet 5 min) ramènerait la vue
+  // en arrière si le transporteur avait déjà fait défiler ailleurs.
+  if (!calScrolledOnce) {
+    calScrolledOnce = true;
+    const target = container.children[CAL_MONTHS_BEFORE];
+    if (target) target.scrollIntoView({ inline: 'start', block: 'nearest' });
+  }
 }
 
 // Surligne un ensemble de voyages (venant d'un jour du calendrier) sur le
@@ -739,16 +755,6 @@ function setupRealtime() {
 document.getElementById('btn-refresh').addEventListener('click', chargerVoyages);
 window.addEventListener('resize', () => { if (leafletMap) leafletMap.invalidateSize(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeVoyageModal(); });
-document.getElementById('cal-prev').addEventListener('click', () => {
-  if (!calMonth) calMonth = defaultCalMonth();
-  calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1);
-  renderCalendar();
-});
-document.getElementById('cal-next').addEventListener('click', () => {
-  if (!calMonth) calMonth = defaultCalMonth();
-  calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1);
-  renderCalendar();
-});
 
 // ── Mode calibration des colonnes (?edit=1) ──────────────────────────────────
 // Jamais actif par défaut — les transporteurs ne voient ni poignées ni bouton.
