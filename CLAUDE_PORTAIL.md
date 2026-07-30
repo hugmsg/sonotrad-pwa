@@ -426,11 +426,11 @@ livraison prévue désormais — utile si la date change après création de la 
 portail), ce qui n'était possible nulle part ailleurs (l'édition côté écran Départ ne touche que
 la Production, en amont de la LV).
 
-## Calendrier des livraisons prévues sur le portail — EN COURS, PAS ENCORE MERGÉ (2026-07-30)
+## Calendrier des livraisons prévues sur le portail — EN PRODUCTION (2026-07-30)
 
-**État exact au moment d'écrire** : 6 commits sur `dev`, **aucun mergé sur `main`**, **le projet
-Vercel standalone `sonotrad-portail-transporteur` n'a PAS été redéployé** (il sert donc toujours
-la version sans calendrier). Dernier commit dev : `3d92930`.
+Mergé sur `main` (commit `aca56cf`) et redéployé sur le projet Vercel standalone
+`sonotrad-portail-transporteur` (celui réellement utilisé par les transporteurs) le 2026-07-30.
+Les deux sont à jour.
 
 ```
 ad863f0  calendrier des livraisons prévues + surlignage croisé (1ère version : grille mensuelle 3 mois pleine largeur en bas de page)
@@ -472,17 +472,6 @@ e6e0edb  heatmap plus lisible — en-tête jours, repère mois, chiffres, légen
   en tête de ligne, en petit gris, a été lu "534" au lieu de "S34" par Hugo. Le concept "case
   colorée + chiffre du jour" de cette itération est conservé dans le design actuel, juste remonté
   dans une vraie grille mensuelle.
-
-**Reste à faire, dans l'ordre** :
-1. Hugo teste la preview `dev` (lien stable : `https://sonotrad-pwa-git-dev-hugos-projects-28638a76.vercel.app/portail-transporteur.html`,
-   nécessite un compte Vercel avec accès au projet).
-2. Si validé : merge `dev` → `main` (`git fetch && git merge --no-edit origin/dev`, push `main`) →
-   déploiement production automatique sur `sonotrad-pwa.vercel.app` via Vercel.
-3. **Ne pas oublier** : redéployer ensuite le projet Vercel standalone `sonotrad-portail-transporteur`
-   (celui réellement partagé avec les transporteurs, non lié à Git — voir section "Hébergement"
-   plus haut) via `mcp__plugin_vercel_vercel__deploy_to_vercel`, target `production`, même nom de
-   projet, contenu à jour de `portail-transporteur.html` en tant que `index.html`. Sans cette étape,
-   les transporteurs ne voient jamais les changements malgré le merge sur `main`.
 
 ---
 
