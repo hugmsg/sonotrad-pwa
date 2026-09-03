@@ -10797,7 +10797,13 @@ ${bodies}${sansAcheteurBody}
         marchandises_desc: (d.marchandises || []).map(m => m.description).filter(Boolean).join(', '),
         grutage: this._lvuCalcGrutage(d),
       };
-      const r   = await _fetchWithTimeout(S.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) }, 30000);
+      // 60s (pas 30s) : _saveLv fait Drive + 2 sheets + Planning multi-fichiers + verrou
+      // LockService — dépasse régulièrement 30s, ce qui abortait le fetch côté client
+      // AVANT que la réponse 'ok' n'arrive (incident LV 01714, 2026-09-03 : sauvegarde
+      // réussie à 100% côté serveur, mais _syncVoyageSupabase jamais appelée car le code
+      // qui la déclenche ne tourne que dans le bloc de traitement de la réponse — jamais
+      // atteint si le fetch abort avant. Voir CLAUDE_LV.md.
+      const r   = await _fetchWithTimeout(S.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) }, 60000);
       const res = await r.json();
       if (res.status === 'ok') {
         const savedDisplay = res.numero || d.display;
