@@ -496,6 +496,79 @@ parti dans le tableur restait visible comme disponible dans l'Historique. `onEdi
 
 ---
 
+## Incident sauvegarde LV — race condition + timeout (2026-09-03)
+
+Deux bugs distincts découverts coup sur coup sur `lvuSaveToDrive()` (index.html) /
+`_saveLv()` (`sonotrad-scripts/masterfile/pwa_master.js`), tous deux causant le même
+symptôme visible : **la LV existe bien (PDF Drive + dossier + ligne Archive + Planning),
+mais reste invisible dans l'Historique PWA et le portail transporteur** (qui lisent
+Supabase `voyages`/`voyages_internes`, alimenté uniquement côté client par
+`_syncVoyageSupabase()` après un fetch réussi — voir aussi la section Historique
+ci-dessus pour le contexte général de cette dépendance Sheet↔Supabase).
+
+### Bug 1 — race condition sur le compteur (LV 01711)
+
+`_saveLv` lisait le compteur (`CMR!G1`), créait le PDF, écrivait la ligne Archive, puis
+incrémentait le compteur — **sans aucun verrou**. Deux sauvegardes quasi simultanées
+(deux LV différentes, lues à ~12 min d'écart mais dont l'une a mis longtemps à
+progresser) ont lu le **même** numéro. Le `archive.getRange('3:3')` de Google Sheets
+cible toujours "la ligne 3 actuelle", pas une référence stable à la ligne insérée — la
+seconde écriture a donc silencieusement écrasé la ligne Archive de la première. Résultat :
+une seule ligne Archive (la gagnante), mais l'étape 4 (mise à jour Planning) des **deux**
+exécutions a réussi, laissant les modules de la perdante marqués "LV créée" avec un
+numéro qui pointait en fait vers un autre envoi. Modules 141160/135925 (BT 82808) se
+sont retrouvés sans aucun document réel malgré un statut Planning "fait".
+
+**Corrigé** : `LockService.getScriptLock()` autour lecture-compteur + écriture Archive +
+incrément dans `_saveLv` (attente max 30s, sinon `status:'error'` explicite plutôt qu'une
+race silencieuse). Empêche la corruption ; en cas de contention, la 2e sauvegarde attend
+son tour au lieu d'écraser la 1ère.
+
+**Doublons annexes trouvés en marge** (mêmes symptômes à plus petite échelle, contenu
+identique donc sans corruption de données, juste des lignes dupliquées dans Planning →
+Départs) : LV 1709, 1710, 622, 624, 1174 — dédoublonnés. LV 268 (2024-07-09) a un
+contenu **différent** entre ses deux lignes Départs, non touché (à vérifier manuellement
+si besoin un jour). Fonction de diagnostic/réparation conservée dans
+`pwa_master.js` → `repairPlanningIncidents()` (à lancer manuellement dans l'éditeur Apps
+Script si un cas similaire réapparaît — elle vérifie le contenu avant toute suppression).
+
+### Bug 2 — timeout client plus court que l'exécution serveur (LV 01714)
+
+Même symptôme, cause différente : `_saveLv` (Drive + 2 sheets + Planning multi-fichiers,
++ le verrou du bug 1 depuis le correctif) peut dépasser 30s en conditions réelles. Le
+fetch client (`_fetchWithTimeout(..., 30000)`) abandonnait alors la requête
+("signal is aborted without reason") **avant** de recevoir la réponse `'ok'` — hors le
+code qui déclenche `_syncVoyageSupabase()` ne tourne que dans le bloc de traitement de
+cette réponse, jamais atteint si le fetch abort avant. Côté serveur, l'exécution Apps
+Script continue et termine normalement (Archive + Planning corrects, un seul
+enregistrement propre) ; seule la synchro Supabase manque.
+
+**Mitigé** (pas une correction complète — voir limite ci-dessous) : timeout remonté à
+60s. Réduit fortement la fréquence mais **ne l'élimine pas** : sous forte charge Apps
+Script (plusieurs sauvegardes concurrentes qui font maintenant la queue à cause du
+verrou du bug 1, ce qui allonge d'autant les temps d'attente) ou réseau lent, le
+problème peut se reproduire. Le fond du problème — la synchro Supabase dépend du succès
+du fetch client plutôt que d'être garantie côté serveur — n'est pas résolu. Piste pour
+une correction plus robuste, non implémentée : découpler `_syncVoyageSupabase` du
+`then` du fetch (ex. la déclencher aussi après un timeout en interrogeant l'état
+serveur pour détecter une sauvegarde déjà réussie), ou faire écrire Supabase par
+`_saveLv` lui-même côté serveur plutôt que par le client.
+
+### Procédure si le symptôme réapparaît (LV invisible Historique/portail malgré Archive/Drive OK)
+
+1. Vérifier l'Archive Sheet (LV/CMR, onglet Archive) — si la ligne existe avec les
+   bonnes données, **le serveur a réussi** : ne pas recliquer "Enregistrer" (créerait une
+   LV en double pour rien), et surtout **ne jamais utiliser "Supprimer" depuis
+   l'Historique PWA** sur ce numéro — `_deleteLv` supprime par numéro, donc une LV
+   archivée correctement serait effacée en croyant nettoyer un doublon.
+2. Comparer avec Supabase (`select * from voyages where numero_lv = '0XXXX'`) — absent
+   ou différent de l'Archive = confirmation du symptôme.
+3. Backfill manuel via le RPC déjà utilisé par la PWA, avec les données de l'Archive :
+   `select enregistrer_voyage(p_numero_lv := '0XXXX', p_type := ..., ...)` — upsert sûr
+   (`ON CONFLICT (numero_lv) DO UPDATE`), ne touche jamais l'Archive Sheet ni Drive.
+
+---
+
 ## Évolutions futures prévues
 
 - [ ] **Mode remplissage progressif** : transporteur + expéditeur à l'étape chargement, réserves + destinataire + signatures à la livraison
