@@ -10799,7 +10799,7 @@ ${bodies}${sansAcheteurBody}
       };
       const r   = await _fetchWithTimeout(S.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) }, 30000);
       const res = await r.json();
-      if (res.status === 'ok' || res.status === 'partial') {
+      if (res.status === 'ok') {
         const savedDisplay = res.numero || d.display;
         if (statusEl) statusEl.textContent = `✅ N° ${savedDisplay} enregistré sur Drive`;
         S.lvu.numero = null; S.lvu.display = null;
@@ -10810,7 +10810,6 @@ ${bodies}${sansAcheteurBody}
           this._saveLvLinkRemote(S.lvu.fromOpKey, savedDisplay, savedDisplay);
           S.lvu.fromOpKey = null; S.lvu.fromOpNote = '';
         }
-        if (res.status === 'partial' && statusEl) statusEl.textContent += ' ⚠️ archivage partiel';
         // Lier la CMR à son bon d'enlèvement si applicable
         if (S.lvu.enlevementNumero && res.pdfUrl) {
           try {
@@ -10827,6 +10826,13 @@ ${bodies}${sansAcheteurBody}
           } catch(_) {}
           S.lvu.enlevementNumero = null;
         }
+      } else if (res.status === 'partial') {
+        // PDF envoyé sur Drive mais jamais archivé (numéro/compteur non mis à
+        // jour côté serveur) — ne JAMAIS traiter comme un succès : pas de sync
+        // Supabase (donnée non fiable, cause de l'incident LV 01711 du
+        // 2026-09-03), pas de reset de l'état pour permettre un nouvel essai propre.
+        if (statusEl) statusEl.textContent = '⚠️ PDF envoyé mais NON archivé (' + (res.error || 'erreur inconnue') + ') — réessayez, ce n\'est PAS enregistré.';
+        this.toast('⚠️ Échec archivage — réessayez l\'enregistrement', 6000);
       } else {
         if (statusEl) statusEl.textContent = '❌ ' + (res.error || 'erreur inconnue');
       }
