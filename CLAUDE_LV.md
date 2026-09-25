@@ -543,18 +543,33 @@ cette réponse, jamais atteint si le fetch abort avant. Côté serveur, l'exécu
 Script continue et termine normalement (Archive + Planning corrects, un seul
 enregistrement propre) ; seule la synchro Supabase manque.
 
-**Mitigé** (pas une correction complète — voir limite ci-dessous) : timeout remonté à
-60s. Réduit fortement la fréquence mais **ne l'élimine pas** : sous forte charge Apps
-Script (plusieurs sauvegardes concurrentes qui font maintenant la queue à cause du
-verrou du bug 1, ce qui allonge d'autant les temps d'attente) ou réseau lent, le
-problème peut se reproduire. Le fond du problème — la synchro Supabase dépend du succès
-du fetch client plutôt que d'être garantie côté serveur — n'est pas résolu. Piste pour
-une correction plus robuste, non implémentée : découpler `_syncVoyageSupabase` du
-`then` du fetch (ex. la déclencher aussi après un timeout en interrogeant l'état
-serveur pour détecter une sauvegarde déjà réussie), ou faire écrire Supabase par
-`_saveLv` lui-même côté serveur plutôt que par le client.
+**Mitigé une première fois** (timeout remonté à 60s) sans corriger le fond — et le
+symptôme **a effectivement réapparu** (2026-09-25, sous les mêmes conditions : charge
+Apps Script + fetch client trop court pour l'exécution serveur réelle).
 
-### Procédure si le symptôme réapparaît (LV invisible Historique/portail malgré Archive/Drive OK)
+**Corrigé pour de bon le 2026-09-25** : `_saveLv` (`pwa_master.js`) écrit désormais
+lui-même Supabase, côté serveur, via `_syncVoyageSupabaseServer()` — appelée juste après
+la sortie du bloc verrouillé (Archive garantie écrite), donc **indépendante du fetch
+client** et de son timeout. `enregistrer_voyage()` étant un `UPSERT`
+(`ON CONFLICT (numero_lv) DO UPDATE`), cet appel serveur et l'appel client
+`_syncVoyageSupabase()` (toujours en place, best-effort) coexistent sans risque quel que
+soit l'ordre ou le nombre de fois où ils s'exécutent — le serveur garantit que la fiche
+existe, le client vient éventuellement l'enrichir (nom du transporteur exact,
+géocodage précis `destination_lat`/`lon`, non disponibles côté GAS).
+
+Limite connue et acceptée : l'appel serveur n'a pas accès à l'annuaire ni au nom du
+transporteur (la PWA n'envoie à `_saveLv` que `transporteur_id`, pas le nom), donc une LV
+créée quand le client ne complète jamais sa propre synchro (perte réseau totale, onglet
+fermé avant la fin) apparaîtra dans l'Historique/le portail avec un transporteur vide et
+une position approximative (repli sur la table `VILLES` par nom, comme les entrées
+créées avant le géocodage précis du 2026-07-24) — **mais elle n'est plus invisible**, ce
+qui était le vrai problème.
+
+### Procédure si le symptôme réapparaît malgré tout (LV invisible Historique/portail alors qu'Archive/Drive sont OK)
+
+Ne devrait plus se produire depuis le correctif serveur du 2026-09-25 (sauf échec de
+l'appel `_syncVoyageSupabaseServer()` lui-même — regarder les Logs Apps Script,
+`[_syncVoyageSupabaseServer]`, pour la cause).
 
 1. Vérifier l'Archive Sheet (LV/CMR, onglet Archive) — si la ligne existe avec les
    bonnes données, **le serveur a réussi** : ne pas recliquer "Enregistrer" (créerait une
