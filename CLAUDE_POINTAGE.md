@@ -1,111 +1,130 @@
-# Module Pointage — Contexte pour Claude Code
+# Module Pointage / RH — Contexte pour Claude Code
+
+> **État revérifié le 2026-09-25** (base Supabase + `index.html` + déploiements Vercel).
+> La version précédente de ce fichier décrivait le kiosque comme « à développer » et
+> l'installation du client via `npm install` — les deux étaient faux depuis juin 2026.
+
+---
 
 ## Décision d'architecture
 
 Le module Pointage utilise **Supabase (PostgreSQL)** comme base de données — pas Google Sheets.
 Ce choix est délibéré : écriture concurrente, conformité légale 5 ans, RLS, temps réel.
-Google Sheets reste utilisé pour les autres modules (LV, CMR, planning) et pour les exports paie.
+Google Sheets reste utilisé pour les autres modules (LOXAM, BCB, Stock, LV/CMR) et pour les
+exports paie.
 
 ## Projet Supabase
 
 - **URL** : `https://ajewxwxerrjnnervzjwm.supabase.co`
 - **Région** : EU West (Ireland) — eu-west-1
-- **Anon key** : à récupérer dans Supabase Dashboard → Settings → API → "anon public"
-- **Schéma source** : `pointage_schema.sql` (dans le repo, à la racine ou dans `/supabase/migrations/`)
+- **Anon key** : Supabase Dashboard → Settings → API → « anon public »
+- **Accès depuis Claude Code** : MCP Supabase déjà configuré (`list_tables`, `list_migrations`,
+  `execute_sql`…) — s'en servir plutôt que de se fier aux fichiers du dépôt (voir l'avertissement
+  sur les migrations plus bas).
 
-## Tables
+**Intégration dans la PWA** : le client est chargé par **CDN en UMD** (`index.html`, wrappé par
+`supabase.js`), il n'y a **aucun bundler ni `npm install`** dans ce projet. Les
+`package.json`/`package-lock.json` non trackés à la racine sont des reliquats morts — ne pas s'en
+servir, ne pas les ressusciter (voir `../CLAUDE.md`).
+
+---
+
+## ⚠️ Le code RH n'est pas tout dans ce dépôt
+
+Deux fronts différents tapent dans la même base :
+
+| Front | Où | Ce qu'il fait |
+|---|---|---|
+| **PWA** `index.html` | ce dépôt, vues `view-pointage`, `view-ptg-admin`, `view-ptg-rapport` | kiosque PIN, correction/ajout de pointages par l'admin, rapport d'heures |
+| **`rh-metal`** | **hors dépôt** — projet Vercel `rh-metal.vercel.app`, non lié à git, SSO activé, prod du 2026-08-28 | congés, contrats, contrôle hebdomadaire, portail salarié, association des badges NFC |
+
+La source de `rh-metal` n'a pas été retrouvée sur le poste (seul
+`~/Downloads/rh-metal-backup-2026-06-17.json` subsiste). Conséquence pratique : si une RPC ou une
+table existe en base sans aucun appelant dans `index.html`, **elle est probablement utilisée par
+`rh-metal`** — ne pas la supprimer en croyant à du code mort.
+
+Exemple concret : `pointer_par_nfc`, `associer_badge_nfc`, `dissocier_badge_nfc`,
+`emettre_signal_nfc` (migrations de juillet/août 2026) ne sont appelées **nulle part** dans
+`index.html` — seul le champ `nfc_uid` y apparaît.
+
+---
+
+## Tables réelles (2026-09-25)
 
 | Table | Rôle |
-|-------|------|
-| `employes` | Référentiel employés + hash PIN bcrypt + UID NFC optionnel |
-| `pointages` | Registre légal immuable — jamais de DELETE, annulation = `valide: false` |
-| `heures_journalieres` | Vue calculée, mise à jour automatiquement par trigger après chaque pointage |
+|---|---|
+| `employes` | Référentiel employés + hash PIN bcrypt + `nfc_uid` + coordonnées/profil |
+| `pointages` | Registre légal immuable — jamais de DELETE, annulation = `valide = false` |
+| `heures_journalieres` | Agrégat par jour, recalculé par trigger (multi-sessions depuis le 2026-08-19) |
+| `heures_corrections` | Corrections d'heures saisies par l'admin |
+| `conges` | Congés (respecte le verrouillage de semaine) |
+| `jours_statut` / `semaines_validees` | Contrôle hebdomadaire : statut d'un jour, verrouillage d'une semaine |
+| `contrats` | Contrats de travail + alertes d'échéance (`contrat_alerte_vue`) |
+| `voyages` / `voyages_internes` | **Pas RH** — portail transporteur, voir `CLAUDE_PORTAIL.md` |
+| `config_interne` | Config divers — ⚠️ **RLS désactivée** (voir Points ouverts) |
 
-## Fonctions RPC (appel depuis la PWA)
+**Vues lues par la PWA** : `en_service_vue`, `pointages_today_vue`, `employes_actifs_vue`,
+`heures_rapport_vue`.
 
-```js
-// Authentifier un employé par PIN
-const { data } = await supabase.rpc('authentifier_par_pin', { p_pin: '1234' })
-// Retourne : { ok: true, id: "uuid", nom: "Dupont", prenom: "Jean" }
-// ou        : { ok: false, message: "Code PIN incorrect." }
+**RPC appelées par la PWA** : `authentifier_par_pin`, `verifier_pointage`,
+`upsert_employe_pointage`, `get_employes_rh`, `supprimer_employe_rh`, `admin_add_pointage`,
+`admin_modifier_pointage`, `admin_annuler_pointage`.
 
-// Vérifier la cohérence avant d'insérer un pointage
-const { data } = await supabase.rpc('verifier_pointage', {
-  p_employe_id: 'uuid',
-  p_type: 'ENTREE' // ENTREE | SORTIE | PAUSE_DEBUT | PAUSE_FIN
-})
-// Retourne : { ok: true, message: "OK" }
-// ou        : { ok: false, message: "Déjà en service — pointez votre sortie d'abord." }
+**Realtime** : canaux `ptg-hj-kiosk` et `ptg-hj-admin` (rafraîchissement live du kiosque et de
+l'écran admin), `employes-changes` (broadcast sur modification d'un employé).
+
+---
+
+## Flux d'un pointage (kiosque PIN)
+
+```
+1. L'employé saisit son PIN sur l'écran kiosque (view-pointage)
+2. authentifier_par_pin(pin)           → employe_id + nom/prénom
+3. verifier_pointage(employe_id, type) → cohérence (anti-doublon)
+4. Si ok → INSERT dans pointages       → trigger recalcule heures_journalieres
+5. Feedback visuel 3 s → retour à l'écran d'accueil
 ```
 
-## Flux d'un pointage (ordre des appels)
+Types : `ENTREE` | `SORTIE` | `PAUSE_DEBUT` | `PAUSE_FIN`.
 
-```
-1. Employé saisit son PIN sur l'écran kiosque
-2. PWA appelle authentifier_par_pin(pin)          → récupère employe_id + nom/prénom
-3. PWA appelle verifier_pointage(employe_id, type) → vérifie cohérence
-4. Si ok → INSERT dans pointages                   → trigger recalcule heures_journalieres
-5. Afficher feedback visuel 3s (nom + type pointage) → retour écran accueil
-```
+---
 
 ## Règles métier importantes
 
-- **Jamais de DELETE** sur `pointages` — annuler = `UPDATE SET valide = false` + renseigner `raison_modif` et `modifie_par`
-- **Pause légale** : si durée brute > 6h et 0 pause pointée → 20 min déduites automatiquement (convention transport)
-- **Oubli de sortie** : si ENTREE sans SORTIE à J+1 → créer anomalie (`statut = 'ANOMALIE'` dans `heures_journalieres`)
-- **Anti-doublon** : toujours appeler `verifier_pointage` avant d'insérer
+- **Jamais de DELETE** sur `pointages` — annuler = `UPDATE SET valide = false` + `raison_modif` et
+  `modifie_par` renseignés.
+- **Pause légale** : durée brute > 6 h et 0 pause pointée → 20 min déduites (convention transport).
+- **Oubli de sortie** : ENTREE sans SORTIE à J+1 → anomalie (`statut = 'ANOMALIE'` dans
+  `heures_journalieres`).
+- **Anti-doublon** : toujours appeler `verifier_pointage` avant d'insérer.
+- **Verrouillage de semaine** : une semaine validée (`semaines_validees`) bloque les écritures
+  rétroactives, y compris côté congés.
 
-## Écran kiosque (à développer)
+---
 
-- Activité dédiée dans la PWA : `/pointage`
-- Interface minimaliste : pavé numérique PIN → validation → feedback 3s → reset
-- Mode kiosque Android : utiliser le "pinning d'écran" natif pour bloquer sur cette activité
-- Offline-first : si perte WiFi → stocker dans IndexedDB → sync au retour de connexion (Service Worker)
-- Afficher en permanence : liste des personnes actuellement "en service" (requête temps réel Supabase)
+## ⚠️ Les migrations du dépôt ne font pas foi
 
-## Installation du client Supabase dans la PWA
+`supabase/migrations/` s'arrête au **2026-08-18** alors que la base compte **38 migrations
+appliquées jusqu'au 2026-08-28**. Manquent notamment `conges_table_and_rpc`,
+`heures_journalieres_multi_sessions`, `controle_hebdomadaire`, `heures_recup`/`corrections`,
+`contrats_table_and_sync`, `contrat_alerte_vue`, `auth_gate_rh_admin`,
+`portail_salarie_mes_donnees`, `employes_profil_complet`, `employes_corbeille_purge`.
 
-```bash
-npm install @supabase/supabase-js
-```
+De plus les horodatages des fichiers locaux **ne correspondent pas** aux versions appliquées
+(ex. `20260722000000_voyages_schema.sql` local ↔ `20260722170620` en base) : les fichiers sont des
+brouillons locaux, pas l'historique réel.
 
-```js
-// src/supabase.js
-import { createClient } from '@supabase/supabase-js'
+**Toujours interroger la base** (MCP Supabase) avant de conclure sur le schéma.
 
-const supabaseUrl = 'https://ajewxwxerrjnnervzjwm.supabase.co'
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY // stocker dans .env
+---
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
-```
+## Points ouverts
 
-## Variables d'environnement requises
-
-Fichier `.env` à la racine du projet (ne pas committer) :
-```
-VITE_SUPABASE_URL=https://ajewxwxerrjnnervzjwm.supabase.co
-VITE_SUPABASE_ANON_KEY=<ta_anon_key>
-```
-
-Fichier `.env.example` à committer :
-```
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
-```
-
-## MCP Supabase pour Claude Code (optionnel)
-
-Permet à Claude Code d'accéder directement à la base pour lire les tables, vérifier les données, etc.
-Token à générer sur : https://supabase.com/dashboard/account/tokens
-
-Config dans `~/.claude/claude_desktop_config.json` :
-```json
-{
-  "mcpServers": {
-    "supabase": {
-      "command": "npx",
-      "args": ["-y", "@supabase/mcp-server-supabase", "--access-token", "TON_TOKEN"]
-    }
-  }
-}
-```
+- [ ] **`config_interne` : RLS désactivée** — table entièrement exposée en lecture/écriture à
+      quiconque possède la clé anon (signalé par l'advisor Supabase le 2026-09-25). À corriger par
+      `ALTER TABLE public.config_interne ENABLE ROW LEVEL SECURITY;` **plus** des policies adaptées
+      (activer la RLS seule bloquerait tout accès — vérifier d'abord qui lit cette table).
+- [ ] **Rapatrier le SQL manquant** dans `supabase/migrations/` pour que le dépôt redevienne une
+      source de vérité.
+- [ ] **Versionner `rh-metal`** — aucune source, aucun git, redéploiement manuel.
+- [ ] **Offline-first du kiosque** : perte WiFi → IndexedDB → sync au retour (jamais implémenté).
