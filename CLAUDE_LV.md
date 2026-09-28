@@ -422,7 +422,7 @@ sinon une désynchro apparaît** (déjà arrivé deux fois, voir anomalies du 20
 |---|---|---|---|---|
 | Case à cocher **Planning → Départs col J** (Google Sheets, trigger `onEditPartiSync`) | ✅ | (c'est la source) | ✅ depuis le 2026-07-23 | ✅ |
 | **Historique PWA**, toggle `lvuTogglePartiHistory` → `_markPartiByNumero` | ✅ | ✅ best-effort (LOXAM) | ✅ depuis le 2026-07-23 | ✅ |
-| **Départs PWA**, bulk `depMarkParti` → `dep_mark_parti`/`_markParti()` | ✅ | ✅ (+ Mesnager Départs) | ✅ (déjà en place, code historique) | ✅ depuis le 2026-07-23 |
+| **Départs PWA**, bulk `depMarkParti` → `dep_mark_parti`/`_markParti()` | ✅ | ✅ | ✅ (déjà en place, code historique) | ✅ depuis le 2026-07-23 |
 
 **La colonne "Planning principal col R" est la plus facile à oublier** : c'est elle qui
 détermine si un module reste visible comme "actif" dans le Planning LOXAM (PWA *et* Google
@@ -600,7 +600,7 @@ _saveLv(payload)
 │
 │  … puis, seulement si LOXAM avec des modules sélectionnés :
 ├─ 5. Sheet Planning  : ligne par module (déselection + "LV créée" + lien) (best-effort)
-├─ 6. Sheet Départs   : nouvelle ligne (Planning + Mesnager si applicable) (best-effort)
+├─ 6. Sheet Départs   : nouvelle ligne (Planning)                          (best-effort)
 ├─ 7. Sheet demandes LOXAM (classeur externe) : ligne "Terminé"           (best-effort)
 └─ 8. Drive           : raccourci du PDF dans Dossier par module/{code}   (best-effort)
 ```
@@ -611,19 +611,18 @@ rate) : 1→2→3, protégées ensemble par le verrou `LockService` (voir l'inci
 "réussie" (`status:'ok'`) ne garantit *jamais* que 4 à 8 ont abouti, seulement que la LV
 existe (PDF + Archive + numéro consommé).
 
-### La fragilité trouvée le 2026-09-28 : un seul `catch` pour 5 systèmes indépendants
+### La fragilité trouvée le 2026-09-28 : un seul `catch` pour plusieurs systèmes indépendants
 
 Jusqu'ici, les étapes 5 à 8 partageaient **un seul bloc `try/catch`**, y compris
-l'ouverture du classeur "Départs Mesnager partagé" (`10aNRMwdZLOv...`) — un fichier
-externe **ouvert à chaque LV LOXAM même quand le transporteur n'était pas Mesnager**,
-c'est-à-dire pour rien dans la majorité des cas. Conséquence concrète : si ce classeur
-externe devenait inaccessible ne serait-ce que ponctuellement (permission révoquée,
-fichier déplacé, quota Drive), **toute l'étape 4 du code** (5 à 8 dans la liste
-ci-dessus) était annulée silencieusement d'un coup — Planning non mis à jour (modules
-toujours sélectionnables comme si la LV n'existait pas), Départs jamais inséré, aucun
-raccourci Drive — alors que la LV existait déjà (1→2→3 avaient réussi juste avant) et
-que le client recevait quand même `status:'ok'`. Seul un `Logger.log` côté serveur en
-gardait la trace.
+l'ouverture systématique — à chaque LV LOXAM, quel que soit le transporteur — d'un
+classeur externe "Départs Mesnager partagé" (voir plus bas, retiré depuis). Conséquence
+concrète : si un seul de ces systèmes externes devenait inaccessible ne serait-ce que
+ponctuellement (permission révoquée, fichier déplacé, quota Drive), **toute l'étape 4 du
+code** (5 à 8 dans la liste ci-dessus) était annulée silencieusement d'un coup — Planning
+non mis à jour (modules toujours sélectionnables comme si la LV n'existait pas), Départs
+jamais inséré, aucun raccourci Drive — alors que la LV existait déjà (1→2→3 avaient
+réussi juste avant) et que le client recevait quand même `status:'ok'`. Seul un
+`Logger.log` côté serveur en gardait la trace.
 
 C'est exactement le genre de "ça part dans plusieurs directions et ça peut mettre le
 code en échec" à surveiller sur ce genre de fonction : plus une fonction touche de
@@ -631,13 +630,11 @@ systèmes indépendants dans un seul bloc protégé, plus la probabilité qu'*un
 eux tombe en panne un jour donné augmente — et sans isolation, cette panne isolée en
 emporte d'autres qui n'ont rien à voir.
 
-**Corrigé** : chaque sous-étape (5, 6, 7-par-module, 8-par-module, et le classeur
-Mesnager) a désormais son **propre `try/catch`**, indépendant des autres — une panne sur
-l'un n'affecte plus jamais les autres. Le classeur Mesnager n'est en plus ouvert **que**
-si `transporteur_id === 'mesnager'`, ce qui supprime un point de défaillance inutile dans
-tous les autres cas. Seule l'ouverture du Planning lui-même (5) reste un prérequis dur :
-sans lui, aucune des sous-étapes suivantes n'a de sens, donc son échec arrête légitimement
-toute l'étape 4 (log explicite, mais rien à isoler ici).
+**Corrigé** : chaque sous-étape (5, 6, 7-par-module, 8-par-module) a désormais son
+**propre `try/catch`**, indépendant des autres — une panne sur l'un n'affecte plus jamais
+les autres. Seule l'ouverture du Planning lui-même (5) reste un prérequis dur : sans lui,
+aucune des sous-étapes suivantes n'a de sens, donc son échec arrête légitimement toute
+l'étape 4 (log explicite, mais rien à isoler ici).
 
 **Ce qui ne change pas** : le client ne sait toujours pas, dans sa réponse, si 4 à 8 ont
 réussi — seul `Logger.log` (Journaux d'exécution Apps Script) le dit. Ça reste la vraie
@@ -645,8 +642,36 @@ limite de cette architecture "best-effort partout sauf 1→2→3" : suffisant po
 bloquer une LV pour une raison annexe, mais ça veut dire qu'un Planning pas mis à jour ne
 sera détecté que si quelqu'un s'en aperçoit à l'usage (module encore sélectionnable en
 apparence). Piste non implémentée : renvoyer un `status:'ok'` enrichi
-(`warnings: ['planning_ko', 'mesnager_ko', …]`) plutôt qu'un simple log serveur, pour que
-la PWA puisse au moins l'afficher en toast discret.
+(`warnings: ['planning_ko', …]`) plutôt qu'un simple log serveur, pour que la PWA puisse
+au moins l'afficher en toast discret.
+
+### Suppression du classeur "Départs Mesnager" (2026-09-28)
+
+Le classeur externe `10aNRMwdZLOv-5FZp6ZOyAVR3QG0KSt6puUd0DDxjW7s` ("Départs Mesnager
+partagé") était une copie manuelle des départs destinée au transporteur "TRANSPORTS
+MESNAGER" — indépendante du portail transporteur Supabase (aucun lien entre les deux ;
+le portail ne l'a jamais lu). Il était touché à **3 endroits** dans `pwa_master.js` :
+
+| Fonction | Rôle | Isolation avant suppression |
+|---|---|---|
+| `_saveLv` | insérait une ligne au départ | ✅ isolée (voir ci-dessus) |
+| `_markParti` | cochait "parti" sur la ligne | ❌ dans le même `try/catch` que Planning/Arrivées/Archive/Demandes LOXAM — un classeur Mesnager inaccessible faisait échouer `dep_mark_parti` **en bloc, pour tous les codes**, pas seulement Mesnager |
+| `_deleteLv` | supprimait la ligne au nettoyage | isolée, mais ouverte systématiquement même hors contexte Mesnager |
+
+Confirmé avec Hugo le 2026-09-28 : Transports Mesnager ne consulte plus ce classeur
+(remplacé par le portail transporteur, comme les autres). **Code retiré des 3
+fonctions** — `_saveLv` n'ouvre donc plus ce classeur du tout, `_markParti` a perdu son
+point de défaillance partagé le plus risqué, `_deleteLv` un appel Drive inutile à chaque
+suppression. Le classeur Google Sheets lui-même n'a pas été touché (hors périmètre
+Claude Code) — à archiver/supprimer par Hugo côté Drive s'il le souhaite.
+
+**Ce qui reste inchangé** : "TRANSPORTS MESNAGER" reste un choix pré-rempli (et le choix
+par défaut) dans le formulaire LV (`LVU_TRANSPORTEURS[0]`, `index.html`) — ça concerne le
+contenu du document imprimé (nom/adresse/SIRET du transporteur), pas le classeur partagé
+retiré ici. Les deux sujets sont indépendants : rien n'empêche de continuer à créer des LV
+pour Transports Mesnager, seule la copie automatique vers leur ancien classeur a disparu.
+`seedTransportsMesnager()` (ajout ponctuel de "MESNAGER" dans l'annuaire
+`Adresses_Custom`) n'a pas de rapport avec ce classeur non plus et n'a pas été touché.
 
 ---
 
