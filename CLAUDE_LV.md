@@ -584,6 +584,72 @@ l'appel `_syncVoyageSupabaseServer()` lui-même — regarder les Logs Apps Scrip
 
 ---
 
+## Ce que fait `_saveLv`, en détail — et sa fragilité (revu le 2026-09-28)
+
+`_saveLv` (`sonotrad-scripts/masterfile/pwa_master.js`) est le point d'entrée unique de
+"Enregistrer sur Drive" côté LVU. En une seule requête, il touche **jusqu'à 7 systèmes
+différents** :
+
+```
+_saveLv(payload)
+│
+├─ 1. Drive          : PDF dans un sous-dossier LV_CMR/{numéro}/           ─┐
+├─ 2. Sheet Archive   : ligne insérée (LV/CMR)                             │ verrouillé
+├─ 3. Sheet CMR       : compteur G1 incrémenté                            ─┘ (LockService)
+├─ 4. Supabase        : enregistrer_voyage() — historique/portail          (best-effort)
+│
+│  … puis, seulement si LOXAM avec des modules sélectionnés :
+├─ 5. Sheet Planning  : ligne par module (déselection + "LV créée" + lien) (best-effort)
+├─ 6. Sheet Départs   : nouvelle ligne (Planning + Mesnager si applicable) (best-effort)
+├─ 7. Sheet demandes LOXAM (classeur externe) : ligne "Terminé"           (best-effort)
+└─ 8. Drive           : raccourci du PDF dans Dossier par module/{code}   (best-effort)
+```
+
+**Ce qui est réellement requis** (le client reçoit `status:'error'` ou `'partial'` si ça
+rate) : 1→2→3, protégées ensemble par le verrou `LockService` (voir l'incident du
+2026-09-03 plus haut). Tout le reste — 4 à 8 — est du **best-effort déclaratif** : une LV
+"réussie" (`status:'ok'`) ne garantit *jamais* que 4 à 8 ont abouti, seulement que la LV
+existe (PDF + Archive + numéro consommé).
+
+### La fragilité trouvée le 2026-09-28 : un seul `catch` pour 5 systèmes indépendants
+
+Jusqu'ici, les étapes 5 à 8 partageaient **un seul bloc `try/catch`**, y compris
+l'ouverture du classeur "Départs Mesnager partagé" (`10aNRMwdZLOv...`) — un fichier
+externe **ouvert à chaque LV LOXAM même quand le transporteur n'était pas Mesnager**,
+c'est-à-dire pour rien dans la majorité des cas. Conséquence concrète : si ce classeur
+externe devenait inaccessible ne serait-ce que ponctuellement (permission révoquée,
+fichier déplacé, quota Drive), **toute l'étape 4 du code** (5 à 8 dans la liste
+ci-dessus) était annulée silencieusement d'un coup — Planning non mis à jour (modules
+toujours sélectionnables comme si la LV n'existait pas), Départs jamais inséré, aucun
+raccourci Drive — alors que la LV existait déjà (1→2→3 avaient réussi juste avant) et
+que le client recevait quand même `status:'ok'`. Seul un `Logger.log` côté serveur en
+gardait la trace.
+
+C'est exactement le genre de "ça part dans plusieurs directions et ça peut mettre le
+code en échec" à surveiller sur ce genre de fonction : plus une fonction touche de
+systèmes indépendants dans un seul bloc protégé, plus la probabilité qu'*un seul* d'entre
+eux tombe en panne un jour donné augmente — et sans isolation, cette panne isolée en
+emporte d'autres qui n'ont rien à voir.
+
+**Corrigé** : chaque sous-étape (5, 6, 7-par-module, 8-par-module, et le classeur
+Mesnager) a désormais son **propre `try/catch`**, indépendant des autres — une panne sur
+l'un n'affecte plus jamais les autres. Le classeur Mesnager n'est en plus ouvert **que**
+si `transporteur_id === 'mesnager'`, ce qui supprime un point de défaillance inutile dans
+tous les autres cas. Seule l'ouverture du Planning lui-même (5) reste un prérequis dur :
+sans lui, aucune des sous-étapes suivantes n'a de sens, donc son échec arrête légitimement
+toute l'étape 4 (log explicite, mais rien à isoler ici).
+
+**Ce qui ne change pas** : le client ne sait toujours pas, dans sa réponse, si 4 à 8 ont
+réussi — seul `Logger.log` (Journaux d'exécution Apps Script) le dit. Ça reste la vraie
+limite de cette architecture "best-effort partout sauf 1→2→3" : suffisant pour ne jamais
+bloquer une LV pour une raison annexe, mais ça veut dire qu'un Planning pas mis à jour ne
+sera détecté que si quelqu'un s'en aperçoit à l'usage (module encore sélectionnable en
+apparence). Piste non implémentée : renvoyer un `status:'ok'` enrichi
+(`warnings: ['planning_ko', 'mesnager_ko', …]`) plutôt qu'un simple log serveur, pour que
+la PWA puisse au moins l'afficher en toast discret.
+
+---
+
 ## Évolutions futures prévues
 
 - [ ] **Mode remplissage progressif** : transporteur + expéditeur à l'étape chargement, réserves + destinataire + signatures à la livraison
