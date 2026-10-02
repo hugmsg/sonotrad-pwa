@@ -36,10 +36,9 @@ Deux fronts différents tapent dans la même base :
 | Front | Où | Ce qu'il fait |
 |---|---|---|
 | **PWA** `index.html` | ce dépôt, vues `view-pointage`, `view-ptg-admin`, `view-ptg-rapport` | kiosque PIN, correction/ajout de pointages par l'admin, rapport d'heures |
-| **`rh-metal`** | **hors dépôt** — projet Vercel `rh-metal.vercel.app`, non lié à git, SSO activé, prod du 2026-08-28 | congés, contrats, contrôle hebdomadaire, portail salarié, association des badges NFC |
+| **`rh-metal`** | dépôt GitHub `hugmsg/rh-metal` (cloné dans `dev/rh-metal/`), lié à Vercel `rh-metal.vercel.app`, SSO activé | congés, contrats, contrôle hebdomadaire, portail salarié, association des badges NFC |
 
-La source de `rh-metal` n'a pas été retrouvée sur le poste (seul
-`~/Downloads/rh-metal-backup-2026-06-17.json` subsiste). Conséquence pratique : si une RPC ou une
+Conséquence pratique : si une RPC ou une
 table existe en base sans aucun appelant dans `index.html`, **elle est probablement utilisée par
 `rh-metal`** — ne pas la supprimer en croyant à du code mort.
 
@@ -130,7 +129,6 @@ brouillons locaux, pas l'historique réel.
       `employes_actifs_vue`, `heures_rapport_vue` (+ `pointages_rapport_vue`) sont SECURITY DEFINER
       et GRANT anon. La PWA les lit avec la clé anon (pas de session Supabase côté PWA) : les
       restreindre casserait kiosque/admin/rapport. Prérequis : authentifier la PWA auprès de Supabase.
-- [ ] **Rapatrier le SQL manquant** dans `supabase/migrations/` pour que le dépôt redevienne une
-      source de vérité.
-- [ ] **Versionner `rh-metal`** — aucune source, aucun git, redéploiement manuel.
+- [x] **SQL « manquant » et source `rh-metal` retrouvés le 2026-10-02** — tout est dans le dépôt
+      GitHub `hugmsg/rh-metal` (lié à Vercel, cloné dans `dev/rh-metal/`), migrations comprises.
 - [ ] **Offline-first du kiosque** : perte WiFi → IndexedDB → sync au retour (jamais implémenté).
