@@ -120,10 +120,16 @@ brouillons locaux, pas l'historique réel.
 
 ## Points ouverts
 
-- [ ] **`config_interne` : RLS désactivée** — table entièrement exposée en lecture/écriture à
-      quiconque possède la clé anon (signalé par l'advisor Supabase le 2026-09-25). À corriger par
-      `ALTER TABLE public.config_interne ENABLE ROW LEVEL SECURITY;` **plus** des policies adaptées
-      (activer la RLS seule bloquerait tout accès — vérifier d'abord qui lit cette table).
+- [x] **`config_interne` verrouillée le 2026-10-02** — RLS activée, aucun droit pour
+      anon/authenticated (migration `20261002000000_config_interne_verrouillage.sql`). Seuls
+      lecteurs : `lire_historique_voyages` et `supprimer_voyage`, SECURITY DEFINER → non affectés.
+- [ ] **`historique_secret` à changer** — il a été lisible publiquement jusqu'au 2026-10-02.
+      Changer la valeur dans `config_interne` **et** dans la propriété de script
+      `SUPABASE_HISTORY_SECRET` du masterfile, en même temps.
+- [ ] **Vues RH lisibles par anon** — `en_service_vue`, `pointages_today_vue`,
+      `employes_actifs_vue`, `heures_rapport_vue` (+ `pointages_rapport_vue`) sont SECURITY DEFINER
+      et GRANT anon. La PWA les lit avec la clé anon (pas de session Supabase côté PWA) : les
+      restreindre casserait kiosque/admin/rapport. Prérequis : authentifier la PWA auprès de Supabase.
 - [ ] **Rapatrier le SQL manquant** dans `supabase/migrations/` pour que le dépôt redevienne une
       source de vérité.
 - [ ] **Versionner `rh-metal`** — aucune source, aucun git, redéploiement manuel.
