@@ -3358,7 +3358,10 @@ const App = {
     const stored = localStorage.getItem('snt_user');
     if (stored) {
       try {
-        S.currentUser = JSON.parse(stored);
+        const user = JSON.parse(stored);
+        // Session d'avant les jetons (ou jeton expiré) → une seule re-saisie du PIN.
+        if (!this._tokenValide(user.token)) throw new Error('jeton absent ou expiré');
+        S.currentUser = user;
         document.getElementById('login-overlay').style.display = 'none';
         this._render();
         this._prefetch();
@@ -3368,6 +3371,14 @@ const App = {
     // Pré-remplir l'URL si déjà connue
     if (S.apiUrl) document.getElementById('login-url-input').value = S.apiUrl;
     document.getElementById('login-overlay').style.display = 'flex';
+  },
+
+  /** Lit l'expiration inscrite dans le jeton (la signature, elle, n'est vérifiable que côté serveur). */
+  _tokenValide(tk) {
+    try {
+      const b64 = String(tk).split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(atob(b64)).e > Date.now();
+    } catch { return false; }
   },
 
   _prefetch() { /* désactivé — chargement désormais déclenché par les menus d'activité */ },
@@ -13137,6 +13148,32 @@ async function _post(url, payload) {
   const text = await r.text();
   try { return JSON.parse(text); } catch { return { status: 'ok', raw: text }; }
 }
+// Jeton de session (délivré par l'action 'auth', voir _checkSession dans pwa_master.js) :
+// ajouté ici à TOUS les appels vers S.apiUrl plutôt qu'à chacun des ~90 appels du fichier.
+// GET → paramètre ?tk= ; POST FormData → champ tk ; POST JSON → propriété tk.
+(function () {
+  const _fetch = window.fetch.bind(window);
+  window.fetch = function (resource, options) {
+    const tk = S.currentUser && S.currentUser.token;
+    if (tk && S.apiUrl && typeof resource === 'string' && resource.startsWith(S.apiUrl)) {
+      const method = ((options && options.method) || 'GET').toUpperCase();
+      if (method === 'GET') {
+        resource += (resource.includes('?') ? '&' : '?') + 'tk=' + encodeURIComponent(tk);
+      } else if (options && options.body instanceof FormData) {
+        options.body.set('tk', tk);
+      } else if (options && typeof options.body === 'string') {
+        try {
+          const o = JSON.parse(options.body);
+          if (o && typeof o === 'object' && !Array.isArray(o)) {
+            o.tk = tk;
+            options = { ...options, body: JSON.stringify(o) };
+          }
+        } catch {}
+      }
+    }
+    return _fetch(resource, options);
+  };
+})();
 function _compress(file, maxW = 1200, q = 0.82) {
   return new Promise(resolve => {
     const img = new Image();
