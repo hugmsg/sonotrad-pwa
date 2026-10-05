@@ -3717,8 +3717,10 @@ const App = {
 
   async _fetchRhEmployes() {
     if (!window.SupabaseDB) return [];
-    const { data, error } = await window.SupabaseDB.rpc('get_employes_rh');
-    if (error) { console.error('[Admin] get_employes_rh:', error); return []; }
+    // Annuaire minimal (id, nom, prénom, poste, a_fiche_rh) — la fiche RH complète
+    // (get_employes_rh : coordonnées perso, taux horaire…) est réservée aux admins rh-metal.
+    const { data, error } = await window.SupabaseDB.rpc('get_employes_annuaire');
+    if (error) { console.error('[Admin] get_employes_annuaire:', error); return []; }
     return data || [];
   },
 
@@ -4045,10 +4047,10 @@ const App = {
         // sans fiche RH". Un salarié RH réel (classe_num renseigné) n'est
         // lui jamais touché ici : sa suppression relève de rh-metal.
         if (employeId && window.SupabaseDB) {
-          const { data: rows, error: getErr } = await window.SupabaseDB.rpc('get_employes_rh');
-          if (getErr) console.error('[Pointage] get_employes_rh:', getErr);
+          const { data: rows, error: getErr } = await window.SupabaseDB.rpc('get_employes_annuaire');
+          if (getErr) console.error('[Pointage] get_employes_annuaire:', getErr);
           const row = (rows || []).find(e => e.id === employeId);
-          if (row && (row.classe_num === null || row.classe_num === undefined)) {
+          if (row && !row.a_fiche_rh) {
             const { error: delErr } = await window.SupabaseDB.rpc('supprimer_employe_rh', { p_id: employeId });
             if (delErr) console.error('[Pointage] supprimer_employe_rh:', delErr);
           }
