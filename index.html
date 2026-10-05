@@ -9967,6 +9967,10 @@ ${bodies}${sansAcheteurBody}
     if (!S.bcbPrepMode && !c) { this.toast('Sélectionnez un chauffeur.'); return; }
     const selectedLots = S.bcbLots.filter(l => S.bcbDepartSelected.has(l.idBcb));
     if (!selectedLots.length) { this.toast('Sélectionnez au moins un lot.'); return; }
+    // Verrou anti double-appui : avant, 2-3 appuis rapprochés créaient autant de bons
+    // pour les mêmes lots (ex. 3 « La Michaudière » dans la même minute, 2026-09-29).
+    if (S._bcbCreating) { this.toast('Création déjà en cours, patientez…'); return; }
+    S._bcbCreating = true;
     this.toast('Génération du bon d\'enlèvement…');
     try {
       // 1. Obtenir le numéro
@@ -10009,6 +10013,7 @@ ${bodies}${sansAcheteurBody}
       }, 30000);
       const ds = await rs.json();
       if (ds.status !== 'ok') throw new Error(ds.error || 'Erreur sauvegarde');
+      if (ds.avertissement) App.toast('⚠ Bon enregistré, mais ' + ds.avertissement + ' — prévenir Hugo');
       enlevement.pdfUrl    = ds.pdfUrl    || '';
       enlevement.folderUrl = ds.folderUrl || '';
       enlevement.cmrNumero = '';
@@ -10028,6 +10033,8 @@ ${bodies}${sansAcheteurBody}
       this.go('bcb-enlevement');
     } catch(err) {
       this.toast('Erreur : ' + err.message);
+    } finally {
+      S._bcbCreating = false;
     }
   },
 
