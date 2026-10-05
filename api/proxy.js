@@ -62,8 +62,20 @@ export default async function handler(req, res) {
     const upstream = await fetch(targetUrl, fetchOptions);
     const text     = await upstream.text();
 
+    // Apps Script répond toujours 200. Un refus de session (_checkSession dans
+    // pwa_master.js : {status:'error', auth:...}) est traduit en vrai code HTTP
+    // pour que la PWA le repère sans relire chaque réponse : 401 = reconnexion,
+    // 403 = action réservée aux admins. Les refus sont de petites réponses.
+    let status = 200;
+    if (text.length < 1000 && text.includes('"auth"')) {
+      try {
+        const o = JSON.parse(text);
+        if (o.status === 'error' && o.auth) status = o.auth === 'non_admin' ? 403 : 401;
+      } catch {}
+    }
+
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.status(200).send(text);
+    res.status(status).send(text);
 
   } catch (err) {
     res.status(502).json({ status: 'error', error: err.message });

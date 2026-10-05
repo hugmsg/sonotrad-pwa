@@ -3381,6 +3381,22 @@ const App = {
     } catch { return false; }
   },
 
+  /**
+   * Le serveur a refusé le jeton : on redemande le PIN par-dessus l'écran courant, sans
+   * le quitter — le formulaire en cours reste intact, l'utilisateur relance son action.
+   */
+  _sessionExpiree() {
+    if (S._reauth) return;   // plusieurs appels refusés en même temps → un seul écran PIN
+    S._reauth = true;
+    if (S.currentUser) S.currentUser.token = null;
+    localStorage.removeItem('snt_user');
+    S.pinBuffer = ''; S.pinMode = 'login';
+    document.getElementById('pin-prompt').textContent = 'Session expirée — entrez votre PIN';
+    document.getElementById('pin-error-msg').textContent = '';
+    this._updatePinDots();
+    document.getElementById('login-overlay').style.display = 'flex';
+  },
+
   _prefetch() { /* désactivé — chargement désormais déclenché par les menus d'activité */ },
 
   async _prefetchDeps() {
@@ -3550,6 +3566,14 @@ const App = {
         if (data.status === 'ok') {
           S.currentUser = data.user;
           localStorage.setItem('snt_user', JSON.stringify(data.user));
+          if (S._reauth) {
+            // Reconnexion après session expirée : on reste sur l'écran en cours.
+            S._reauth = false;
+            document.getElementById('pin-prompt').textContent = 'Entrez votre code PIN';
+            document.getElementById('login-overlay').style.display = 'none';
+            this.toast('✓ Reconnecté — relancez votre dernière action');
+            return;
+          }
           S.view = 'home'; S.activity = null; // ← toujours démarrer à l'accueil
           document.getElementById('login-overlay').style.display = 'none';
           this._render();
@@ -13161,8 +13185,9 @@ async function _post(url, payload) {
 (function () {
   const _fetch = window.fetch.bind(window);
   window.fetch = function (resource, options) {
-    const tk = S.currentUser && S.currentUser.token;
-    if (tk && S.apiUrl && typeof resource === 'string' && resource.startsWith(S.apiUrl)) {
+    const tk    = S.currentUser && S.currentUser.token;
+    const isApi = !!S.apiUrl && typeof resource === 'string' && resource.startsWith(S.apiUrl);
+    if (tk && isApi) {
       const method = ((options && options.method) || 'GET').toUpperCase();
       if (method === 'GET') {
         resource += (resource.includes('?') ? '&' : '?') + 'tk=' + encodeURIComponent(tk);
@@ -13178,7 +13203,11 @@ async function _post(url, payload) {
         } catch {}
       }
     }
-    return _fetch(resource, options);
+    // 401 = jeton refusé par le serveur (absent, expiré, ou secret changé) → re-saisie du PIN.
+    return _fetch(resource, options).then(r => {
+      if (isApi && r.status === 401) App._sessionExpiree();
+      return r;
+    });
   };
 })();
 function _compress(file, maxW = 1200, q = 0.82) {
