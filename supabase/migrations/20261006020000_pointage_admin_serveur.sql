@@ -1,8 +1,7 @@
--- Audit 2026-10-06 : corrections de pointage réservées au backend (pwa_master.js, clé
--- secrète) ou à un admin RH connecté (rh-metal). Corps des fonctions inchangé, seul le
--- contrôle d'accès est ajouté en tête.
+-- Audit 2026-10-06 : corrections de pointage réservées à un admin RH connecté (rh-metal)
+-- ou à la clé secrète. Corps des fonctions inchangé, seul le contrôle d'accès est ajouté.
 
-CREATE OR REPLACE FUNCTION public.admin_add_pointage(p_employe_id uuid, p_type text, p_horodatage timestamp with time zone, p_modifie_par text)
+CREATE OR REPLACE FUNCTION public.admin_add_pointage(p_employe_id uuid, p_type text, p_horodatage timestamp with time zone, p_modifie_par text DEFAULT 'admin')
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -27,7 +26,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.admin_annuler_pointage(p_pointage_id uuid, p_motif text, p_modifie_par text)
+CREATE OR REPLACE FUNCTION public.admin_annuler_pointage(p_pointage_id uuid, p_motif text, p_modifie_par text DEFAULT 'admin')
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -49,7 +48,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.admin_modifier_pointage(p_pointage_id uuid, p_horodatage timestamp with time zone, p_modifie_par text)
+CREATE OR REPLACE FUNCTION public.admin_modifier_pointage(p_pointage_id uuid, p_horodatage timestamp with time zone, p_modifie_par text DEFAULT 'admin')
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
