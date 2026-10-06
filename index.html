@@ -3551,7 +3551,8 @@ const App = {
       this._pinError('URL API non configurée — cliquez sur ⚙ ci-dessous');
       return;
     }
-    const hash = await this._hashPin(S.pinBuffer);
+    const pinSaisi = S.pinBuffer;
+    const hash = await this._hashPin(pinSaisi);
     S.pinBuffer = '';
     this._updatePinDots();
     document.getElementById('pin-error-msg').textContent = '';
@@ -3615,7 +3616,8 @@ const App = {
       }
       try {
         const fd = new FormData();
-        fd.append('payload', JSON.stringify({ action:'change_pin', oldPinHash: S._pinOldHash, newPinHash: S._pinNewHash }));
+        // newPin (= la confirmation, identique) : le backend reporte le PIN au kiosque de pointage.
+        fd.append('payload', JSON.stringify({ action:'change_pin', oldPinHash: S._pinOldHash, newPinHash: S._pinNewHash, newPin: pinSaisi }));
         const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
         const data = await resp.json();
         if (data.status === 'ok') {
@@ -3905,21 +3907,11 @@ const App = {
 
     const pinHash = await this._hashPin(pin);
 
-    // Crée/relie la ligne Supabase employes AVANT le compte GAS, pour
-    // connaître son id dès la création — sinon un compte sans fiche RH créé
-    // ici reste sans employeId, et sa suppression plus tard laisse une ligne
-    // employes orpheline (voir _deleteUser) invisible depuis sonotrad-pwa
-    // mais qui continue d'apparaître côté rh-metal.
-    if (window.SupabaseDB) {
-      const { data: sbData, error: sbErr } = await window.SupabaseDB.rpc('upsert_employe_pointage',
-        { p_nom: nom, p_prenom: prenom, p_pin: pin, p_id: employeId || null });
-      if (sbErr) console.error('[Pointage] upsert_employe_pointage:', sbErr);
-      else if (sbData?.id) employeId = sbData.id;
-    }
-
+    // Le PIN en clair sert au kiosque de pointage : le backend crée/relie
+    // lui-même la ligne Supabase employes (clé secrète, côté serveur).
     try {
       const fd = new FormData();
-      fd.append('payload', JSON.stringify({ action:'create_user', prenom, nom, role, activites, pinHash, employeId }));
+      fd.append('payload', JSON.stringify({ action:'create_user', prenom, nom, role, activites, pinHash, pin, employeId }));
       const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
       const data = await resp.json();
       if (data.status === 'ok') {
@@ -3953,25 +3945,11 @@ const App = {
     const newPinHash = await this._hashPin(pin);
     try {
       const fd = new FormData();
-      fd.append('payload', JSON.stringify({ action:'admin_reset_pin', prenom, nom, newPinHash }));
+      // newPin : le backend reporte le même PIN au kiosque de pointage.
+      fd.append('payload', JSON.stringify({ action:'admin_reset_pin', prenom, nom, newPinHash, newPin: pin }));
       const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
       const data = await resp.json();
       if (data.status === 'ok') {
-        // Sync vers Supabase : même PIN pour l'app et le pointage kiosque —
-        // p_id (si connu) cible la ligne exacte. Si ce compte n'avait pas
-        // encore de ligne employes (employeId vide, PIN défini pour la 1re
-        // fois hors création), on relie la nouvelle ligne créée au compte
-        // GAS pour que _deleteUser puisse la retrouver plus tard.
-        if (window.SupabaseDB) {
-          const { data: sbData, error: sbErr } = await window.SupabaseDB.rpc('upsert_employe_pointage',
-            { p_nom: nom, p_prenom: prenom, p_pin: pin, p_id: employeId || null });
-          if (sbErr) console.error('[Pointage] upsert_employe_pointage:', sbErr);
-          else if (!employeId && sbData?.id) {
-            const fd2 = new FormData();
-            fd2.append('payload', JSON.stringify({ action:'update_user_employe_id', prenom, nom, employeId: sbData.id }));
-            _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd2 }, 15000).catch(() => {});
-          }
-        }
         this.toast(`✓ PIN de ${prenom} réinitialisé`);
         document.getElementById(`reset-pin-${prenom}-${nom}`).style.display = 'none';
         this.loadAdminUsers();
@@ -4041,20 +4019,7 @@ const App = {
       const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
       const data = await resp.json();
       if (data.status === 'ok') {
-        // Si ce compte n'a jamais eu de fiche RH (classe_num vide côté
-        // employes), on retire aussi sa ligne Supabase — sinon elle reste
-        // orpheline et continue d'apparaître côté rh-metal comme "salarié
-        // sans fiche RH". Un salarié RH réel (classe_num renseigné) n'est
-        // lui jamais touché ici : sa suppression relève de rh-metal.
-        if (employeId && window.SupabaseDB) {
-          const { data: rows, error: getErr } = await window.SupabaseDB.rpc('get_employes_annuaire');
-          if (getErr) console.error('[Pointage] get_employes_annuaire:', getErr);
-          const row = (rows || []).find(e => e.id === employeId);
-          if (row && !row.a_fiche_rh) {
-            const { error: delErr } = await window.SupabaseDB.rpc('supprimer_employe_rh', { p_id: employeId });
-            if (delErr) console.error('[Pointage] supprimer_employe_rh:', delErr);
-          }
-        }
+        // Le backend retire aussi la ligne Supabase d'un compte sans fiche RH.
         this.toast(`✓ ${prenom} ${nom} supprimé`);
         this.loadAdminUsers();
       } else {
