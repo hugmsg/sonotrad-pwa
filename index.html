@@ -11996,17 +11996,27 @@ ${bodies}${sansAcheteurBody}
     }
   },
 
+  /**
+   * Corrections de pointage : passent par le backend (admin vérifié par le jeton de
+   * session, écriture Supabase avec la clé secrète). Renvoie true si c'est fait,
+   * sinon affiche l'erreur et renvoie false.
+   */
+  async _ptgAdminAppel(payload) {
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify(payload));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 30000);
+      const data = await resp.json();
+      if (data.status === 'ok') return true;
+      this.toast('Erreur : ' + (data.error || 'inconnue'));
+    } catch(e) { this.toast('Erreur réseau : ' + e.message); }
+    return false;
+  },
+
   async ptgAnnulerConfirm(id) {
     const motif = document.getElementById(`ptg-annul-motif-${id}`)?.value?.trim();
     if (!motif) { this.toast('Motif obligatoire'); return; }
-    const db = window.SupabaseDB;
-    if (!db) return;
-    const par = S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}` : 'admin';
-    const { data, error } = await db.rpc('admin_annuler_pointage',
-      { p_pointage_id: id, p_motif: motif, p_modifie_par: par });
-    if (error || data?.ok === false) {
-      this.toast('Erreur : ' + (data?.message || error?.message || 'inconnue')); return;
-    }
+    if (!await this._ptgAdminAppel({ action:'ptg_annuler', pointageId: id, motif })) return;
     this.toast('✓ Pointage annulé');
     this._ptgAdminLoad();
   },
@@ -12016,14 +12026,7 @@ ${bodies}${sansAcheteurBody}
     const time = document.getElementById(`ptg-mod-time-${id}`)?.value;
     if (!date || !time) { this.toast('Date et heure requises'); return; }
     const horodatage = new Date(`${date}T${time}:00`).toISOString();
-    const db = window.SupabaseDB;
-    if (!db) return;
-    const par = S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}` : 'admin';
-    const { data, error } = await db.rpc('admin_modifier_pointage',
-      { p_pointage_id: id, p_horodatage: horodatage, p_modifie_par: par });
-    if (error || data?.ok === false) {
-      this.toast('Erreur : ' + (data?.message || error?.message || 'inconnue')); return;
-    }
+    if (!await this._ptgAdminAppel({ action:'ptg_modifier', pointageId: id, horodatage })) return;
     this.toast('✓ Heure corrigée');
     this._ptgAdminLoad();
   },
@@ -12075,14 +12078,7 @@ ${bodies}${sansAcheteurBody}
     if (!type)  { this.toast('Sélectionnez un type'); return; }
     if (!date || !time) { this.toast('Date et heure requises'); return; }
     const horodatage = new Date(`${date}T${time}:00`).toISOString();
-    const db = window.SupabaseDB;
-    if (!db) return;
-    const par = S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}` : 'admin';
-    const { data, error } = await db.rpc('admin_add_pointage',
-      { p_employe_id: empId, p_type: type, p_horodatage: horodatage, p_modifie_par: par });
-    if (error || data?.ok === false) {
-      this.toast('Erreur : ' + (data?.message || error?.message || 'inconnue')); return;
-    }
+    if (!await this._ptgAdminAppel({ action:'ptg_add', employeId: empId, type, horodatage })) return;
     this.ptgAddModalHide();
     this.toast('✓ Pointage ajouté');
     this._ptgAdminLoad();
