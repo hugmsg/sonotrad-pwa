@@ -3951,12 +3951,15 @@ const App = {
       const data = await resp.json();
       if (data.status === 'ok') {
         this.toast(`✓ PIN de ${prenom} réinitialisé`);
-        document.getElementById(`reset-pin-${prenom}-${nom}`).style.display = 'none';
+        // La zone peut avoir disparu : la mise à jour Supabase faite par le backend
+        // déclenche le broadcast employes_changed, qui recharge déjà la liste.
+        const zone = document.getElementById(`reset-pin-${prenom}-${nom}`);
+        if (zone) zone.style.display = 'none';
         this.loadAdminUsers();
       } else {
         this.toast('Erreur : ' + (data.error || 'inconnue'));
       }
-    } catch(e) { this.toast('Erreur réseau'); }
+    } catch(e) { this.toast('Erreur réseau : ' + e.message); }
   },
 
   async _toggleUser(prenom, nom, actif) {
