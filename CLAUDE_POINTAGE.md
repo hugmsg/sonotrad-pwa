@@ -1,5 +1,10 @@
 # Module Pointage / RH — Contexte pour Claude Code
 
+> **⚠️ 2026-10-06 : le module Pointage a été retiré de `index.html`** (commit `962dfcd`).
+> Le pointage (kiosque, admin, rapports) vit uniquement dans **rh-metal** — voir
+> `rh-metal/CLAUDE.md`. Ce fichier reste la référence pour le schéma Supabase partagé ; les
+> passages qui décrivent l'interface de la PWA sont historiques.
+
 > **État revérifié le 2026-09-25** (base Supabase + `index.html` + déploiements Vercel).
 > La version précédente de ce fichier décrivait le kiosque comme « à développer » et
 > l'installation du client via `npm install` — les deux étaient faux depuis juin 2026.
