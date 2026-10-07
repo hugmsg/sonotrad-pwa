@@ -675,6 +675,23 @@ pour Transports Mesnager, seule la copie automatique vers leur ancien classeur a
 
 ---
 
+## Incident LV 01763 — PDF marqué « 00000 » (2026-10-06, corrigé le 2026-10-07)
+
+Le numéro officiel est attribué par `_saveLv` (compteur `CMR!G1`, sous verrou) ; le PDF, lui,
+est généré côté client **avant** la sauvegarde avec le numéro de `lv_next_number`. Cet appel
+avait échoué en silence (`catch(_) {}`, délai 10 s) → `S.lvu.display` vide → `'00000'` dans le
+PDF, alors qu'archive, dossier Drive, historique et Supabase portaient bien 01763. Même risque
+si le compteur avançait entre la génération et la sauvegarde (deux postes en parallèle).
+
+Correctif : la PWA envoie `numero_attendu` (= numéro imprimé sur le PDF) ; si `_saveLv` lit un
+autre numéro dans G1, il **n'enregistre rien** et répond `{status:'renumber', numero}` ;
+`lvuSaveToDrive` régénère alors le PDF avec ce numéro et renvoie une seule fois
+(masterfile @101 `bcfe406`, PWA `5764e64`). Sans `numero_attendu` (ancienne PWA en cache) :
+comportement inchangé. Le PDF 01763 déjà sur Drive a été corrigé à la main (numéro remplacé
+au même endroit, nouvelle version du même fichier pour garder le lien).
+
+---
+
 ## Évolutions futures prévues
 
 - [ ] **Mode remplissage progressif** : transporteur + expéditeur à l'étape chargement, réserves + destinataire + signatures à la livraison
