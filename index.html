@@ -10524,7 +10524,7 @@ ${bodies}${sansAcheteurBody}
     S.lvu.lastDoc.save(`LV_${d.display}_${(d.destinataire?.nom || 'transport').replace(/[^a-zA-Z0-9]/g,'_')}.pdf`);
   },
 
-  async lvuSaveToDrive() {
+  async lvuSaveToDrive(_renumerote = false) {
     if (!S.lvu.lastDoc || !S.lvu.lastData) return;
     if (!S.apiUrl) { this.toast('URL API non configurée'); return; }
     const statusEl = document.getElementById('lvu-save-status');
@@ -10535,6 +10535,7 @@ ${bodies}${sansAcheteurBody}
       const payload = {
         action: 'lv_save',
         pdf_b64: b64,
+        numero_attendu: d.display, // le serveur refuse ('renumber') si le PDF ne porte pas le bon numéro
         type: d.type, conducteur: d.conducteur,
         immat_moteur: d.immat_moteur, immat_semi: d.immat_semi,
         expediteur: d.expediteur?.nom || '', destinataire: d.destinataire?.nom || '',
@@ -10557,6 +10558,17 @@ ${bodies}${sansAcheteurBody}
       // atteint si le fetch abort avant. Voir CLAUDE_LV.md.
       const r   = await _fetchWithTimeout(S.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) }, 60000);
       const res = await r.json();
+      if (res.status === 'renumber' && res.numero && !_renumerote) {
+        // Le PDF portait un numéro faux (ex. 00000 si lv_next_number avait échoué) :
+        // rien n'a été enregistré. On régénère avec le numéro du serveur et on renvoie.
+        const data = { ...d, display: res.numero };
+        S.lvu.numero = Number(res.numero); S.lvu.display = res.numero;
+        S.lvu.lastDoc  = _generateLvu(data);
+        S.lvu.lastData = data;
+        const t = document.getElementById('lvu-result-title');
+        if (t) t.textContent = `✅ ${data.type} N° ${data.display} générée`;
+        return this.lvuSaveToDrive(true);
+      }
       if (res.status === 'ok') {
         const savedDisplay = res.numero || d.display;
         if (statusEl) statusEl.textContent = `✅ N° ${savedDisplay} enregistré sur Drive`;
