@@ -7277,10 +7277,6 @@ const App = {
     const codes = this._depExpandedSelection();
     const extra = codes.length - S.depSelected.size;
     const n = codes.length;
-    // Capturé avant l'appel (les codes sont retirés de S.deps après succès) —
-    // sert à répercuter sur Supabase pour que le portail transporteur reflète
-    // aussi ce départ, pas seulement le tableur.
-    const lvNumbers = [...new Set(codes.map(c => S.deps.find(d => d.code === c)?.lv).filter(Boolean))];
     const extraNote = extra > 0 ? `\n\n(+${extra} module${extra > 1 ? 's' : ''} ajouté${extra > 1 ? 's' : ''} automatiquement, même LV)` : '';
     const ok = window.confirm(`Marquer ${n} module${n > 1 ? 's' : ''} comme parti${n > 1 ? 's' : ''} ?\n\n${codes.join(', ')}${extraNote}`);
     if (!ok) return;
@@ -7301,19 +7297,7 @@ const App = {
         this._updateDepLvBar();
         this._renderDepList();
         this.toast(`✅ ${res.count} module${res.count > 1 ? 's' : ''} marqué${res.count > 1 ? 's' : ''} parti${res.count > 1 ? 's' : ''}`);
-        // Portail transporteur (Supabase) — best-effort, comme _syncVoyageSupabase :
-        // une erreur ici ne doit jamais remettre en cause le départ déjà acté au tableur.
-        if (window.SupabaseDB) {
-          lvNumbers.forEach(async lv => {
-            try {
-              const { error } = await window.SupabaseDB.rpc('marquer_parti', {
-                p_numero_lv: String(lv).padStart(5, '0'),
-                p_parti:     true,
-              });
-              if (error) console.warn('[depMarkParti] portail non synchronisé pour LV ' + lv + ' :', error.message);
-            } catch (e) { console.warn('[depMarkParti] portail non synchronisé pour LV ' + lv + ' :', e.message); }
-          });
-        }
+        // Portail transporteur (Supabase) : synchronisé par le serveur (dep_mark_parti).
       } else {
         this.toast('❌ ' + (res.error || 'Erreur inconnue'));
       }
@@ -10645,7 +10629,7 @@ ${bodies}${sansAcheteurBody}
   },
 
   async _syncVoyageSupabase(d, numero, pdfUrl) {
-    if (!window.SupabaseDB || !numero) return;
+    if (!S.apiUrl || !numero) return;
     try {
       const destinationAdresse = [d.destinataire?.adresse, d.destinataire?.ville].filter(Boolean).join(', ');
       // Repli sur la ville seule si l'adresse complète ne donne aucun résultat
@@ -10656,35 +10640,41 @@ ${bodies}${sansAcheteurBody}
         || (await this._geocodeAdresse(d.destinataire?.ville));
       // Réutilise d.total.poids (déjà calculé par _lvuCollectFormData, qté incluse)
       // plutôt que de recalculer — ce total est celui affiché sur la LV générée.
-      const { error } = await window.SupabaseDB.rpc('enregistrer_voyage', {
-        p_numero_lv:    String(numero),
-        p_type:         d.type || 'LV',
-        p_destination:  d.destinataire?.nom || '',
-        p_doc_annexe:   d.doc_annexe || '',
-        p_commande:     d.commande || '',
-        p_commentaire:  d.note || '',
-        p_poids:        parseFloat(d.total?.poids) || null,
-        p_ml:           parseFloat(d.total?.ml) || null,
-        p_grutage:      this._lvuCalcGrutage(d),
-        p_transporteur: d.transporteur?.nom || d.transporteur?.id || '',
-        // BCB : la CMR est créée au moment du départ du matériel (contrairement
-        // à LOXAM, créée en avance) — donc déjà parti à la création.
-        p_parti:        d.source === 'bcb',
-        p_marchandises_desc:   (d.marchandises || []).map(m => m.description).filter(Boolean).join(', '),
-        p_destination_adresse: destinationAdresse,
-        p_destination_lat:     geo?.lat ?? null,
-        p_destination_lon:     geo?.lon ?? null,
-        // Champs internes (jamais exposés au portail public) — pour l'essai
-        // Historique via Supabase, voir CLAUDE_PORTAIL.md.
-        p_conducteur:   d.conducteur || '',
-        p_immat_moteur: d.immat_moteur || '',
-        p_immat_semi:   d.immat_semi || '',
-        p_expediteur:   d.expediteur?.nom || '',
-        p_convoi:       !!d.convoi,
-        p_pdf_url:      pdfUrl || '',
-        p_livraison_prevue: d.livraisonPrevue || null,
-      });
-      if (error) console.warn('[_syncVoyageSupabase] portail non synchronisé :', error.message);
+      // Écrit par Apps Script (clé secrète) : enregistrer_voyage n'accepte plus la clé publique.
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action:       'voyage_enregistrer',
+          p_numero_lv:    String(numero),
+          p_type:         d.type || 'LV',
+          p_destination:  d.destinataire?.nom || '',
+          p_doc_annexe:   d.doc_annexe || '',
+          p_commande:     d.commande || '',
+          p_commentaire:  d.note || '',
+          p_poids:        parseFloat(d.total?.poids) || null,
+          p_ml:           parseFloat(d.total?.ml) || null,
+          p_grutage:      this._lvuCalcGrutage(d),
+          p_transporteur: d.transporteur?.nom || d.transporteur?.id || '',
+          // BCB : la CMR est créée au moment du départ du matériel (contrairement
+          // à LOXAM, créée en avance) — donc déjà parti à la création.
+          p_parti:        d.source === 'bcb',
+          p_marchandises_desc:   (d.marchandises || []).map(m => m.description).filter(Boolean).join(', '),
+          p_destination_adresse: destinationAdresse,
+          p_destination_lat:     geo?.lat ?? null,
+          p_destination_lon:     geo?.lon ?? null,
+          // Champs internes (jamais exposés au portail public) — pour l'essai
+          // Historique via Supabase, voir CLAUDE_PORTAIL.md.
+          p_conducteur:   d.conducteur || '',
+          p_immat_moteur: d.immat_moteur || '',
+          p_immat_semi:   d.immat_semi || '',
+          p_expediteur:   d.expediteur?.nom || '',
+          p_convoi:       !!d.convoi,
+          p_pdf_url:      pdfUrl || '',
+          p_livraison_prevue: d.livraisonPrevue || null,
+        })
+      }, 30000);
+      const res = await r.json();
+      if (res.status !== 'ok' || res.portail_ok === false) console.warn('[_syncVoyageSupabase] portail non synchronisé :', res.error || 'refus Supabase');
     } catch (e) {
       console.warn('[_syncVoyageSupabase] portail non synchronisé :', e.message);
     }
@@ -10992,25 +10982,12 @@ ${bodies}${sansAcheteurBody}
       const d = await r.json();
       if (d.status !== 'ok') throw new Error(d.error || 'erreur inconnue (tableur)');
 
-      // Portail transporteur (Supabase) — pas best-effort ici : action volontaire
-      // de l'utilisateur, un échec doit rester visible. Le voyage peut ne pas
-      // exister côté Supabase (ex: créé avant _syncVoyageSupabase, ou jamais
-      // synchronisé) — la fonction répond alors {ok:false} sans erreur de
-      // transport, donc on vérifie aussi data.ok (pas seulement `error`).
-      let portailKo = false;
-      if (window.SupabaseDB) {
-        const { data, error } = await window.SupabaseDB.rpc('modifier_voyage_note', {
-          p_numero_lv:   String(numero).padStart(5, '0'),
-          p_commentaire: commentaire,
-          p_grutage:     grutage,
-          p_livraison_prevue: livraisonPrevue || null,
-        });
-        if (error) throw new Error(error.message + ' (portail)');
-        if (data && data.ok === false) portailKo = true;
-      }
+      // Portail transporteur (Supabase) : mis à jour par le serveur (lv_update_note).
+      // Un échec reste visible (voyage inconnu de Supabase, ou erreur).
+      const portailKo = d.portail_ok === false;
 
       this.toast(portailKo
-        ? 'Note mise à jour (tableur) — portail non synchronisé (voyage inconnu de Supabase)'
+        ? 'Note mise à jour (tableur) — portail non synchronisé'
         : 'Note mise à jour pour ' + numero);
       this.closeLvNoteModal();
       this.lvuLoadHistory();
@@ -11032,15 +11009,8 @@ ${bodies}${sansAcheteurBody}
       const d = await r.json();
       if (d.status !== 'ok') throw new Error(d.error || 'erreur inconnue (tableur)');
 
-      let portailKo = false;
-      if (window.SupabaseDB) {
-        const { data, error } = await window.SupabaseDB.rpc('marquer_parti', {
-          p_numero_lv: String(numero).padStart(5, '0'),
-          p_parti:     nextParti,
-        });
-        if (error) throw new Error(error.message + ' (portail)');
-        if (data && data.ok === false) portailKo = true;
-      }
+      // Portail transporteur (Supabase) : mis à jour par le serveur (lv_mark_parti_by_numero).
+      const portailKo = d.portail_ok === false;
 
       const label = nextParti ? 'LV ' + numero + ' marquée partie' : 'LV ' + numero + ' remise disponible';
       this.toast(portailKo ? label + ' (tableur) — portail non synchronisé' : label);
