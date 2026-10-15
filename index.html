@@ -7279,7 +7279,12 @@ const App = {
     const n = codes.length;
     const extraNote = extra > 0 ? `\n\n(+${extra} module${extra > 1 ? 's' : ''} ajouté${extra > 1 ? 's' : ''} automatiquement, même LV)` : '';
     const ok = window.confirm(`Marquer ${n} module${n > 1 ? 's' : ''} comme parti${n > 1 ? 's' : ''} ?\n\n${codes.join(', ')}${extraNote}`);
-    if (!ok) return;
+    if (!ok || S.depPartiBusy) return;
+    // Bouton bloqué pendant l'appel (quelques secondes) pour éviter les clics répétés.
+    S.depPartiBusy = true;
+    const btn = document.getElementById('dep-mark-parti-btn');
+    const btnHtml = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; btn.innerHTML = '⏳ Envoi…'; }
     this.toast('Mise à jour en cours…');
     try {
       const r = await _fetchWithTimeout(S.apiUrl, {
@@ -7303,6 +7308,9 @@ const App = {
       }
     } catch(e) {
       this.toast('❌ Erreur réseau : ' + e.message);
+    } finally {
+      S.depPartiBusy = false;
+      if (btn) { btn.disabled = false; btn.style.opacity = ''; btn.innerHTML = btnHtml; }
     }
   },
   openDep(idx) {
@@ -10913,7 +10921,7 @@ ${bodies}${sansAcheteurBody}
                 <div style="display:flex;align-items:center;gap:6px;">
                   ${row.pdfUrl?`<a href="${row.pdfUrl}" target="_blank" rel="noopener" title="PDF" class="lvu-hist-action pdf">📄</a>`:''}
                   <button onclick="App.openLvNoteModal('${row.numero}')" title="Éditer note/grutage" class="lvu-hist-action">✏️</button>
-                  <button onclick="App.lvuTogglePartiHistory('${row.numero}', ${row.parti===true})" title="${row.parti?'Remettre disponible':'Marquer parti'}" class="lvu-hist-action">${row.parti?'↩':'🚚'}</button>
+                  <button onclick="App.lvuTogglePartiHistory('${row.numero}', ${row.parti===true}, this)" title="${row.parti?'Remettre disponible':'Marquer parti'}" class="lvu-hist-action">${row.parti?'↩':'🚚'}</button>
                   <button onclick="App.lvuDeleteLv('${row.numero}')" title="Supprimer" class="lvu-hist-action delete">🗑</button>
                 </div>
               </td>
@@ -10999,7 +11007,11 @@ ${bodies}${sansAcheteurBody}
   },
 
   // ── Marquer/démarquer "Parti" depuis l'Historique ────────────────────────
-  async lvuTogglePartiHistory(numero, currentParti) {
+  async lvuTogglePartiHistory(numero, currentParti, btn) {
+    // Bouton bloqué pendant l'appel (quelques secondes) pour éviter les clics répétés.
+    if (btn && btn.disabled) return;
+    const btnHtml = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; btn.innerHTML = '⏳'; }
     const nextParti = !currentParti;
     try {
       const r = await _fetchWithTimeout(S.apiUrl, {
@@ -11017,6 +11029,8 @@ ${bodies}${sansAcheteurBody}
       this.lvuLoadHistory();
     } catch (e) {
       this.toast('Erreur : ' + e.message);
+    } finally {
+      if (btn && btn.isConnected) { btn.disabled = false; btn.style.opacity = ''; btn.innerHTML = btnHtml; }
     }
   },
 
