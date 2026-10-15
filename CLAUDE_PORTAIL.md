@@ -84,11 +84,27 @@ Pour désactiver/rollback : exécuter `removePartiTrigger` une fois de la même 
 
 | Table | Rôle |
 |-------|------|
-| `voyages` | Exposée au portail (Realtime activé). Colonnes non sensibles uniquement : numero_lv, type, date_creation, destination, poids, ml, grutage, commentaire, transporteur, parti, parti_le |
-| `voyages_internes` | BT (doc_annexe) et n° de commande Loxam — jamais lue par anon, aucune policy RLS dessus |
-| `voyages_portail` (vue) | Confort de lecture, triée voyages disponibles en premier |
+| `voyages` | Exposée au portail (Realtime activé). La clé publique ne lit que `id` + les 14 colonnes affichées par le portail (voir ci-dessous) ; `transporteur`, `parti_le`, etc. ne sont plus lisibles |
+| `voyages_internes` | BT, n° de commande, conducteur, immat, PDF — aucun accès pour la clé publique |
 
-RLS : aucune écriture directe possible pour `anon` — tout passe par les fonctions `security definer` `enregistrer_voyage()` et `marquer_parti()`. Lecture (`SELECT`) ouverte sur `voyages` pour que Realtime fonctionne (nécessaire : Realtime écoute la table, pas une vue).
+**Droits depuis le 2026-10-15** (migrations `voyages_ecriture_serveur` + `voyages_lecture_cle_primaire`) :
+
+- **Écriture réservée au serveur.** `enregistrer_voyage`, `marquer_parti`, `modifier_voyage_note`
+  ne sont exécutables que par `service_role`. Seul Apps Script les appelle, avec la propriété de
+  script `SUPABASE_SERVICE_KEY` : masterfile (`_voyagePortail` dans `lv_save`,
+  `voyage_enregistrer`, `dep_mark_parti`, `lv_mark_parti_by_numero`, `lv_update_note`) et projet
+  **planning** (`SyncPartiSupabase.js`, case Parti de l'onglet Départs). La PWA n'appelle plus
+  aucune RPC voyages : elle passe par l'API Apps Script (jeton de session) et affiche « portail
+  non synchronisé » si `portail_ok === false`. `supprimer_voyage` reste protégée par
+  `historique_secret`.
+- **Lecture publique par colonnes** : `GRANT SELECT (id, numero_lv, type, date_creation,
+  destination, destination_adresse, destination_lat, destination_lon, poids, ml, grutage,
+  commentaire, marchandises_desc, livraison_prevue, parti)`. Realtime filtre le contenu des
+  événements avec les mêmes droits. ⚠️ **`id` (clé primaire) doit rester lisible** : sans lui,
+  Realtime envoie des événements vides et le portail affiche des lignes « Invalid Date »
+  (incident du 2026-10-15). Toute nouvelle colonne affichée par le portail doit être ajoutée au
+  GRANT.
+- Vue `voyages_portail` supprimée (inutilisée).
 
 ---
 
