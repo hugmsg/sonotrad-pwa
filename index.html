@@ -799,6 +799,18 @@
     .pin-key:active, .pin-key:focus { background: rgba(255,255,255,0.28); outline: none; }
     .pin-key-del { font-size: 20px; }
     .pin-key-empty { visibility: hidden; }
+    #login-qui {
+      display: none; margin-top: 12px; padding: 6px 14px; border: none; border-radius: 20px;
+      background: rgba(255,255,255,0.14); color: white; font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    #login-noms { display: none; width: 100%; max-width: 320px; max-height: 58vh; overflow-y: auto; }
+    .login-nom {
+      display: block; width: 100%; margin-bottom: 8px; padding: 14px 16px; border: none; border-radius: 12px;
+      background: rgba(255,255,255,0.13); color: white; font-size: 16px; font-weight: 600;
+      text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent;
+    }
+    .login-nom:active { background: rgba(255,255,255,0.28); }
+    .login-noms-msg { color: rgba(255,255,255,0.75); font-size: 13px; text-align: center; margin: 8px 0 14px; }
     /* Panneau URL (config première utilisation) */
     #login-setup-panel {
       width: 100%; max-width: 340px; margin-top: 20px;
@@ -845,8 +857,13 @@
     <div style="font-size:52px;line-height:1;margin-bottom:14px;">🏢</div>
     <h1 style="color:white;font-size:24px;font-weight:800;margin:0 0 8px;letter-spacing:-.3px;">SONOTRAD</h1>
     <p id="pin-prompt" style="color:rgba(255,255,255,0.65);font-size:14px;margin:0;">Entrez votre code PIN</p>
+    <button id="login-qui" onclick="App._loginChoisirAutre()"></button>
   </div>
 
+  <!-- Choix du nom (mémorisé sur l'appareil) -->
+  <div id="login-noms"></div>
+
+  <div id="login-pin-zone" style="display:flex;flex-direction:column;align-items:center;width:100%;">
   <!-- Indicateurs de saisie (4 points) -->
   <div class="pin-dots-row" id="pin-dots-row" style="display:flex;gap:18px;margin-bottom:14px;">
     <div class="pin-dot" id="pdot-0"></div>
@@ -872,6 +889,7 @@
     <button class="pin-key pin-key-empty" disabled aria-hidden="true"></button>
     <button class="pin-key" onclick="App._pinPress('0')">0</button>
     <button class="pin-key pin-key-del" onclick="App._pinDel()">⌫</button>
+  </div>
   </div>
 
   <!-- Config URL (première utilisation) -->
@@ -2693,10 +2711,10 @@ const ARR_SOURCES = {
 const S = {
   // ── Auth ──────────────────────────────────────────────────────────────────
   currentUser:  null,      // { prenom, nom, role, activites } — stocké en localStorage
-  pinBuffer:    '',        // digits saisis (jamais envoyés en clair)
+  pinBuffer:    '',        // chiffres saisis (envoyés au serveur en HTTPS, jamais stockés)
   pinMode:      'login',   // 'login' | 'change_old' | 'change_new' | 'change_confirm'
-  _pinNewHash:  null,      // hash intermédiaire lors du changement de PIN
-  _pinOldHash:  null,
+  _pinOld:      null,      // PIN actuel / nouveau, le temps du changement de PIN
+  _pinNew:      null,
   // ── Navigation ────────────────────────────────────────────────────────────
   view:        'home',
   prevView:    'home',
@@ -3095,7 +3113,8 @@ const App = {
       try {
         const user = JSON.parse(stored);
         // Session d'avant les jetons (ou jeton expiré) → une seule re-saisie du PIN.
-        if (!this._tokenValide(user.token)) throw new Error('jeton absent ou expiré');
+        // (jetons d'avant les comptes Supabase du 2026-10-15 : sans « compte » → refusés)
+        if (!user.compte || !this._tokenValide(user.token)) throw new Error('jeton absent ou expiré');
         S.currentUser = user;
         document.getElementById('login-overlay').style.display = 'none';
         this._render();
@@ -3105,7 +3124,7 @@ const App = {
     }
     // Pré-remplir l'URL si déjà connue
     if (S.apiUrl) document.getElementById('login-url-input').value = S.apiUrl;
-    document.getElementById('login-overlay').style.display = 'flex';
+    this._afficherConnexion();
   },
 
   /** Lit l'expiration inscrite dans le jeton (la signature, elle, n'est vérifiable que côté serveur). */
@@ -3125,11 +3144,8 @@ const App = {
     S._reauth = true;
     if (S.currentUser) S.currentUser.token = null;
     localStorage.removeItem('snt_user');
-    S.pinBuffer = ''; S.pinMode = 'login';
-    document.getElementById('pin-prompt').textContent = 'Session expirée — entrez votre PIN';
-    document.getElementById('pin-error-msg').textContent = '';
-    this._updatePinDots();
-    document.getElementById('login-overlay').style.display = 'flex';
+    S.pinMode = 'login';
+    this._afficherConnexion('Session expirée — entrez votre PIN');
   },
 
   _prefetch() { /* désactivé — chargement désormais déclenché par les menus d'activité */ },
@@ -3239,15 +3255,9 @@ const App = {
     } catch(e) {}
   },
 
-  /** Hash SHA-256 côté client via Web Crypto API. */
-  async _hashPin(pin) {
-    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
-    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
-  },
-
   /** Ajoute un chiffre au buffer et soumet automatiquement à 4 chiffres. */
   _pinPress(d) {
-    if (S.pinBuffer.length >= 4) return;
+    if (S.pinBuffer.length >= 4 || S._pinEnvoi) return;
     S.pinBuffer += d;
     this._updatePinDots();
     if (S.pinBuffer.length === 4) setTimeout(() => this._submitPin(), 80);
@@ -3280,6 +3290,87 @@ const App = {
     }
   },
 
+  /** Compte choisi sur cet appareil (connexion : on choisit son nom, puis on tape son PIN). */
+  _loginCompte() {
+    try { return JSON.parse(localStorage.getItem('snt_compte') || 'null'); } catch { return null; }
+  },
+
+  /** Affiche l'écran de connexion : la liste des noms si aucun n'est choisi, sinon le clavier PIN. */
+  _afficherConnexion(prompt) {
+    S.pinBuffer = '';
+    this._updatePinDots();
+    document.getElementById('pin-error-msg').textContent = '';
+    document.getElementById('login-overlay').style.display = 'flex';
+    const enLogin = S.pinMode === 'login';
+    const compte  = enLogin ? this._loginCompte() : null;
+    const qui     = document.getElementById('login-qui');
+    if (enLogin && !compte) {
+      document.getElementById('pin-prompt').textContent = 'Qui êtes-vous ?';
+      qui.style.display = 'none';
+      document.getElementById('login-pin-zone').style.display = 'none';
+      this._chargerNomsConnexion();
+      return;
+    }
+    document.getElementById('login-noms').style.display = 'none';
+    document.getElementById('login-pin-zone').style.display = 'flex';
+    document.getElementById('pin-prompt').textContent = prompt || 'Entrez votre code PIN';
+    const annulable = !enLogin && S.currentUser;
+    qui.style.display = (compte || annulable) ? 'inline-block' : 'none';
+    qui.textContent = compte ? compte.nom + '  ·  changer' : 'Annuler';
+  },
+
+  async _chargerNomsConnexion() {
+    const box = document.getElementById('login-noms');
+    box.style.display = 'block';
+    const message = txt => {
+      box.innerHTML = '';
+      const p = document.createElement('p');
+      p.className = 'login-noms-msg';
+      p.textContent = txt;
+      box.appendChild(p);
+    };
+    if (!S.apiUrl) { message('URL API non configurée — cliquez sur ⚙ ci-dessous'); return; }
+    message('Chargement…');
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=auth_comptes', {}, 30000);
+      const d = await r.json();
+      if (d.status !== 'ok') throw new Error(d.error || 'erreur inconnue');
+      if (!d.comptes.length) { message('Aucun compte actif.'); return; }
+      box.innerHTML = '';
+      d.comptes.forEach(c => {
+        const b = document.createElement('button');
+        b.className = 'login-nom';
+        b.textContent = c.nom;
+        b.onclick = () => this._loginChoisir(c);
+        box.appendChild(b);
+      });
+    } catch(e) {
+      message('Liste indisponible : ' + e.message);
+      const b = document.createElement('button');
+      b.className = 'login-nom';
+      b.style.textAlign = 'center';
+      b.textContent = 'Réessayer';
+      b.onclick = () => this._chargerNomsConnexion();
+      box.appendChild(b);
+    }
+  },
+
+  _loginChoisir(c) {
+    try { localStorage.setItem('snt_compte', JSON.stringify({ id: c.id, nom: c.nom })); } catch {}
+    this._afficherConnexion();
+  },
+
+  /** « changer » : revient à la liste des noms ; pendant un changement de PIN : annule. */
+  _loginChoisirAutre() {
+    if (S.pinMode !== 'login') {
+      S.pinMode = 'login'; S._pinOld = null; S._pinNew = null;
+      document.getElementById('login-overlay').style.display = 'none';
+      return;
+    }
+    try { localStorage.removeItem('snt_compte'); } catch {}
+    this._afficherConnexion();
+  },
+
   /** Soumet le PIN selon le mode courant (login / change). */
   async _submitPin() {
     if (!S.apiUrl) {
@@ -3287,63 +3378,75 @@ const App = {
       return;
     }
     const pinSaisi = S.pinBuffer;
-    const hash = await this._hashPin(pinSaisi);
-    S.pinBuffer = '';
-    this._updatePinDots();
-    document.getElementById('pin-error-msg').textContent = '';
+    S._pinEnvoi = true;
+    document.getElementById('pin-error-msg').textContent = 'Vérification…';
+    try {
+      await this._traiterPin(pinSaisi);
+    } finally {
+      S._pinEnvoi = false;
+      S.pinBuffer = '';
+      this._updatePinDots();
+    }
+  },
+
+  async _envoyerAuth(compte, pin) {
+    const fd = new FormData();
+    fd.append('payload', JSON.stringify({ action:'auth', compte, pin }));
+    const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 30000);
+    return resp.json();
+  },
+
+  async _traiterPin(pinSaisi) {
+    const msg = document.getElementById('pin-error-msg');
 
     if (S.pinMode === 'login') {
       // ── Authentification ──────────────────────────────────────────────
+      const compte = this._loginCompte();
+      if (!compte) { this._afficherConnexion(); return; }
       try {
-        const fd = new FormData();
-        fd.append('payload', JSON.stringify({ action:'auth', pinHash: hash }));
-        const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
-        const data = await resp.json();
-        if (data.status === 'ok') {
-          S.currentUser = data.user;
-          localStorage.setItem('snt_user', JSON.stringify(data.user));
-          if (S._reauth) {
-            // Reconnexion après session expirée : on reste sur l'écran en cours.
-            S._reauth = false;
-            document.getElementById('pin-prompt').textContent = 'Entrez votre code PIN';
-            document.getElementById('login-overlay').style.display = 'none';
-            this.toast('✓ Reconnecté — relancez votre dernière action');
-            return;
-          }
+        const data = await this._envoyerAuth(compte.id, pinSaisi);
+        if (data.status !== 'ok') { this._pinError(data.error || 'Code PIN incorrect'); return; }
+        msg.textContent = '';
+        S.currentUser = data.user;
+        localStorage.setItem('snt_user', JSON.stringify(data.user));
+        const reauth = S._reauth;
+        S._reauth = false;
+        if (!reauth) {
           S.view = 'home'; S.activity = null; // ← toujours démarrer à l'accueil
-          document.getElementById('login-overlay').style.display = 'none';
           this._render();
           this._prefetch();
-        } else {
-          this._pinError(data.error || 'Code PIN incorrect');
         }
+        if (data.user.pinAChanger) {
+          // Son PIN est déjà celui d'un collègue au kiosque : il en choisit un autre tout de suite.
+          S._pinOld = pinSaisi; S.pinMode = 'change_new';
+          this._afficherConnexion('Ce PIN est déjà pris par un collègue — choisissez un nouveau PIN');
+          return;
+        }
+        document.getElementById('login-overlay').style.display = 'none';
+        if (reauth) this.toast('✓ Reconnecté — relancez votre dernière action');
       } catch(e) { this._pinError('Erreur de connexion — réessayez'); }
 
     } else if (S.pinMode === 'change_old') {
-      // ── Vérification ancien PIN avant changement ───────────────────────
+      // ── Vérification du PIN actuel avant changement ───────────────────
       try {
-        const fd = new FormData();
-        fd.append('payload', JSON.stringify({ action:'auth', pinHash: hash }));
-        const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
-        const data = await resp.json();
-        if (data.status === 'ok') {
-          S._pinOldHash = hash;
-          S.pinMode = 'change_new';
-          document.getElementById('pin-prompt').textContent = 'Nouveau code PIN (4 chiffres)';
-        } else {
-          this._pinError('Code PIN actuel incorrect');
-        }
+        const data = await this._envoyerAuth(S.currentUser?.compte, pinSaisi);
+        if (data.status !== 'ok') { this._pinError(data.error || 'Code PIN actuel incorrect'); return; }
+        S._pinOld = pinSaisi;
+        S.pinMode = 'change_new';
+        msg.textContent = '';
+        document.getElementById('pin-prompt').textContent = 'Nouveau code PIN (4 chiffres)';
       } catch(e) { this._pinError('Erreur réseau — réessayez'); }
 
     } else if (S.pinMode === 'change_new') {
       // ── Saisie du nouveau PIN ─────────────────────────────────────────
-      S._pinNewHash = hash;
+      S._pinNew = pinSaisi;
       S.pinMode = 'change_confirm';
+      msg.textContent = '';
       document.getElementById('pin-prompt').textContent = 'Confirmez le nouveau PIN';
 
     } else if (S.pinMode === 'change_confirm') {
       // ── Confirmation + envoi ──────────────────────────────────────────
-      if (hash !== S._pinNewHash) {
+      if (pinSaisi !== S._pinNew) {
         this._pinError('Les codes ne correspondent pas');
         S.pinMode = 'change_new';
         document.getElementById('pin-prompt').textContent = 'Nouveau code PIN (4 chiffres)';
@@ -3351,19 +3454,21 @@ const App = {
       }
       try {
         const fd = new FormData();
-        // newPin (= la confirmation, identique) : le backend reporte le PIN au kiosque de pointage.
-        fd.append('payload', JSON.stringify({ action:'change_pin', oldPinHash: S._pinOldHash, newPinHash: S._pinNewHash, newPin: pinSaisi }));
-        const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+        // Le même PIN sert au kiosque de pointage.
+        fd.append('payload', JSON.stringify({ action:'change_pin', ancien: S._pinOld, nouveau: pinSaisi }));
+        const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 30000);
         const data = await resp.json();
         if (data.status === 'ok') {
-          S.pinMode = 'login'; S._pinOldHash = null; S._pinNewHash = null;
-          document.getElementById('pin-prompt').textContent = 'Entrez votre code PIN';
+          S.pinMode = 'login'; S._pinOld = null; S._pinNew = null;
+          if (S.currentUser) { S.currentUser.pinAChanger = false; localStorage.setItem('snt_user', JSON.stringify(S.currentUser)); }
+          msg.textContent = '';
           document.getElementById('login-overlay').style.display = 'none';
           this.toast('✓ Code PIN modifié avec succès !');
         } else {
+          // Nouveau PIN refusé (déjà pris…) : on en redemande un, l'ancien reste valable.
           this._pinError(data.error || 'Erreur lors du changement');
-          S.pinMode = 'login';
-          document.getElementById('pin-prompt').textContent = 'Entrez votre code PIN';
+          S.pinMode = 'change_new'; S._pinNew = null;
+          document.getElementById('pin-prompt').textContent = 'Nouveau code PIN (4 chiffres)';
         }
       } catch(e) { this._pinError('Erreur réseau — réessayez'); }
     }
@@ -3371,22 +3476,16 @@ const App = {
 
   /** Lance le flux de changement de PIN depuis les réglages. */
   _showChangePin() {
-    S.pinMode = 'change_old'; S.pinBuffer = ''; S._pinOldHash = null; S._pinNewHash = null;
-    document.getElementById('pin-prompt').textContent = 'Entrez votre PIN actuel';
-    document.getElementById('pin-error-msg').textContent = '';
-    this._updatePinDots();
-    document.getElementById('login-overlay').style.display = 'flex';
+    S.pinMode = 'change_old'; S._pinOld = null; S._pinNew = null;
+    this._afficherConnexion('Entrez votre PIN actuel');
   },
 
-  /** Déconnexion : vide la session locale et réaffiche l'overlay. */
+  /** Déconnexion : vide la session locale et réaffiche l'écran de connexion (nom mémorisé). */
   logout() {
     localStorage.removeItem('snt_user');
-    S.currentUser = null; S.pinBuffer = ''; S.pinMode = 'login';
+    S.currentUser = null; S.pinMode = 'login';
     S.view = 'home'; S.activity = null; // ← retour accueil à la prochaine connexion
-    document.getElementById('pin-prompt').textContent = 'Entrez votre code PIN';
-    document.getElementById('pin-error-msg').textContent = '';
-    this._updatePinDots();
-    document.getElementById('login-overlay').style.display = 'flex';
+    this._afficherConnexion();
   },
 
   /** Affiche/masque le panneau de config URL depuis l'overlay. */
@@ -3533,36 +3632,72 @@ const App = {
     if (badge) badge.style.display = 'block';
   },
 
+  _escHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  },
+
+  /** Compte de la liste admin (par id) — pour les messages. */
+  _adminUser(id) {
+    return (S.adminUsers || []).find(u => u.id === id) || { prenom: '', nom: '' };
+  },
+
+  /** Envoie une action admin sur un compte ; recharge la liste dans tous les cas. */
+  async _adminAction(payload, messageOk) {
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify(payload));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 30000);
+      const data = await resp.json();
+      if (data.status === 'ok') { this.toast(messageOk); return true; }
+      this.toast('Erreur : ' + (data.error || 'inconnue'));
+      return false;
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+      return false;
+    } finally {
+      this.loadAdminUsers();
+    }
+  },
+
   _renderAdminUsers(users) {
     const list = document.getElementById('admin-user-list');
     if (!list) return;
+    S.adminUsers = users;
     if (!users.length) {
       list.innerHTML = '<div class="card" style="text-align:center;color:#94A3B8;padding:32px 0;">Aucun utilisateur</div>';
       return;
     }
-    const roleLabel = { admin:'Administrateur', utilisateur:'Utilisateur', gestionnaire:'Utilisateur', chauffeur:'Utilisateur' };
+    const e = s => this._escHtml(s);
     list.innerHTML = users.map(u => {
-      const badgeBg  = u.actif ? '#D1FAE5' : '#FEE2E2';
-      const badgeCol = u.actif ? '#065F46'  : '#991B1B';
-      const badgeTxt = u.actif ? 'Actif'    : 'Inactif';
+      const actif    = u.actif && u.present !== false;
+      const badgeBg  = actif ? '#D1FAE5' : '#FEE2E2';
+      const badgeCol = actif ? '#065F46'  : '#991B1B';
+      const badgeTxt = !u.actif ? 'Inactif' : (u.present === false ? 'Contrat terminé' : 'Actif');
       const pinBadge = u.hasPIN
         ? '<span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;padding:2px 6px;border-radius:10px;font-weight:600;">🔑 PIN défini</span>'
         : '<span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:2px 6px;border-radius:10px;font-weight:600;">⚠ Pas de PIN</span>';
+      const bloque = u.bloqueJusqua && new Date(u.bloqueJusqua) > new Date();
+      const blocage = bloque
+        ? `<div style="margin-bottom:8px;padding:8px 10px;background:#FEF2F2;border:1.5px solid #FECACA;border-radius:8px;display:flex;align-items:center;gap:8px;">
+             <span style="flex:1;font-size:12px;color:#991B1B;font-weight:600;">🔒 Connexion bloquée jusqu'à ${new Date(u.bloqueJusqua).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })} (${u.echecsJour} erreur${u.echecsJour > 1 ? 's' : ''} aujourd'hui)</span>
+             <button onclick="App._unlockUser('${u.id}')" style="background:#991B1B;color:white;border:none;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">Débloquer</button>
+           </div>`
+        : (u.echecsJour ? `<div style="margin-bottom:8px;font-size:11px;color:#92400E;">${u.echecsJour} erreur${u.echecsJour > 1 ? 's' : ''} de PIN aujourd'hui</div>` : '');
       return `
         <div class="card" style="margin-bottom:8px;">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
-            <div style="width:40px;height:40px;border-radius:50%;background:${u.actif ? 'var(--brand)' : '#94A3B8'};display:flex;align-items:center;justify-content:center;color:white;font-size:18px;flex-shrink:0;">👤</div>
+            <div style="width:40px;height:40px;border-radius:50%;background:${actif ? 'var(--brand)' : '#94A3B8'};display:flex;align-items:center;justify-content:center;color:white;font-size:18px;flex-shrink:0;">👤</div>
             <div style="flex:1;min-width:0;">
-              <div style="font-weight:700;color:#1E293B;">${u.prenom} ${u.nom}</div>
-              <div style="font-size:12px;color:#64748B;margin-top:1px;">${roleLabel[u.role] || u.role} · ${u.activites.join(', ')}</div>
+              <div style="font-weight:700;color:#1E293B;">${e(u.prenom)} ${e(u.nom)}</div>
+              <div style="font-size:12px;color:#64748B;margin-top:1px;">${u.role === 'admin' ? 'Administrateur' : 'Utilisateur'} · ${u.activites.map(e).join(', ')}${u.externe ? ' · accès externe' : (u.aFicheRh ? '' : ' · sans fiche RH')}</div>
               <div style="margin-top:4px;">${pinBadge}</div>
             </div>
             <span style="background:${badgeBg};color:${badgeCol};font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;flex-shrink:0;">${badgeTxt}</span>
           </div>
-          <!-- Rôle modifiable -->
+          ${blocage}
           <!-- Rôle -->
           <div style="margin-bottom:8px;">
-            <select onchange="App._updateUserRole('${u.prenom}','${u.nom}',this.value)"
+            <select onchange="App._updateUserRole('${u.id}',this.value)"
               style="width:100%;padding:7px 10px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:12px;font-weight:600;color:#475569;background:#F8FAFC;cursor:pointer;">
               <option value="utilisateur" ${u.role!=='admin' ?'selected':''}>👤 Utilisateur</option>
               <option value="admin"       ${u.role==='admin' ?'selected':''}>⚙️ Administrateur</option>
@@ -3574,35 +3709,35 @@ const App = {
             <div style="display:flex;flex-wrap:wrap;gap:8px;">
               ${['loxam','bcb','agorastore','stockage','lvu'].map(a => `
                 <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">
-                  <input type="checkbox" id="uact-${u.prenom}-${u.nom}-${a}" value="${a}"
+                  <input type="checkbox" id="uact-${u.id}-${a}" value="${a}"
                     ${u.activites.includes(a)?'checked':''}
-                    onchange="App._updateUserActivites('${u.prenom}','${u.nom}')">
+                    onchange="App._updateUserActivites('${u.id}')">
                   ${a.charAt(0).toUpperCase()+a.slice(1)}
                 </label>`).join('')}
             </div>
           </div>
           <div style="display:flex;gap:8px;">
-            <button onclick="App._showResetPin('${u.prenom}','${u.nom}')"
+            <button onclick="App._showResetPin('${u.id}')"
               style="flex:1;background:#F8FAFC;border:1.5px solid #E2E8F0;color:#475569;padding:8px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
               🔑 ${u.hasPIN ? 'Reset PIN' : 'Définir PIN'}
             </button>
-            <button onclick="App._toggleUser('${u.prenom}','${u.nom}',${!u.actif})"
+            <button onclick="App._toggleUser('${u.id}',${!u.actif})"
               style="background:${u.actif ? '#FEF2F2' : '#F0FDF4'};border:1.5px solid ${u.actif ? '#FECACA' : '#86EFAC'};color:${u.actif ? '#991B1B' : '#14532D'};padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
               ${u.actif ? 'Désactiver' : 'Réactiver'}
             </button>
-            <button onclick="App._deleteUser('${u.prenom}','${u.nom}','${u.employeId||''}')"
+            <button onclick="App._deleteUser('${u.id}')"
               style="background:#FEF2F2;border:1.5px solid #FECACA;color:#991B1B;padding:8px 10px;border-radius:8px;font-size:14px;cursor:pointer;" title="Supprimer ce compte">
               🗑
             </button>
           </div>
           <!-- Zone reset PIN inline (masquée par défaut) -->
-          <div id="reset-pin-${u.prenom}-${u.nom}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid #F1F5F9;">
-            <label class="label-sm">Nouveau PIN (4 chiffres)</label>
+          <div id="reset-pin-${u.id}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid #F1F5F9;">
+            <label class="label-sm">Nouveau PIN (4 chiffres) — le même sert au kiosque</label>
             <div style="display:flex;gap:8px;margin-top:4px;">
-              <input type="number" id="rpin-${u.prenom}-${u.nom}" class="input-field"
-                placeholder="ex : 3947" min="1000" max="9999"
+              <input type="text" inputmode="numeric" maxlength="4" id="rpin-${u.id}" class="input-field"
+                placeholder="ex : 3947"
                 style="margin:0;flex:1;letter-spacing:4px;font-size:18px;font-weight:600;">
-              <button onclick="App._applyResetPin('${u.prenom}','${u.nom}','${u.employeId||''}')"
+              <button onclick="App._applyResetPin('${u.id}')"
                 style="background:var(--brand);color:white;border:none;padding:0 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;">
                 OK
               </button>
@@ -3631,144 +3766,69 @@ const App = {
   async _createUser() {
     const btn = document.querySelector('#admin-create-form .btn-primary');
     if (btn && btn.disabled) return; // protection double-clic
-    if (btn) { btn.disabled = true; btn.textContent = 'Création...'; }
     const prenom = document.getElementById('nu-prenom').value.trim();
     const nom    = document.getElementById('nu-nom').value.trim();
     const role   = document.getElementById('nu-role').value;
     const pin    = document.getElementById('nu-pin').value.trim();
-    let employeId = S._pendingEmployeId || '';
+    const employeId = S._pendingEmployeId || '';
     const activites = ['loxam','bcb','agorastore','stockage','lvu'].filter(a => {
       const el = document.getElementById('nu-act-' + a); return el && el.checked;
     });
 
-    if (!prenom || !nom)              { this.toast('Prénom et nom requis'); return; }
-    if (!pin || pin.length < 4)       { this.toast('PIN invalide — 4 chiffres requis'); return; }
-    if (!activites.length)            { this.toast('Sélectionne au moins une activité'); return; }
+    if (!prenom || !nom)        { this.toast('Prénom et nom requis'); return; }
+    if (!/^[0-9]{4}$/.test(pin)) { this.toast('PIN invalide — 4 chiffres requis'); return; }
+    if (!activites.length)      { this.toast('Sélectionne au moins une activité'); return; }
 
-    const pinHash = await this._hashPin(pin);
-
-    // Le PIN en clair sert au kiosque de pointage : le backend crée/relie
-    // lui-même la ligne Supabase employes (clé secrète, côté serveur).
-    try {
-      const fd = new FormData();
-      fd.append('payload', JSON.stringify({ action:'create_user', prenom, nom, role, activites, pinHash, pin, employeId }));
-      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
-      const data = await resp.json();
-      if (data.status === 'ok') {
-        this.toast(`✓ ${prenom} ${nom} créé !`);
-        this._hideCreateUserForm();
-        this.loadAdminUsers();
-      } else {
-        this.toast('Erreur : ' + (data.error || 'inconnue'));
-        if (btn) { btn.disabled = false; btn.textContent = 'Créer le compte'; }
-      }
-    } catch(e) {
-      this.toast('Erreur réseau');
-      if (btn) { btn.disabled = false; btn.textContent = 'Créer le compte'; }
-    }
+    if (btn) { btn.disabled = true; btn.textContent = 'Création...'; }
+    // Le backend crée/relie la fiche Supabase employes ; le PIN sert aussi au kiosque.
+    const ok = await this._adminAction({ action:'create_user', prenom, nom, role, activites, pin, employeId }, `✓ ${prenom} ${nom} créé !`);
+    if (ok) this._hideCreateUserForm();
+    if (btn) { btn.disabled = false; btn.textContent = 'Créer le compte'; }
   },
 
-  _showResetPin(prenom, nom) {
-    const zone = document.getElementById(`reset-pin-${prenom}-${nom}`);
+  _showResetPin(id) {
+    const zone = document.getElementById(`reset-pin-${id}`);
     if (!zone) return;
     const isVisible = zone.style.display === 'block';
     // Fermer toutes les autres zones ouvertes
     document.querySelectorAll('[id^="reset-pin-"]').forEach(z => z.style.display = 'none');
     zone.style.display = isVisible ? 'none' : 'block';
-    if (!isVisible) document.getElementById(`rpin-${prenom}-${nom}`)?.focus();
+    if (!isVisible) document.getElementById(`rpin-${id}`)?.focus();
   },
 
-  async _applyResetPin(prenom, nom, employeId) {
-    const input = document.getElementById(`rpin-${prenom}-${nom}`);
-    const pin   = (input?.value || '').trim();
-    if (!pin || pin.length < 4) { this.toast('PIN invalide — 4 chiffres requis'); return; }
-    const newPinHash = await this._hashPin(pin);
-    try {
-      const fd = new FormData();
-      // newPin : le backend reporte le même PIN au kiosque de pointage.
-      fd.append('payload', JSON.stringify({ action:'admin_reset_pin', prenom, nom, newPinHash, newPin: pin }));
-      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
-      const data = await resp.json();
-      if (data.status === 'ok') {
-        this.toast(`✓ PIN de ${prenom} réinitialisé`);
-        // La zone peut avoir disparu : la mise à jour Supabase faite par le backend
-        // déclenche le broadcast employes_changed, qui recharge déjà la liste.
-        const zone = document.getElementById(`reset-pin-${prenom}-${nom}`);
-        if (zone) zone.style.display = 'none';
-        this.loadAdminUsers();
-      } else {
-        this.toast('Erreur : ' + (data.error || 'inconnue'));
-      }
-    } catch(e) { this.toast('Erreur réseau : ' + e.message); }
+  async _applyResetPin(id) {
+    const pin = (document.getElementById(`rpin-${id}`)?.value || '').trim();
+    if (!/^[0-9]{4}$/.test(pin)) { this.toast('PIN invalide — 4 chiffres requis'); return; }
+    await this._adminAction({ action:'admin_reset_pin', id, pin }, `✓ PIN de ${this._adminUser(id).prenom} réinitialisé`);
   },
 
-  async _toggleUser(prenom, nom, actif) {
-    try {
-      const fd = new FormData();
-      fd.append('payload', JSON.stringify({ action:'toggle_user', prenom, nom, actif }));
-      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
-      const data = await resp.json();
-      if (data.status === 'ok') {
-        this.toast(actif ? `✓ ${prenom} réactivé` : `${prenom} désactivé`);
-        this.loadAdminUsers();
-      } else {
-        this.toast('Erreur : ' + (data.error || 'inconnue'));
-      }
-    } catch(e) { this.toast('Erreur réseau'); }
+  _toggleUser(id, actif) {
+    const p = this._adminUser(id).prenom;
+    this._adminAction({ action:'toggle_user', id, actif }, actif ? `✓ ${p} réactivé` : `${p} désactivé`);
   },
 
-  async _updateUserActivites(prenom, nom) {
+  _updateUserActivites(id) {
     const activites = ['loxam','bcb','agorastore','stockage','lvu'].filter(a => {
-      const el = document.getElementById(`uact-${prenom}-${nom}-${a}`);
+      const el = document.getElementById(`uact-${id}-${a}`);
       return el && el.checked;
     });
     if (!activites.length) { this.toast('Au moins une activité requise'); this.loadAdminUsers(); return; }
-    try {
-      const fd = new FormData();
-      fd.append('payload', JSON.stringify({ action:'update_user_activites', prenom, nom, activites }));
-      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
-      const data = await resp.json();
-      if (data.status === 'ok') {
-        this.toast(`✓ Activités de ${prenom} mises à jour`);
-        this.loadAdminUsers();
-      } else {
-        this.toast('Erreur : ' + (data.error || 'inconnue'));
-        this.loadAdminUsers();
-      }
-    } catch(e) { this.toast('Erreur réseau'); this.loadAdminUsers(); }
+    this._adminAction({ action:'update_user_activites', id, activites }, `✓ Activités de ${this._adminUser(id).prenom} mises à jour`);
   },
 
-  async _updateUserRole(prenom, nom, newRole) {
-    try {
-      const fd = new FormData();
-      fd.append('payload', JSON.stringify({ action:'update_user_role', prenom, nom, role: newRole }));
-      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
-      const data = await resp.json();
-      if (data.status === 'ok') {
-        this.toast(`✓ Rôle de ${prenom} mis à jour`);
-        this.loadAdminUsers();
-      } else {
-        this.toast('Erreur : ' + (data.error || 'inconnue'));
-        this.loadAdminUsers(); // recharge pour réafficher l'ancien rôle
-      }
-    } catch(e) { this.toast('Erreur réseau'); this.loadAdminUsers(); }
+  _updateUserRole(id, role) {
+    this._adminAction({ action:'update_user_role', id, role }, `✓ Rôle de ${this._adminUser(id).prenom} mis à jour`);
   },
 
-  async _deleteUser(prenom, nom, employeId) {
-    if (!window.confirm(`Supprimer définitivement ${prenom} ${nom} ?\nCette action est irréversible.`)) return;
-    try {
-      const fd = new FormData();
-      fd.append('payload', JSON.stringify({ action:'delete_user', prenom, nom }));
-      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
-      const data = await resp.json();
-      if (data.status === 'ok') {
-        // Le backend retire aussi la ligne Supabase d'un compte sans fiche RH.
-        this.toast(`✓ ${prenom} ${nom} supprimé`);
-        this.loadAdminUsers();
-      } else {
-        this.toast('Erreur : ' + (data.error || 'inconnue'));
-      }
-    } catch(e) { this.toast('Erreur réseau'); }
+  _unlockUser(id) {
+    this._adminAction({ action:'unlock_user', id }, `✓ ${this._adminUser(id).prenom} peut de nouveau se connecter`);
+  },
+
+  _deleteUser(id) {
+    const u = this._adminUser(id);
+    if (!window.confirm(`Supprimer définitivement le compte de ${u.prenom} ${u.nom} ?\nCette action est irréversible.`)) return;
+    // Le backend retire aussi la fiche Supabase d'un compte sans fiche RH.
+    this._adminAction({ action:'delete_user', id }, `✓ ${u.prenom} ${u.nom} supprimé`);
   },
 
   /* ─ Stockage ─ */
