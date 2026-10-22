@@ -9319,14 +9319,16 @@ ${bodies}${sansAcheteurBody}
       if (d.status !== 'ok') throw new Error(d.error || 'Erreur serveur');
       toImport.forEach(m => {
         const lot = S.bcbLots.find(l => l.idBcb === m.idBcb);
-        if (lot) { lot.acheteur = m.acheteur; lot.vendu = true; lot.dateVente = m.dateVente; lot.numVente = m.numVente; }
+        if (lot) { lot.acheteur = m.acheteur; lot.vendu = true; lot.dateVente = m.dateVente; if (!lot.numVente) lot.numVente = m.numVente; }
       });
+      const nGarde = d.venteGardee?.length || 0;
       this._bcbImpShowStep(4);
       const resultEl = document.getElementById('bcb-imp-result');
       if (resultEl) resultEl.innerHTML = `
         <div style="font-size:48px;margin-bottom:12px;">✅</div>
         <div style="font-size:20px;font-weight:800;color:#1E293B;margin-bottom:6px;">${d.updated||toImport.length} lot${(d.updated||toImport.length)>1?'s':''} importé${(d.updated||toImport.length)>1?'s':''}</div>
         ${d.notFound?.length?`<div style="font-size:12px;color:#D97706;margin-top:8px;">⚠️ ${d.notFound.length} N° BCB introuvable${d.notFound.length>1?'s':''} dans le sheet</div>`:''}
+        ${nGarde?`<div style="font-size:12px;color:#475569;margin-top:8px;">ℹ️ ${nGarde} lot${nGarde>1?'s':''} déjà passé${nGarde>1?'s':''} en vente : n° de première vente conservé</div>`:''}
         <div style="font-size:12px;color:#64748B;margin-top:8px;">Statut "vendu", acheteur et date de vente mis à jour dans Google Sheets.</div>`;
     } catch(e) {
       if (btn) { btn.disabled = false; btn.textContent = '↩ Réessayer'; }
