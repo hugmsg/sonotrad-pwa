@@ -65,7 +65,7 @@ Décision prise avec Hugo (2026-07-22) : les équipes continuent de cocher la ca
 
 **Déployé le 2026-07-23** via le repo `sonotrad-scripts` (accès clasp disponible dans cet environnement, contrairement à ce qu'on pensait au départ) : `planning/SyncPartiSupabase.js` contient le déclencheur `onEditPartiSync` qui, dès que la case J est cochée/décochée sur l'onglet Départs, appelle le RPC Supabase `marquer_parti(numero_lv, parti)`. Poussé en HEAD sur le projet Apps Script `planning` (`clasp push`, commit `9d98e97` dans sonotrad-scripts).
 
-`apps-script/sync-parti-supabase.gs.txt` (ce repo) reste la copie de référence/historique — la source de vérité est maintenant `sonotrad-scripts/planning/SyncPartiSupabase.js`.
+L'ancienne copie `apps-script/sync-parti-supabase.gs.txt` a été supprimée le 2026-10-26 (périmée, ancienne clé) — la seule source est `sonotrad-scripts/planning/SyncPartiSupabase.js`.
 
 **Dernière étape, 100% manuelle (confirmé impossible à automatiser depuis cet environnement)** : le code est poussé mais le déclencheur n'est pas encore actif tant que la fonction d'installation n'a pas tourné au moins une fois.
 
@@ -599,7 +599,7 @@ sonotrad-pwa/
 ├── portail-transporteur.html                        ← page publique, autonome
 ├── supabase/migrations/20260722000000_voyages_schema.sql
 ├── supabase/migrations/20260722170839_voyages_portail_security_invoker.sql
-├── apps-script/sync-parti-supabase.gs.txt            ← à coller à la main dans Apps Script
+├── (apps-script/sync-parti-supabase.gs.txt — supprimé le 2026-10-26, voir sonotrad-scripts/planning/SyncPartiSupabase.js)
 ├── index.html                                         ← _syncVoyageSupabase() + _lvuCalcGrutage() après lvuSaveToDrive()
 └── CLAUDE_PORTAIL.md (ce fichier)
 ```
