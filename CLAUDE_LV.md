@@ -722,3 +722,26 @@ sonotrad-pwa/
 ├── lv_modele_corrige.html               ← source HTML du modèle (référence)
 └── CLAUDE_LV.md (ce fichier)
 ```
+
+---
+
+## Annuler / supprimer une LV (2026-10-26)
+
+Une LV remise au chauffeur ne se corrige pas sous le même numéro (pas de « V2 ») : on
+l'**annule** et on en refait une avec un nouveau numéro (choix de Hugo).
+
+- **Annuler (⊘)**, n'importe quelle LV : `lv_cancel` (`_cancelLv`, `pwa_master.js`). Motif
+  obligatoire, « remplacée par n° » facultatif, auteur = session. L'Archive garde la ligne
+  (col T « ANNULÉE le … par … : motif — remplacée par n° … »), le PDF reste sur Drive
+  renommé « ANNULÉE - … » (raccourcis Expédition aussi), le numéro n'est jamais repris.
+  Supabase `annuler_voyage` copie la fiche dans `voyages_annules` et la retire de `voyages`
+  (donc du portail transporteur). L'Historique PWA lit les annulations des 90 derniers jours
+  (`lire_historique_voyages`, `annulee`…) : ligne grisée, filtre « Annulées », pas d'action.
+- **Supprimer (🗑)** : seulement la **dernière** LV créée (numéro = compteur − 1), sous le
+  verrou de `_saveLv` ; le compteur recule, pas de trou. Refusé côté serveur pour toute autre
+  LV ou une LV annulée. Le bouton n'apparaît que sur la dernière.
+- Les deux passent par `_lvLibererModules` : modules du Planning non partis libérés (Q « LV
+  créée » décochée, V vidée), demandes LOXAM (Terminé, N° LV), ligne Départs, lien CMR des
+  bons d'enlèvement BCB. Avant, la suppression ne libérait pas les modules du Planning.
+- Pas de mise en forme barrée dans l'Archive : `_saveLv` insère ses lignes au-dessus et la
+  nouvelle ligne pourrait en hériter.

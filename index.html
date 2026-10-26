@@ -830,6 +830,8 @@
     .lvu-hist-table tbody tr { transition: background-color 0.12s; }
     .lvu-hist-table tbody tr:hover { background: #EFF6FF; }
     .lvu-hist-table tbody tr.lvu-hist-parti { opacity: 0.55; }
+    .lvu-hist-table tbody tr.lvu-hist-annulee { background: #F8FAFC; color: #94A3B8; }
+    .lvu-hist-table tbody tr.lvu-hist-annulee strong { text-decoration: line-through; }
     .lvu-hist-table .ellipsis { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .lvu-hist-table .lvu-hist-type {
       display: inline-block; font-size: 9.5px; font-weight: 700; letter-spacing: 0.3px;
@@ -2601,6 +2603,8 @@
             style="border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;background:#1E293B;color:white;">Disponibles</button>
           <button onclick="App.lvuSetHistoryFilter('partis')" data-filter="partis"
             style="border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#475569;">Partis</button>
+          <button onclick="App.lvuSetHistoryFilter('annulees')" data-filter="annulees"
+            style="border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#475569;">Annulées</button>
         </div>
         <div id="lvu-history-list" style="background:white;border:1px solid #E2E8F0;border-radius:10px;overflow:hidden;">
           <div style="text-align:center;padding:40px;color:#94A3B8;font-size:14px;">Chargement…</div>
@@ -10987,11 +10991,17 @@ ${bodies}${sansAcheteurBody}
   _renderLvHistoryList() {
     const el     = document.getElementById('lvu-history-list');
     const filter = S.lvuHistoryFilter || 'disponibles';
-    const rows   = (S.lvuHistoryRows || []).filter(row => {
-      if (filter === 'disponibles') return !row.parti;
-      if (filter === 'partis')      return !!row.parti;
+    const all    = S.lvuHistoryRows || [];
+    const rows   = all.filter(row => {
+      if (filter === 'disponibles') return !row.annulee && !row.parti;
+      if (filter === 'partis')      return !row.annulee && !!row.parti;
+      if (filter === 'annulees')    return !!row.annulee;
       return true;
     });
+    // Seule la dernière LV créée peut être supprimée (pas de trou dans la numérotation) ;
+    // les autres s'annulent. Le serveur refuse de toute façon.
+    const dernier = all.reduce((m, r) => (Number(r.numero) > Number(m?.numero || 0) ? r : m), null);
+    const supprimable = dernier && !dernier.annulee ? String(dernier.numero) : null;
     if (!rows.length) {
       el.innerHTML = '<div style="text-align:center;padding:40px;color:#94A3B8;font-size:14px;">Aucun document trouvé</div>';
       return;
@@ -11008,13 +11018,17 @@ ${bodies}${sansAcheteurBody}
         <tbody>
           ${rows.map(row => {
             const { grutage, commentaire } = this._lvuParseNote(row.note);
+            const ann = row.annulee
+              ? `Annulée le ${row.annulee_le || '?'}${row.annulee_par ? ' par ' + row.annulee_par : ''} : ${row.annulation_motif || ''}${row.remplacee_par ? ' — remplacée par n° ' + row.remplacee_par : ''}`
+              : '';
             return `
-            <tr class="${row.parti ? 'lvu-hist-parti' : ''}">
+            <tr class="${row.annulee ? 'lvu-hist-annulee' : row.parti ? 'lvu-hist-parti' : ''}">
               <td style="white-space:nowrap;"><strong>${row.numero||'—'}</strong><span class="lvu-hist-type">${row.type||'LV'}</span></td>
               <td style="white-space:nowrap;color:#64748B;">${row.date||''}</td>
               <td class="ellipsis" title="${row.destinataire||''}">
                 ${row.destinataire||'—'}
                 ${row.expediteur && row.expediteur !== 'SONOTRAD' ? `<div style="font-size:10px;color:#94A3B8;">${row.expediteur}</div>` : ''}
+                ${ann ? `<div style="font-size:10.5px;color:#B91C1C;white-space:normal;">${this._escHtml(ann)}</div>` : ''}
               </td>
               <td class="ellipsis" style="color:#475569;" title="${row.marchandises_desc||''}">${row.marchandises_desc||'<span style="color:#CBD5E1;">-</span>'}</td>
               <td style="white-space:nowrap;color:#94A3B8;">${row.conducteur?`${row.conducteur} · ${row.immat_moteur||''}`:'-'}</td>
@@ -11022,13 +11036,15 @@ ${bodies}${sansAcheteurBody}
               <td class="ellipsis" style="color:#92400E;font-style:italic;" title="${commentaire}">${commentaire||'<span style="color:#CBD5E1;font-style:normal;">-</span>'}</td>
               <td style="white-space:nowrap;">${grutage?'<span style="font-size:10.5px;font-weight:700;background:#FEF3C7;color:#92400E;border-radius:6px;padding:2px 7px;">grutage</span>':'<span style="color:#CBD5E1;">-</span>'}</td>
               <td style="white-space:nowrap;color:#1D4ED8;">${row.livraison_prevue||'<span style="color:#CBD5E1;">-</span>'}</td>
-              <td style="white-space:nowrap;">${row.parti?'<span style="font-size:10.5px;font-weight:700;color:#64748B;">🚚 Parti</span>':'<span style="font-size:10.5px;font-weight:700;color:#15803D;">✅ Dispo</span>'}</td>
+              <td style="white-space:nowrap;">${row.annulee?'<span style="font-size:10.5px;font-weight:700;color:#B91C1C;">⊘ Annulée</span>':row.parti?'<span style="font-size:10.5px;font-weight:700;color:#64748B;">🚚 Parti</span>':'<span style="font-size:10.5px;font-weight:700;color:#15803D;">✅ Dispo</span>'}</td>
               <td style="white-space:nowrap;">
                 <div style="display:flex;align-items:center;gap:6px;">
                   ${row.pdfUrl?`<a href="${row.pdfUrl}" target="_blank" rel="noopener" title="PDF" class="lvu-hist-action pdf">📄</a>`:''}
+                  ${row.annulee ? '' : `
                   <button onclick="App.openLvNoteModal('${row.numero}')" title="Éditer note/grutage" class="lvu-hist-action">✏️</button>
                   <button onclick="App.lvuTogglePartiHistory('${row.numero}', ${row.parti===true}, this)" title="${row.parti?'Remettre disponible':'Marquer parti'}" class="lvu-hist-action">${row.parti?'↩':'🚚'}</button>
-                  <button onclick="App.lvuDeleteLv('${row.numero}')" title="Supprimer" class="lvu-hist-action delete">🗑</button>
+                  <button onclick="App.openLvCancelModal('${row.numero}')" title="Annuler (reste dans l'historique)" class="lvu-hist-action delete">⊘</button>
+                  ${String(row.numero) === supprimable ? `<button onclick="App.lvuDeleteLv('${row.numero}')" title="Supprimer (dernière LV créée : son numéro sera repris)" class="lvu-hist-action delete">🗑</button>` : ''}`}
                 </div>
               </td>
             </tr>`;
@@ -11039,7 +11055,7 @@ ${bodies}${sansAcheteurBody}
   },
 
   async lvuDeleteLv(numero) {
-    if (!confirm(`Supprimer ${numero} de l'historique et mettre la corbeille le PDF ?`)) return;
+    if (!confirm(`Supprimer la LV ${numero} (la dernière créée) ?\n\nElle disparaît de l'historique, le PDF part à la corbeille et la prochaine LV reprendra ce numéro.\nSi elle a déjà été remise au chauffeur, utilisez plutôt « Annuler » (⊘).`)) return;
     try {
       const r = await _fetchWithTimeout(S.apiUrl, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -11054,6 +11070,51 @@ ${bodies}${sansAcheteurBody}
         this.lvuLoadHistory();
       } else this.toast('Erreur : ' + (d.error || 'inconnue'));
     } catch(e) { this.toast('Erreur : ' + e.message); }
+  },
+
+  // ── Annulation : la LV reste dans l'historique (motif, auteur, remplaçante) ──
+  openLvCancelModal(numero) {
+    const row = (S.lvuHistoryRows || []).find(r => String(r.numero) === String(numero));
+    if (!row) return;
+    S._lvCancelNumero = numero;
+    const refEl = document.getElementById('lvcancel-modal-ref');
+    if (refEl) refEl.textContent = `${row.type||'LV'} N° ${row.numero} — ${row.destinataire||''}`;
+    document.getElementById('lvcancel-modal-motif').value = '';
+    document.getElementById('lvcancel-modal-rempl').value = '';
+    document.getElementById('lvcancel-modal').style.display = 'flex';
+  },
+
+  closeLvCancelModal() {
+    document.getElementById('lvcancel-modal').style.display = 'none';
+    S._lvCancelNumero = null;
+  },
+
+  async saveLvCancelModal() {
+    const numero = S._lvCancelNumero;
+    if (!numero) return;
+    const motif = document.getElementById('lvcancel-modal-motif').value.trim();
+    const remplacee_par = document.getElementById('lvcancel-modal-rempl').value.trim();
+    if (!motif) { this.toast('Le motif est obligatoire'); return; }
+    const btn = document.getElementById('lvcancel-modal-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'lv_cancel', numero, motif, remplacee_par })
+      }, 40000);
+      const d = await r.json();
+      if (d.status !== 'ok') throw new Error(d.error || 'erreur inconnue');
+      S.bcbEnlevements.forEach(e => { if (e.cmrNumero === numero) { e.cmrNumero = ''; e.cmrUrl = ''; } });
+      if (S.bcbCurEnlevement?.cmrNumero === numero) { S.bcbCurEnlevement.cmrNumero = ''; S.bcbCurEnlevement.cmrUrl = ''; }
+      const lib = (d.liberes || []).length ? ` — module(s) libéré(s) : ${d.liberes.join(', ')}` : '';
+      this.toast(`LV N° ${numero} annulée${lib}${d.portail_ok === false ? ' (portail non synchronisé)' : ''}`, 5000);
+      this.closeLvCancelModal();
+      this.lvuLoadHistory();
+    } catch (e) {
+      this.toast('Erreur : ' + e.message);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '⊘ Annuler cette LV'; }
+    }
   },
 
   // ── Édition note/grutage depuis l'Historique (sans toucher au PDF déjà généré) ──
@@ -12413,6 +12474,30 @@ document.addEventListener('DOMContentLoaded', () => {
     <button onclick="App.saveLvNoteModal()" id="lvnote-modal-btn"
       style="width:100%;padding:13px;border:none;background:var(--brand);color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
       ✓ Enregistrer
+    </button>
+  </div>
+</div>
+
+<div id="lvcancel-modal" class="pose-overlay" style="display:none;" onclick="if(event.target===this)App.closeLvCancelModal()">
+  <div style="background:white;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;margin:0 auto;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <span style="font-size:20px;">⊘</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:700;color:#1E293B;">Annuler la lettre de voiture</div>
+        <div id="lvcancel-modal-ref" style="font-size:11px;color:#64748B;margin-top:1px;"></div>
+      </div>
+      <button onclick="App.closeLvCancelModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#475569;padding:2px;line-height:1;">✕</button>
+    </div>
+    <p style="font-size:11px;color:#94A3B8;margin:0 0 10px;">Elle reste dans l'historique et l'Archive, marquée annulée, son PDF reste sur Drive (renommé « ANNULÉE »). Son numéro n'est jamais repris. Elle disparaît du portail transporteur et ses modules non partis sont libérés pour une nouvelle LV.</p>
+    <label style="font-size:12px;color:#64748B;font-weight:600;display:block;margin-bottom:6px;">Motif (obligatoire)</label>
+    <input id="lvcancel-modal-motif" placeholder="ex : changement de module de dernière minute"
+      style="width:100%;box-sizing:border-box;border:1.5px solid #CBD5E1;border-radius:10px;padding:10px;font-size:14px;outline:none;margin-bottom:12px;">
+    <label style="font-size:12px;color:#64748B;font-weight:600;display:block;margin-bottom:6px;">Remplacée par la LV n° (facultatif)</label>
+    <input id="lvcancel-modal-rempl" inputmode="numeric" placeholder="ex : 01802"
+      style="width:100%;box-sizing:border-box;border:1.5px solid #CBD5E1;border-radius:10px;padding:10px;font-size:14px;outline:none;margin-bottom:16px;">
+    <button onclick="App.saveLvCancelModal()" id="lvcancel-modal-btn"
+      style="width:100%;padding:13px;border:none;background:#B91C1C;color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
+      ⊘ Annuler cette LV
     </button>
   </div>
 </div>
