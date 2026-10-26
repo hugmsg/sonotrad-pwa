@@ -18,11 +18,23 @@ export const config = {
   },
 };
 
+// Seule la PWA (même domaine) peut appeler le proxy depuis un navigateur.
+// Les appels sans en-tête Origin (curl, serveur) restent possibles : la vraie
+// protection est le jeton de session vérifié par Apps Script.
+const ORIGINES_AUTORISEES = ['https://sonotrad-pwa.vercel.app'];
+
 export default async function handler(req, res) {
-  // ── CORS headers (toujours présents, y compris preflight) ──────────────────
-  res.setHeader('Access-Control-Allow-Origin',  '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  // ── CORS : origine de la PWA uniquement ────────────────────────────────────
+  const origin = req.headers.origin;
+  res.setHeader('Vary', 'Origin');
+  if (origin && !ORIGINES_AUTORISEES.includes(origin)) {
+    return res.status(403).json({ status: 'error', error: 'Origine non autorisée' });
+  }
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin',  origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  }
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
