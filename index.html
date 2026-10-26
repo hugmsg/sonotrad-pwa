@@ -2536,6 +2536,10 @@
           <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">N° de commande</label>
           <input id="lvu-f-commande" type="text"
             style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:10px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Remplace la LV annulée (facultatif)</label>
+          <select id="lvu-f-remplace" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:10px;background:white;">
+            <option value="">— Aucune —</option>
+          </select>
           <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Note de livraison</label>
           <textarea id="lvu-f-note" rows="3"
             style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;resize:vertical;font-family:inherit;margin-bottom:10px;"></textarea>
@@ -2897,7 +2901,7 @@ const App = {
     if (view === 'bcb-consignes') this.bcbInitLangGrid();
     if (view === 'bcb-depart')      this.bcbDepartInit();
     if (view === 'bcb-enlevements') this.bcbEnlevementsLoad();
-    if (view === 'lvu-form')      this._lvuRenderMarchandises();
+    if (view === 'lvu-form')      { this._lvuRenderMarchandises(); this._lvuChargerAnnulees(); }
     if (view === 'lvu-history')   { this.lvuLoadHistory(); this._lvuSubscribeHistoryRealtime(); }
     if (view === 'annuaire')      this.annuaireLoad();
   },
@@ -10534,6 +10538,7 @@ ${bodies}${sansAcheteurBody}
       total,
       doc_annexe:   v('lvu-f-doc'),
       commande:     v('lvu-f-commande'),
+      remplace:     v('lvu-f-remplace'),
       note:         v('lvu-f-note'),
       livraisonPrevue: (document.getElementById('lvu-f-livraison-check')?.checked && v('lvu-f-livraison-date')) ? v('lvu-f-livraison-date') : '',
       convoi:       document.getElementById('lvu-convoi-oui')?.checked || false,
@@ -10612,6 +10617,7 @@ ${bodies}${sansAcheteurBody}
         planning_codes: (d.marchandises || []).map(m => m.note).filter(Boolean),
         marchandises_desc: (d.marchandises || []).map(m => m.description).filter(Boolean).join(', '),
         grutage: this._lvuCalcGrutage(d),
+        remplace: d.remplace || '', // LV annulée que celle-ci remplace (lien posé par le serveur)
       };
       // 60s (pas 30s) : _saveLv fait Drive + 2 sheets + Planning multi-fichiers + verrou
       // LockService — dépasse régulièrement 30s, ce qui abortait le fetch côté client
@@ -10640,7 +10646,7 @@ ${bodies}${sansAcheteurBody}
         return this._lvuSave(true);
       }
       if (res.status === 'ok') {
-        await this._lvuEnregistree(d, res.numero || d.display, res.pdfUrl);
+        await this._lvuEnregistree(d, res.numero || d.display, res.pdfUrl, res.remplace_erreur);
       } else if (res.status === 'partial') {
         // PDF envoyé sur Drive mais jamais archivé (numéro/compteur non mis à
         // jour côté serveur) — ne JAMAIS traiter comme un succès : pas de sync
@@ -10681,9 +10687,11 @@ ${bodies}${sansAcheteurBody}
     return null;
   },
 
-  async _lvuEnregistree(d, savedDisplay, pdfUrl) {
+  async _lvuEnregistree(d, savedDisplay, pdfUrl, remplaceErreur) {
     const statusEl = document.getElementById('lvu-save-status');
-    if (statusEl) statusEl.textContent = `✅ N° ${savedDisplay} enregistré sur Drive`;
+    if (statusEl) statusEl.textContent = `✅ N° ${savedDisplay} enregistré sur Drive`
+      + (d.remplace ? (remplaceErreur ? ` — ⚠️ lien avec la LV annulée ${d.remplace} non fait : ${remplaceErreur}` : ` — remplace la LV annulée ${d.remplace}`) : '');
+    if (d.remplace) this._lvuChargerAnnulees();
     S.lvu.numero = null; S.lvu.display = null; S.lvu.incertain = null;
     S.lvu.enregistree = d.display; // un second clic ne crée pas de doublon
     if (document.getElementById('lvu-result-title')) document.getElementById('lvu-result-title').textContent = `✅ ${d.type} N° ${savedDisplay} enregistrée`;
@@ -10909,7 +10917,7 @@ ${bodies}${sansAcheteurBody}
     ['lvu-f-conducteur','lvu-f-immat-moteur','lvu-f-immat-semi','lvu-f-donneur',
      'lvu-f-exp-nom','lvu-f-exp-adresse','lvu-f-exp-ville','lvu-f-exp-pays',
      'lvu-f-dest-nom','lvu-f-dest-adresse','lvu-f-dest-ville','lvu-f-dest-pays',
-     'lvu-f-doc','lvu-f-commande','lvu-f-note','lvu-f-livraison-date'].forEach(id => {
+     'lvu-f-doc','lvu-f-commande','lvu-f-remplace','lvu-f-note','lvu-f-livraison-date'].forEach(id => {
       const el = document.getElementById(id); if (el) el.value = '';
     });
     const nonEl = document.getElementById('lvu-convoi-non');
@@ -11023,7 +11031,7 @@ ${bodies}${sansAcheteurBody}
               : '';
             return `
             <tr class="${row.annulee ? 'lvu-hist-annulee' : row.parti ? 'lvu-hist-parti' : ''}">
-              <td style="white-space:nowrap;"><strong>${row.numero||'—'}</strong><span class="lvu-hist-type">${row.type||'LV'}</span></td>
+              <td style="white-space:nowrap;"><strong>${row.numero||'—'}</strong><span class="lvu-hist-type">${row.type||'LV'}</span>${row.remplace ? `<div style="font-size:10px;color:#64748B;">remplace n° ${this._escHtml(row.remplace)}</div>` : ''}</td>
               <td style="white-space:nowrap;color:#64748B;">${row.date||''}</td>
               <td class="ellipsis" title="${row.destinataire||''}">
                 ${row.destinataire||'—'}
@@ -11040,7 +11048,7 @@ ${bodies}${sansAcheteurBody}
               <td style="white-space:nowrap;">
                 <div style="display:flex;align-items:center;gap:6px;">
                   ${row.pdfUrl?`<a href="${row.pdfUrl}" target="_blank" rel="noopener" title="PDF" class="lvu-hist-action pdf">📄</a>`:''}
-                  ${row.annulee ? '' : `
+                  ${row.annulee ? (row.remplacee_par ? '' : `<button onclick="App.openLvLinkModal('${row.numero}')" title="Lier à la LV qui la remplace" class="lvu-hist-action">🔗</button>`) : `
                   <button onclick="App.openLvNoteModal('${row.numero}')" title="Éditer note/grutage" class="lvu-hist-action">✏️</button>
                   <button onclick="App.lvuTogglePartiHistory('${row.numero}', ${row.parti===true}, this)" title="${row.parti?'Remettre disponible':'Marquer parti'}" class="lvu-hist-action">${row.parti?'↩':'🚚'}</button>
                   <button onclick="App.openLvCancelModal('${row.numero}')" title="Annuler (reste dans l'historique)" class="lvu-hist-action delete">⊘</button>
@@ -11072,6 +11080,68 @@ ${bodies}${sansAcheteurBody}
     } catch(e) { this.toast('Erreur : ' + e.message); }
   },
 
+  // Liste « Remplace la LV annulée » : seulement les annulées sans remplaçante, pour ne
+  // pas pouvoir lier n'importe quelle LV. Le serveur revérifie de toute façon.
+  async _lvuChargerAnnulees() {
+    const sel = document.getElementById('lvu-f-remplace');
+    if (!sel || !S.apiUrl) return;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_history_supabase&limit=50', {}, 15000);
+      const d = await r.json();
+      if (d.status !== 'ok') return;
+      S.lvuHistoryRows = d.history || [];
+      const libres = S.lvuHistoryRows.filter(x => x.annulee && !x.remplacee_par);
+      const garde = sel.value;
+      sel.innerHTML = `<option value="">${libres.length ? '— Aucune —' : 'Aucune LV annulée à remplacer'}</option>`
+        + libres.map(x => `<option value="${this._escHtml(x.numero)}">${this._escHtml(`${x.type || 'LV'} ${x.numero} — ${x.destinataire || ''} (${x.annulation_motif || 'annulée'})`)}</option>`).join('');
+      sel.disabled = !libres.length;
+      if (libres.some(x => String(x.numero) === garde)) sel.value = garde;
+    } catch (_) {}
+  },
+
+  openLvLinkModal(numero) {
+    const rows = S.lvuHistoryRows || [];
+    const row = rows.find(r => String(r.numero) === String(numero));
+    if (!row) return;
+    S._lvLinkNumero = numero;
+    document.getElementById('lvlink-modal-ref').textContent = `${row.type||'LV'} N° ${row.numero} — ${row.destinataire||''} (annulée)`;
+    const cands = rows.filter(r => !r.annulee && Number(r.numero) > Number(numero))
+      .sort((a, b) => Number(b.numero) - Number(a.numero));
+    const sel = document.getElementById('lvlink-modal-select');
+    sel.innerHTML = cands.length
+      ? cands.map(r => `<option value="${this._escHtml(r.numero)}">${this._escHtml(`${r.type||'LV'} ${r.numero} — ${r.destinataire||''} — ${r.marchandises_desc||''}`)}</option>`).join('')
+      : '<option value="">Aucune LV plus récente</option>';
+    document.getElementById('lvlink-modal').style.display = 'flex';
+  },
+
+  closeLvLinkModal() {
+    document.getElementById('lvlink-modal').style.display = 'none';
+    S._lvLinkNumero = null;
+  },
+
+  async saveLvLinkModal() {
+    const annulee = S._lvLinkNumero;
+    const remplacante = document.getElementById('lvlink-modal-select').value;
+    if (!annulee || !remplacante) return;
+    const btn = document.getElementById('lvlink-modal-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'lv_link_replacement', annulee, remplacante })
+      }, 30000);
+      const d = await r.json();
+      if (d.status !== 'ok') throw new Error(d.error || 'erreur inconnue');
+      this.toast(`LV ${annulee} remplacée par ${remplacante}`);
+      this.closeLvLinkModal();
+      this.lvuLoadHistory();
+    } catch (e) {
+      this.toast('Erreur : ' + e.message);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '🔗 Lier'; }
+    }
+  },
+
   // ── Annulation : la LV reste dans l'historique (motif, auteur, remplaçante) ──
   openLvCancelModal(numero) {
     const row = (S.lvuHistoryRows || []).find(r => String(r.numero) === String(numero));
@@ -11080,7 +11150,6 @@ ${bodies}${sansAcheteurBody}
     const refEl = document.getElementById('lvcancel-modal-ref');
     if (refEl) refEl.textContent = `${row.type||'LV'} N° ${row.numero} — ${row.destinataire||''}`;
     document.getElementById('lvcancel-modal-motif').value = '';
-    document.getElementById('lvcancel-modal-rempl').value = '';
     document.getElementById('lvcancel-modal').style.display = 'flex';
   },
 
@@ -11093,14 +11162,13 @@ ${bodies}${sansAcheteurBody}
     const numero = S._lvCancelNumero;
     if (!numero) return;
     const motif = document.getElementById('lvcancel-modal-motif').value.trim();
-    const remplacee_par = document.getElementById('lvcancel-modal-rempl').value.trim();
     if (!motif) { this.toast('Le motif est obligatoire'); return; }
     const btn = document.getElementById('lvcancel-modal-btn');
     if (btn) { btn.disabled = true; btn.textContent = '…'; }
     try {
       const r = await _fetchWithTimeout(S.apiUrl, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'lv_cancel', numero, motif, remplacee_par })
+        body: JSON.stringify({ action: 'lv_cancel', numero, motif })
       }, 40000);
       const d = await r.json();
       if (d.status !== 'ok') throw new Error(d.error || 'erreur inconnue');
@@ -12491,13 +12559,31 @@ document.addEventListener('DOMContentLoaded', () => {
     <p style="font-size:11px;color:#94A3B8;margin:0 0 10px;">Elle reste dans l'historique et l'Archive, marquée annulée, son PDF reste sur Drive (renommé « ANNULÉE »). Son numéro n'est jamais repris. Elle disparaît du portail transporteur et ses modules non partis sont libérés pour une nouvelle LV.</p>
     <label style="font-size:12px;color:#64748B;font-weight:600;display:block;margin-bottom:6px;">Motif (obligatoire)</label>
     <input id="lvcancel-modal-motif" placeholder="ex : changement de module de dernière minute"
-      style="width:100%;box-sizing:border-box;border:1.5px solid #CBD5E1;border-radius:10px;padding:10px;font-size:14px;outline:none;margin-bottom:12px;">
-    <label style="font-size:12px;color:#64748B;font-weight:600;display:block;margin-bottom:6px;">Remplacée par la LV n° (facultatif)</label>
-    <input id="lvcancel-modal-rempl" inputmode="numeric" placeholder="ex : 01802"
-      style="width:100%;box-sizing:border-box;border:1.5px solid #CBD5E1;border-radius:10px;padding:10px;font-size:14px;outline:none;margin-bottom:16px;">
+      style="width:100%;box-sizing:border-box;border:1.5px solid #CBD5E1;border-radius:10px;padding:10px;font-size:14px;outline:none;margin-bottom:8px;">
+    <p style="font-size:11px;color:#64748B;margin:0 0 16px;">La LV qui la remplace s'y relie à sa création (champ « Remplace la LV annulée »), ou après coup avec 🔗 dans l'historique.</p>
     <button onclick="App.saveLvCancelModal()" id="lvcancel-modal-btn"
       style="width:100%;padding:13px;border:none;background:#B91C1C;color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
       ⊘ Annuler cette LV
+    </button>
+  </div>
+</div>
+
+<div id="lvlink-modal" class="pose-overlay" style="display:none;" onclick="if(event.target===this)App.closeLvLinkModal()">
+  <div style="background:white;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;margin:0 auto;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <span style="font-size:20px;">🔗</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:700;color:#1E293B;">Lier à la LV qui la remplace</div>
+        <div id="lvlink-modal-ref" style="font-size:11px;color:#64748B;margin-top:1px;"></div>
+      </div>
+      <button onclick="App.closeLvLinkModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#475569;padding:2px;line-height:1;">✕</button>
+    </div>
+    <label style="font-size:12px;color:#64748B;font-weight:600;display:block;margin-bottom:6px;">Remplacée par (LV plus récentes, non annulées)</label>
+    <select id="lvlink-modal-select"
+      style="width:100%;box-sizing:border-box;border:1.5px solid #CBD5E1;border-radius:10px;padding:10px;font-size:14px;outline:none;margin-bottom:16px;background:white;"></select>
+    <button onclick="App.saveLvLinkModal()" id="lvlink-modal-btn"
+      style="width:100%;padding:13px;border:none;background:var(--brand);color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
+      🔗 Lier
     </button>
   </div>
 </div>

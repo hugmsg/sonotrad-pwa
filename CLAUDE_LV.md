@@ -743,5 +743,16 @@ l'**annule** et on en refait une avec un nouveau numéro (choix de Hugo).
 - Les deux passent par `_lvLibererModules` : modules du Planning non partis libérés (Q « LV
   créée » décochée, V vidée), demandes LOXAM (Terminé, N° LV), ligne Départs, lien CMR des
   bons d'enlèvement BCB. Avant, la suppression ne libérait pas les modules du Planning.
+- **Remplaçante** : à la création, champ « Remplace la LV annulée » (liste = annulées sans
+  remplaçante, `_lvuChargerAnnulees`) → `payload.remplace` ; `_saveLv` appelle
+  `_lvLierRemplacement` (sous verrou) : col T de l'annulée complétée « — remplacée par n° … »,
+  col U « Remplace n° … » de la nouvelle, Supabase `lier_remplacement_voyage`. Refus renvoyé
+  dans `remplace_erreur` sans annuler l'enregistrement. Après coup : 🔗 sur une annulée sans
+  remplaçante (`lv_link_replacement`, LV plus récentes non annulées seulement). L'Historique
+  affiche « remplace n° … » (`remplace`, calculé depuis `voyages_annules`). On ne saisit plus
+  la remplaçante à l'annulation (numéro inconnu à ce moment-là).
+- L'annulation et la suppression vident aussi la commande (Planning col U, demandes LOXAM col N).
+- `_cancelLv` tourne sous le verrou de `_saveLv` (sinon une LV insérée en ligne 3 décalerait les
+  lignes et la mention irait sur une autre LV).
 - Pas de mise en forme barrée dans l'Archive : `_saveLv` insère ses lignes au-dessus et la
   nouvelle ligne pourrait en hériter.
