@@ -327,7 +327,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
 const SUPABASE_URL  = 'https://ajewxwxerrjnnervzjwm.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqZXd4d3hlcnJqbm5lcnZ6andtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MDU5MDEsImV4cCI6MjA5NzA4MTkwMX0.NJcm1_tb4BcCSileiODYP0pKJ1LRVXFTIr2idQBrALg';
+const SUPABASE_ANON = 'sb_publishable_Bvglc1RUZsIFR7oMtmE_bQ_eOAohcQS';
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
 // Ordre important : mots-clés les plus spécifiques en premier.
@@ -820,6 +820,11 @@ function setupRealtime() {
       else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { dot.classList.add('off'); txt.textContent = 'Connexion perdue — réessai…'; }
     });
 }
+
+// Avec la clé publique « publishable », Supabase coupe le temps réel anonyme au
+// bout de 24 h : la page se recharge d'elle-même toutes les 12 h (écran laissé
+// ouvert en permanence chez un transporteur).
+setTimeout(() => location.reload(), 12 * 60 * 60 * 1000);
 
 document.getElementById('btn-refresh').addEventListener('click', chargerVoyages);
 window.addEventListener('resize', () => { if (leafletMap) leafletMap.invalidateSize(); });
