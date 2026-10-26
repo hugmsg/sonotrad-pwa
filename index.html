@@ -10579,10 +10579,17 @@ ${bodies}${sansAcheteurBody}
   async lvuSaveToDrive(_renumerote = false) {
     if (!S.lvu.lastDoc || !S.lvu.lastData) return;
     if (!S.apiUrl) { this.toast('URL API non configurée'); return; }
+    if (S.lvu.saving && !_renumerote) return;
+    if (S.lvu.enregistree && S.lvu.enregistree === S.lvu.lastData.display) { this.toast(`N° ${S.lvu.enregistree} déjà enregistrée`); return; }
+    S.lvu.saving = true;
+    try { await this._lvuSave(_renumerote); } finally { S.lvu.saving = false; }
+  },
+
+  async _lvuSave(_renumerote) {
     const statusEl = document.getElementById('lvu-save-status');
     if (statusEl) statusEl.textContent = '⏳ Enregistrement…';
+    const d = S.lvu.lastData;
     try {
-      const d   = S.lvu.lastData;
       const b64 = S.lvu.lastDoc.output('datauristring').split(',')[1];
       const payload = {
         action: 'lv_save',
@@ -10611,43 +10618,25 @@ ${bodies}${sansAcheteurBody}
       const r   = await _fetchWithTimeout(S.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) }, 60000);
       const res = await r.json();
       if (res.status === 'renumber' && res.numero && !_renumerote) {
+        // Envoi précédent resté sans réponse : le compteur a avancé peut-être parce qu'il
+        // a abouti. On le cherche dans l'Archive avant de renuméroter (sinon doublon).
+        if (S.lvu.incertain === d.display) {
+          const trouvee = await this._lvuChercherDansArchive(d, 1);
+          if (trouvee) return this._lvuEnregistree(d, d.display, trouvee.pdfUrl);
+        }
         // Le PDF portait un numéro faux (ex. 00000 si lv_next_number avait échoué) :
         // rien n'a été enregistré. On régénère avec le numéro du serveur et on renvoie.
         const data = { ...d, display: res.numero };
         S.lvu.numero = Number(res.numero); S.lvu.display = res.numero;
         S.lvu.lastDoc  = _generateLvu(data);
         S.lvu.lastData = data;
+        S.lvu.incertain = null;
         const t = document.getElementById('lvu-result-title');
         if (t) t.textContent = `✅ ${data.type} N° ${data.display} générée`;
-        return this.lvuSaveToDrive(true);
+        return this._lvuSave(true);
       }
       if (res.status === 'ok') {
-        const savedDisplay = res.numero || d.display;
-        if (statusEl) statusEl.textContent = `✅ N° ${savedDisplay} enregistré sur Drive`;
-        S.lvu.numero = null; S.lvu.display = null;
-        if (document.getElementById('lvu-result-title')) document.getElementById('lvu-result-title').textContent = `✅ ${d.type} N° ${savedDisplay} enregistrée`;
-        this.toast(`LV N° ${savedDisplay} enregistrée !`);
-        this._syncVoyageSupabase(d, savedDisplay, res.pdfUrl); // portail transporteur — best-effort, ne bloque jamais le flux principal
-        if (S.lvu.fromOpKey) {
-          this._saveLvLinkRemote(S.lvu.fromOpKey, savedDisplay, savedDisplay);
-          S.lvu.fromOpKey = null; S.lvu.fromOpNote = '';
-        }
-        // Lier la CMR à son bon d'enlèvement si applicable
-        if (S.lvu.enlevementNumero && res.pdfUrl) {
-          try {
-            await _fetchWithTimeout(S.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'},
-              body: JSON.stringify({ action:'bcb_enlevement_update_cmr',
-                numero: S.lvu.enlevementNumero, cmrNumero: savedDisplay, cmrUrl: res.pdfUrl })
-            }, 10000);
-            // Mettre à jour l'entrée en mémoire
-            const ei = S.bcbEnlevements.findIndex(e => e.numero === S.lvu.enlevementNumero);
-            if (ei > -1) { S.bcbEnlevements[ei].cmrNumero = savedDisplay; S.bcbEnlevements[ei].cmrUrl = res.pdfUrl; }
-            if (S.bcbCurEnlevement?.numero === S.lvu.enlevementNumero) {
-              S.bcbCurEnlevement.cmrNumero = savedDisplay; S.bcbCurEnlevement.cmrUrl = res.pdfUrl;
-            }
-          } catch(_) {}
-          S.lvu.enlevementNumero = null;
-        }
+        await this._lvuEnregistree(d, res.numero || d.display, res.pdfUrl);
       } else if (res.status === 'partial') {
         // PDF envoyé sur Drive mais jamais archivé (numéro/compteur non mis à
         // jour côté serveur) — ne JAMAIS traiter comme un succès : pas de sync
@@ -10658,7 +10647,64 @@ ${bodies}${sansAcheteurBody}
       } else {
         if (statusEl) statusEl.textContent = '❌ ' + (res.error || 'erreur inconnue');
       }
-    } catch (e) { if (statusEl) statusEl.textContent = '❌ ' + e.message; }
+    } catch (e) {
+      // Délai dépassé ou coupure réseau : Apps Script a souvent fini malgré tout.
+      // On regarde l'Archive avant de laisser recommencer.
+      if (statusEl) statusEl.textContent = '⏳ Pas de réponse du serveur — vérification dans l\'archive…';
+      const trouvee = await this._lvuChercherDansArchive(d, 3);
+      if (trouvee) return this._lvuEnregistree(d, d.display, trouvee.pdfUrl);
+      S.lvu.incertain = d.display;
+      if (statusEl) statusEl.textContent = `⚠️ ${d.type} N° ${d.display} introuvable dans l'archive pour l'instant (${e.message}). `
+        + 'Vous pouvez réessayer : si elle a été enregistrée entre-temps, aucun doublon ne sera créé.';
+    }
+  },
+
+  // Cherche la LV dans l'Archive (lv_history = source de vérité) : même numéro, même
+  // type, même destinataire — un collègue a pu prendre ce numéro entre-temps.
+  async _lvuChercherDansArchive(d, essais) {
+    const norm = s => String(s || '').trim().toLowerCase();
+    for (let i = 0; i < essais; i++) {
+      if (i > 0) await _sleep(8000);
+      try {
+        const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_history&limit=15', {}, 20000);
+        const h = (await r.json()).history || [];
+        const x = h.find(l => Number(l.numero) === Number(d.display)
+          && norm(l.type || 'LV') === norm(d.type || 'LV')
+          && norm(l.destinataire) === norm(d.destinataire?.nom));
+        if (x) return x;
+      } catch (_) {}
+    }
+    return null;
+  },
+
+  async _lvuEnregistree(d, savedDisplay, pdfUrl) {
+    const statusEl = document.getElementById('lvu-save-status');
+    if (statusEl) statusEl.textContent = `✅ N° ${savedDisplay} enregistré sur Drive`;
+    S.lvu.numero = null; S.lvu.display = null; S.lvu.incertain = null;
+    S.lvu.enregistree = d.display; // un second clic ne crée pas de doublon
+    if (document.getElementById('lvu-result-title')) document.getElementById('lvu-result-title').textContent = `✅ ${d.type} N° ${savedDisplay} enregistrée`;
+    this.toast(`LV N° ${savedDisplay} enregistrée !`);
+    this._syncVoyageSupabase(d, savedDisplay, pdfUrl); // portail transporteur — best-effort, ne bloque jamais le flux principal
+    if (S.lvu.fromOpKey) {
+      this._saveLvLinkRemote(S.lvu.fromOpKey, savedDisplay, savedDisplay);
+      S.lvu.fromOpKey = null; S.lvu.fromOpNote = '';
+    }
+    // Lier la CMR à son bon d'enlèvement si applicable
+    if (S.lvu.enlevementNumero && pdfUrl) {
+      try {
+        await _fetchWithTimeout(S.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ action:'bcb_enlevement_update_cmr',
+            numero: S.lvu.enlevementNumero, cmrNumero: savedDisplay, cmrUrl: pdfUrl })
+        }, 10000);
+        // Mettre à jour l'entrée en mémoire
+        const ei = S.bcbEnlevements.findIndex(e => e.numero === S.lvu.enlevementNumero);
+        if (ei > -1) { S.bcbEnlevements[ei].cmrNumero = savedDisplay; S.bcbEnlevements[ei].cmrUrl = pdfUrl; }
+        if (S.bcbCurEnlevement?.numero === S.lvu.enlevementNumero) {
+          S.bcbCurEnlevement.cmrNumero = savedDisplay; S.bcbCurEnlevement.cmrUrl = pdfUrl;
+        }
+      } catch(_) {}
+      S.lvu.enlevementNumero = null;
+    }
   },
 
   // ── Portail transporteur — synchro Supabase (temps réel) ────────────────────

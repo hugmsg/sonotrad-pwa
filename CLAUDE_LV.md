@@ -557,6 +557,16 @@ soit l'ordre ou le nombre de fois où ils s'exécutent — le serveur garantit q
 existe, le client vient éventuellement l'enrichir (nom du transporteur exact,
 géocodage précis `destination_lat`/`lon`, non disponibles côté GAS).
 
+**Après un délai dépassé (2026-10-26)** : `lvuSaveToDrive` ne laisse plus l'utilisateur
+dans le doute. Sur délai dépassé ou coupure réseau, `_lvuChercherDansArchive` relit
+`lv_history` (Archive, 3 essais espacés de 8 s) et cherche la LV par numéro + type +
+destinataire (un collègue a pu prendre ce numéro). Trouvée → traitée comme un succès
+(`_lvuEnregistree` : lien opération, CMR d'enlèvement, synchro portail). Pas trouvée →
+`S.lvu.incertain` ; au nouvel essai, si le serveur répond `renumber`, l'Archive est relue
+avant de renuméroter (sinon la même LV partait sous un 2e numéro). Un clic sur
+« Enregistrer » une fois la LV enregistrée (`S.lvu.enregistree`) ou pendant l'envoi
+(`S.lvu.saving`) ne fait plus rien.
+
 Limite connue et acceptée : l'appel serveur n'a pas accès à l'annuaire ni au nom du
 transporteur (la PWA n'envoie à `_saveLv` que `transporteur_id`, pas le nom), donc une LV
 créée quand le client ne complète jamais sa propre synchro (perte réseau totale, onglet
