@@ -1,0 +1,9731 @@
+// ── CONSTANTES ──────────────────────────────────────────────────────────────
+const MODULES = {
+  loxam:      { label: 'LOXAM / PIDEO', icon: '🏗️', iconBg: '#EBF5FB' },
+  bcb:        { label: 'BCB',           icon: '🚛', iconBg: '#FEF3E8' },
+  agorastore: { label: 'Agorastore',    icon: '🏷️', iconBg: '#F5EEF8' },
+  rapido:     { label: 'Rapido',        icon: '⚡', iconBg: '#F0FDF4' },
+};
+const SK = {
+  API:           'snt_api_url',
+  CODES:         'snt_codes',
+  CODES_TS:      'snt_codes_ts',
+  HISTORY:       'snt_history',
+  CODE_STOCK:    'snt_code_stock',
+  OFFLINE_QUEUE: 'snt_offline_queue',
+  STOCK_FILTER:  'snt_stock_filter',
+};
+const CODES_TTL = 30 * 60 * 1000; // 30 min
+const ARR_SOURCES = {
+  loxam:      { label: 'LOXAM',      icon: '🏗️', bg: '#EBF5FB', color: '#1A5276' },
+  bcb:        { label: 'BCB',        icon: '🚛', bg: '#FEF3E8', color: '#7D2A00' },
+  agorastore: { label: 'Agorastore', icon: '🏷️', bg: '#F5EEF8', color: '#5B2C6F' },
+  rapido:     { label: 'Rapido',     icon: '⚡', bg: '#F0FDF4', color: '#14532D' },
+};
+// ── STATE ────────────────────────────────────────────────────────────────────
+const S = {
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  currentUser:  null,      // { prenom, nom, role, activites } — stocké en localStorage
+  pinBuffer:    '',        // chiffres saisis (envoyés au serveur en HTTPS, jamais stockés)
+  pinMode:      'login',   // 'login' | 'change_old' | 'change_new' | 'change_confirm'
+  _pinOld:      null,      // PIN actuel / nouveau, le temps du changement de PIN
+  _pinNew:      null,
+  // ── Navigation ────────────────────────────────────────────────────────────
+  view:        'home',
+  prevView:    'home',
+  activity:    null,   // null = accueil | 'loxam' | 'bcb' | 'agora' | 'stockage'
+  apiUrl:      localStorage.getItem(SK.API) || '',
+  codes:       new Set(JSON.parse(localStorage.getItem(SK.CODES) || '[]')),
+  codesTs:     +(localStorage.getItem(SK.CODES_TS) || 0),
+  codeStock:    JSON.parse(localStorage.getItem(SK.CODE_STOCK)    || '[]'),
+  offlineQueue: JSON.parse(localStorage.getItem(SK.OFFLINE_QUEUE) || '[]'),
+  history:      JSON.parse(localStorage.getItem(SK.HISTORY) || '[]'),
+  depPhotosLog: {},   // chargé depuis Drive au démarrage (dep_photos_log.json)
+  arrPhotosLog: {},   // chargé depuis Drive au démarrage (arr_photos_log.json)
+  online:      navigator.onLine,
+  // Arrival form
+  arr: {
+    step: 1, module: null, code: '',
+    photos: [],          // [{dataUrl, name}]
+    chauffeur: '', date: '', etat: '',
+    // Champs LOXAM spécifiques
+    moduleType: '', numModule: '', lv: '', agence: '',
+    longueur: '',
+  },
+  // Departure / Production
+  deps:       [],
+  depsLoaded:    false,
+  depsLoading:   false,
+  historyLoading:false,
+  selDep:     null,
+  depPhotos:  [],      // [{dataUrl}]
+  arrPhotos:  [],      // [{dataUrl}] photos arrivée supplémentaires
+  depFilter:       'all',   // 'all' | 'enCours' | 'aControler' | 'termine' | 'deCote'
+  depModuleFilter: 'all',   // 'all' | nom du module (col F)
+  depSortAsc:      true,    // true = En cours→Terminé ; false = Terminé→En cours
+  depScope:        'actifs',// 'actifs' | 'avecPartis'
+  depSearch:       '',      // recherche texte libre
+  depDateFrom:     '',      // 'YYYY-MM-DD' ou vide
+  depDateTo:       '',      // 'YYYY-MM-DD' ou vide
+  depFiltersOpen:  false,   // panneau filtres détaillés ouvert/fermé
+  depSelectMode:   false,   // mode sélection multi-modules pour créer LV
+  depSelected:     new Set(),
+  // Arrivals (depuis serveur)
+  arrivalsData:    [],
+  arrivalsSummary: {},
+  arrivalsLoaded:  false,
+  arrTypeFilter:   'all',
+  arrPartiFilter:  'present',  // 'present' par défaut → chargement initial léger
+  arrFullLoaded:   false,      // true une fois les partis aussi chargés
+  selArrival:      null,
+  // Archive (Partis)
+  archive:        [],
+  archiveLoaded:  false,
+  depFromArchive: false,
+  submitting: false,
+  // ── Stockage ─────────────────────────────────────────────────────────────
+  stockData:     [],       // catalogue complet
+  stockLoaded:   false,
+  catalogLoaded:  false,   // true dès que stockData est peuplé (prefetch ou full load)
+  catalogLoading: false,
+  stockPrefs:    new Set(),// refs marquées "mes références"
+  stockFamilles: [],       // valeurs uniques pour le filtre
+  stockFilter: (() => { try { const s = JSON.parse(localStorage.getItem(SK.STOCK_FILTER)||'{}'); return { search:'', famille:'', myRefs:!!s.myRefs, alerts:!!s.alerts }; } catch(e) { return { search:'', famille:'', myRefs:false, alerts:false }; } })(),
+  stockPhotos:    {},      // { ref: thumbFileId } — chargé à la demande
+  stockShowThumbs: false,  // toggle miniatures
+  selStockRef:    null,    // référence ouverte dans la vue détail
+  stockDeltas:    {},      // { ref: { delta, invQty, lastDate } } — mouvements cumulés
+  selMvType:      null,    // type de mouvement en cours de saisie
+  // ── Saisie groupée ────────────────────────────────────────────────────
+  batchMvType:    null,    // type actif du batch
+  batchItems:     {},      // { ref: qty } — quantités saisies
+
+  // ── Historique ────────────────────────────────────────────────────────
+  historyData:    [],      // mouvements bruts ({ date, ref, type, qty, user, note })
+  historyOps:     [],      // opérations groupées (calculé côté client)
+  historyLoaded:  false,
+  histFilter:     { type: '', search: '' },
+  selHistProd:    null,      // référence produit sélectionnée dans "Par produit"
+  poseHistory:    new Set(), // codes modules ayant au moins une pose enregistrée
+  poseViewItems:  [],        // cache des mouvements de pose affichés dans le modal (pour suppression par index)
+  // ── Saisie rapide (dashboard) ─────────────────────────────────────────
+  saisieItems:    {},        // { ref: qty }
+  saisieType:     'entrée',
+  saisieNote:     '',
+  // ── Saisie pose depuis LOXAM ─────────────────────────────────────────
+  poseItems:      {},      // { ref: qty } — pose en cours de saisie
+  poseModuleCode: null,    // code du module (ex: 'PRGYGB')
+  poseModuleLabel:'',      // label affiché dans la modale
+  // ── Layer 2 — Intelligence ────────────────────────────────────────────
+  stockAnalytics:  {},     // { ref: { avgPerWeek, trend, exits30d, entries30d, lastDate } }
+  analyticsLoaded: false,
+  // ── Layer 3 — Dashboard ───────────────────────────────────────────────
+  stockRecentMvs:  [],     // derniers N mouvements toutes refs confondues
+  dashboardLoaded: false,
+  dashMvtLimit:    10,     // nb d'opérations affichées dans "mouvements récents"
+  // ── Layer 1 — Sync ────────────────────────────────────────────────────
+  stockSyncData:   null,   // { new, modified, deleted, unchangedCount, savedAt, isInitial }
+  syncLoading:     false,
+  // ── Import XLS ───────────────────────────────────────────────────────────
+  _xlsWorkbook:    null,   // workbook SheetJS brut
+  _xlsRawRows:     null,   // lignes de l'onglet sélectionné
+  _xlsConfig:      null,   // { sheetName, headerRowIdx, dataRowIdx, colMap }
+  _xlsParsed:      null,   // données parsées prêtes à envoyer
+  _xlsFileName:    null,
+  // ── BCB ──────────────────────────────────────────────────────────────────
+  bcbLang:         null,   // langue sélectionnée pour les consignes
+  bcbLots:         [],     // lots non partis (depuis endpoint bcb_lots)
+  bcbByBuyer:      {},     // { acheteur: [lot,...] }
+  bcbLotsLoaded:   false,
+  bcbLotsLoading:  false,
+  bcbLotsSearch:   '',
+  bcbLotsView:     'lots',
+  bcbStatusFilter: { arrive: null, inspecte: null, vendu: null }, // null=tous | true=oui | false=non
+  bcbSortField:    'default',  // 'default' | 'id_desc' | 'date_asc' | 'date_desc'
+  bcbSelectMode:   false,
+  bcbSelected:     new Set(),
+  bcbLotsFilters:  { acheteur: null, vendeur: null, vente: null },
+  bcbActiveFilter: null,
+  bcbImp:          { step:1, rows:[], matched:[], notInFile:[] },
+  bcbSelLot:         null,
+  bcbDepartConsigne:     null,
+  bcbDepartSelected:     new Set(),
+  bcbDepartBuyer:        null,
+  bcbPrepMode:           false,
+  bcbEnlevements:        [],
+  bcbEnlevementsLoaded:  false,
+  bcbEnlevementsLoading: false,
+  bcbCurEnlevement:      null,
+  bcbEnlevPhotos:        [],
+  // ── LVU ──────────────────────────────────────────────────────────────────
+  lvLinks: {},        // { opKey: { numero, display, date } } — chargé au prefetch
+  annuaireData: [],   // [{code,nom,adresse,cp,ville,email,tel,note}]
+  annuaireLoaded: false,
+  lvu: {
+    source:        'manual',
+    type:          'LV',
+    numero:        null,
+    display:       null,
+    loxamItems:    [],
+    selectedItems: new Set(),
+    bcbArrivals:   [],
+    selectedBcb:   new Set(),
+    generating:    false,
+    lastDoc:       null,
+    lastData:      null,
+    transporteur:  null,
+    agencies:      [],
+    fromOpKey:     null,  // clé de l'opération stock à l'origine de la LV
+    fromOpNote:    '',    // note/BL de cette opération
+  },
+};
+// ── APP ──────────────────────────────────────────────────────────────────────
+const App = {
+  /* ─ Navigation ─ */
+  go(view) {
+    if (S.view === 'lvu-form' && view !== 'lvu-form' && S.lvu.lastDoc) this.lvuNew();
+    if (S.view === 'departures' && view !== 'departures' && S.depSelectMode) {
+      S.depSelectMode = false;
+      S.depSelected.clear();
+    }
+    if (S.view === 'lvu-history' && view !== 'lvu-history') this._lvuUnsubscribeHistoryRealtime();
+    S.prevView = S.view;
+    S.view = view;
+    if (view === 'loxam-menu') S.activity = 'loxam'; // reset avant _render pour les tabs nav
+    this._render();
+    if (view === 'loxam-menu') this.loxamMenuInit();
+    if (view === 'arrivals' && !S.arrivalsLoaded) this.loadArrivalsData();
+    if (view === 'history')    this._renderHistory();
+    if (view === 'departures') { if (S.depsLoaded) this._renderDepList(); else if (!S.depsLoading) this.loadDepartures(); }
+    if (view === 'archive'    && !S.archiveLoaded) this.loadArchive();
+    if (view === 'settings')   this._fillSettings();
+    if (view === 'stock-dashboard') this.loadStockDashboard();
+    if (view === 'stock') { if (!S.stockLoaded) this.loadStockCatalog(); else this._renderStockList(); }
+    if (view === 'stock-detail') this._renderStockDetail();
+    if (view === 'stock-history') { if (!S.historyLoaded) this.loadStockHistory(); else this._renderHistoryList(); }
+    if (view === 'stock-sync')   this.loadStockSync();
+    if (view === 'bcb-menu')      this.bcbMenuInit();
+    if (view === 'bcb-lots')      this.bcbLotsLoad();
+    if (view === 'bcb-import')    this.bcbImportInit();
+    if (view === 'bcb-consignes') this.bcbInitLangGrid();
+    if (view === 'bcb-depart')      this.bcbDepartInit();
+    if (view === 'bcb-enlevements') this.bcbEnlevementsLoad();
+    if (view === 'lvu-form')      { this._lvuRenderMarchandises(); this._lvuChargerAnnulees(); }
+    if (view === 'lvu-history')   { this.lvuLoadHistory(); this._lvuSubscribeHistoryRealtime(); }
+    if (view === 'annuaire')      this.annuaireLoad();
+  },
+  breadcrumbGoActivity() {
+    const map = { loxam:'loxam-menu', bcb:'bcb-menu', stockage:'loxam-menu' };
+    const dest = map[S.activity];
+    if (dest) { if (S.view !== dest) this.go(dest); return; }
+    if (S.activity === 'lvu')        this.lvuInit();
+    else if (S.activity === 'annuaire')  this.go('annuaire');
+    else if (S.activity === 'reception') this.goHome();
+  },
+  goBack() {
+    if (S.view === 'admin')           { this.goHome(); return; }
+    if (S.view === 'stock-detail')    { this.go('stock'); return; }
+    if (S.view === 'bcb-lot-detail')  { this.go('bcb-lots'); return; }
+    if (S.view === 'bcb-enlevement')  { this.go('bcb-enlevements'); return; }
+    this.go(S.prevView);
+  },
+
+  /* ─ Accueil multi-activité ─ */
+  goHome() {
+    S.activity = null;
+    S.prevView  = S.view;
+    S.view      = 'home';
+    this._render();
+  },
+  selectActivity(name) {
+    const ready = { loxam: true, stockage: true, bcb: true, lvu: true, annuaire: true };
+    if (!ready[name]) {
+      this.toast('Cette activité est en cours de développement 🚧');
+      return;
+    }
+    // Contrôle d'accès : les admins ont accès à tout, sinon vérifier activites[]
+    const isAdmin = S.currentUser?.role === 'admin';
+    if (!isAdmin) {
+      const userActs = S.currentUser?.activites || [];
+      if (!userActs.includes(name)) {
+        this.toast('⛔ Vous n\'avez pas accès à cette activité');
+        return;
+      }
+    }
+    S.activity = name;
+    if (name === 'loxam')    this.go('loxam-menu');
+    if (name === 'stockage') this.go('stock-dashboard');
+    if (name === 'bcb')      this.go('bcb-menu');
+    if (name === 'lvu')      this.lvuInit();
+    if (name === 'annuaire')  this.go('annuaire');
+  },
+  receptionDirecte() {
+    S.activity = 'reception';
+    this.startNewArrival();
+  },
+  _render() {
+    const v      = S.view;
+    const onHome = v === 'home';
+
+    // ── Nav : cachée sur l'accueil, tabs selon activité ─────────────────
+    const nav = document.getElementById('main-nav');
+    if (nav) nav.style.display = onHome ? 'none' : '';
+    document.querySelectorAll('#main-nav .nav-tab[data-tab]').forEach(el => {
+      el.style.display = (S.activity === 'loxam' && v !== 'loxam-menu') ? '' : 'none';
+    });
+    document.querySelectorAll('#main-nav .nav-tab[data-stab]').forEach(el => {
+      const isAdmin   = S.currentUser?.role === 'admin';
+      const isSynchro = el.dataset.stab === 'stock-sync';
+      el.style.display = (S.activity === 'stockage' && (!isSynchro || isAdmin)) ? '' : 'none';
+    });
+    document.querySelectorAll('#main-nav .nav-tab[data-bcbtab]').forEach(el => {
+      el.style.display = (S.activity === 'bcb' && v !== 'bcb-menu') ? '' : 'none';
+    });
+    document.querySelectorAll('#main-nav .nav-tab[data-lvutab]').forEach(el => {
+      el.style.display = (S.activity === 'lvu') ? '' : 'none';
+    });
+
+    // ── Views : affiche la vue active ────────────────────────────────────
+    document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+    const mapId  = { 'dep-detail': 'dep-detail', 'arr-detail': 'arr-detail' };
+    const viewId = 'view-' + (mapId[v] || v);
+    const el     = document.getElementById(viewId);
+    if (el) el.classList.add('active');
+
+    // ── Nav tabs : onglet actif (LOXAM + Stockage + BCB) ───────────────
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    const tab = document.querySelector(`[data-tab="${v}"]`) || document.querySelector(`[data-stab="${v}"]`) || document.querySelector(`[data-bcbtab="${v}"]`) || document.querySelector(`[data-lvutab="${v}"]`);
+    if (tab) tab.classList.add('active');
+    // BCB menu → aucun tab actif (vue d'accueil)
+    // BCB consignes → tab "Consignes" reste actif sur toutes les étapes
+    if (v === 'bcb-consignes') {
+      const t2 = document.querySelector('[data-bcbtab="bcb-consignes"]');
+      if (t2) t2.classList.add('active');
+    }
+    // Tableau de bord stockage = tab "Tableau"
+    if (['stock-dashboard'].includes(v)) {
+      const t2 = document.querySelector('[data-stab="stock-dashboard"]');
+      if (t2) t2.classList.add('active');
+    }
+
+    // ── FAB : visible selon la vue ───────────────────────────────────────
+    const fab = document.getElementById('fab');
+    if (fab) fab.style.display = (v === 'arrivals') ? 'flex' : 'none';
+    const fabDep = document.getElementById('fab-dep');
+    if (fabDep) fabDep.style.display = (v === 'departures') ? 'flex' : 'none';
+
+    // ── Header : back button / logo / breadcrumb ─────────────────────────
+    const inForm = ['new-arrival','settings','dep-detail','arr-detail','stock-detail','bcb-enlevement','bcb-lot-detail'].includes(v);
+    document.getElementById('btn-back').classList.toggle('hidden', !inForm);
+    const showBreadcrumb = !onHome && !inForm && !!S.activity;
+    document.getElementById('header-logo').style.display       = (!showBreadcrumb && !inForm) ? 'flex' : 'none';
+    const bcEl  = document.getElementById('header-breadcrumb');
+    const actEl = document.getElementById('breadcrumb-activity');
+    if (bcEl) bcEl.style.display = showBreadcrumb ? 'flex' : 'none';
+    if (showBreadcrumb && actEl) {
+      const names = { loxam:'LOXAM', bcb:'BCB', stockage:'LOXAM', lvu:'LV / CMR', annuaire:'Annuaire',reception:'Réception' };
+      actEl.textContent = names[S.activity] || S.activity;
+    }
+
+    // Labels du bouton retour
+    const backLabels = {
+      'new-arrival':       'Annuler',
+      'settings':          'Réglages',
+      'dep-detail':        S.depFromArchive ? 'Partis' : 'Production',
+      'arr-detail':        'Arrivées',
+      'stock-detail':      'Catalogue',
+      'bcb-enlevement':    'Enlèvements',
+      'bcb-lot-detail':    'Lots',
+    };
+    document.getElementById('back-label').textContent = backLabels[v] || 'Retour';
+
+    // Titre + sous-titre du header selon l'activité
+    const activityMeta = {
+      loxam:    { icon: '🏗️', title: 'LOXAM',         sub: 'Arrivées & Départs'  },
+      bcb:      { icon: '🚛', title: 'BCB',            sub: 'Vente & Logistique'  },
+      agora:    { icon: '🏷️', title: 'Agorastore',     sub: 'Ventes en ligne'     },
+      stockage: { icon: '📦', title: 'Stockage Pidem', sub: 'Gestion des pièces'  },
+      lvu:      { icon: '📄', title: 'LV / CMR',       sub: 'Lettres de voiture'  },
+      annuaire: { icon: '📋', title: 'Annuaire',        sub: 'Destinations & agences' },
+    };
+    const titleEl    = document.getElementById('header-title');
+    const subtitleEl = document.getElementById('header-subtitle');
+    if (titleEl && subtitleEl) {
+      if (onHome) {
+        titleEl.textContent    = 'SONOTRAD';
+        subtitleEl.textContent = 'Multi-activités';
+      } else {
+        const meta = S.activity ? activityMeta[S.activity] : null;
+        titleEl.textContent    = meta ? `${meta.icon} ${meta.title}` : 'SONOTRAD';
+        subtitleEl.textContent = meta ? meta.sub : '';
+      }
+    }
+
+    // ── Bonjour [Prénom] sur l'écran d'accueil ────────────────────────────
+    const greetEl = document.getElementById('home-greeting');
+    if (greetEl && S.currentUser?.prenom) {
+      greetEl.textContent = `Bonjour ${S.currentUser.prenom}`;
+    }
+
+    // ── Cartes admin (accueil) : visibles uniquement pour les admins ─────
+    const isAdmin = S.currentUser?.role === 'admin';
+    const adminCard = document.getElementById('admin-home-card');
+    if (adminCard) adminCard.style.display = isAdmin ? '' : 'none';
+    const annCard = document.getElementById('annuaire-home-card');
+    if (annCard) annCard.style.display = isAdmin ? '' : 'none';
+    const rhCard = document.getElementById('rh-home-card');
+    if (rhCard) rhCard.style.display = isAdmin ? '' : 'none';
+    const fillTestBtn = document.getElementById('btn-fill-test');
+    if (fillTestBtn) fillTestBtn.style.display = isAdmin ? '' : 'none';
+
+    // ── Pastilles de chargement sur les cartes d'accueil ─────────────────
+    this._updateHomeCards();
+
+    // ── Back button : admin revient à l'accueil ───────────────────────────
+    if (v === 'admin') {
+      document.getElementById('btn-back').classList.remove('hidden');
+      document.getElementById('header-logo').style.display = 'none';
+      if (bcEl) bcEl.style.display = 'none';
+      document.getElementById('back-label').textContent = 'Accueil';
+      if (titleEl) titleEl.textContent = '👥 Utilisateurs';
+      if (subtitleEl) subtitleEl.textContent = 'Administration';
+    }
+
+    // ── API warning ───────────────────────────────────────────────────────
+    const w = document.getElementById('api-warning');
+    if (w) w.style.display = (!S.apiUrl && v === 'arrivals') ? 'block' : 'none';
+  },
+  /* ─ Auth / PIN ─ */
+
+  /** Met à jour les pastilles de chargement sur les cartes d'accueil. */
+  _updateHomeCards() {
+    const loxam = document.getElementById('badge-loxam');
+    if (loxam) {
+      if (S.depsLoaded) {
+        loxam.className = 'activity-badge badge-active';
+        loxam.textContent = '● Actif';
+      } else if (S.depsLoading) {
+        loxam.className = 'activity-badge badge-loading';
+        loxam.textContent = '⟳ Chargement...';
+      }
+    }
+    const stock = document.getElementById('badge-stockage');
+    if (stock) {
+      if (S.historyLoaded) {
+        stock.className = 'activity-badge badge-active';
+        stock.textContent = '● Actif';
+      } else if (S.historyLoading || S.apiUrl) {
+        stock.className = 'activity-badge badge-loading';
+        stock.textContent = '⟳ Chargement...';
+      }
+    }
+  },
+
+  /** Vérifie localStorage au démarrage — affiche ou masque l'overlay. */
+  _initAuth() {
+    const stored = localStorage.getItem('snt_user');
+    if (stored) {
+      try {
+        const user = JSON.parse(stored);
+        // Session d'avant les jetons (ou jeton expiré) → une seule re-saisie du PIN.
+        // (jetons d'avant les comptes Supabase du 2026-10-15 : sans « compte » → refusés)
+        if (!user.compte || !this._tokenValide(user.token)) throw new Error('jeton absent ou expiré');
+        S.currentUser = user;
+        document.getElementById('login-overlay').style.display = 'none';
+        this._render();
+        this._prefetch();
+        return;
+      } catch(e) { localStorage.removeItem('snt_user'); }
+    }
+    // Pré-remplir l'URL si déjà connue
+    if (S.apiUrl) document.getElementById('login-url-input').value = S.apiUrl;
+    this._afficherConnexion();
+  },
+
+  /** Lit l'expiration inscrite dans le jeton (la signature, elle, n'est vérifiable que côté serveur). */
+  _tokenValide(tk) {
+    try {
+      const b64 = String(tk).split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(atob(b64)).e > Date.now();
+    } catch { return false; }
+  },
+
+  /**
+   * Le serveur a refusé le jeton : on redemande le PIN par-dessus l'écran courant, sans
+   * le quitter — le formulaire en cours reste intact, l'utilisateur relance son action.
+   */
+  _sessionExpiree() {
+    if (S._reauth) return;   // plusieurs appels refusés en même temps → un seul écran PIN
+    S._reauth = true;
+    if (S.currentUser) S.currentUser.token = null;
+    localStorage.removeItem('snt_user');
+    S.pinMode = 'login';
+    this._afficherConnexion('Session expirée — entrez votre PIN');
+  },
+
+  _prefetch() { /* désactivé — chargement désormais déclenché par les menus d'activité */ },
+
+  async _prefetchDeps() {
+    if (S.depsLoaded || S.depsLoading) return;
+    S.depsLoading = true;
+    this._updateHomeCards();
+    try {
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=production', {}, 90000);
+      const data = await r.json();
+      S.deps       = Array.isArray(data) ? data : (data.data || []);
+      S.depsLoaded = true;
+      this._buildModuleFilterBar();
+      this._buildPoseHistory();
+      // Rendre si la vue concernée est déjà active
+      if (S.view === 'departures')                                  this._renderDepList();
+      else if (S.view === 'stock-dashboard' || S.view === 'stock-history') this._renderDashboard?.();
+    } catch(e) { /* échec silencieux — l'utilisateur chargera en navigant */ }
+    finally { S.depsLoading = false; this._updateHomeCards(); }
+  },
+
+  async _prefetchHistory() {
+    if (S.historyLoaded || S.historyLoading) return;
+    S.historyLoading = true;
+    this._updateHomeCards();
+    try {
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=stock_recent_movements&limit=9999', {}, 30000);
+      const data = await r.json();
+      S.historyData   = (data.status === 'ok' ? data.movements : []) || [];
+      S.historyOps    = this._groupMovements(S.historyData);
+      S.historyLoaded = true;
+      this._buildPoseHistory();
+      if (S.view === 'stock-history')   this._renderHistoryList();
+      if (S.view === 'stock-dashboard') this._renderDashboard();
+      if (S.view === 'departures' && S.depsLoaded) this._renderDepList();
+      // Si la modale de pose est ouverte (ouverte pendant le prefetch), l'alimenter maintenant
+      if (S.poseModuleCode && document.getElementById('pose-modal')?.style.display !== 'none') {
+        this._renderPoseExisting(S.poseModuleCode);
+      }
+    } catch(e) { /* échec silencieux */ }
+    finally { S.historyLoading = false; this._updateHomeCards(); }
+  },
+
+  async _prefetchCatalog() {
+    if (S.catalogLoaded || S.catalogLoading || S.stockLoaded) return;
+    S.catalogLoading = true;
+    try {
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=stock_catalog', {}, 40000);
+      const data = await r.json();
+      if (data.status === 'ok') {
+        S.stockData     = data.data     || [];
+        S.stockFamilles = data.familles || [];
+        S.catalogLoaded = true;
+      }
+    } catch(e) { /* échec silencieux */ }
+    finally { S.catalogLoading = false; }
+  },
+
+  async _prefetchLvLinks() {
+    if (!S.apiUrl) return;
+    try {
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=stock_get_lv_links', {}, 10000);
+      const data = await r.json();
+      if (data.status === 'ok') S.lvLinks = data.links || {};
+    } catch(e) { /* échec silencieux */ }
+  },
+
+  /** Crée une LV pré-remplie à partir d'une opération de sortie stock. */
+  async createLvFromOp(encodedKey) {
+    const opKey = decodeURIComponent(encodedKey);
+    const op    = (S.historyOps || []).find(o => o.key === opKey);
+    if (!op) { this.toast('Opération introuvable'); return; }
+    const THRESHOLD = 10;
+    let rows;
+    if (op.items.length <= THRESHOLD) {
+      rows = op.items.map(m => {
+        const desc = S.stockData.find(d => d.ref === m.ref)?.description || '';
+        return { qte: String(m.qty), description: m.ref + (desc ? '  —  ' + desc : ''), poids: '', note: m.ref, ml: '' };
+      });
+    } else {
+      const totalQty = op.items.reduce((s, m) => s + (Number(m.qty) || 0), 0);
+      rows = [{ qte: String(totalQty), description: `Pièces PIDEM — ${op.items.length} références`, poids: '', note: '', ml: '' }];
+    }
+    S.lvu.fromOpKey  = opKey;
+    S.lvu.fromOpNote = op.note || '';
+    await this.lvuInit();
+    this.lvuLoadAgencies();
+    S.lvu.marchandises = rows;
+    this._lvuRenderMarchandises();
+    if (op.note) {
+      const docEl = document.getElementById('lvu-f-doc');
+      if (docEl && !docEl.value) docEl.value = op.note;
+    }
+  },
+
+  /** Enregistre le lien LV↔opération dans Drive (lv_links.json). */
+  async _saveLvLinkRemote(opKey, numero, display) {
+    if (!S.apiUrl) return;
+    try {
+      await _fetchWithTimeout(S.apiUrl, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ action: 'stock_save_lv_link', opKey, numero, display }),
+      }, 10000);
+      S.lvLinks[opKey] = { numero, display, date: new Date().toISOString() };
+    } catch(e) {}
+  },
+
+  /** Ajoute un chiffre au buffer et soumet automatiquement à 4 chiffres. */
+  _pinPress(d) {
+    if (S.pinBuffer.length >= 4 || S._pinEnvoi) return;
+    S.pinBuffer += d;
+    this._updatePinDots();
+    if (S.pinBuffer.length === 4) setTimeout(() => this._submitPin(), 80);
+  },
+
+  /** Supprime le dernier chiffre. */
+  _pinDel() {
+    if (!S.pinBuffer.length) return;
+    S.pinBuffer = S.pinBuffer.slice(0, -1);
+    this._updatePinDots();
+  },
+
+  /** Met à jour l'affichage des 4 points. */
+  _updatePinDots() {
+    [0,1,2,3].forEach(i => {
+      const d = document.getElementById('pdot-' + i);
+      if (d) d.classList.toggle('filled', i < S.pinBuffer.length);
+    });
+  },
+
+  /** Affiche un message d'erreur + animation shake + vide le buffer. */
+  _pinError(msg) {
+    document.getElementById('pin-error-msg').textContent = msg;
+    S.pinBuffer = '';
+    this._updatePinDots();
+    const row = document.getElementById('pin-dots-row');
+    if (row) {
+      row.classList.add('shake');
+      setTimeout(() => row.classList.remove('shake'), 400);
+    }
+  },
+
+  /** Compte choisi sur cet appareil (connexion : on choisit son nom, puis on tape son PIN). */
+  _loginCompte() {
+    try { return JSON.parse(localStorage.getItem('snt_compte') || 'null'); } catch { return null; }
+  },
+
+  /** Affiche l'écran de connexion : la liste des noms si aucun n'est choisi, sinon le clavier PIN. */
+  _afficherConnexion(prompt) {
+    S.pinBuffer = '';
+    this._updatePinDots();
+    document.getElementById('pin-error-msg').textContent = '';
+    document.getElementById('login-overlay').style.display = 'flex';
+    const enLogin = S.pinMode === 'login';
+    const compte  = enLogin ? this._loginCompte() : null;
+    const qui     = document.getElementById('login-qui');
+    if (enLogin && !compte) {
+      document.getElementById('pin-prompt').textContent = 'Qui êtes-vous ?';
+      qui.style.display = 'none';
+      document.getElementById('login-pin-zone').style.display = 'none';
+      this._chargerNomsConnexion();
+      return;
+    }
+    document.getElementById('login-noms').style.display = 'none';
+    document.getElementById('login-pin-zone').style.display = 'flex';
+    document.getElementById('pin-prompt').textContent = prompt || 'Entrez votre code PIN';
+    const annulable = !enLogin && S.currentUser;
+    qui.style.display = (compte || annulable) ? 'inline-block' : 'none';
+    qui.textContent = compte ? compte.nom + '  ·  changer' : 'Annuler';
+  },
+
+  async _chargerNomsConnexion() {
+    const box = document.getElementById('login-noms');
+    box.style.display = 'block';
+    const message = txt => {
+      box.innerHTML = '';
+      const p = document.createElement('p');
+      p.className = 'login-noms-msg';
+      p.textContent = txt;
+      box.appendChild(p);
+    };
+    if (!S.apiUrl) { message('URL API non configurée — cliquez sur ⚙ ci-dessous'); return; }
+    message('Chargement…');
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=auth_comptes', {}, 30000);
+      const d = await r.json();
+      if (d.status !== 'ok') throw new Error(d.error || 'erreur inconnue');
+      if (!d.comptes.length) { message('Aucun compte actif.'); return; }
+      box.innerHTML = '';
+      d.comptes.forEach(c => {
+        const b = document.createElement('button');
+        b.className = 'login-nom';
+        b.textContent = c.nom;
+        b.onclick = () => this._loginChoisir(c);
+        box.appendChild(b);
+      });
+    } catch(e) {
+      message('Liste indisponible : ' + e.message);
+      const b = document.createElement('button');
+      b.className = 'login-nom';
+      b.style.textAlign = 'center';
+      b.textContent = 'Réessayer';
+      b.onclick = () => this._chargerNomsConnexion();
+      box.appendChild(b);
+    }
+  },
+
+  _loginChoisir(c) {
+    try { localStorage.setItem('snt_compte', JSON.stringify({ id: c.id, nom: c.nom })); } catch {}
+    this._afficherConnexion();
+  },
+
+  /** « changer » : revient à la liste des noms ; pendant un changement de PIN : annule. */
+  _loginChoisirAutre() {
+    if (S.pinMode !== 'login') {
+      S.pinMode = 'login'; S._pinOld = null; S._pinNew = null;
+      document.getElementById('login-overlay').style.display = 'none';
+      return;
+    }
+    try { localStorage.removeItem('snt_compte'); } catch {}
+    this._afficherConnexion();
+  },
+
+  /** Soumet le PIN selon le mode courant (login / change). */
+  async _submitPin() {
+    if (!S.apiUrl) {
+      this._pinError('URL API non configurée — cliquez sur ⚙ ci-dessous');
+      return;
+    }
+    const pinSaisi = S.pinBuffer;
+    S._pinEnvoi = true;
+    document.getElementById('pin-error-msg').textContent = 'Vérification…';
+    try {
+      await this._traiterPin(pinSaisi);
+    } finally {
+      S._pinEnvoi = false;
+      S.pinBuffer = '';
+      this._updatePinDots();
+    }
+  },
+
+  async _envoyerAuth(compte, pin) {
+    const fd = new FormData();
+    fd.append('payload', JSON.stringify({ action:'auth', compte, pin }));
+    const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 30000);
+    return resp.json();
+  },
+
+  async _traiterPin(pinSaisi) {
+    const msg = document.getElementById('pin-error-msg');
+
+    if (S.pinMode === 'login') {
+      // ── Authentification ──────────────────────────────────────────────
+      const compte = this._loginCompte();
+      if (!compte) { this._afficherConnexion(); return; }
+      try {
+        const data = await this._envoyerAuth(compte.id, pinSaisi);
+        if (data.status !== 'ok') { this._pinError(data.error || 'Code PIN incorrect'); return; }
+        msg.textContent = '';
+        S.currentUser = data.user;
+        localStorage.setItem('snt_user', JSON.stringify(data.user));
+        const reauth = S._reauth;
+        S._reauth = false;
+        if (!reauth) {
+          S.view = 'home'; S.activity = null; // ← toujours démarrer à l'accueil
+          this._render();
+          this._prefetch();
+        }
+        if (data.user.pinAChanger) {
+          // Son PIN est déjà celui d'un collègue au kiosque : il en choisit un autre tout de suite.
+          S._pinOld = pinSaisi; S.pinMode = 'change_new';
+          this._afficherConnexion('Ce PIN est déjà pris par un collègue — choisissez un nouveau PIN');
+          return;
+        }
+        document.getElementById('login-overlay').style.display = 'none';
+        if (reauth) this.toast('✓ Reconnecté — relancez votre dernière action');
+      } catch(e) { this._pinError('Erreur de connexion — réessayez'); }
+
+    } else if (S.pinMode === 'change_old') {
+      // ── Vérification du PIN actuel avant changement ───────────────────
+      try {
+        const data = await this._envoyerAuth(S.currentUser?.compte, pinSaisi);
+        if (data.status !== 'ok') { this._pinError(data.error || 'Code PIN actuel incorrect'); return; }
+        S._pinOld = pinSaisi;
+        S.pinMode = 'change_new';
+        msg.textContent = '';
+        document.getElementById('pin-prompt').textContent = 'Nouveau code PIN (4 chiffres)';
+      } catch(e) { this._pinError('Erreur réseau — réessayez'); }
+
+    } else if (S.pinMode === 'change_new') {
+      // ── Saisie du nouveau PIN ─────────────────────────────────────────
+      S._pinNew = pinSaisi;
+      S.pinMode = 'change_confirm';
+      msg.textContent = '';
+      document.getElementById('pin-prompt').textContent = 'Confirmez le nouveau PIN';
+
+    } else if (S.pinMode === 'change_confirm') {
+      // ── Confirmation + envoi ──────────────────────────────────────────
+      if (pinSaisi !== S._pinNew) {
+        this._pinError('Les codes ne correspondent pas');
+        S.pinMode = 'change_new';
+        document.getElementById('pin-prompt').textContent = 'Nouveau code PIN (4 chiffres)';
+        return;
+      }
+      try {
+        const fd = new FormData();
+        // Le même PIN sert au kiosque de pointage.
+        fd.append('payload', JSON.stringify({ action:'change_pin', ancien: S._pinOld, nouveau: pinSaisi }));
+        const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 30000);
+        const data = await resp.json();
+        if (data.status === 'ok') {
+          S.pinMode = 'login'; S._pinOld = null; S._pinNew = null;
+          if (S.currentUser) { S.currentUser.pinAChanger = false; localStorage.setItem('snt_user', JSON.stringify(S.currentUser)); }
+          msg.textContent = '';
+          document.getElementById('login-overlay').style.display = 'none';
+          this.toast('✓ Code PIN modifié avec succès !');
+        } else {
+          // Nouveau PIN refusé (déjà pris…) : on en redemande un, l'ancien reste valable.
+          this._pinError(data.error || 'Erreur lors du changement');
+          S.pinMode = 'change_new'; S._pinNew = null;
+          document.getElementById('pin-prompt').textContent = 'Nouveau code PIN (4 chiffres)';
+        }
+      } catch(e) { this._pinError('Erreur réseau — réessayez'); }
+    }
+  },
+
+  /** Lance le flux de changement de PIN depuis les réglages. */
+  _showChangePin() {
+    S.pinMode = 'change_old'; S._pinOld = null; S._pinNew = null;
+    this._afficherConnexion('Entrez votre PIN actuel');
+  },
+
+  /** Déconnexion : vide la session locale et réaffiche l'écran de connexion (nom mémorisé). */
+  logout() {
+    localStorage.removeItem('snt_user');
+    S.currentUser = null; S.pinMode = 'login';
+    S.view = 'home'; S.activity = null; // ← retour accueil à la prochaine connexion
+    this._afficherConnexion();
+  },
+
+  /** Affiche/masque le panneau de config URL depuis l'overlay. */
+  _toggleLoginSetup() {
+    const p = document.getElementById('login-setup-panel');
+    p.style.display = p.style.display === 'block' ? 'none' : 'block';
+    if (p.style.display === 'block') document.getElementById('login-url-input').focus();
+  },
+
+  /** Sauvegarde l'URL depuis l'overlay de connexion. */
+  _saveLoginUrl() {
+    const val = document.getElementById('login-url-input').value.trim();
+    if (!val) return;
+    S.apiUrl = val;
+    localStorage.setItem(SK.API, val);
+    document.getElementById('login-setup-panel').style.display = 'none';
+    document.getElementById('pin-error-msg').textContent = '';
+    this.toast('✓ URL enregistrée');
+    this._applyEnvMode();
+  },
+
+  /**
+   * Détecte si l'API connectée est en mode TEST et applique l'indicateur visuel.
+   * ADR-007 : header rouge + badge "⚠ TEST" si env=test.
+   * Non-breaking : le GAS actuel ne répond pas à ?action=env → catch silencieux.
+   */
+  async _applyEnvMode() {
+    if (!S.apiUrl) return;
+    try {
+      const resp = await fetch(S.apiUrl + '?action=env',
+        { signal: AbortSignal.timeout(3000) });
+      const data = await resp.json();
+      if (data.env === 'test') {
+        document.body.classList.add('env-test');
+      } else {
+        document.body.classList.remove('env-test');
+      }
+    } catch(e) {
+      // GAS ne connaît pas ?action=env → silencieux, pas de changement visuel
+      document.body.classList.remove('env-test');
+    }
+  },
+
+  /* ─ Admin ─ */
+
+  goAdmin() {
+    S.view = 'admin'; S.activity = 'admin'; S.prevView = 'home';
+    this._render();
+    this.loadAdminUsers();
+    this._subscribeEmployesChanges();
+  },
+
+  // Écoute les changements de la table Supabase `employes` (rh-metal) pour
+  // rafraîchir la liste "salariés RH sans accès" sans reload manuel. Canal
+  // public au payload minimal {op,id} (voir migration employes_broadcast_change) —
+  // jamais de pin_hash/nfc_uid sur ce canal.
+  _subscribeEmployesChanges() {
+    if (S._employesChannel || !window.SupabaseDB) return;
+    S._employesChannel = window.SupabaseDB.channel('employes-changes')
+      .on('broadcast', { event: 'employes_changed' }, () => {
+        if (S.view === 'admin') this.loadAdminUsers();
+      })
+      .subscribe();
+  },
+
+  async _fetchRhEmployes() {
+    if (!window.SupabaseDB) return [];
+    // Annuaire minimal (id, nom, prénom, poste, a_fiche_rh) — la fiche RH complète
+    // (get_employes_rh : coordonnées perso, taux horaire…) est réservée aux admins rh-metal.
+    const { data, error } = await window.SupabaseDB.rpc('get_employes_annuaire');
+    if (error) { console.error('[Admin] get_employes_annuaire:', error); return []; }
+    return data || [];
+  },
+
+  _normalizeName(s) {
+    return String(s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  },
+
+  async loadAdminUsers() {
+    if (!S.apiUrl) return;
+    // Plusieurs chargements peuvent se chevaucher (action admin + broadcast employes_changed) :
+    // seul le plus récent a le droit d'afficher son résultat, ou son erreur.
+    const seq = S._adminUsersSeq = (S._adminUsersSeq || 0) + 1;
+    const loading = document.getElementById('admin-loading');
+    const list    = document.getElementById('admin-user-list');
+    if (loading) loading.style.display = 'block';
+    if (list)    list.innerHTML = '';
+    try {
+      const [gasData, employes] = await Promise.all([
+        _fetchWithTimeout(S.apiUrl + '?action=users_list', {}, 45000).then(r => r.json()),
+        this._fetchRhEmployes(),
+      ]);
+      if (seq !== S._adminUsersSeq) return;
+      if (gasData.status === 'ok') {
+        const users = gasData.users || [];
+        this._renderAdminUsers(users);
+        this._renderRhUnlinked(employes, users);
+      } else if (list) {
+        list.innerHTML = `<div class="card" style="border-left:4px solid #F87171;"><p style="color:#991B1B;">${gasData.error || 'Erreur'}</p></div>`;
+      }
+    } catch(e) {
+      if (seq !== S._adminUsersSeq) return;
+      if (list) list.innerHTML = `<div class="card" style="border-left:4px solid #F87171;"><p style="color:#991B1B;">Erreur réseau : ${e.message}</p></div>`;
+    } finally {
+      if (loading && seq === S._adminUsersSeq) loading.style.display = 'none';
+    }
+  },
+
+  _renderRhUnlinked(employes, gasUsers) {
+    const box  = document.getElementById('admin-rh-unlinked');
+    const list = document.getElementById('admin-rh-unlinked-list');
+    if (!box || !list) return;
+    const linkedIds   = new Set(gasUsers.map(u => u.employeId).filter(Boolean));
+    const linkedNames = new Set(gasUsers.map(u => this._normalizeName(u.prenom) + '|' + this._normalizeName(u.nom)));
+    const unlinked = (employes || []).filter(e => {
+      if (linkedIds.has(e.id)) return false;
+      const key = this._normalizeName(e.prenom) + '|' + this._normalizeName(e.nom);
+      return !linkedNames.has(key);
+    });
+    if (!unlinked.length) { box.style.display = 'none'; list.innerHTML = ''; return; }
+    box.style.display = 'block';
+    list.innerHTML = unlinked.map(e => `
+      <div class="card" style="margin-bottom:8px;display:flex;align-items:center;gap:12px;">
+        <div style="width:36px;height:36px;border-radius:50%;background:#F1F5F9;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">👤</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;color:#1E293B;">${e.prenom} ${e.nom}</div>
+          <div style="font-size:12px;color:#64748B;">${e.poste || 'Fiche RH'} — pas de compte sonotrad-pwa</div>
+        </div>
+        <button onclick="App._activateAccessFor('${e.id}','${String(e.prenom||'').replace(/'/g,"\\'")}','${String(e.nom||'').replace(/'/g,"\\'")}')"
+          style="background:var(--brand);color:white;border:none;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0;">
+          Activer l'accès
+        </button>
+      </div>`).join('');
+  },
+
+  _activateAccessFor(employeId, prenom, nom) {
+    this._showCreateUserForm();
+    S._pendingEmployeId = employeId;
+    const pEl = document.getElementById('nu-prenom');
+    const nEl = document.getElementById('nu-nom');
+    if (pEl) { pEl.value = prenom; pEl.readOnly = true; }
+    if (nEl) { nEl.value = nom;    nEl.readOnly = true; }
+    const badge = document.getElementById('nu-linked-badge');
+    if (badge) badge.style.display = 'block';
+  },
+
+  _escHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  },
+
+  /** Compte de la liste admin (par id) — pour les messages. */
+  _adminUser(id) {
+    return (S.adminUsers || []).find(u => u.id === id) || { prenom: '', nom: '' };
+  },
+
+  /** Envoie une action admin sur un compte ; recharge la liste dans tous les cas. */
+  async _adminAction(payload, messageOk) {
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify(payload));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 30000);
+      const data = await resp.json();
+      if (data.status === 'ok') { this.toast(messageOk); return true; }
+      this.toast('Erreur : ' + (data.error || 'inconnue'));
+      return false;
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+      return false;
+    } finally {
+      this.loadAdminUsers();
+    }
+  },
+
+  _renderAdminUsers(users) {
+    const list = document.getElementById('admin-user-list');
+    if (!list) return;
+    S.adminUsers = users;
+    if (!users.length) {
+      list.innerHTML = '<div class="card" style="text-align:center;color:#94A3B8;padding:32px 0;">Aucun utilisateur</div>';
+      return;
+    }
+    const e = s => this._escHtml(s);
+    list.innerHTML = users.map(u => {
+      const actif    = u.actif && u.present !== false;
+      const badgeBg  = actif ? '#D1FAE5' : '#FEE2E2';
+      const badgeCol = actif ? '#065F46'  : '#991B1B';
+      const badgeTxt = !u.actif ? 'Inactif' : (u.present === false ? 'Contrat terminé' : 'Actif');
+      const pinBadge = u.hasPIN
+        ? '<span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;padding:2px 6px;border-radius:10px;font-weight:600;">🔑 PIN défini</span>'
+        : '<span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:2px 6px;border-radius:10px;font-weight:600;">⚠ Pas de PIN</span>';
+      const bloque = u.bloqueJusqua && new Date(u.bloqueJusqua) > new Date();
+      const blocage = bloque
+        ? `<div style="margin-bottom:8px;padding:8px 10px;background:#FEF2F2;border:1.5px solid #FECACA;border-radius:8px;display:flex;align-items:center;gap:8px;">
+             <span style="flex:1;font-size:12px;color:#991B1B;font-weight:600;">🔒 Connexion bloquée jusqu'à ${new Date(u.bloqueJusqua).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })} (${u.echecsJour} erreur${u.echecsJour > 1 ? 's' : ''} aujourd'hui)</span>
+             <button onclick="App._unlockUser('${u.id}')" style="background:#991B1B;color:white;border:none;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">Débloquer</button>
+           </div>`
+        : (u.echecsJour ? `<div style="margin-bottom:8px;font-size:11px;color:#92400E;">${u.echecsJour} erreur${u.echecsJour > 1 ? 's' : ''} de PIN aujourd'hui</div>` : '');
+      return `
+        <div class="card" style="margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+            <div style="width:40px;height:40px;border-radius:50%;background:${actif ? 'var(--brand)' : '#94A3B8'};display:flex;align-items:center;justify-content:center;color:white;font-size:18px;flex-shrink:0;">👤</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:700;color:#1E293B;">${e(u.prenom)} ${e(u.nom)}</div>
+              <div style="font-size:12px;color:#64748B;margin-top:1px;">${u.role === 'admin' ? 'Administrateur' : 'Utilisateur'} · ${u.activites.map(e).join(', ')}${u.externe ? ' · accès externe' : (u.aFicheRh ? '' : ' · sans fiche RH')}</div>
+              <div style="margin-top:4px;">${pinBadge}</div>
+            </div>
+            <span style="background:${badgeBg};color:${badgeCol};font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;flex-shrink:0;">${badgeTxt}</span>
+          </div>
+          ${blocage}
+          <!-- Rôle -->
+          <div style="margin-bottom:8px;">
+            <select onchange="App._updateUserRole('${u.id}',this.value)"
+              style="width:100%;padding:7px 10px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:12px;font-weight:600;color:#475569;background:#F8FAFC;cursor:pointer;">
+              <option value="utilisateur" ${u.role!=='admin' ?'selected':''}>👤 Utilisateur</option>
+              <option value="admin"       ${u.role==='admin' ?'selected':''}>⚙️ Administrateur</option>
+            </select>
+          </div>
+          <!-- Activités éditables -->
+          <div style="margin-bottom:8px;padding:8px 10px;background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:8px;">
+            <div style="font-size:11px;font-weight:600;color:#94A3B8;margin-bottom:6px;">ACTIVITÉS</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;">
+              ${['loxam','bcb','agorastore','stockage','lvu'].map(a => `
+                <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">
+                  <input type="checkbox" id="uact-${u.id}-${a}" value="${a}"
+                    ${u.activites.includes(a)?'checked':''}
+                    onchange="App._updateUserActivites('${u.id}')">
+                  ${a.charAt(0).toUpperCase()+a.slice(1)}
+                </label>`).join('')}
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button onclick="App._showResetPin('${u.id}')"
+              style="flex:1;background:#F8FAFC;border:1.5px solid #E2E8F0;color:#475569;padding:8px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
+              🔑 ${u.hasPIN ? 'Reset PIN' : 'Définir PIN'}
+            </button>
+            <button onclick="App._toggleUser('${u.id}',${!u.actif})"
+              style="background:${u.actif ? '#FEF2F2' : '#F0FDF4'};border:1.5px solid ${u.actif ? '#FECACA' : '#86EFAC'};color:${u.actif ? '#991B1B' : '#14532D'};padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
+              ${u.actif ? 'Désactiver' : 'Réactiver'}
+            </button>
+            <button onclick="App._deleteUser('${u.id}')"
+              style="background:#FEF2F2;border:1.5px solid #FECACA;color:#991B1B;padding:8px 10px;border-radius:8px;font-size:14px;cursor:pointer;" title="Supprimer ce compte">
+              🗑
+            </button>
+          </div>
+          <!-- Zone reset PIN inline (masquée par défaut) -->
+          <div id="reset-pin-${u.id}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid #F1F5F9;">
+            <label class="label-sm">Nouveau PIN (4 chiffres) — le même sert au kiosque</label>
+            <div style="display:flex;gap:8px;margin-top:4px;">
+              <input type="text" inputmode="numeric" maxlength="4" id="rpin-${u.id}" class="input-field"
+                placeholder="ex : 3947"
+                style="margin:0;flex:1;letter-spacing:4px;font-size:18px;font-weight:600;">
+              <button onclick="App._applyResetPin('${u.id}')"
+                style="background:var(--brand);color:white;border:none;padding:0 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;">
+                OK
+              </button>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  },
+
+  _showCreateUserForm() {
+    document.getElementById('admin-create-form').style.display = 'block';
+    document.getElementById('nu-prenom').focus();
+  },
+  _hideCreateUserForm() {
+    document.getElementById('admin-create-form').style.display = 'none';
+    S._pendingEmployeId = null;
+    ['nu-prenom','nu-nom','nu-pin'].forEach(id => { const el = document.getElementById(id); if (el) { el.value = ''; el.readOnly = false; } });
+    const badge = document.getElementById('nu-linked-badge');
+    if (badge) badge.style.display = 'none';
+    ['loxam','bcb','agorastore','stockage','lvu'].forEach(a => {
+      const el = document.getElementById('nu-act-' + a);
+      if (el) el.checked = (a === 'loxam'); // reset : loxam coché par défaut
+    });
+  },
+
+  async _createUser() {
+    const btn = document.querySelector('#admin-create-form .btn-primary');
+    if (btn && btn.disabled) return; // protection double-clic
+    const prenom = document.getElementById('nu-prenom').value.trim();
+    const nom    = document.getElementById('nu-nom').value.trim();
+    const role   = document.getElementById('nu-role').value;
+    const pin    = document.getElementById('nu-pin').value.trim();
+    const employeId = S._pendingEmployeId || '';
+    const activites = ['loxam','bcb','agorastore','stockage','lvu'].filter(a => {
+      const el = document.getElementById('nu-act-' + a); return el && el.checked;
+    });
+
+    if (!prenom || !nom)        { this.toast('Prénom et nom requis'); return; }
+    if (!/^[0-9]{4}$/.test(pin)) { this.toast('PIN invalide — 4 chiffres requis'); return; }
+    if (!activites.length)      { this.toast('Sélectionne au moins une activité'); return; }
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Création...'; }
+    // Le backend crée/relie la fiche Supabase employes ; le PIN sert aussi au kiosque.
+    const ok = await this._adminAction({ action:'create_user', prenom, nom, role, activites, pin, employeId }, `✓ ${prenom} ${nom} créé !`);
+    if (ok) this._hideCreateUserForm();
+    if (btn) { btn.disabled = false; btn.textContent = 'Créer le compte'; }
+  },
+
+  _showResetPin(id) {
+    const zone = document.getElementById(`reset-pin-${id}`);
+    if (!zone) return;
+    const isVisible = zone.style.display === 'block';
+    // Fermer toutes les autres zones ouvertes
+    document.querySelectorAll('[id^="reset-pin-"]').forEach(z => z.style.display = 'none');
+    zone.style.display = isVisible ? 'none' : 'block';
+    if (!isVisible) document.getElementById(`rpin-${id}`)?.focus();
+  },
+
+  async _applyResetPin(id) {
+    const pin = (document.getElementById(`rpin-${id}`)?.value || '').trim();
+    if (!/^[0-9]{4}$/.test(pin)) { this.toast('PIN invalide — 4 chiffres requis'); return; }
+    await this._adminAction({ action:'admin_reset_pin', id, pin }, `✓ PIN de ${this._adminUser(id).prenom} réinitialisé`);
+  },
+
+  _toggleUser(id, actif) {
+    const p = this._adminUser(id).prenom;
+    this._adminAction({ action:'toggle_user', id, actif }, actif ? `✓ ${p} réactivé` : `${p} désactivé`);
+  },
+
+  _updateUserActivites(id) {
+    const activites = ['loxam','bcb','agorastore','stockage','lvu'].filter(a => {
+      const el = document.getElementById(`uact-${id}-${a}`);
+      return el && el.checked;
+    });
+    if (!activites.length) { this.toast('Au moins une activité requise'); this.loadAdminUsers(); return; }
+    this._adminAction({ action:'update_user_activites', id, activites }, `✓ Activités de ${this._adminUser(id).prenom} mises à jour`);
+  },
+
+  _updateUserRole(id, role) {
+    this._adminAction({ action:'update_user_role', id, role }, `✓ Rôle de ${this._adminUser(id).prenom} mis à jour`);
+  },
+
+  _unlockUser(id) {
+    this._adminAction({ action:'unlock_user', id }, `✓ ${this._adminUser(id).prenom} peut de nouveau se connecter`);
+  },
+
+  _deleteUser(id) {
+    const u = this._adminUser(id);
+    if (!window.confirm(`Supprimer définitivement le compte de ${u.prenom} ${u.nom} ?\nCette action est irréversible.`)) return;
+    // Le backend retire aussi la fiche Supabase d'un compte sans fiche RH.
+    this._adminAction({ action:'delete_user', id }, `✓ ${u.prenom} ${u.nom} supprimé`);
+  },
+
+  /* ─ Stockage ─ */
+  async loadStockCatalog() {
+    if (!S.apiUrl) return;
+    document.getElementById('stock-loading').style.display = 'block';
+    document.getElementById('stock-list').innerHTML = '';
+    try {
+      // Catalogue + préférences + mouvements + analytics en parallèle
+      const tasks = [
+        _fetchWithTimeout(S.apiUrl + '?action=stock_catalog',            {}, 40000),
+        _fetchWithTimeout(S.apiUrl + '?action=stock_prefs',              {}, 10000),
+        _fetchWithTimeout(S.apiUrl + '?action=stock_mouvements_summary', {}, 15000),
+      ];
+      if (!S.analyticsLoaded) {
+        tasks.push(_fetchWithTimeout(S.apiUrl + '?action=stock_analytics', {}, 20000));
+      }
+      const [catResp, prefsResp, deltaResp, anaResp] = await Promise.all(tasks);
+      const cat    = await catResp.json();
+      const prefs  = await prefsResp.json();
+      const deltas = await deltaResp.json();
+
+      if (cat.status === 'ok') {
+        S.stockData     = cat.data || [];
+        S.stockFamilles = cat.familles || [];
+        S.stockLoaded   = true;
+        S.catalogLoaded = true;
+      }
+      if (prefs.status === 'ok') {
+        S.stockPrefs = new Set(prefs.prefs?.relevant || []);
+      }
+      if (deltas.status === 'ok') {
+        S.stockDeltas = deltas.summary || {};
+      }
+      if (anaResp) {
+        const ana = await anaResp.json();
+        if (ana.status === 'ok') { S.stockAnalytics = ana.analytics || {}; S.analyticsLoaded = true; }
+      }
+    } catch(e) { this.toast('Erreur chargement catalogue'); }
+    finally { document.getElementById('stock-loading').style.display = 'none'; }
+
+    this._renderStockFamilleFilters();
+    this._renderStockList();
+  },
+
+  async refreshStockQty() {
+    if (!S.apiUrl) return;
+    const btn = document.getElementById('stock-refresh-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Chargement…'; }
+    try {
+      const [catResp, deltaResp] = await Promise.all([
+        _fetchWithTimeout(S.apiUrl + '?action=stock_catalog',            {}, 40000),
+        _fetchWithTimeout(S.apiUrl + '?action=stock_mouvements_summary', {}, 15000),
+      ]);
+      const cat    = await catResp.json();
+      const deltas = await deltaResp.json();
+      if (cat.status === 'ok') {
+        S.stockData     = cat.data || [];
+        S.stockFamilles = cat.familles || [];
+        S.stockLoaded   = true;
+      }
+      if (deltas.status === 'ok') S.stockDeltas = deltas.summary || {};
+      S.analyticsLoaded = false;
+      S.dashboardLoaded = false;
+      this._renderStockList();
+      this.toast('✓ Quantités mises à jour');
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '🔄 Actualiser'; }
+    }
+  },
+
+  setStockSearch(val) {
+    S.stockFilter.search = val.toLowerCase();
+    this._renderStockList();
+  },
+
+  setStockFamille(val) {
+    S.stockFilter.famille = (val === '' || S.stockFilter.famille === val) ? '' : val;
+    this._renderStockFamilleFilters();
+    this._renderStockList();
+  },
+
+  _saveStockFilterPrefs() {
+    try { localStorage.setItem(SK.STOCK_FILTER, JSON.stringify({ myRefs: S.stockFilter.myRefs, alerts: S.stockFilter.alerts })); } catch(e) {}
+  },
+
+  toggleStockMyRefs() {
+    S.stockFilter.myRefs = !S.stockFilter.myRefs;
+    const btn = document.getElementById('stock-myrefs-btn');
+    if (btn) {
+      btn.style.background    = S.stockFilter.myRefs ? 'var(--accent)' : '#F1F5F9';
+      btn.style.borderColor   = S.stockFilter.myRefs ? 'var(--accent)' : '#CBD5E1';
+      btn.style.color         = S.stockFilter.myRefs ? 'white' : '#64748B';
+      btn.textContent         = S.stockFilter.myRefs ? '★ Mes références' : '☆ Mes références';
+    }
+    this._saveStockFilterPrefs();
+    this._renderStockList();
+  },
+
+  toggleStockAlerts() {
+    S.stockFilter.alerts = !S.stockFilter.alerts;
+    const btn = document.getElementById('stock-alerts-btn');
+    if (btn) {
+      btn.style.background  = S.stockFilter.alerts ? '#FEF3C7' : '#F1F5F9';
+      btn.style.borderColor = S.stockFilter.alerts ? '#D97706' : '#CBD5E1';
+      btn.style.color       = S.stockFilter.alerts ? '#D97706' : '#64748B';
+    }
+    this._saveStockFilterPrefs();
+    this._renderStockList();
+  },
+
+  async toggleStockPref(ref) {
+    if (S.stockPrefs.has(ref)) { S.stockPrefs.delete(ref); }
+    else                        { S.stockPrefs.add(ref);    }
+    this._renderStockList(); // re-render immédiat
+    // Sauvegarde en fond
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action:'save_stock_prefs', relevant: [...S.stockPrefs] }));
+      await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+    } catch(e) { /* silencieux — sauvegardé localement de toute façon */ }
+  },
+
+  _renderStockFamilleFilters() {
+    const wrap = document.getElementById('stock-famille-filters');
+    if (!wrap) return;
+    const cur = S.stockFilter.famille;
+    // Synchronise l'état visuel des boutons toggle depuis S.stockFilter (utile au 1er rendu)
+    const myBtn = document.getElementById('stock-myrefs-btn');
+    if (myBtn) {
+      myBtn.style.background  = S.stockFilter.myRefs ? 'var(--accent)' : '#F1F5F9';
+      myBtn.style.borderColor = S.stockFilter.myRefs ? 'var(--accent)' : '#CBD5E1';
+      myBtn.style.color       = S.stockFilter.myRefs ? 'white' : '#64748B';
+      myBtn.textContent       = S.stockFilter.myRefs ? '★ Mes références' : '☆ Mes références';
+    }
+    const alBtn = document.getElementById('stock-alerts-btn');
+    if (alBtn) {
+      alBtn.style.background  = S.stockFilter.alerts ? '#FEF3C7' : '#F1F5F9';
+      alBtn.style.borderColor = S.stockFilter.alerts ? '#D97706' : '#CBD5E1';
+      alBtn.style.color       = S.stockFilter.alerts ? '#D97706' : '#64748B';
+    }
+    // Bouton "Toutes"
+    const allBtn = document.getElementById('stock-famille-all');
+    if (allBtn) allBtn.className = 'stock-famille-btn' + (cur === '' ? ' active' : '');
+    // Boutons par famille
+    wrap.innerHTML = S.stockFamilles
+      .filter(Boolean)
+      .map(f => `<button class="stock-famille-btn${f===cur?' active':''}" onclick="App.setStockFamille('${f.replace(/'/g,"\\'")}')">${f}</button>`)
+      .join('');
+  },
+
+  _renderStockList() {
+    const list = document.getElementById('stock-list');
+    if (!list) return;
+
+    const { search, famille, myRefs, alerts } = S.stockFilter;
+    let items = S.stockData;
+
+    if (myRefs)   items = items.filter(d => S.stockPrefs.has(d.ref));
+    if (alerts)   items = items.filter(d => {
+      if (!d.seuil || d.seuil <= 0) return false;
+      const qty = this._calcStockActuel(d.ref, d.qte);
+      return qty !== null && qty <= d.seuil;
+    });
+    if (famille)  items = items.filter(d => d.famille === famille);
+    if (search)   items = items.filter(d =>
+      d.ref.toLowerCase().includes(search) ||
+      d.description.toLowerCase().includes(search) ||
+      d.fournisseur.toLowerCase().includes(search)
+    );
+
+    const lbl = document.getElementById('stock-count-label');
+    if (lbl) lbl.textContent = `${items.length} référence${items.length!==1?'s':''} affichée${items.length!==1?'s':''}${S.stockData.length ? ' sur ' + S.stockData.length : ''}`;
+
+    if (!items.length) {
+      list.innerHTML = `<div style="text-align:center;padding:40px 0;color:#94A3B8;">
+        <div style="font-size:36px;margin-bottom:10px;">📭</div>
+        <p style="font-size:14px;">${S.stockData.length ? 'Aucune référence ne correspond aux filtres' : 'Catalogue non chargé'}</p>
+      </div>`;
+      return;
+    }
+
+    list.innerHTML = items.map(d => {
+      const isRel      = S.stockPrefs.has(d.ref);
+      const calcQty    = this._calcStockActuel(d.ref, d.qte);
+      const qtyTxt     = calcQty !== null ? `📦 ${calcQty}${d.seuil !== null ? '/' + d.seuil : ''}` : '📦 —';
+      const hasDelta   = !!S.stockDeltas[d.ref];
+      const calcStatus = d.seuil !== null && calcQty !== null
+        ? (calcQty >= d.seuil ? 'ok' : 'low')
+        : (calcQty !== null ? 'ok' : 'unknown');
+      const qtyClass = calcStatus;
+      const cardCls  = `stock-card${isRel?' relevant':''}${calcStatus==='low'?' stock-low':''}${hasDelta?' has-delta':''}`;
+
+      const desc     = d.description.length > 90 ? d.description.substring(0,88)+'…' : d.description;
+      const refSafe  = d.ref.replace(/'/g, "\\'");
+      const refEsc   = CSS.escape(d.ref);
+
+      // Analytics Layer 2
+      const ana      = S.stockAnalytics[d.ref];
+      const days     = this._calcDaysToRupture(d.ref, calcQty);
+      const trendArrow = ana?.trend === 'up'   ? '↑'
+                       : ana?.trend === 'down' ? '↓' : '';
+      const trendCls   = ana?.trend || 'stable';
+      const ruptureHtml = (days !== null && calcQty !== null)
+        ? (days <= 0
+            ? `<span class="sc-rupture">⛔ Rupture</span>`
+            : `<span class="sc-rupture ok">~${days}j</span>`)
+        : '';
+
+      let thumbHtml = '';
+      if (S.stockShowThumbs) {
+        if (S.stockPhotos[d.ref]) {
+          thumbHtml = `<img class="sc-thumb" data-ref="${d.ref.replace(/"/g,'&quot;')}" src="" alt="📷">`;
+        } else {
+          thumbHtml = `<div class="sc-thumb-ph" title="Aucune photo">📷</div>`;
+        }
+      }
+
+      const batchQty = S.batchItems[d.ref] || 0;
+      const batchCls = batchQty > 0 && S.batchMvType ? ' in-' + S.batchMvType : '';
+      const fullCardCls = cardCls + batchCls;
+
+      return `<div class="${fullCardCls}" id="scard-${refEsc}" style="padding:0;display:flex;align-items:stretch;">
+        <div onclick="App.openStockDetail('${refSafe}')" style="flex:1;min-width:0;cursor:pointer;padding:8px 6px 8px 10px;">
+          ${S.stockShowThumbs ? `<div style="float:left;margin-right:8px;">${thumbHtml}</div>` : ''}
+          <div class="sc-head">
+            <span class="sc-star${isRel?' on':''}" onclick="event.stopPropagation();App.toggleStockPref('${refSafe}')">${isRel?'★':'☆'}</span>
+            <span class="sc-ref">${d.ref}</span>
+            ${trendArrow ? `<span class="sc-trend ${trendCls}">${trendArrow}</span>` : ''}
+            <span class="sc-qty ${qtyClass}">${qtyTxt}</span>
+            <button onclick="event.stopPropagation();App.openSeuilModal('${refSafe}')" class="sc-seuil-edit" title="Modifier seuil d'alerte">✏️</button>
+          </div>
+          <div class="sc-desc">${desc}</div>
+          <div class="sc-foot">
+            ${d.famille     ? `<span class="sc-bdg fam">${d.famille}</span>` : ''}
+            ${d.fournisseur ? `<span class="sc-bdg fou">${d.fournisseur}</span>` : ''}
+            ${d.refFourn    ? `<span class="sc-rfourn">${d.refFourn}</span>` : ''}
+            ${ruptureHtml}
+          </div>
+        </div>
+        <div style="flex-shrink:0;display:flex;align-items:center;padding:8px 10px 8px 8px;border-left:1.5px solid #F1F5F9;">
+          <div class="batch-stepper">
+            <button class="batch-minus" onclick="App.stepBatchQty('${refSafe}',-1)">−</button>
+            <input class="batch-qty-input" type="number" id="bqi-${refEsc}" min="0"
+              value="${batchQty || ''}" placeholder="0"
+              oninput="App.setBatchQtyInput('${refSafe}',this.value)"
+              onclick="this.select()">
+            <button class="batch-plus" onclick="App.stepBatchQty('${refSafe}',1)">+</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+    if (S.stockShowThumbs) this._loadVisibleThumbnails();
+  },
+
+  /* ─ Historique mouvements ─ */
+
+  async loadStockHistory(force = false) {
+    if (!force && S.historyLoaded) { this._renderHistoryList(); return; }
+    if (!force && S.historyLoading) return;
+    if (!S.apiUrl) return;
+    S.historyLoading = true;
+    const loading = document.getElementById('hist-loading');
+    const list    = document.getElementById('shist-list');
+    if (loading) loading.style.display = 'block';
+    if (list)    list.innerHTML = '';
+    try {
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=stock_recent_movements&limit=9999', {}, 30000);
+      const data = await r.json();
+      S.historyData   = (data.status === 'ok' ? data.movements : []) || [];
+      S.historyOps    = this._groupMovements(S.historyData);
+      S.historyLoaded = true;
+      this._buildPoseHistory();
+      if (S.view === 'stock-history') this._renderHistoryList();
+      if (S.depsLoaded && S.view === 'departures') this._renderDepList();
+    } catch(e) {
+      if (list) list.innerHTML = `<div class="card" style="border-left:4px solid #F87171;color:#991B1B;font-size:13px;">Impossible de charger l'historique : ${e.message}</div>`;
+    } finally {
+      S.historyLoading = false;
+      if (loading) loading.style.display = 'none';
+    }
+  },
+
+  _groupMovements(movs) {
+    const map = new Map();
+    movs.forEach(m => {
+      const ts  = Math.floor(new Date(m.date).getTime() / 2000); // fenêtre 2s
+      const key = ts + '|' + m.type + '|' + (m.note || '');
+      if (!map.has(key)) map.set(key, { key, date: m.date, type: m.type, note: m.note || '', items: [] });
+      map.get(key).items.push(m);
+    });
+    return [...map.values()]
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
+  },
+
+  _opDisplayType(type, note) {
+    if (type === 'sortie' && note.startsWith('[Pose ')) return 'pose';
+    return type;
+  },
+
+  _opRef(note, displayType) {
+    if (displayType === 'pose') {
+      const code  = (note.match(/\[Pose\s+(\S+)\]/) || [])[1] || '';
+      const extra = note.replace(/^\[Pose\s+\S+\]\s*/, '').trim();
+      return extra || code;
+    }
+    return note || '—';
+  },
+
+  _poseCode(note) {
+    return (note.match(/\[Pose\s+(\S+)\]/) || [])[1] || '';
+  },
+
+  _consolidatePoseOps(ops) {
+    const nonPose = [];
+    const poseMap = {};
+    ops.forEach(op => {
+      if (this._opDisplayType(op.type, op.note) !== 'pose') { nonPose.push(op); return; }
+      const code = this._poseCode(op.note);
+      if (!code) { nonPose.push(op); return; }
+      if (!poseMap[code]) {
+        poseMap[code] = { type: op.type, note: op.note, key: op.key, date: op.date,
+                          items: op.items.map(i => Object.assign({}, i)), _consolidated: true };
+      } else {
+        op.items.forEach(item => {
+          const ex = poseMap[code].items.find(i => i.ref === item.ref);
+          if (ex) ex.qty = (Number(ex.qty) || 0) + (Number(item.qty) || 0);
+          else poseMap[code].items.push(Object.assign({}, item));
+        });
+        if (new Date(op.date) > new Date(poseMap[code].date)) {
+          poseMap[code].date = op.date;
+          poseMap[code].key  = op.key;
+          poseMap[code].note = op.note;
+        }
+      }
+    });
+    return nonPose.concat(Object.values(poseMap))
+                  .sort((a, b) => new Date(b.date) - new Date(a.date));
+  },
+
+  _buildPoseHistory() {
+    S.poseHistory = new Set();
+    S.historyData.forEach(m => {
+      if (m.type === 'sortie' && m.note && m.note.startsWith('[Pose ')) {
+        const code = (m.note.match(/\[Pose\s+(\S+)\]/) || [])[1] || '';
+        if (code) S.poseHistory.add(code);
+      }
+    });
+  },
+
+  setHistFilter(type) {
+    S.histFilter.type = type;
+    document.querySelectorAll('.hist-type-btn').forEach(btn => {
+      const active = btn.dataset.htype === type;
+      btn.style.background  = active ? 'var(--brand)' : '#F8FAFC';
+      btn.style.borderColor = active ? 'var(--brand)' : '#E2E8F0';
+      btn.style.color       = active ? 'white'        : '#64748B';
+    });
+    this._renderHistoryList();
+  },
+
+  setHistSearch(val) {
+    S.histFilter.search = val.toLowerCase().trim();
+    this._renderHistoryList();
+  },
+
+  _renderHistoryList() {
+    const list = document.getElementById('shist-list');
+    if (!list) return;
+    const { type: fType, search } = S.histFilter;
+
+    let ops = S.historyOps;
+
+    if (fType) {
+      ops = ops.filter(op => this._opDisplayType(op.type, op.note) === fType);
+    }
+    if (search) {
+      ops = ops.filter(op => {
+        const dt = this._opDisplayType(op.type, op.note);
+        if (this._opRef(op.note, dt).toLowerCase().includes(search)) return true;
+        return op.items.some(m =>
+          m.ref.toLowerCase().includes(search) ||
+          (S.stockData.find(d => d.ref === m.ref)?.description || '').toLowerCase().includes(search)
+        );
+      });
+    }
+
+    // Consolider les poses : une seule ligne par module (toutes sessions fusionnées)
+    ops = this._consolidatePoseOps(ops);
+
+    // KPIs
+    const totalOps   = ops.length;
+    const totalLines = ops.reduce((s, op) => s + op.items.length, 0);
+    const lastLiv    = S.historyOps.find(op => op.type === 'entrée');
+    const lastLivStr = lastLiv ? new Date(lastLiv.date).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit' }) : '—';
+    const kpiOps   = document.getElementById('hist-kpi-ops');
+    const kpiLines = document.getElementById('hist-kpi-lines');
+    const kpiLiv   = document.getElementById('hist-kpi-lastliv');
+    if (kpiOps)   kpiOps.textContent   = totalOps;
+    if (kpiLines) kpiLines.textContent = totalLines;
+    if (kpiLiv)   kpiLiv.textContent   = lastLivStr;
+
+    const lbl = document.getElementById('hist-count-label');
+    if (lbl) lbl.textContent = `${ops.length} opération${ops.length !== 1 ? 's' : ''}${S.historyOps.length ? ' sur ' + S.historyOps.length : ''}`;
+
+    if (!ops.length) {
+      list.innerHTML = `<div style="text-align:center;padding:40px 0;color:#94A3B8;"><div style="font-size:32px;margin-bottom:8px;">📭</div><p style="font-size:13px;">Aucune opération trouvée</p></div>`;
+      return;
+    }
+
+    list.innerHTML = ops.map((op, idx) => {
+      const dt       = this._opDisplayType(op.type, op.note);
+      const ref      = this._opRef(op.note, dt);
+      const dateStr  = new Date(op.date).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'2-digit' });
+      const timeStr  = new Date(op.date).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+      const nRefs    = op.items.length;
+      const nUnits   = op.items.reduce((s, m) => s + (Number(m.qty) || 0), 0);
+      const typeLabels = { entrée:'Entrée', sortie:'Sortie', pose:'Pose', inventaire:'Inventaire' };
+      const lvLink   = S.lvLinks[op.key];
+      const lvBadge  = lvLink
+        ? `<span style="margin-left:6px;font-size:10px;font-weight:600;background:#DBEAFE;color:#1D4ED8;padding:2px 7px;border-radius:10px;white-space:nowrap;">📄 LV N° ${lvLink.display || lvLink.numero}</span>`
+        : '';
+      const lvBtn    = (op.type === 'sortie' && dt !== 'pose' && !lvLink)
+        ? `<button onclick="App.createLvFromOp('${encodeURIComponent(op.key)}')"
+            style="margin-top:8px;padding:6px 12px;background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;width:100%;">
+            📄 Créer LV / CMR</button>`
+        : '';
+      const poseBtn  = (() => {
+        if (dt !== 'pose') return '';
+        const pc = this._poseCode(op.note);
+        if (!pc) return '';
+        const dep  = S.depsLoaded ? S.deps.find(d => (d.code||'').toUpperCase() === pc.toUpperCase()) : null;
+        const pcs  = pc.replace(/'/g,"&#39;");
+        const mods = (dep?.codeModule||'').replace(/'/g,"&#39;");
+        const chs  = (dep?.chantier||'').replace(/'/g,"&#39;");
+        return `<button onclick="App.openPoseModal('${pcs}','${mods}','${chs}')"
+          style="margin-top:8px;padding:6px 12px;background:#FFF7ED;color:#C2410C;border:1.5px solid #FED7AA;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;width:100%;">
+          🔧 Gérer les pièces posées</button>`;
+      })();
+      return `<div class="hist-op-card t-${dt}">
+        <div class="hist-op-header" onclick="App.toggleHistOp(${idx})">
+          <span class="hist-badge ${dt}">${typeLabels[dt] || dt}</span>
+          <span class="hist-op-ref">${ref}</span>
+          ${lvBadge}
+          <span class="hist-op-date">${dateStr} ${timeStr}</span>
+          <span class="hist-op-meta">${nRefs}r · ${nUnits}u</span>
+          <span class="hist-op-chevron" id="hist-chev-${idx}">›</span>
+        </div>
+        <div class="hist-op-body" id="hist-body-${idx}">
+          ${lvBtn}${poseBtn}
+          <table class="hist-detail-table">
+            <thead><tr><th>Réf.</th><th>Désignation</th><th style="text-align:right;">Qté</th></tr></thead>
+            <tbody>${op.items.map(m => {
+              const desc = S.stockData.find(d => d.ref === m.ref)?.description || '';
+              return `<tr><td><span class="hist-detail-ref">${m.ref}</span></td><td>${desc}</td><td style="text-align:right;font-weight:700;color:#1E293B;">${m.qty}</td></tr>`;
+            }).join('')}</tbody>
+          </table>
+          ${op.note && dt !== 'pose' ? `<div style="margin-top:6px;font-size:10px;color:#94A3B8;">Note : ${op.note}</div>` : ''}
+          ${op.items[0]?.user ? `<div style="margin-top:2px;font-size:10px;color:#94A3B8;">Par : ${op.items[0].user}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  toggleHistOp(idx) {
+    const body = document.getElementById('hist-body-' + idx);
+    const chev = document.getElementById('hist-chev-' + idx);
+    if (!body) return;
+    const open = body.classList.toggle('open');
+    if (chev) chev.classList.toggle('open', open);
+  },
+
+  /* ─ Historique : sous-onglets ─ */
+
+  switchHistTab(tab) {
+    ['ops', 'prod', 'bilan'].forEach(t => {
+      document.getElementById('shtab-' + t)?.classList.toggle('active', t === tab);
+      const pane = document.getElementById('shist-pane-' + t);
+      if (pane) pane.style.display = t === tab ? 'block' : 'none';
+    });
+    const opsFilters = document.getElementById('shist-ops-filters');
+    if (opsFilters) opsFilters.style.display = tab === 'ops' ? '' : 'none';
+    if (tab === 'prod'  && S.historyLoaded) { this._renderHistProd(); }
+    if (tab === 'bilan' && S.historyLoaded) { this._renderHistBilan(); }
+  },
+
+  /* ─ Historique : onglet "Par produit" ─ */
+
+  _renderHistProd() {
+    this._renderTopConsumed();
+    this._renderProdChips('');
+    const det = document.getElementById('shist-prod-detail');
+    if (det) det.style.display = 'none';
+    S.selHistProd = null;
+  },
+
+  _renderTopConsumed() {
+    const cmap = {}, dmap = {};
+    S.historyOps.forEach(op => {
+      if (op.type === 'sortie') {
+        op.items.forEach(m => {
+          cmap[m.ref] = (cmap[m.ref] || 0) + (Number(m.qty) || 0);
+          dmap[m.ref] = S.stockData.find(d => d.ref === m.ref)?.description || m.ref;
+        });
+      }
+    });
+    const top = Object.entries(cmap)
+      .map(([ref, qty]) => ({ ref, des: dmap[ref], qty }))
+      .sort((a, b) => b.qty - a.qty).slice(0, 7);
+    const maxQ = top[0]?.qty || 1;
+    const barColors = ['#1A5276','#1D9E75','#D85A30','#3266AD','#BA7517','#0F6E56','#993C1D'];
+    const el = document.getElementById('shist-top-list');
+    if (!el) return;
+    if (!top.length) {
+      el.innerHTML = '<p style="text-align:center;padding:14px 0;color:#94A3B8;font-size:12px;">Aucune sortie enregistrée</p>';
+      return;
+    }
+    el.innerHTML = top.map((p, i) => {
+      const refSafe = p.ref.replace(/'/g, "\\'");
+      const pct = Math.round(p.qty / maxQ * 100);
+      return `<div class="shist-top-row" onclick="App.selectHistProd('${refSafe}')">
+        <span style="font-size:10px;color:#94A3B8;min-width:14px;text-align:right;font-weight:600;">${i + 1}</span>
+        <span style="font-family:'Courier New',monospace;font-size:11px;min-width:80px;white-space:nowrap;color:var(--brand);">${p.ref}</span>
+        <div class="shist-bar-bg"><div class="shist-bar-fill" style="width:${pct}%;background:${barColors[i % barColors.length]};"></div></div>
+        <span style="font-size:11px;color:#64748B;min-width:36px;text-align:right;">${p.qty}&nbsp;u.</span>
+      </div>`;
+    }).join('');
+  },
+
+  _renderProdChips(q) {
+    const query = (q || '').toLowerCase();
+    const refs = new Set();
+    S.historyOps.forEach(op => op.items.forEach(m => refs.add(m.ref)));
+    let prods = [...refs].map(ref => ({
+      ref,
+      des: S.stockData.find(d => d.ref === ref)?.description || ''
+    })).sort((a, b) => a.ref.localeCompare(b.ref));
+    if (query) prods = prods.filter(p =>
+      p.ref.toLowerCase().includes(query) || p.des.toLowerCase().includes(query)
+    );
+    const el = document.getElementById('shist-chips');
+    if (!el) return;
+    el.innerHTML = prods.map(p => {
+      const refSafe = p.ref.replace(/'/g, "\\'");
+      const sel = S.selHistProd === p.ref ? ' sel' : '';
+      return `<div class="shist-chip${sel}" onclick="App.selectHistProd('${refSafe}')">${p.ref}</div>`;
+    }).join('');
+  },
+
+  selectHistProd(ref) {
+    S.selHistProd = ref;
+    this._renderProdChips(document.getElementById('shist-prod-search')?.value || '');
+    const sd  = S.stockData.find(d => d.ref === ref);
+    const des = sd?.description || ref;
+    const tl  = this._prodTimeline(ref);
+    const stock = sd?.stock ?? (tl.length ? tl[tl.length - 1].run : '—');
+    const conso = this._prodConso(ref);
+    const vals  = tl.map(t => t.run);
+    const dates = tl.map(t => t.date);
+    const typeLabels = { entrée:'Entrée', sortie:'Sortie', pose:'Pose', inventaire:'Inventaire' };
+    document.getElementById('spd-ref').textContent   = ref;
+    document.getElementById('spd-des').textContent   = des;
+    document.getElementById('spd-stock').textContent = stock + ' u.';
+    document.getElementById('spd-conso').textContent = conso + ' u. consommées';
+    document.getElementById('spd-spark').innerHTML   = vals.length >= 2 ? this._makeSpark(vals, dates)
+      : '<p style="color:#94A3B8;font-size:11px;text-align:center;padding:8px 0;">Pas assez de points pour le graphique</p>';
+    document.getElementById('spd-rows').innerHTML = [...tl].reverse().map(t => {
+      const d = new Date(t.date).toLocaleDateString('fr-FR', { day:'numeric', month:'short', year:'2-digit' });
+      const dStr  = t.delta === null ? '= ' + t.qty : (t.delta >= 0 ? '+' + t.delta : '' + t.delta);
+      const dCol  = t.delta === null ? '#64748B' : t.delta > 0 ? '#15803D' : '#DC2626';
+      return `<tr style="border-top:1px solid #F1F5F9;">
+        <td style="padding:5px 0;color:#94A3B8;white-space:nowrap;font-size:11px;">${d}</td>
+        <td style="padding:5px 6px;"><span class="hist-badge ${t.dt}" style="font-size:9px;">${typeLabels[t.dt] || t.dt}</span></td>
+        <td style="padding:5px 0;text-align:right;font-weight:700;color:${dCol};font-size:12px;">${dStr}</td>
+        <td style="padding:5px 0;text-align:right;font-weight:800;color:#1E293B;font-size:12px;">${t.run}</td>
+      </tr>`;
+    }).join('');
+    const det = document.getElementById('shist-prod-detail');
+    if (det) { det.style.display = 'block'; setTimeout(() => det.scrollIntoView({ behavior:'smooth', block:'nearest' }), 50); }
+  },
+
+  _prodTimeline(ref) {
+    const sorted = [...S.historyOps]
+      .filter(op => op.items.some(m => m.ref === ref))
+      .sort((a, b) => a.date < b.date ? -1 : 1);
+    let run = 0;
+    return sorted.flatMap(op => {
+      const item = op.items.find(m => m.ref === ref);
+      if (!item) return [];
+      const qty = Number(item.qty) || 0;
+      const dt  = this._opDisplayType(op.type, op.note);
+      if (op.type === 'inventaire') { run = qty; }
+      else if (op.type === 'entrée') { run += qty; }
+      else { run -= qty; }
+      const delta = op.type === 'inventaire' ? null : (op.type === 'entrée' ? qty : -qty);
+      return [{ date: op.date, dt, delta, qty, run }];
+    });
+  },
+
+  _prodConso(ref) {
+    let c = 0;
+    S.historyOps.forEach(op => {
+      if (op.type === 'sortie') {
+        const item = op.items.find(m => m.ref === ref);
+        if (item) c += Number(item.qty) || 0;
+      }
+    });
+    return c;
+  },
+
+  _makeSpark(vals, dates) {
+    if (vals.length < 2) return '';
+    const W = 400, H = 56, pad = 6;
+    const mn = Math.min(...vals), mx = Math.max(...vals), rng = mx - mn || 1;
+    const px = vals.map((v, i) => ({
+      x: +(pad + (i / (vals.length - 1)) * (W - pad * 2)).toFixed(1),
+      y: +(pad + (1 - (v - mn) / rng) * (H - pad * 2)).toFixed(1)
+    }));
+    const pts  = px.map(p => p.x + ',' + p.y).join(' ');
+    const area = `M${px[0].x},${H - pad} ` + px.map(p => `L${p.x},${p.y}`).join(' ') + ` L${px[px.length - 1].x},${H - pad}Z`;
+    const stroke = '#1A5276', fill = 'rgba(26,82,118,0.07)';
+    const dots = px.filter((_, i) => i === 0 || i === px.length - 1 || vals[i] !== vals[i - 1])
+      .map(p => `<circle cx="${p.x}" cy="${p.y}" r="3" fill="${stroke}"/>`).join('');
+    return `<svg viewBox="0 0 ${W} ${H + 10}" style="width:100%;height:52px;" preserveAspectRatio="none">
+      <path d="${area}" fill="${fill}"/>
+      <polyline points="${pts}" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      ${dots}
+    </svg>`;
+  },
+
+  /* ─ Historique : onglet "Bilan" ─ */
+
+  _renderHistBilan() {
+    const md = {};
+    S.historyOps.forEach(op => {
+      const mo = op.date.slice(0, 7);
+      if (!md[mo]) md[mo] = { e:0, eL:0, eU:0, s:0, sL:0, sU:0, p:0, pL:0, pU:0, i:0, iL:0 };
+      const nb = op.items.length;
+      const tq = op.items.reduce((a, m) => a + (Number(m.qty) || 0), 0);
+      const dt = this._opDisplayType(op.type, op.note);
+      if (op.type === 'entrée')       { md[mo].e++; md[mo].eL += nb; md[mo].eU += tq; }
+      else if (dt === 'pose')         { md[mo].p++; md[mo].pL += nb; md[mo].pU += tq; }
+      else if (op.type === 'sortie')  { md[mo].s++; md[mo].sL += nb; md[mo].sU += tq; }
+      else if (op.type === 'inventaire') { md[mo].i++; md[mo].iL += nb; }
+    });
+    const mos = Object.keys(md).sort().reverse();
+    const cnt = document.getElementById('shist-bilan-cnt');
+    if (!cnt) return;
+    if (!mos.length) {
+      cnt.innerHTML = '<p style="text-align:center;padding:32px 0;color:#94A3B8;font-size:13px;">Aucune donnée</p>';
+      return;
+    }
+    const cell = (label, n, sub, color) => `<div class="shist-bilan-cell">
+      <p style="color:#94A3B8;margin:0 0 4px;font-size:10px;">${label}</p>
+      <p style="font-size:18px;font-weight:800;margin:0;${color ? 'color:' + color : ''}">${n}</p>
+      <p style="font-size:9px;color:#94A3B8;margin:3px 0 0;">${sub}</p>
+    </div>`;
+    cnt.innerHTML = mos.map(mo => {
+      const dl = new Date(mo + '-01T00:00:00').toLocaleDateString('fr-FR', { month:'long', year:'numeric' });
+      const v  = md[mo];
+      return `<div class="shist-bilan-card">
+        <p style="font-weight:700;font-size:14px;margin:0 0 2px;text-transform:capitalize;color:#1E293B;">${dl}</p>
+        <div class="shist-bilan-grid">
+          ${cell('Livraisons', v.e, v.eL + ' réf · ' + v.eU + ' u.', '#15803D')}
+          ${cell('Sorties', v.s, v.sL + ' réf · ' + v.sU + ' u.', '#DC2626')}
+          ${cell('Poses', v.p, v.pL + ' réf · ' + v.pU + ' u.', '#6B21A8')}
+          ${cell('Inventaires', v.i, v.iL + ' réf vérif.', '')}
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  /* ─ Saisie pose depuis LOXAM ─ */
+
+  openPoseModal(code, codeModule, chantier) {
+    S.poseModuleCode  = code;
+    S.poseModuleLabel = [codeModule, chantier].filter(Boolean).join(' — ') || code;
+    S.poseItems       = {};
+    S.poseViewItems   = [];
+    const modal = document.getElementById('pose-modal');
+    const lbl   = document.getElementById('pose-module-label');
+    const inp   = document.getElementById('pose-search-input');
+    const res   = document.getElementById('pose-search-results');
+    if (lbl) lbl.textContent = S.poseModuleLabel;
+    if (inp) { inp.value = ''; }
+    if (res) { res.style.display = 'none'; res.innerHTML = ''; }
+    this._renderPoseItems();
+    // Afficher les poses existantes
+    if (S.historyLoaded) {
+      this._renderPoseExisting(code);
+    } else {
+      const sec = document.getElementById('pose-existing-section');
+      if (sec) {
+        sec.style.display = '';
+        sec.innerHTML = '<div style="padding:8px 0;color:#94A3B8;font-size:12px;text-align:center;">⏳ Chargement de l\'historique…</div>';
+      }
+      this._loadPoseHistory(code);
+    }
+    if (modal) modal.style.display = 'flex';
+    setTimeout(() => inp?.focus(), 100);
+  },
+
+  closePoseModal() {
+    const modal = document.getElementById('pose-modal');
+    if (modal) modal.style.display = 'none';
+  },
+
+  _renderPoseExisting(code) {
+    const section = document.getElementById('pose-existing-section');
+    if (!section) return;
+    const poses = S.historyData.filter(m => m.type === 'sortie' && this._poseCode(m.note) === code);
+    S.poseViewItems = poses;
+    if (!poses.length) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = '';
+    section.innerHTML = `
+      <div class="pose-existing-label">Déjà enregistré</div>
+      <div class="pose-existing-list">
+        ${poses.map((m, i) => {
+          const desc = S.stockData.find(d => d.ref === m.ref)?.description || '';
+          const dt   = new Date(m.date);
+          const dStr = isNaN(dt) ? '' : dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}) + ' ' + dt.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+          return `<div class="pose-existing-row">
+            <div style="flex:1;min-width:0;">
+              <span class="pose-item-ref">${m.ref}</span>
+              ${desc ? `<span class="pose-item-desc">${desc.length>42?desc.substring(0,40)+'…':desc}</span>` : ''}
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+              <span id="pose-qty-${i}" style="font-size:13px;font-weight:700;color:#1E293B;min-width:28px;text-align:right;">×${m.qty}</span>
+              <span id="pose-edit-${i}" style="display:none;align-items:center;gap:3px;">
+                <input id="pose-edit-inp-${i}" type="number" min="1" value="${m.qty}"
+                  style="width:52px;padding:3px 5px;border:1.5px solid #CBD5E1;border-radius:6px;font-size:13px;text-align:center;"
+                  onkeydown="if(event.key==='Enter')App.confirmEditPoseQty(${i});else if(event.key==='Escape')App._cancelEditPoseQty(${i})">
+                <button onclick="App.confirmEditPoseQty(${i})" id="pose-edit-confirm-${i}"
+                  style="background:var(--brand);color:white;border:none;padding:4px 7px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;line-height:1;">✓</button>
+                <button onclick="App._cancelEditPoseQty(${i})"
+                  style="background:none;border:none;color:#94A3B8;font-size:14px;cursor:pointer;padding:2px;line-height:1;">✕</button>
+              </span>
+              <span style="font-size:10px;color:#94A3B8;white-space:nowrap;">${dStr}</span>
+              <button onclick="App.editPoseQty(${i})" title="Modifier la quantité"
+                style="background:none;border:none;color:#64748B;font-size:14px;cursor:pointer;padding:2px 4px;line-height:1;flex-shrink:0;">✏</button>
+              <button onclick="App.deletePoseEntry(${i})" title="Supprimer ce mouvement"
+                style="background:none;border:none;color:#DC2626;font-size:16px;cursor:pointer;padding:2px 6px;line-height:1;flex-shrink:0;">🗑</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+  },
+
+  async _loadPoseHistory(code) {
+    if (S.historyLoading) return;
+    if (S.historyLoaded) { this._renderPoseExisting(code); return; }
+    S.historyLoading = true;
+    try {
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=stock_recent_movements&limit=9999', {}, 30000);
+      const data = await r.json();
+      S.historyData   = (data.status === 'ok' ? data.movements : []) || [];
+      S.historyOps    = this._groupMovements(S.historyData);
+      S.historyLoaded = true;
+      this._buildPoseHistory();
+      if (S.poseModuleCode === code && document.getElementById('pose-modal')?.style.display !== 'none') {
+        this._renderPoseExisting(code);
+      }
+      if (S.depsLoaded) this._renderDepList();
+    } catch(e) {
+      const sec = document.getElementById('pose-existing-section');
+      if (sec) sec.innerHTML = `<div style="padding:8px 0;color:#DC2626;font-size:12px;text-align:center;">Erreur de chargement</div>`;
+    } finally {
+      S.historyLoading = false;
+    }
+  },
+
+  async deletePoseEntry(idx) {
+    const m = S.poseViewItems[idx];
+    if (!m) return;
+    if (!confirm(`Supprimer la pose de ×${m.qty} ${m.ref} ?\nCette action va remettre la quantité en stock.`)) return;
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action:'delete_mouvement', ref:m.ref, type:m.type, qty:m.qty, note:m.note, date:m.date }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast(`✓ Pose supprimée (${m.ref} ×${m.qty})`);
+        const item = S.stockData.find(i => i.ref === m.ref);
+        if (item && item.qte !== null) item.qte += m.qty;
+        const hi = S.historyData.findIndex(h => h.ref===m.ref && h.type===m.type && h.note===m.note && h.date===m.date);
+        if (hi > -1) S.historyData.splice(hi, 1);
+        S.historyOps = this._groupMovements(S.historyData);
+        this._buildPoseHistory();
+        this._renderPoseExisting(S.poseModuleCode);
+        if (S.depsLoaded) this._renderDepList();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+      }
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+    }
+  },
+
+  editPoseQty(idx) {
+    const qtyEl  = document.getElementById('pose-qty-' + idx);
+    const editEl = document.getElementById('pose-edit-' + idx);
+    if (!qtyEl || !editEl) return;
+    qtyEl.style.display  = 'none';
+    editEl.style.display = 'flex';
+    document.getElementById('pose-edit-inp-' + idx)?.focus();
+  },
+
+  _cancelEditPoseQty(idx) {
+    const qtyEl  = document.getElementById('pose-qty-' + idx);
+    const editEl = document.getElementById('pose-edit-' + idx);
+    if (qtyEl)  qtyEl.style.display  = '';
+    if (editEl) editEl.style.display = 'none';
+  },
+
+  async confirmEditPoseQty(idx) {
+    const m = S.poseViewItems[idx];
+    if (!m) return;
+    const inp = document.getElementById('pose-edit-inp-' + idx);
+    if (!inp) return;
+    const newQty = parseInt(inp.value, 10);
+    if (isNaN(newQty) || newQty <= 0) { this.toast('Quantité invalide'); return; }
+    if (newQty === m.qty) { this._cancelEditPoseQty(idx); return; }
+    const confirmBtn = document.getElementById('pose-edit-confirm-' + idx);
+    if (confirmBtn) confirmBtn.disabled = true;
+    try {
+      const fd1 = new FormData();
+      fd1.append('payload', JSON.stringify({ action:'delete_mouvement', ref:m.ref, type:m.type, qty:m.qty, note:m.note, date:m.date }));
+      const r1 = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd1 }, 15000);
+      const d1 = await r1.json();
+      if (d1.status !== 'ok') { this.toast('Erreur suppression : ' + (d1.error || 'inconnue')); return; }
+      const u    = S.currentUser;
+      const user = u ? `${u.prenom} ${u.nom}` : (m.user || 'inconnu');
+      const fd2  = new FormData();
+      fd2.append('payload', JSON.stringify({ action:'add_mouvement', ref:m.ref, type:'sortie', qty:newQty, note:m.note, user }));
+      const r2 = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd2 }, 15000);
+      const d2 = await r2.json();
+      if (d2.status !== 'ok') { this.toast('Erreur enregistrement : ' + (d2.error || 'inconnue')); return; }
+      this.toast(`✓ Qté modifiée : ${m.ref} ×${newQty}`);
+      const qtyDiff = newQty - m.qty;
+      const item = S.stockData.find(i => i.ref === m.ref);
+      if (item && item.qte !== null) item.qte -= qtyDiff;
+      const hi = S.historyData.findIndex(h => h.ref===m.ref && h.type===m.type && h.note===m.note && h.date===m.date);
+      if (hi > -1) S.historyData[hi] = Object.assign({}, S.historyData[hi], { qty: newQty });
+      S.historyOps = this._groupMovements(S.historyData);
+      this._buildPoseHistory();
+      this._renderPoseExisting(S.poseModuleCode);
+      if (S.depsLoaded) this._renderDepList();
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+    } finally {
+      if (confirmBtn) confirmBtn.disabled = false;
+    }
+  },
+
+  _stockSearchHits(q, limit) {
+    const numeric = /^\d+$/.test(q);
+    if (numeric) {
+      return S.stockData.filter(d => d.ref.toLowerCase().includes(q)).slice(0, limit);
+    }
+    const exact   = S.stockData.filter(d => d.ref.toLowerCase() === q);
+    const starts  = S.stockData.filter(d => d.ref.toLowerCase().startsWith(q) && d.ref.toLowerCase() !== q);
+    const inRef   = S.stockData.filter(d => { const r = d.ref.toLowerCase(); return r.includes(q) && !r.startsWith(q); });
+    const inDesc  = S.stockData.filter(d => !d.ref.toLowerCase().includes(q) && d.description.toLowerCase().includes(q));
+    return [...exact, ...starts, ...inRef, ...inDesc].slice(0, limit);
+  },
+  poseSearch(val) {
+    const q   = val.toLowerCase().trim();
+    const res = document.getElementById('pose-search-results');
+    if (!res) return;
+    if (!q) { res.style.display = 'none'; res.innerHTML = ''; return; }
+    const hits = this._stockSearchHits(q, 20);
+    if (!hits.length) {
+      res.style.display = 'block';
+      res.innerHTML = '<div style="padding:10px 12px;color:#94A3B8;font-size:12px;">Aucun résultat</div>';
+      return;
+    }
+    res.style.display = 'block';
+    res.innerHTML = hits.map(d => {
+      const refSafe = d.ref.replace(/'/g, "\\'");
+      return `<div class="pose-result-row" onclick="App.addPoseRef('${refSafe}')">
+        <span class="pose-result-ref">${d.ref}</span>
+        <span class="pose-result-desc">${d.description}</span>
+      </div>`;
+    }).join('');
+  },
+
+  addPoseRef(ref) {
+    if (!S.poseItems[ref]) S.poseItems[ref] = 1;
+    const inp = document.getElementById('pose-search-input');
+    const res = document.getElementById('pose-search-results');
+    if (inp) inp.value = '';
+    if (res) { res.style.display = 'none'; res.innerHTML = ''; }
+    this._renderPoseItems();
+    setTimeout(() => {
+      const qi = document.getElementById('pqi-' + CSS.escape(ref));
+      if (qi) { qi.focus(); qi.select(); }
+    }, 50);
+  },
+
+  _poseSearchKey(e) {
+    this._suggestKeyDown(e, 'pose-search-results', i => {
+      const r = document.querySelectorAll('#pose-search-results .pose-result-row')[i];
+      if (r) r.click();
+    }, true);
+  },
+
+  _poseQtyKey(e, ref) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    this.setPoseQtyInput(ref, e.target.value);
+    const si = document.getElementById('pose-search-input');
+    if (si) { si.value = ''; this.poseSearch(''); si.focus(); }
+  },
+
+  stepPoseQty(ref, delta) {
+    const cur  = S.poseItems[ref] || 0;
+    const next = Math.max(0, cur + delta);
+    if (next === 0) delete S.poseItems[ref];
+    else S.poseItems[ref] = next;
+    const inp = document.getElementById('pqi-' + CSS.escape(ref));
+    if (inp) inp.value = next || '';
+    this._updatePoseSubmitBtn();
+  },
+
+  setPoseQtyInput(ref, val) {
+    const qty = parseFloat(val);
+    if (!isNaN(qty) && qty > 0) S.poseItems[ref] = qty;
+    else delete S.poseItems[ref];
+    this._updatePoseSubmitBtn();
+  },
+
+  removePoseRef(ref) {
+    delete S.poseItems[ref];
+    this._renderPoseItems();
+  },
+
+  _updatePoseSubmitBtn() {
+    const btn = document.getElementById('pose-submit-btn');
+    if (btn) btn.style.display = Object.keys(S.poseItems).length > 0 ? 'inline-block' : 'none';
+  },
+
+  _renderPoseItems() {
+    const list = document.getElementById('pose-items-list');
+    const empty = document.getElementById('pose-empty-msg');
+    if (!list) return;
+    const refs = Object.keys(S.poseItems);
+    if (!refs.length) {
+      if (empty) empty.style.display = 'block';
+      list.innerHTML = '';
+      list.appendChild(empty || document.createElement('div'));
+      this._updatePoseSubmitBtn();
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+    list.innerHTML = refs.map(ref => {
+      const refEsc  = CSS.escape(ref);
+      const refSafe = ref.replace(/'/g, "\\'");
+      const qty     = S.poseItems[ref] || 1;
+      const desc    = S.stockData.find(d => d.ref === ref)?.description || '';
+      return `<div class="pose-item-row">
+        <div style="flex:1;min-width:0;">
+          <span class="pose-item-ref">${ref}</span>
+          ${desc ? `<span class="pose-item-desc">${desc.length > 45 ? desc.substring(0,43)+'…' : desc}</span>` : ''}
+        </div>
+        <div class="batch-stepper">
+          <button class="batch-minus" onclick="App.stepPoseQty('${refSafe}',-1)">−</button>
+          <input class="batch-qty-input" type="number" id="pqi-${refEsc}" min="1"
+            value="${qty}"
+            oninput="App.setPoseQtyInput('${refSafe}',this.value)"
+            onkeydown="App._poseQtyKey(event,'${refSafe}')"
+            onclick="this.select()">
+          <button class="batch-plus" onclick="App.stepPoseQty('${refSafe}',1)">+</button>
+        </div>
+        <button class="pose-item-del" onclick="App.removePoseRef('${refSafe}')">×</button>
+      </div>`;
+    }).join('');
+    this._updatePoseSubmitBtn();
+  },
+
+  async submitPose() {
+    const code  = S.poseModuleCode;
+    const items = Object.entries(S.poseItems);
+    if (!items.length) { this.toast('Aucune pièce saisie'); return; }
+    if (!code)         { this.toast('Code module manquant'); return; }
+
+    const u    = S.currentUser;
+    const user = u ? `${u.prenom} ${u.nom}` : 'inconnu';
+    const note = `[Pose ${code}]${S.poseModuleLabel && S.poseModuleLabel !== code ? ' ' + S.poseModuleLabel : ''}`;
+
+    const btn = document.getElementById('pose-submit-btn');
+    if (btn) btn.disabled = true;
+    this.toast(`⏳ Enregistrement de ${items.length} pièce${items.length > 1 ? 's' : ''}…`);
+
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({
+        action: 'add_mouvements_batch',
+        type:   'sortie',
+        user,
+        note,
+        items:  items.map(([ref, qty]) => ({ ref, qty })),
+      }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method: 'POST', body: fd }, 30000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast(`✓ ${data.count} pièce${data.count > 1 ? 's' : ''} enregistrée${data.count > 1 ? 's' : ''}`);
+        const now = new Date().toISOString();
+        // Mise à jour locale des stocks + injection dans historyData
+        items.forEach(([ref, qty]) => {
+          const item = S.stockData.find(i => i.ref === ref);
+          if (item && item.qte !== null) item.qte = item.qte - qty;
+          if (S.historyLoaded) {
+            S.historyData.unshift({ date: now, ref, type: 'sortie', qty, user, note });
+          }
+        });
+        if (S.historyLoaded) {
+          S.historyOps = this._groupMovements(S.historyData);
+        }
+        // Marquer la pose dans l'historique en mémoire
+        S.poseHistory.add(code);
+        S.analyticsLoaded = false;
+        S.dashboardLoaded = false;
+        this.closePoseModal();
+        if (S.depsLoaded) this._renderDepList();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+      }
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  },
+
+  /* ─ Saisie rapide (dashboard) ─ */
+
+  openSaisieModal() {
+    S.saisieItems = {};
+    S.saisieType  = 'entrée';
+    S.saisieNote  = '';
+    const modal = document.getElementById('saisie-modal');
+    const note  = document.getElementById('saisie-note-input');
+    const inp   = document.getElementById('saisie-search-input');
+    const res   = document.getElementById('saisie-search-results');
+    if (note) note.value = '';
+    if (inp)  inp.value  = '';
+    if (res)  { res.style.display = 'none'; res.innerHTML = ''; }
+    this.setSaisieType('entrée');
+    this._renderSaisieItems();
+    if (modal) modal.style.display = 'flex';
+    setTimeout(() => inp?.focus(), 100);
+  },
+
+  closeSaisieModal() {
+    const modal = document.getElementById('saisie-modal');
+    if (modal) modal.style.display = 'none';
+  },
+
+  setSaisieType(type) {
+    S.saisieType = type;
+    ['entrée','sortie','inventaire'].forEach(t => {
+      const btn = document.getElementById('saisie-btn-' + t);
+      if (!btn) return;
+      const cls = t === 'entrée' ? 'entree' : t;
+      btn.classList.toggle('active', t === type);
+    });
+  },
+
+  saisieSearch(val) {
+    const q   = val.toLowerCase().trim();
+    const res = document.getElementById('saisie-search-results');
+    if (!res) return;
+    if (!q) { res.style.display = 'none'; res.innerHTML = ''; return; }
+    const hits = this._stockSearchHits(q, 20);
+    if (!hits.length) {
+      res.style.display = 'block';
+      res.innerHTML = '<div style="padding:10px 12px;color:#94A3B8;font-size:12px;">Aucun résultat</div>';
+      return;
+    }
+    res.style.display = 'block';
+    res.innerHTML = hits.map(d => {
+      const refSafe = d.ref.replace(/'/g, "\\'");
+      return `<div class="pose-result-row" onclick="App.addSaisieRef('${refSafe}')">
+        <span class="pose-result-ref">${d.ref}</span>
+        <span class="pose-result-desc">${d.description}</span>
+      </div>`;
+    }).join('');
+  },
+
+  _saisieSearchKey(e) {
+    this._suggestKeyDown(e, 'saisie-search-results', i => {
+      const r = document.querySelectorAll('#saisie-search-results .pose-result-row')[i];
+      if (r) r.click();
+    }, true);
+  },
+
+  addSaisieRef(ref) {
+    if (!S.saisieItems[ref]) S.saisieItems[ref] = 1;
+    const inp = document.getElementById('saisie-search-input');
+    const res = document.getElementById('saisie-search-results');
+    if (inp) inp.value = '';
+    if (res) { res.style.display = 'none'; res.innerHTML = ''; }
+    this._renderSaisieItems();
+    setTimeout(() => {
+      const qi = document.getElementById('sqi-' + CSS.escape(ref));
+      if (qi) { qi.focus(); qi.select(); }
+    }, 50);
+  },
+
+  stepSaisieQty(ref, delta) {
+    const cur  = S.saisieItems[ref] || 0;
+    const next = Math.max(0, cur + delta);
+    if (next === 0) delete S.saisieItems[ref];
+    else S.saisieItems[ref] = next;
+    const inp = document.getElementById('sqi-' + CSS.escape(ref));
+    if (inp) inp.value = next || '';
+    this._updateSaisieSubmitBtn();
+  },
+
+  setSaisieQtyInput(ref, val) {
+    const qty = parseFloat(val);
+    if (!isNaN(qty) && qty >= 0) S.saisieItems[ref] = qty;
+    else delete S.saisieItems[ref];
+    this._updateSaisieSubmitBtn();
+  },
+
+  _saisieQtyKey(e, ref) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    this.setSaisieQtyInput(ref, e.target.value);
+    const si = document.getElementById('saisie-search-input');
+    if (si) { si.value = ''; this.saisieSearch(''); si.focus(); }
+  },
+
+  removeSaisieRef(ref) {
+    delete S.saisieItems[ref];
+    this._renderSaisieItems();
+  },
+
+  _updateSaisieSubmitBtn() {
+    const btn = document.getElementById('saisie-submit-btn');
+    if (!btn) return;
+    const n = Object.keys(S.saisieItems).length;
+    btn.style.display = n > 0 ? 'inline-block' : 'none';
+    btn.textContent = n > 0 ? `✓ Valider (${n} réf.)` : '✓ Valider';
+  },
+
+  _renderSaisieItems() {
+    const list  = document.getElementById('saisie-items-list');
+    const empty = document.getElementById('saisie-empty-msg');
+    if (!list) return;
+    const refs = Object.keys(S.saisieItems);
+    if (!refs.length) {
+      if (empty) empty.style.display = 'block';
+      list.innerHTML = '';
+      list.appendChild(empty || document.createElement('div'));
+      this._updateSaisieSubmitBtn();
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+    list.innerHTML = refs.map(ref => {
+      const refEsc  = CSS.escape(ref);
+      const refSafe = ref.replace(/'/g, "\\'");
+      const qty     = S.saisieItems[ref] ?? 1;
+      const desc    = S.stockData.find(d => d.ref === ref)?.description || '';
+      return `<div class="pose-item-row">
+        <div style="flex:1;min-width:0;">
+          <span class="pose-item-ref">${ref}</span>
+          ${desc ? `<span class="pose-item-desc">${desc.length > 45 ? desc.substring(0,43)+'…' : desc}</span>` : ''}
+        </div>
+        <div class="batch-stepper">
+          <button class="batch-minus" onclick="App.stepSaisieQty('${refSafe}',-1)">−</button>
+          <input class="batch-qty-input" type="number" id="sqi-${refEsc}" min="0"
+            value="${qty}"
+            oninput="App.setSaisieQtyInput('${refSafe}',this.value)"
+            onkeydown="App._saisieQtyKey(event,'${refSafe}')"
+            onclick="this.select()">
+          <button class="batch-plus" onclick="App.stepSaisieQty('${refSafe}',1)">+</button>
+        </div>
+        <button class="pose-item-del" onclick="App.removeSaisieRef('${refSafe}')">×</button>
+      </div>`;
+    }).join('');
+    this._updateSaisieSubmitBtn();
+  },
+
+  async submitSaisie() {
+    const items = Object.entries(S.saisieItems).filter(([, qty]) => Number(qty) > 0 || S.saisieType === 'inventaire');
+    if (!items.length) { this.toast('Aucune pièce saisie'); return; }
+    const user = S.user?.nom || '';
+    const note = S.saisieNote || '';
+    const btn  = document.getElementById('saisie-submit-btn');
+    if (btn) btn.disabled = true;
+    this.toast(`⏳ Enregistrement de ${items.length} référence${items.length > 1 ? 's' : ''}…`);
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({
+        action: 'add_mouvements_batch',
+        type:   S.saisieType,
+        user,
+        note,
+        items:  items.map(([ref, qty]) => ({ ref, qty: Number(qty) })),
+      }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 30000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast(`✓ ${data.count} mouvement${data.count > 1 ? 's' : ''} enregistré${data.count > 1 ? 's' : ''}`);
+        // Mise à jour locale du stock
+        const sign = S.saisieType === 'entrée' ? 1 : S.saisieType === 'sortie' ? -1 : 0;
+        items.forEach(([ref, qty]) => {
+          const item = S.stockData.find(i => i.ref === ref);
+          if (!item) return;
+          if (S.saisieType === 'inventaire') item.qte = Number(qty);
+          else if (item.qte !== null) item.qte = (item.qte || 0) + sign * Number(qty);
+        });
+        S.historyLoaded   = false;
+        S.analyticsLoaded = false;
+        S.dashboardLoaded = false;
+        this.closeSaisieModal();
+        if (S.view === 'stock') this._renderStockList();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+      }
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  },
+
+  /* ─ Stock photos & detail ─ */
+
+  /* ─ Saisie groupée ─ */
+
+  // Ouvre la vue saisie groupée (reset du batch si on repart de zéro)
+  openBatchMv() {
+    this.go('stock');
+  },
+
+  // Définit le type de mouvement du batch
+  setBatchType(type) {
+    S.batchMvType = type;
+    const colors  = { entrée:'#15803D', sortie:'#DC2626', inventaire:'#2563EB' };
+    ['entrée','sortie','inventaire'].forEach(t => {
+      const btn = document.getElementById('batch-btn-' + t);
+      if (!btn) return;
+      const active = t === type;
+      btn.style.background  = active ? colors[t] : '#F8FAFC';
+      btn.style.borderColor = active ? colors[t] : '#E2E8F0';
+      btn.style.color       = active ? 'white'   : '#64748B';
+    });
+    this._renderStockList();
+  },
+
+  // Incrément / décrément du stepper
+  stepBatchQty(ref, delta) {
+    const cur = S.batchItems[ref] || 0;
+    const next = Math.max(0, cur + delta);
+    if (next === 0) delete S.batchItems[ref];
+    else S.batchItems[ref] = next;
+    const input = document.getElementById('bqi-' + CSS.escape(ref));
+    if (input) input.value = next || '';
+    const card = document.getElementById('scard-' + CSS.escape(ref));
+    if (card) {
+      ['in-entrée','in-sortie','in-inventaire'].forEach(c => card.classList.remove(c));
+      if (next > 0 && S.batchMvType) card.classList.add('in-' + S.batchMvType);
+    }
+    this._updateBatchHeader();
+  },
+
+  // Saisie directe dans l'input quantité
+  setBatchQtyInput(ref, val) {
+    const qty = parseFloat(val);
+    if (!isNaN(qty) && qty > 0) S.batchItems[ref] = qty;
+    else delete S.batchItems[ref];
+    const card = document.getElementById('scard-' + CSS.escape(ref));
+    if (card) {
+      ['in-entrée','in-sortie','in-inventaire'].forEach(c => card.classList.remove(c));
+      if (S.batchItems[ref] && S.batchMvType) card.classList.add('in-' + S.batchMvType);
+    }
+    this._updateBatchHeader();
+  },
+
+  // Met à jour le compteur et le bouton valider
+  _updateBatchHeader() {
+    const n   = Object.keys(S.batchItems).length;
+    const lbl = document.getElementById('batch-count-label');
+    const btn = document.getElementById('batch-submit-btn');
+    const chip = document.getElementById('batch-count-chip');
+    if (lbl)  lbl.textContent  = n ? `${n} réf. saisie${n>1?'s':''}` : '0 réf.';
+    if (chip) chip.textContent = n;
+    if (btn)  btn.style.display = (n > 0 && S.batchMvType) ? 'inline-flex' : 'none';
+  },
+
+  // Soumet tout le batch
+  async submitBatchMv() {
+    const type  = S.batchMvType;
+    const note  = document.getElementById('batch-note-input')?.value?.trim() || '';
+    const u     = S.currentUser;
+    const user  = u ? `${u.prenom} ${u.nom}` : 'inconnu';
+
+    if (!type) { this.toast('Sélectionne un type de mouvement'); return; }
+
+    // Pour un inventaire : inclure TOUTES les refs du catalogue (vide = 0)
+    let items;
+    if (type === 'inventaire') {
+      if (!S.stockData.length) { this.toast('Catalogue non chargé'); return; }
+      items = S.stockData.map(d => [d.ref, S.batchItems[d.ref] ?? 0]);
+      const zeroCount = items.filter(([, q]) => q === 0).length;
+      const msg = `Inventaire complet : ${items.length} référence${items.length>1?'s':''} vont être enregistrées.\n` +
+                  `${zeroCount} référence${zeroCount>1?'s':''} non renseignée${zeroCount>1?'s':''} seront mises à 0.\n\nConfirmer ?`;
+      if (!confirm(msg)) return;
+    } else {
+      items = Object.entries(S.batchItems);
+      if (!items.length) { this.toast('Aucune quantité saisie'); return; }
+    }
+
+    const btn = document.getElementById('batch-submit-btn');
+    if (btn) btn.disabled = true;
+    this.toast(`⏳ Enregistrement de ${items.length} référence${items.length>1?'s':''}…`);
+
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({
+        action: 'add_mouvements_batch',
+        type,
+        user,
+        note,
+        items: items.map(([ref, qty]) => ({ ref, qty })),
+      }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 30000);
+      const data = await resp.json();
+
+      if (data.status === 'ok') {
+        this.toast(`✓ ${data.count} mouvement${data.count>1?'s':''} enregistré${data.count>1?'s':''}`);
+        // Mise à jour locale de S.stockData (évite un rechargement complet)
+        items.forEach(([ref, qty]) => {
+          const item = S.stockData.find(i => i.ref === ref);
+          if (item) {
+            if      (type === 'inventaire') item.qte = Number(qty);        // 0 inclus
+            else if (type === 'entrée')     item.qte = (item.qte !== null ? item.qte : 0) + qty;
+            else if (type === 'sortie')     item.qte = (item.qte !== null ? item.qte : 0) - qty;
+            if (item.seuil !== null && item.qte !== null)
+              item.stockStatus = item.qte >= item.seuil ? 'ok' : 'low';
+            else item.stockStatus = 'ok';
+          }
+        });
+        // Invalider caches analytics/dashboard côté client
+        S.analyticsLoaded = false;
+        S.dashboardLoaded = false;
+        // Reset batch
+        S.batchItems  = {};
+        S.batchMvType = null;
+        ['entrée','sortie','inventaire'].forEach(t => {
+          const b = document.getElementById('batch-btn-' + t);
+          if (b) { b.style.background='#F8FAFC'; b.style.borderColor='#E2E8F0'; b.style.color='#64748B'; }
+        });
+        this._updateBatchHeader();
+        // Retour au tableau de bord
+        this.go('stock-dashboard');
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+        console.error('[submitBatchMv]', data);
+      }
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+      console.error('[submitBatchMv]', e);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  },
+
+  // Charge l'index des photos (ref → thumbId) en arrière-plan
+  async loadStockPhotos() {
+    if (!S.apiUrl) return;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=stock_photos_index', {}, 10000);
+      const data = await r.json();
+      if (data.status === 'ok') S.stockPhotos = data.photos || {};
+    } catch(e) { /* silencieux */ }
+  },
+
+  // Toggle bouton "🖼 Photos"
+  toggleStockThumbs() {
+    S.stockShowThumbs = !S.stockShowThumbs;
+    const btn = document.getElementById('stock-thumbs-btn');
+    if (btn) {
+      btn.style.background  = S.stockShowThumbs ? 'var(--accent)' : '#F1F5F9';
+      btn.style.borderColor = S.stockShowThumbs ? 'var(--accent)' : '#CBD5E1';
+      btn.style.color       = S.stockShowThumbs ? 'white' : '#64748B';
+    }
+    // Premier chargement : récupérer l'index photos avant de re-rendre
+    if (S.stockShowThumbs && Object.keys(S.stockPhotos).length === 0) {
+      this.loadStockPhotos().then(() => this._renderStockList());
+    } else {
+      this._renderStockList();
+    }
+  },
+
+  // ── Seuil d'alerte ───────────────────────────────────────────────────────
+  openSeuilModal(ref) {
+    const d = S.stockData.find(x => x.ref === ref);
+    if (!d) return;
+    S._seuilModalRef = ref;
+    const modal = document.getElementById('seuil-modal');
+    const inp   = document.getElementById('seuil-modal-input');
+    const lbl   = document.getElementById('seuil-modal-ref');
+    if (lbl) lbl.textContent = `${ref}${d.description ? ' — ' + d.description.substring(0, 40) + (d.description.length > 40 ? '…' : '') : ''}`;
+    if (inp) { inp.value = d.seuil !== null ? d.seuil : ''; inp.focus(); }
+    if (modal) modal.style.display = 'flex';
+  },
+
+  closeSeuilModal() {
+    const modal = document.getElementById('seuil-modal');
+    if (modal) modal.style.display = 'none';
+    S._seuilModalRef = null;
+  },
+
+  async saveSeuilModal() {
+    const ref = S._seuilModalRef;
+    if (!ref) return;
+    const inp  = document.getElementById('seuil-modal-input');
+    const btn  = document.getElementById('seuil-modal-btn');
+    const raw  = inp ? inp.value.trim() : '';
+    const seuil = raw === '' ? null : parseInt(raw, 10);
+    if (raw !== '' && (isNaN(seuil) || seuil < 0)) { this.toast('Seuil invalide'); return; }
+
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action: 'save_stock_seuil', ref, seuil }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method: 'POST', body: fd }, 15000);
+      const data = await resp.json();
+      if (data.status !== 'ok') throw new Error(data.error || 'Erreur inconnue');
+
+      const item = S.stockData.find(x => x.ref === ref);
+      if (item) {
+        item.seuil = seuil;
+        const qty = this._calcStockActuel(ref, item.qte);
+        item.stockStatus = seuil !== null && qty !== null ? (qty >= seuil ? 'ok' : 'low') : (qty !== null ? 'ok' : 'unknown');
+      }
+      this.toast(`✓ Seuil ${seuil !== null ? 'fixé à ' + seuil : 'supprimé'} pour ${ref}`);
+      this.closeSeuilModal();
+      if (S.view === 'stock') this._renderStockList();
+      if (S.view === 'stock-detail') this._renderStockDetail();
+      if (S.view === 'stock-dashboard') this._renderDashboard();
+    } catch(e) {
+      this.toast('Erreur : ' + e.message);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '✓ Enregistrer'; }
+    }
+  },
+
+  // Charge les miniatures des cartes visibles après rendu
+  async _loadVisibleThumbnails() {
+    if (!S.apiUrl) return;
+    const imgs = document.querySelectorAll('.sc-thumb[data-ref][src=""]');
+    for (const img of imgs) {
+      if (img.dataset.loaded) continue;
+      const ref = img.getAttribute('data-ref');
+      if (!ref || !S.stockPhotos[ref]) continue;
+      img.dataset.loaded = '1';
+      this._loadStockPhotoImg(img, ref);
+    }
+  },
+
+  // Récupère une photo (pleine ou thumb) via l'AppScript et l'injecte dans <img>
+  async _loadStockPhotoImg(img, ref) {
+    if (!S.apiUrl || !ref) return;
+    try {
+      const r = await _fetchWithTimeout(
+        `${S.apiUrl}?action=get_stock_thumbnail&ref=${encodeURIComponent(ref)}`, {}, 12000
+      );
+      const data = await r.json();
+      if (data.status === 'ok' && data.data) {
+        img.src = `data:${data.mime || 'image/jpeg'};base64,${data.data}`;
+      }
+    } catch(e) { /* silencieux */ }
+  },
+
+  // Ouvre la vue détail d'une référence
+  async openStockDetail(ref) {
+    S.selStockRef = ref;
+    this.go('stock-detail'); // rendu immédiat (sans photo si index pas chargé)
+    // Charger l'index photos si besoin, puis rafraîchir
+    if (Object.keys(S.stockPhotos).length === 0) {
+      await this.loadStockPhotos();
+      if (S.view === 'stock-detail' && S.selStockRef === ref) this._renderStockDetail();
+    }
+  },
+
+  // Rendu de la vue détail stock
+  _renderStockDetail() {
+    const ref  = S.selStockRef;
+    const body = document.getElementById('stock-detail-body');
+    if (!body || !ref) return;
+
+    const d = S.stockData.find(x => x.ref === ref);
+    if (!d) {
+      body.innerHTML = '<p style="color:#94A3B8;text-align:center;padding:40px;">Référence introuvable</p>';
+      return;
+    }
+
+    const isRel      = S.stockPrefs.has(ref);
+    const calcQty    = this._calcStockActuel(ref, d.qte);
+    const pidemQty   = d.qte !== null ? String(d.qte) : '—';
+    const hasDelta   = !!S.stockDeltas[ref];
+    const deltaInfo  = S.stockDeltas[ref];
+    const calcStatus = d.seuil !== null && calcQty !== null
+      ? (calcQty >= d.seuil ? 'ok' : 'low') : (calcQty !== null ? 'ok' : 'unknown');
+    const qtyClass   = calcStatus;
+    const hasPhoto   = !!S.stockPhotos[ref];
+    const refSafe    = ref.replace(/'/g, "\\'");
+
+    // Indicateur delta
+    let deltaLabel = '';
+    if (hasDelta && deltaInfo) {
+      if (deltaInfo.invQty !== null) {
+        deltaLabel = `<span style="font-size:10px;color:#64748B;margin-left:6px;">inventaire</span>`;
+      } else {
+        const sign = deltaInfo.delta >= 0 ? '+' : '';
+        deltaLabel = `<span style="font-size:10px;color:${deltaInfo.delta>=0?'#15803D':'#DC2626'};margin-left:6px;">${sign}${deltaInfo.delta} vs PIDEM</span>`;
+      }
+    }
+
+    // Boutons type de mouvement (état conservé via S.selMvType)
+    const mvColors  = { entrée:'#15803D', sortie:'#DC2626', inventaire:'#2563EB' };
+    const mvIcons   = { entrée:'➕', sortie:'➖', inventaire:'📋' };
+    const mvLabels  = { entrée:'Entrée', sortie:'Sortie', inventaire:'Inventaire' };
+    const mvBtnStyle = (type) => {
+      const active = S.selMvType === type;
+      const c = mvColors[type];
+      return active
+        ? `background:${c};border-color:${c};color:white;`
+        : `background:#F8FAFC;border-color:#E2E8F0;color:#64748B;`;
+    };
+
+    body.innerHTML = `
+      <button onclick="App.go('stock')"
+        style="background:none;border:none;color:var(--brand);font-size:14px;font-weight:600;cursor:pointer;padding:0 0 14px;display:flex;align-items:center;gap:5px;">
+        ← Retour catalogue
+      </button>
+
+      <!-- ── Fiche référence ── -->
+      <div class="card">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;">
+          <div>
+            <div style="font-family:'Courier New',monospace;font-size:18px;font-weight:700;color:var(--brand);">${d.ref}</div>
+            ${d.refFourn ? `<div style="font-size:11px;color:#94A3B8;margin-top:2px;">Réf. fournisseur : ${d.refFourn}</div>` : ''}
+          </div>
+          <button onclick="App.toggleStockPref('${refSafe}');App._renderStockDetail();"
+            style="background:none;border:none;font-size:28px;cursor:pointer;line-height:1;color:${isRel?'#F59E0B':'#CBD5E1'};">
+            ${isRel?'★':'☆'}
+          </button>
+        </div>
+        <p style="font-size:14px;color:#1E293B;line-height:1.55;margin-bottom:14px;">${d.description||'—'}</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
+          ${d.famille     ? `<span class="sc-bdg fam" style="font-size:12px;padding:3px 9px;">${d.famille}</span>` : ''}
+          ${d.fournisseur ? `<span class="sc-bdg fou" style="font-size:12px;padding:3px 9px;">${d.fournisseur}</span>` : ''}
+        </div>
+
+        <!-- Stock calculé -->
+        <div style="display:flex;align-items:center;gap:12px;padding:12px;background:#F8FAFC;border-radius:10px;margin-bottom:16px;">
+          <div style="font-size:26px;">📦</div>
+          <div style="flex:1;">
+            <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">Stock calculé</div>
+            <div style="display:flex;align-items:center;margin-top:4px;flex-wrap:wrap;gap:6px;">
+              <span class="sc-qty ${qtyClass}" style="font-size:14px;padding:4px 12px;">${calcQty !== null ? calcQty : '—'}${d.seuil !== null ? ' / min ' + d.seuil : ''}</span>
+              <button onclick="App.openSeuilModal('${refSafe}')"
+                style="background:none;border:1.5px solid #E2E8F0;color:#64748B;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;">
+                ✏️ Seuil
+              </button>
+              ${deltaLabel}
+            </div>
+            ${hasDelta && d.qte !== null ? `<div style="font-size:10px;color:#94A3B8;margin-top:4px;">PIDEM : ${pidemQty}</div>` : ''}
+          </div>
+        </div>
+
+        <!-- Analytics Layer 2 -->
+        ${(function() {
+          const ana  = S.stockAnalytics[ref];
+          const days = App._calcDaysToRupture(ref, calcQty);
+          if (!ana && days === null) return '';
+          const trendIco = ana?.trend === 'up' ? '↑ Hausse' : ana?.trend === 'down' ? '↓ Baisse' : '→ Stable';
+          const trendColor = ana?.trend === 'up' ? '#DC2626' : ana?.trend === 'down' ? '#15803D' : '#94A3B8';
+          return `<div style="margin-bottom:14px;">
+            <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Consommation (30 j)</div>
+            <div class="analytics-grid">
+              <div class="analytics-box">
+                <div class="analytics-val">${ana?.avgPerWeek ?? '—'}</div>
+                <div class="analytics-lbl">moy. / sem.</div>
+              </div>
+              <div class="analytics-box">
+                <div class="analytics-val" style="color:${trendColor};font-size:14px;">${trendIco}</div>
+                <div class="analytics-lbl">tendance</div>
+              </div>
+              <div class="analytics-box">
+                <div class="analytics-val" style="color:${days !== null ? (days <= 7 ? '#DC2626' : days <= 30 ? '#D97706' : '#15803D') : '#94A3B8'}">${days !== null ? (days <= 0 ? '⛔' : days + 'j') : '—'}</div>
+                <div class="analytics-lbl">avant rupture</div>
+              </div>
+            </div>
+            ${ana?.exits30d ? `<div style="font-size:10px;color:#94A3B8;text-align:right;margin-top:2px;">${ana.exits30d} sorti${ana.exits30d>1?'es':'e'} · ${ana.entries30d} entré${ana.entries30d>1?'es':'e'} ces 30 jours</div>` : ''}
+          </div>`;
+        })()}
+
+        <!-- Photo -->
+        <div>
+          <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Photo de référence</div>
+          <div id="stock-detail-photo" style="width:100%;min-height:140px;background:#F1F5F9;border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:10px;">
+            ${hasPhoto
+              ? `<img id="stock-detail-img" src="" style="width:100%;max-height:260px;object-fit:contain;" alt="Photo">`
+              : `<div style="text-align:center;color:#CBD5E1;padding:30px 20px;">
+                   <div style="font-size:40px;margin-bottom:8px;">📷</div>
+                   <div style="font-size:12px;">Aucune photo</div>
+                 </div>`
+            }
+          </div>
+          <label style="display:flex;align-items:center;justify-content:center;gap:8px;background:#EBF5FB;color:var(--brand);border:2px dashed var(--accent);padding:11px;border-radius:10px;cursor:pointer;font-weight:600;font-size:13px;">
+            📷 ${hasPhoto?'Changer la photo':'Ajouter une photo'}
+            <input type="file" accept="image/*" capture="environment"
+              onchange="App.uploadStockPhoto(this,'${refSafe}')" style="display:none;">
+          </label>
+        </div>
+      </div>
+
+      <!-- ── Enregistrer un mouvement ── -->
+      <div class="card" style="margin-top:10px;">
+        <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">Enregistrer un mouvement</div>
+        <div style="display:flex;gap:6px;margin-bottom:10px;">
+          ${['entrée','sortie','inventaire'].map(t => `
+            <button id="mv-btn-${t}" onclick="App.selectMvType('${t}')"
+              style="flex:1;padding:9px 4px;border-radius:8px;border:1.5px solid;font-size:11px;font-weight:700;cursor:pointer;${mvBtnStyle(t)}">
+              ${mvIcons[t]} ${mvLabels[t]}
+            </button>`).join('')}
+        </div>
+        <div id="mv-form" style="display:${S.selMvType ? 'block' : 'none'};">
+          <div style="display:flex;gap:8px;margin-bottom:8px;align-items:stretch;">
+            <input type="number" id="mv-qty" min="1" placeholder="Quantité"
+              style="flex:1;padding:10px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:16px;text-align:center;">
+            <button onclick="App.submitMouvement()" id="mv-submit-btn"
+              style="padding:10px 18px;background:${mvColors[S.selMvType]||'var(--brand)'};color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px;">
+              ✓ OK
+            </button>
+          </div>
+          <input type="text" id="mv-note" placeholder="Note optionnelle (commande, chantier…)"
+            style="width:100%;padding:9px 10px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;">
+        </div>
+      </div>
+
+      <!-- ── Historique des mouvements ── -->
+      <div class="card" style="margin-top:10px;margin-bottom:20px;">
+        <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">Historique</div>
+        <div id="mv-history-loading" style="text-align:center;padding:16px;display:none;"><div class="spinner"></div></div>
+        <div id="mv-history-list"><div style="text-align:center;color:#CBD5E1;padding:16px;font-size:13px;">Chargement…</div></div>
+      </div>`;
+
+    // Charger la photo
+    if (hasPhoto) {
+      const img = document.getElementById('stock-detail-img');
+      if (img) this._loadStockPhotoImg(img, ref);
+    }
+    // Charger l'historique des mouvements
+    this.loadStockMouvements(ref);
+  },
+
+  // Stock réel : déjà calculé par l'AppScript (invQty + delta), on retourne directement
+  _calcStockActuel(ref, pidemQty) {
+    return pidemQty;
+  },
+
+  // Sélectionne le type de mouvement (met à jour les boutons)
+  selectMvType(type) {
+    S.selMvType = type;
+    const colors = { entrée:'#15803D', sortie:'#DC2626', inventaire:'#2563EB' };
+    ['entrée','sortie','inventaire'].forEach(t => {
+      const btn = document.getElementById('mv-btn-' + t);
+      if (!btn) return;
+      const active = t === type;
+      btn.style.background  = active ? colors[t] : '#F8FAFC';
+      btn.style.borderColor = active ? colors[t] : '#E2E8F0';
+      btn.style.color       = active ? 'white'   : '#64748B';
+    });
+    const form = document.getElementById('mv-form');
+    if (form) form.style.display = 'block';
+    const submitBtn = document.getElementById('mv-submit-btn');
+    if (submitBtn) submitBtn.style.background = colors[type];
+    setTimeout(() => document.getElementById('mv-qty')?.focus(), 50);
+  },
+
+  // Soumet un mouvement de stock
+  async submitMouvement() {
+    const ref  = S.selStockRef;
+    const type = S.selMvType;
+    const qty  = parseFloat(document.getElementById('mv-qty')?.value);
+    const note = document.getElementById('mv-note')?.value?.trim() || '';
+    const u    = S.currentUser;
+    const user = u ? `${u.prenom} ${u.nom}` : 'inconnu';
+
+    if (!type) { this.toast('Sélectionne un type de mouvement'); return; }
+    if (!qty || qty <= 0 || isNaN(qty)) { this.toast('Quantité invalide'); return; }
+
+    const btn = document.getElementById('mv-submit-btn');
+    if (btn) btn.disabled = true;
+    this.toast('⏳ Enregistrement…');
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action:'add_mouvement', ref, type, qty, note, user }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast('✓ Mouvement enregistré');
+        // Mise à jour locale de S.stockData (évite un rechargement complet)
+        const item = S.stockData.find(i => i.ref === ref);
+        if (item) {
+          if      (type === 'inventaire') item.qte = qty;
+          else if (type === 'entrée')     item.qte = (item.qte !== null ? item.qte : 0) + qty;
+          else if (type === 'sortie')     item.qte = (item.qte !== null ? item.qte : 0) - qty;
+          if (item.seuil !== null && item.qte !== null)
+            item.stockStatus = item.qte >= item.seuil ? 'ok' : 'low';
+          else if (item.qte !== null) item.stockStatus = 'ok';
+        }
+        // Invalider caches analytics/dashboard côté client
+        S.analyticsLoaded = false;
+        S.dashboardLoaded = false;
+        // Réinitialiser le formulaire
+        S.selMvType = null;
+        if (document.getElementById('mv-qty'))  document.getElementById('mv-qty').value  = '';
+        if (document.getElementById('mv-note')) document.getElementById('mv-note').value = '';
+        // Re-rendre le détail (stock calculé mis à jour) et recharger l'historique
+        this._renderStockDetail();
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+        console.error('[submitMouvement]', data);
+      }
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+      console.error('[submitMouvement]', e);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  },
+
+  // Charge et affiche l'historique des mouvements pour une référence
+  async loadStockMouvements(ref) {
+    const el      = document.getElementById('mv-history-list');
+    const loading = document.getElementById('mv-history-loading');
+    if (!el || !S.apiUrl) return;
+    if (loading) loading.style.display = 'block';
+    el.innerHTML = '';
+    try {
+      const r    = await _fetchWithTimeout(
+        `${S.apiUrl}?action=stock_mouvements&ref=${encodeURIComponent(ref)}`, {}, 15000
+      );
+      const data = await r.json();
+      if (data.status === 'ok') {
+        const movs = (data.mouvements || []).slice().reverse(); // plus récent en premier
+        if (!movs.length) {
+          el.innerHTML = '<div style="text-align:center;color:#CBD5E1;padding:16px;font-size:13px;">Aucun mouvement enregistré</div>';
+          return;
+        }
+        const clrMap  = { entrée:'#15803D', sortie:'#DC2626', inventaire:'#2563EB' };
+        const iconMap = { entrée:'➕', sortie:'➖', inventaire:'📋' };
+        const signMap = { entrée:'+', sortie:'-', inventaire:'=' };
+        el.innerHTML = movs.map((m, i) => {
+          const c    = clrMap[m.type]  || '#64748B';
+          const ico  = iconMap[m.type] || '·';
+          const sign = signMap[m.type] || '';
+          const dt   = m.date ? new Date(m.date).toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+          const last = i === movs.length - 1;
+          return `<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;${last?'':'border-bottom:1px solid #F1F5F9;'}">
+            <div style="width:28px;height:28px;border-radius:50%;background:${c}18;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;">${ico}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;">
+                <span style="font-size:14px;font-weight:700;color:${c};">${sign}${m.qty}</span>
+                <span style="font-size:10px;color:#94A3B8;white-space:nowrap;">${dt}</span>
+              </div>
+              <div style="font-size:11px;color:#64748B;margin-top:1px;">${m.user||''}${m.note?' · <em>'+m.note+'</em>':''}</div>
+            </div>
+          </div>`;
+        }).join('');
+      }
+    } catch(e) {
+      el.innerHTML = '<div style="color:#94A3B8;font-size:12px;padding:12px;">Erreur chargement historique</div>';
+    } finally {
+      if (loading) loading.style.display = 'none';
+    }
+  },
+
+  // Gère l'upload d'une photo pour une référence stock
+  async uploadStockPhoto(input, ref) {
+    const file = input.files[0];
+    if (!file || !S.apiUrl) return;
+    this.toast('⏳ Redimensionnement…');
+    let fullB64, thumbB64;
+    try {
+      // Redimensionner séquentiellement pour éviter les problèmes mémoire
+      fullB64  = await _compress(file, 1200, 0.82);
+      thumbB64 = await _compress(file, 200,  0.75);
+    } catch(e) {
+      this.toast('Erreur redimensionnement : ' + e.message);
+      console.error('[uploadStockPhoto] resize error:', e);
+      return;
+    }
+    this.toast('⏳ Envoi de la photo…');
+    try {
+      const payload = JSON.stringify({
+        action:    'save_stock_photo',
+        ref:       ref,
+        imageData: fullB64.split(',')[1],
+        thumbData: thumbB64.split(',')[1],
+        mime:      'image/jpeg',
+      });
+      const fd = new FormData();
+      fd.append('payload', payload);
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 60000);
+      const data = await resp.json();
+      if (data.status === 'ok') {
+        this.toast('✓ Photo enregistrée');
+        S.stockPhotos[ref] = data.thumbId || data.fileId;
+        this._renderStockDetail();
+      } else {
+        const msg = data.error || 'inconnue';
+        this.toast('Erreur AppScript : ' + msg);
+        console.error('[uploadStockPhoto] AppScript error:', data);
+      }
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+      console.error('[uploadStockPhoto] network error:', e);
+    }
+  },
+
+  /* ─ Couche 2 — Intelligence ─ */
+  // Calcule le nombre de jours avant rupture estimée
+  _calcDaysToRupture(ref, stockActuel) {
+    if (stockActuel === null || stockActuel <= 0) return 0;
+    const a = S.stockAnalytics[ref];
+    if (!a || !a.avgPerWeek || a.avgPerWeek === 0) return null; // pas de conso connue
+    return Math.round(stockActuel / (a.avgPerWeek / 7));
+  },
+
+  // Charge les analytics depuis l'AppScript (avec cache local en session)
+  async loadStockAnalytics() {
+    if (!S.apiUrl || S.analyticsLoaded) return;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=stock_analytics', {}, 20000);
+      const d = await r.json();
+      if (d.status === 'ok') {
+        S.stockAnalytics  = d.analytics || {};
+        S.analyticsLoaded = true;
+      }
+    } catch(e) { console.warn('[analytics]', e); }
+  },
+
+  /* ─ Couche 3 — Dashboard ─ */
+  dashMvtMore() {
+    S.dashMvtLimit += 10;
+    this._renderDashboard();
+  },
+
+  async loadStockDashboard(force = false) {
+    if (!S.apiUrl) return;
+    if (force) S.dashMvtLimit = 10;
+    if (S.dashboardLoaded && !force) { this._renderDashboard(); return; }
+
+    document.getElementById('dash-kpi-grid').innerHTML =
+      '<div style="text-align:center;padding:24px;color:#94A3B8;grid-column:1/-1;font-size:13px;">Chargement…</div>';
+    document.getElementById('dash-mvt-list').innerHTML =
+      '<div style="text-align:center;padding:16px;color:#94A3B8;font-size:13px;">Chargement…</div>';
+
+    try {
+      // Charger catalogue si nécessaire + analytics + mouvements récents en parallèle
+      const tasks = [
+        _fetchWithTimeout(S.apiUrl + '?action=stock_recent_movements&limit=200', {}, 15000),
+      ];
+      if (!S.analyticsLoaded) {
+        tasks.push(_fetchWithTimeout(S.apiUrl + '?action=stock_analytics', {}, 20000));
+      }
+      if (!S.stockLoaded) {
+        tasks.push(
+          _fetchWithTimeout(S.apiUrl + '?action=stock_catalog',            {}, 40000),
+          _fetchWithTimeout(S.apiUrl + '?action=stock_mouvements_summary', {}, 15000),
+        );
+      }
+      const results = await Promise.all(tasks);
+      const mvtData = await results[0].json();
+      if (mvtData.status === 'ok') S.stockRecentMvs = mvtData.movements || [];
+
+      if (!S.analyticsLoaded && results[1]) {
+        const aData = await results[1].json();
+        if (aData.status === 'ok') { S.stockAnalytics = aData.analytics || {}; S.analyticsLoaded = true; }
+      }
+      if (!S.stockLoaded) {
+        const catIdx  = S.analyticsLoaded ? 2 : 1;
+        const dltIdx  = catIdx + 1;
+        const catData = results[catIdx] ? await results[catIdx].json() : null;
+        const dltData = results[dltIdx] ? await results[dltIdx].json() : null;
+        if (catData?.status === 'ok') {
+          S.stockData = catData.data || []; S.stockFamilles = catData.familles || []; S.stockLoaded = true;
+        }
+        if (dltData?.status === 'ok') S.stockDeltas = dltData.summary || {};
+      }
+      S.dashboardLoaded = true;
+    } catch(e) { this.toast('Erreur chargement tableau de bord'); }
+    this._renderDashboard();
+  },
+
+  _renderDashboard() {
+    const kpiEl   = document.getElementById('dash-kpi-grid');
+    const mvtEl   = document.getElementById('dash-mvt-list');
+    const alertEl = document.getElementById('dash-alerts-section');
+    const alertListEl = document.getElementById('dash-alerts-list');
+    if (!kpiEl || !mvtEl) return;
+
+    const total = S.stockData.length;
+    const alerts = [];
+    S.stockData.forEach(d => {
+      const hasSeuil = d.seuil && d.seuil > 0;
+      const qty = this._calcStockActuel(d.ref, d.qte);
+      if (hasSeuil) {
+        if (qty !== null && qty <= 0)            alerts.push({ ref: d.ref, desc: d.description, type: 'rupture', qty, seuil: d.seuil });
+        else if (qty !== null && qty <= d.seuil) alerts.push({ ref: d.ref, desc: d.description, type: 'low', qty, seuil: d.seuil });
+      } else if (qty !== null && qty < 0) {
+        // Pas de seuil suivi sur cette réf, mais un stock négatif révèle une
+        // sortie/livraison mal enregistrée quelque part — à signaler même sans seuil.
+        alerts.push({ ref: d.ref, desc: d.description, type: 'rupture', qty, seuil: null });
+      }
+    });
+    // Trier : rupture d'abord (les plus négatives en tête), puis par ratio qté/seuil croissant
+    alerts.sort((a,b) => {
+      if (a.type !== b.type) return a.type === 'rupture' ? -1 : 1;
+      if (a.type === 'rupture') return a.qty - b.qty;
+      return (a.qty / a.seuil) - (b.qty / b.seuil);
+    });
+    const ruptures  = alerts.filter(a => a.type === 'rupture').length;
+    const lowStock  = alerts.filter(a => a.type === 'low').length;
+    const exits30   = Object.values(S.stockAnalytics).reduce((s, a) => s + (a.exits30d || 0), 0);
+
+    // ── KPIs ──
+    kpiEl.innerHTML = `
+      <div class="dash-kpi">
+        <div class="dash-kpi-val">${total}</div>
+        <div class="dash-kpi-lbl">Références total</div>
+      </div>
+      <div class="dash-kpi ${exits30 > 0 ? 'ok' : ''}">
+        <div class="dash-kpi-val">${exits30}</div>
+        <div class="dash-kpi-lbl">Sorties (30 j)</div>
+      </div>
+      <div class="dash-kpi ${lowStock > 0 ? 'warn' : 'ok'}">
+        <div class="dash-kpi-val">${lowStock}</div>
+        <div class="dash-kpi-lbl">Stock bas</div>
+      </div>
+      <div class="dash-kpi ${ruptures > 0 ? 'alert' : 'ok'}">
+        <div class="dash-kpi-val">${ruptures}</div>
+        <div class="dash-kpi-lbl">Ruptures</div>
+      </div>`;
+
+    // ── Alertes favoris ──
+    alertEl.style.display = '';
+    const hasSeuils = S.stockData.some(d => d.seuil && d.seuil > 0);
+    if (alerts.length === 0) {
+      alertListEl.innerHTML = hasSeuils
+        ? `<div style="font-size:12px;color:#15803D;padding:8px 0;">✅ Tous les stocks sont au-dessus de leurs seuils.</div>`
+        : `<div style="font-size:12px;color:#94A3B8;padding:8px 0;">Aucun seuil configuré. Utilisez ✏️ sur une référence pour définir un seuil d'alerte.</div>`;
+    } else {
+      alertListEl.innerHTML = alerts.slice(0, 8).map(a => {
+        const badgeCls = a.type === 'rupture' ? 'rupture' : 'low';
+        const badgeTxt = a.type === 'rupture'
+          ? (a.seuil !== null ? '⛔ Rupture' : `⛔ Stock négatif (${a.qty})`)
+          : `⚠️ ${a.qty}/${a.seuil}`;
+        return `<div class="dash-alert-row" onclick="App.openStockDetail('${a.ref.replace(/'/g,"\\'")}')">
+          <div class="dash-alert-ref">${a.ref}</div>
+          <div style="font-size:11px;color:#475569;flex:2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.desc}</div>
+          <span class="dash-alert-badge ${badgeCls}">${badgeTxt}</span>
+        </div>`;
+      }).join('');
+    }
+
+    // ── Mouvements récents (groupés par opération) ──
+    // Priorité : historyData (complet) si déjà chargé, sinon stockRecentMvs
+    const srcMvs = S.historyLoaded ? S.historyData : S.stockRecentMvs;
+    const allOps     = this._consolidatePoseOps(this._groupMovements(srcMvs));
+    const visibleOps = allOps.slice(0, S.dashMvtLimit);
+    const moreEl     = document.getElementById('dash-mvt-more');
+    if (!visibleOps.length) {
+      mvtEl.innerHTML = '<div style="text-align:center;padding:16px;color:#94A3B8;font-size:13px;">Aucun mouvement</div>';
+      if (moreEl) moreEl.innerHTML = '';
+    } else {
+      const typeIcons  = { entrée:'↑', sortie:'↓', pose:'🔧', inventaire:'≡' };
+      const typeLabels = { entrée:'Entrée', sortie:'Sortie', pose:'Pose', inventaire:'Inventaire' };
+      mvtEl.innerHTML = visibleOps.map((op) => {
+        const dt   = this._opDisplayType(op.type, op.note);
+        const code = this._opRef(op.note, dt);
+        // Sous-info contextuelle (pose → module + chantier)
+        let sub = '';
+        if (dt === 'pose' && code && S.depsLoaded) {
+          const dep = S.deps.find(d => (d.code || '').toUpperCase() === code.toUpperCase());
+          if (dep) sub = [dep.codeModule, dep.chantier].filter(Boolean).join('  ·  ');
+        }
+        const d      = new Date(op.date);
+        const dtStr  = d.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit' }) + ' ' +
+                       d.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+        const nRefs  = op.items.length;
+        const nUnits = op.items.reduce((s, m) => s + (Number(m.qty) || 0), 0);
+        const lvLink = S.lvLinks[op.key];
+        const lvBtn  = (op.type === 'sortie' && dt !== 'pose' && !lvLink)
+          ? `<button onclick="App.createLvFromOp('${encodeURIComponent(op.key)}')"
+              style="margin-top:6px;padding:5px 10px;background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;width:100%;">
+              📄 Créer LV / CMR</button>`
+          : '';
+        const poseBtnDash = (() => {
+          if (dt !== 'pose') return '';
+          const pc = this._poseCode(op.note);
+          if (!pc) return '';
+          const dep  = S.depsLoaded ? S.deps.find(d => (d.code||'').toUpperCase() === pc.toUpperCase()) : null;
+          const pcs  = pc.replace(/'/g,"&#39;");
+          const mods = (dep?.codeModule||'').replace(/'/g,"&#39;");
+          const chs  = (dep?.chantier||'').replace(/'/g,"&#39;");
+          return `<button onclick="App.openPoseModal('${pcs}','${mods}','${chs}')"
+            style="margin-top:6px;padding:5px 10px;background:#FFF7ED;color:#C2410C;border:1.5px solid #FED7AA;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;width:100%;">
+            🔧 Gérer les pièces posées</button>`;
+        })();
+        const lvBadgeDash = lvLink
+          ? `<span style="font-size:10px;font-weight:600;background:#DBEAFE;color:#1D4ED8;padding:2px 6px;border-radius:10px;flex-shrink:0;margin-left:4px;">📄 LV N° ${lvLink.display || lvLink.numero}</span>`
+          : '';
+        return `<div class="dash-mvt-row">
+          <div class="dash-mvt-header" onclick="this.nextElementSibling.classList.toggle('open')">
+            <span class="dash-mvt-type ${dt}">${typeIcons[dt] || ''} ${typeLabels[dt] || dt}</span>
+            <span style="font-family:'Courier New',monospace;font-size:11px;font-weight:700;color:var(--brand);flex-shrink:0;margin:0 6px;">${code || '—'}</span>
+            <span style="flex:1;font-size:10px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sub}</span>
+            ${lvBadgeDash}
+            <span style="font-size:10px;color:#94A3B8;white-space:nowrap;flex-shrink:0;margin-left:6px;">${nRefs}r&nbsp;·&nbsp;${nUnits}u</span>
+            <span style="font-size:10px;color:#94A3B8;white-space:nowrap;flex-shrink:0;margin-left:8px;">${dtStr}</span>
+          </div>
+          <div class="dash-mvt-body">
+            ${lvBtn}${poseBtnDash}
+            ${op.items.map(m => {
+              const desc = S.stockData.find(d => d.ref === m.ref)?.description || '';
+              return `<div style="display:flex;align-items:baseline;gap:6px;padding:3px 0;border-bottom:.5px solid #F8FAFC;">
+                <span style="font-family:'Courier New',monospace;font-size:11px;font-weight:700;color:var(--brand);flex-shrink:0;">${m.ref}</span>
+                <span style="font-size:10px;color:#64748B;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${desc}</span>
+                <span style="font-size:11px;font-weight:700;color:#1E293B;flex-shrink:0;">×${m.qty}</span>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+      }).join('');
+      // Bouton "Montrer plus"
+      if (moreEl) {
+        if (allOps.length > S.dashMvtLimit) {
+          moreEl.innerHTML = `<button onclick="App.dashMvtMore()"
+            style="width:100%;margin-top:4px;background:transparent;border:1.5px solid #E2E8F0;color:#475569;padding:7px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
+            ↓ Montrer plus (${allOps.length - S.dashMvtLimit} de plus)
+          </button>`;
+        } else {
+          moreEl.innerHTML = '';
+        }
+      }
+    }
+  },
+
+  /* ─ Couche 1 — Sync catalogue ─ */
+  async loadStockSync(force = false) {
+    if (!S.apiUrl) return;
+    if (S.stockSyncData && !force) { this._renderSyncView(); return; }
+    S.syncLoading = true;
+    document.getElementById('sync-body').innerHTML =
+      '<div style="text-align:center;padding:32px;color:#94A3B8;font-size:13px;"><div class="spinner" style="margin:0 auto 10px"></div>Comparaison avec PIDEM…</div>';
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=catalog_diff', {}, 30000);
+      const d = await r.json();
+      if (d.status === 'ok') {
+        S.stockSyncData = d.diff;
+        this._renderSyncView();
+      } else {
+        document.getElementById('sync-body').innerHTML =
+          `<div style="color:#DC2626;padding:16px;background:#FEF2F2;border-radius:8px;">Erreur : ${d.error || 'inconnue'}</div>`;
+      }
+    } catch(e) {
+      document.getElementById('sync-body').innerHTML =
+        '<div style="color:#DC2626;padding:16px;background:#FEF2F2;border-radius:8px;">Erreur réseau</div>';
+    }
+    S.syncLoading = false;
+  },
+
+  _renderSyncView() {
+    const sd   = S.stockSyncData;
+    const body = document.getElementById('sync-body');
+    if (!body || !sd) return;
+
+    const hasChanges = sd.new.length + sd.modified.length + sd.deleted.length > 0;
+    const savedAt    = sd.savedAt ? new Date(sd.savedAt).toLocaleDateString('fr-FR', {
+      day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : null;
+
+    if (sd.isInitial) {
+      body.innerHTML = `
+        <div style="background:#FEF3C7;border-radius:10px;padding:14px;margin-bottom:14px;">
+          <div style="font-weight:700;color:#92400E;margin-bottom:4px;">📸 Premier snapshot</div>
+          <div style="font-size:12px;color:#78350F;">Aucun snapshot enregistré. Le catalogue PIDEM contient
+            <strong>${sd.new.length} références</strong>. Valider pour enregistrer la photo initiale.</div>
+        </div>
+        <button onclick="App.applySnapshot()" style="width:100%;padding:12px;border:none;background:#1A5276;color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
+          📸 Enregistrer snapshot initial (${sd.new.length} refs)
+        </button>`;
+      return;
+    }
+
+    if (!hasChanges) {
+      body.innerHTML = `
+        <div style="text-align:center;padding:40px 20px;color:#15803D;">
+          <div style="font-size:48px;margin-bottom:10px;">✅</div>
+          <div style="font-size:16px;font-weight:700;">Catalogue à jour</div>
+          <div style="font-size:12px;color:#64748B;margin-top:6px;">${sd.unchangedCount} références — snapshot du ${savedAt || '?'}</div>
+        </div>`;
+      return;
+    }
+
+    let html = `<div style="font-size:11px;color:#64748B;margin-bottom:10px;">
+      Snapshot du ${savedAt || '?'} · ${sd.unchangedCount} ref. inchangées</div>`;
+
+    if (sd.new.length) {
+      html += `<div class="sync-group">
+        <div class="sync-group-title" style="color:#15803D;">
+          Nouvelles références <span class="sync-badge new">${sd.new.length}</span>
+        </div>
+        ${sd.new.map(r => `<div class="sync-ref-row">
+          <div class="sync-ref">${r.ref}</div>
+          <div class="sync-desc">${r.description || '—'}${r.famille ? ` · <em>${r.famille}</em>` : ''}</div>
+        </div>`).join('')}
+      </div>`;
+    }
+
+    if (sd.modified.length) {
+      html += `<div class="sync-group">
+        <div class="sync-group-title" style="color:#D97706;">
+          Références modifiées <span class="sync-badge mod">${sd.modified.length}</span>
+        </div>
+        ${sd.modified.map(r => {
+          const changes = [];
+          if (r.description !== r._old.description) changes.push(`Désig. : <span class="sync-old">${r._old.description}</span> → ${r.description}`);
+          if (r.famille     !== r._old.famille)     changes.push(`Famille : <span class="sync-old">${r._old.famille}</span> → ${r.famille}`);
+          if (r.fournisseur !== r._old.fournisseur) changes.push(`Fourn. : <span class="sync-old">${r._old.fournisseur}</span> → ${r.fournisseur}`);
+          return `<div class="sync-ref-row">
+            <div class="sync-ref">${r.ref}</div>
+            <div class="sync-desc" style="font-size:10.5px;">${changes.join(' &nbsp;|&nbsp; ')}</div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }
+
+    if (sd.deleted.length) {
+      html += `<div class="sync-group">
+        <div class="sync-group-title" style="color:#DC2626;">
+          Références supprimées du PIDEM <span class="sync-badge del">${sd.deleted.length}</span>
+        </div>
+        ${sd.deleted.map(r => `<div class="sync-ref-row" style="opacity:.7;">
+          <div class="sync-ref" style="text-decoration:line-through;">${r.ref}</div>
+          <div class="sync-desc">${r.description || '—'}</div>
+        </div>`).join('')}
+      </div>`;
+    }
+
+    html += `<button onclick="App.applySnapshot()" style="width:100%;padding:12px;border:none;background:#1A5276;color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px;">
+      ✅ Valider et mettre à jour le snapshot
+    </button>`;
+
+    body.innerHTML = html;
+  },
+
+  /* ─────────────────────────────────────────────────────────────────────────
+     IMPORT XLS CLIENT — assistant en 3 étapes
+     1. Lecture fichier → sélection onglet
+     2. Config : ligne d'en-têtes + correspondance colonnes
+     3. Aperçu diff → import
+  ───────────────────────────────────────────────────────────────────────── */
+
+  // Champs cibles et leurs labels affichés
+  _XLS_FIELDS: [
+    { key:'ref',         label:'Référence',          required:true  },
+    { key:'description', label:'Description',         required:true  },
+    { key:'famille',     label:'Famille',             required:false },
+    { key:'fournisseur', label:'Fournisseur',         required:false },
+    { key:'refFourn',    label:'Réf. fournisseur',    required:false },
+    { key:'prixHT',      label:'Prix HT',             required:false },
+  ],
+
+  // Mots-clés par champ pour auto-détection (après normalisation)
+  _XLS_KEYWORDS: {
+    ref:         ['refrentalman','pidem','refarticle','ref','reference'],
+    description: ['detailfournitures','detail','description','designation','libelle','fourniture'],
+    famille:     ['famillearticle','famille','categorie','type'],
+    fournisseur: ['fournisseur','fourn','supplier'],
+    refFourn:    ['referencefournisseur','reffournisseur','reffourn','refsupplier'],
+    prixHT:      ['prixht','prix','price','montant','tarif'],
+  },
+
+  // ── Étape 0 : lecture du fichier ─────────────────────────────────────────
+  onXlsSelected(input) {
+    const file = input.files?.[0];
+    if (file) this._xlsLoadFile(file);
+  },
+
+  _xlsLoadFile(file) {
+    if (typeof XLSX === 'undefined') {
+      this.toast('⚠️ SheetJS non chargé — vérifie la connexion internet');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type:'array', cellDates:false });
+        S._xlsWorkbook  = wb;
+        S._xlsFileName  = file.name;
+        S._xlsConfig    = null;
+        S._xlsParsed    = null;
+
+        // Afficher l'assistant
+        document.getElementById('xls-step-file').style.display   = 'none';
+        document.getElementById('xls-step-config').style.display = 'block';
+        document.getElementById('xls-file-name').textContent     = file.name;
+
+        // Rendre les boutons d'onglets
+        this._xlsRenderTabButtons();
+
+        // Auto-sélectionner le meilleur onglet
+        const bestSheet = this._xlsBestSheet(wb);
+        this._xlsSelectTab(bestSheet);
+
+      } catch(err) {
+        this.toast('Erreur lecture fichier : ' + err.message);
+        console.error('[xlsLoad]', err);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  },
+
+  // Choisit l'onglet qui a le plus de lignes non vides
+  _xlsBestSheet(wb) {
+    let best = wb.SheetNames[0], bestCount = 0;
+    wb.SheetNames.forEach(name => {
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header:1, defval:'' });
+      const nonEmpty = rows.filter(r => r.some(c => String(c).trim() !== '')).length;
+      if (nonEmpty > bestCount) { bestCount = nonEmpty; best = name; }
+    });
+    return best;
+  },
+
+  // ── Étape 1 : sélection de l'onglet ─────────────────────────────────────
+  _xlsRenderTabButtons() {
+    const wb  = S._xlsWorkbook;
+    const el  = document.getElementById('xls-tab-btns');
+    if (!el || !wb) return;
+    el.innerHTML = wb.SheetNames.map(name =>
+      `<button onclick="App._xlsSelectTab('${name.replace(/'/g,"\\'")}') "
+        id="xls-tab-${name.replace(/[^a-z0-9]/gi,'_')}"
+        style="padding:5px 10px;border-radius:7px;border:1.5px solid #CBD5E1;background:#F8FAFC;
+               font-size:11px;font-weight:600;color:#475569;cursor:pointer;white-space:nowrap;">
+        ${name}
+      </button>`
+    ).join('');
+  },
+
+  _xlsSelectTab(sheetName) {
+    const wb = S._xlsWorkbook;
+    if (!wb || !wb.Sheets[sheetName]) return;
+
+    // Highlight du bouton actif
+    wb.SheetNames.forEach(n => {
+      const btn = document.getElementById('xls-tab-' + n.replace(/[^a-z0-9]/gi,'_'));
+      if (btn) {
+        btn.style.background   = n === sheetName ? 'var(--brand)' : '#F8FAFC';
+        btn.style.borderColor  = n === sheetName ? 'var(--brand)' : '#CBD5E1';
+        btn.style.color        = n === sheetName ? 'white'        : '#475569';
+      }
+    });
+
+    // Lire les lignes brutes (toutes)
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header:1, defval:'' });
+    S._xlsRawRows = rows;
+
+    // Auto-détecter ligne d'en-têtes et colonnes
+    const { headerRowIdx, colMap } = this._xlsAutoDetect(rows);
+    S._xlsConfig = {
+      sheetName,
+      headerRowIdx,                         // 0-indexed
+      dataRowIdx: headerRowIdx + 1,         // 0-indexed
+      colMap,                               // { ref:-1..N, description:..., ... }
+    };
+
+    this._xlsRenderRawTable();
+    this._xlsRenderColDropdowns();
+    this._xlsApplyConfig();
+  },
+
+  // Auto-détecte la ligne d'en-têtes et les colonnes
+  _xlsAutoDetect(rows) {
+    // Cherche la première ligne avec ≥3 cellules non vides consécutives
+    let headerRowIdx = 0;
+    for (let i = 0; i < Math.min(rows.length, 8); i++) {
+      const filled = rows[i].filter(c => String(c).trim() !== '').length;
+      if (filled >= 3) { headerRowIdx = i; break; }
+    }
+
+    const headerRow = rows[headerRowIdx] || [];
+    // Normaliser les en-têtes
+    const norm = headerRow.map(h => String(h || '').trim()
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^a-z0-9]/g,''));
+
+    const colMap = {};
+    this._XLS_FIELDS.forEach(f => {
+      let found = -1;
+      for (const kw of (this._XLS_KEYWORDS[f.key] || [])) {
+        const idx = norm.findIndex(h => h === kw || h.includes(kw) || kw.includes(h));
+        if (idx >= 0) { found = idx; break; }
+      }
+      colMap[f.key] = found;
+    });
+    return { headerRowIdx, colMap };
+  },
+
+  // ── Étape 2a : table brute ───────────────────────────────────────────────
+  _xlsRenderRawTable() {
+    const el  = document.getElementById('xls-raw-table');
+    const cfg = S._xlsConfig;
+    if (!el || !cfg || !S._xlsRawRows) return;
+
+    const rows    = S._xlsRawRows;
+    const showMax = Math.max(cfg.headerRowIdx + 5, 8);   // afficher au moins jusqu'aux premières données
+    const display = rows.slice(0, Math.min(showMax, rows.length));
+    const colCount= Math.max(...display.map(r => r.length), 1);
+
+    let html = '<table style="border-collapse:collapse;min-width:100%;white-space:nowrap;">';
+    display.forEach((row, i) => {
+      const isHeader = (i === cfg.headerRowIdx);
+      const isData   = (i >= cfg.dataRowIdx);
+      const rowBg    = isHeader ? '#1A5276' : isData ? 'white' : '#F8FAFC';
+      const rowColor = isHeader ? 'white'   : '#334155';
+      const rowFw    = isHeader ? '700'     : '400';
+      html += `<tr style="background:${rowBg};color:${rowColor};font-weight:${rowFw};">`;
+      // Numéro de ligne cliquable
+      html += `<td onclick="App._xlsSetHeaderRow(${i})" title="Définir comme ligne d'en-têtes"
+        style="padding:3px 6px;border-right:2px solid #E2E8F0;border-bottom:1px solid #F1F5F9;
+               cursor:pointer;color:${isHeader?'white':'#94A3B8'};font-weight:700;font-size:9px;
+               background:${isHeader?'#0F3460':'#F8FAFC'};text-align:right;min-width:22px;">
+        ${isHeader ? '▶' : (i+1)}
+      </td>`;
+      // Cellules
+      for (let c = 0; c < Math.min(colCount, 8); c++) {
+        const val = String(row[c] || '');
+        const truncated = val.length > 22 ? val.substring(0,20)+'…' : val;
+        html += `<td style="padding:3px 7px;border-right:1px solid #F1F5F9;border-bottom:1px solid #F1F5F9;max-width:140px;overflow:hidden;text-overflow:ellipsis;" title="${val.replace(/"/g,'&quot;')}">${truncated}</td>`;
+      }
+      if (colCount > 8) html += `<td style="padding:3px 6px;color:#94A3B8;font-size:9px;">+${colCount-8}</td>`;
+      html += '</tr>';
+    });
+    if (rows.length > showMax) {
+      html += `<tr><td colspan="${Math.min(colCount,8)+2}" style="text-align:center;padding:4px;font-size:9px;color:#94A3B8;">… ${rows.length - showMax} lignes supplémentaires</td></tr>`;
+    }
+    html += '</table>';
+    el.innerHTML = html;
+  },
+
+  // Clic sur un numéro de ligne → définir comme ligne d'en-têtes
+  _xlsSetHeaderRow(rowIdx) {
+    if (!S._xlsConfig) return;
+    S._xlsConfig.headerRowIdx = rowIdx;
+    S._xlsConfig.dataRowIdx   = rowIdx + 1;
+    // Re-détecter les colonnes avec la nouvelle ligne d'en-têtes
+    const { colMap } = this._xlsAutoDetect(S._xlsRawRows);
+    S._xlsConfig.colMap = colMap;
+    this._xlsRenderRawTable();
+    this._xlsRenderColDropdowns();
+    this._xlsApplyConfig();
+  },
+
+  // ── Étape 2b : dropdowns colonnes ────────────────────────────────────────
+  _xlsRenderColDropdowns() {
+    const el  = document.getElementById('xls-col-grid');
+    const cfg = S._xlsConfig;
+    if (!el || !cfg || !S._xlsRawRows) return;
+
+    const headerRow = S._xlsRawRows[cfg.headerRowIdx] || [];
+    // Options : "— Ne pas importer —" + une option par colonne du fichier
+    const opts = ['<option value="-1">— Ne pas importer —</option>'];
+    headerRow.forEach((h, i) => {
+      const letter = String.fromCharCode(65 + i);  // A, B, C…
+      const label  = String(h || '').trim();
+      opts.push(`<option value="${i}">${letter}${label ? ' — ' + label.substring(0,30) : ''}</option>`);
+    });
+    const optStr = opts.join('');
+
+    el.innerHTML = this._XLS_FIELDS.map(f => {
+      const val    = cfg.colMap[f.key] ?? -1;
+      const req    = f.required ? ' *' : '';
+      const border = f.required && val === -1 ? '1.5px solid #FCA5A5' : '1.5px solid #E2E8F0';
+      return `<div>
+        <div style="font-size:9px;color:#64748B;font-weight:600;margin-bottom:2px;">${f.label}${req}</div>
+        <select onchange="App._xlsSetColMap('${f.key}', parseInt(this.value))"
+          style="width:100%;padding:6px 8px;border:${border};border-radius:7px;font-size:11px;background:white;color:#1E293B;">
+          ${optStr.replace(`value="${val}"`, `value="${val}" selected`)}
+        </select>
+      </div>`;
+    }).join('');
+  },
+
+  _xlsSetColMap(field, colIdx) {
+    if (!S._xlsConfig) return;
+    S._xlsConfig.colMap[field] = colIdx;
+    // Mettre à jour la couleur de la bordure du select
+    this._xlsRenderColDropdowns();
+    this._xlsApplyConfig();
+  },
+
+  // ── Étape 3 : parse + aperçu diff ────────────────────────────────────────
+  _xlsApplyConfig() {
+    const cfg  = S._xlsConfig;
+    const rows = S._xlsRawRows;
+    if (!cfg || !rows) return;
+
+    const cm = cfg.colMap;
+    // Vérifier que les champs requis sont mappés
+    const missingRequired = this._XLS_FIELDS.filter(f => f.required && (cm[f.key] === -1 || cm[f.key] === undefined));
+
+    const btn = document.getElementById('xls-submit-btn');
+
+    if (missingRequired.length) {
+      document.getElementById('xls-preview-section').style.display = 'none';
+      if (btn) {
+        btn.disabled = true;
+        btn.style.background = '#94A3B8';
+        btn.style.cursor = 'not-allowed';
+        btn.textContent = `⚠️ Mapper : ${missingRequired.map(f=>f.label).join(', ')}`;
+      }
+      return;
+    }
+
+    // Parser
+    const parsed = [];
+    for (let i = cfg.dataRowIdx; i < rows.length; i++) {
+      const row = rows[i];
+      const refRaw = cm.ref >= 0 ? String(row[cm.ref] ?? '').trim() : '';
+      if (!refRaw) continue;  // ligne vide
+      parsed.push({
+        ref:         refRaw,
+        description: cm.description >= 0 ? String(row[cm.description] ?? '').trim() : '',
+        famille:     cm.famille     >= 0 ? String(row[cm.famille]     ?? '').trim() : '',
+        fournisseur: cm.fournisseur >= 0 ? String(row[cm.fournisseur] ?? '').trim() : '',
+        refFourn:    cm.refFourn    >= 0 ? String(row[cm.refFourn]    ?? '').trim() : '',
+        prixHT:      cm.prixHT     >= 0 ? this._cleanPrice(row[cm.prixHT]) : null,
+      });
+    }
+
+    S._xlsParsed = parsed;
+    this._xlsRenderPreview(parsed);
+
+    if (btn) {
+      btn.disabled = parsed.length === 0;
+      btn.style.background = parsed.length ? '#1A5276' : '#94A3B8';
+      btn.style.cursor = parsed.length ? 'pointer' : 'not-allowed';
+      btn.textContent = parsed.length
+        ? `✅ Importer ${parsed.length} références dans le catalogue`
+        : '⚠️ Aucune référence trouvée';
+    }
+  },
+
+  _xlsRenderPreview(parsed) {
+    const section  = document.getElementById('xls-preview-section');
+    const diffGrid = document.getElementById('xls-diff-grid');
+    const sampleEl = document.getElementById('xls-preview-sample');
+    if (!section || !diffGrid || !sampleEl) return;
+    section.style.display = 'block';
+
+    if (!parsed.length) {
+      diffGrid.innerHTML = '<div style="color:#DC2626;font-size:12px;">Aucune référence détectée avec cette configuration.</div>';
+      sampleEl.innerHTML = '';
+      return;
+    }
+
+    // Diff local (si catalogue chargé)
+    const curMap = {};
+    S.stockData.forEach(d => { curMap[d.ref] = d; });
+    let added = 0, modified = 0, unchanged = 0;
+    const changes = [];
+
+    parsed.forEach(r => {
+      const cur = curMap[r.ref];
+      if (!cur) {
+        added++;
+        if (changes.length < 12) changes.push({ tag:'new', ref:r.ref, desc:r.description });
+      } else {
+        const chg = (r.description !== cur.description || r.famille !== cur.famille ||
+                     r.fournisseur !== cur.fournisseur || r.refFourn !== cur.refFourn ||
+                     (r.prixHT !== null && r.prixHT !== cur.prixHT));
+        if (chg) {
+          modified++;
+          if (changes.length < 12) changes.push({ tag:'mod', ref:r.ref, desc:r.description });
+        } else { unchanged++; }
+      }
+    });
+    const deleted = S.stockData.filter(d => !parsed.find(r => r.ref === d.ref));
+
+    diffGrid.innerHTML = `
+      <div class="diff-stat new"><div class="diff-stat-val">${added}</div><div class="diff-stat-lbl">Nouvelles</div></div>
+      <div class="diff-stat mod"><div class="diff-stat-val">${modified}</div><div class="diff-stat-lbl">Modifiées</div></div>
+      <div class="diff-stat del"><div class="diff-stat-val">${deleted.length}</div><div class="diff-stat-lbl">Absentes</div></div>
+      <div class="diff-stat ok"><div class="diff-stat-val">${unchanged}</div><div class="diff-stat-lbl">Inchangées</div></div>`;
+
+    const toShow = [
+      ...changes,
+      ...deleted.slice(0,4).map(d => ({ tag:'del', ref:d.ref, desc:d.description })),
+    ].slice(0, 15);
+
+    if (!toShow.length) {
+      sampleEl.innerHTML = '<div style="text-align:center;padding:12px;color:#94A3B8;font-size:11px;">Aucun changement détecté.</div>';
+    } else {
+      sampleEl.innerHTML = toShow.map(r =>
+        `<div class="xls-row">
+          <span class="xls-row-ref">${r.ref}</span>
+          <span class="xls-row-desc">${r.desc}</span>
+          <span class="xls-row-tag ${r.tag}">${r.tag==='new'?'Nouveau':r.tag==='mod'?'Modifié':'Absent'}</span>
+        </div>`).join('');
+      if (parsed.length > 15) {
+        sampleEl.innerHTML += `<div style="text-align:center;padding:6px;font-size:10px;color:#94A3B8;">… ${parsed.length} références au total</div>`;
+      }
+    }
+  },
+
+  // Nettoie un prix "55,55 €" → 55.55
+  _cleanPrice(raw) {
+    if (raw === null || raw === undefined || raw === '') return null;
+    const s = String(raw).replace(/[€$£\s]/g,'').replace(',','.');
+    const n = parseFloat(s);
+    return isNaN(n) ? null : Math.round(n * 100) / 100;
+  },
+
+  // ── Reset ────────────────────────────────────────────────────────────────
+  cancelXlsImport() {
+    S._xlsWorkbook  = null;
+    S._xlsParsed    = null;
+    S._xlsFileName  = null;
+    S._xlsConfig    = null;
+    S._xlsRawRows   = null;
+    document.getElementById('xls-step-file').style.display   = 'block';
+    document.getElementById('xls-step-config').style.display = 'none';
+    const inp = document.getElementById('xls-input');
+    if (inp) inp.value = '';
+  },
+
+  // ── Envoi à l'AppScript ──────────────────────────────────────────────────
+  async submitXlsImport() {
+    if (!S._xlsParsed?.length) return;
+    if (!S.apiUrl) { this.toast('URL API non configurée'); return; }
+
+    const btn = document.getElementById('xls-submit-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Import en cours…'; }
+
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({
+        action: 'import_catalog_data',
+        refs:   S._xlsParsed,
+        source: S._xlsFileName || 'import.xls',
+      }));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 60000);
+      const data = await resp.json();
+
+      if (data.status === 'ok') {
+        this.toast(`✅ ${data.added} ajout${data.added>1?'s':''} · ${data.updated} modif. · ${data.deactivated} désactivée${data.deactivated>1?'s':''}`);
+
+        // Afficher résultat + lien Sheet
+        const syncBody = document.getElementById('sync-body');
+        if (syncBody) {
+          syncBody.innerHTML = `
+            <div style="background:#F0FDF4;border-radius:10px;padding:14px;margin-bottom:8px;">
+              <div style="font-weight:700;color:#15803D;margin-bottom:4px;">✅ Import terminé</div>
+              <div style="font-size:12px;color:#166534;line-height:1.7;">
+                <b>${data.added}</b> nouvelle${data.added>1?'s':''} &nbsp;·&nbsp;
+                <b>${data.updated}</b> modifiée${data.updated>1?'s':''} &nbsp;·&nbsp;
+                <b>${data.deactivated}</b> désactivée${data.deactivated>1?'s':''} &nbsp;·&nbsp;
+                <b>${data.unchanged}</b> inchangée${data.unchanged>1?'s':''}
+              </div>
+            </div>
+            ${data.sheetUrl ? `
+            <a href="${data.sheetUrl}" target="_blank"
+              style="display:flex;align-items:center;gap:8px;background:#EFF6FF;border:1.5px solid #BFDBFE;
+                     border-radius:8px;padding:10px 12px;text-decoration:none;margin-bottom:8px;">
+              <span style="font-size:20px;">📊</span>
+              <div>
+                <div style="font-size:12px;font-weight:700;color:#1D4ED8;">Ouvrir "Sonotrad - Catalogue"</div>
+                <div style="font-size:10px;color:#64748B;">Éditer les seuils directement dans le Sheet</div>
+              </div>
+              <span style="margin-left:auto;font-size:14px;color:#93C5FD;">↗</span>
+            </a>` : ''}`;
+        }
+
+        // Invalider caches
+        S.stockLoaded     = false;
+        S.analyticsLoaded = false;
+        S.dashboardLoaded = false;
+        this.cancelXlsImport();
+        if (S.view === 'stock') this.loadStockCatalog();
+
+      } else {
+        this.toast('Erreur : ' + (data.error || 'inconnue'));
+        if (btn) { btn.disabled = false; btn.textContent = '✅ Importer dans le catalogue'; }
+      }
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+      if (btn) { btn.disabled = false; btn.textContent = '✅ Importer dans le catalogue'; }
+    }
+  },
+
+  async applySnapshot() {
+    if (!S.apiUrl) return;
+    const btn = document.querySelector('#view-stock-sync button[onclick="App.applySnapshot()"]');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Enregistrement…'; }
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action: 'apply_catalog_snapshot' }));
+      const r = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 20000);
+      const d = await r.json();
+      if (d.status === 'ok') {
+        this.toast(`✅ Snapshot enregistré — ${d.count} références`);
+        S.stockSyncData = null; // forcer rechargement
+        this.loadStockSync(true);
+      } else {
+        this.toast('Erreur : ' + (d.error || 'inconnue'));
+        if (btn) { btn.disabled = false; btn.textContent = '✅ Valider et mettre à jour le snapshot'; }
+      }
+    } catch(e) {
+      this.toast('Erreur réseau');
+      if (btn) { btn.disabled = false; btn.textContent = '✅ Valider et mettre à jour le snapshot'; }
+    }
+  },
+
+  /* ─ Arrivals list ─ */
+  _renderArrivalList() {
+    const list = document.getElementById('arrival-list');
+    const none = document.getElementById('no-arrivals');
+    const items = S.history.filter(h => h.type !== 'departure').slice(-15).reverse();
+    if (!items.length) {
+      list.innerHTML = '';
+      none.style.display = 'block';
+      return;
+    }
+    none.style.display = 'none';
+    list.innerHTML = items.map(r => {
+      const m = MODULES[r.module] || { icon: '📦', iconBg: '#F1F5F9', label: r.module };
+      return `
+        <div class="history-row">
+          <div class="mod-icon" style="background:${m.iconBg}">${m.icon}</div>
+          <div style="flex:1;min-width:0;">
+            <div class="code-mono" style="font-size:16px;">${r.code}</div>
+            <div style="font-size:12px;color:#64748B;margin-top:2px;">${m.label} · ${r.date} · ${r.photos || 0} photo(s)</div>
+            ${r.chauffeur ? `<div style="font-size:12px;color:#475569;">🚛 ${r.chauffeur}</div>` : ''}
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <div style="font-size:10px;color:#94A3B8;">${r.sentAt || ''}</div>
+            ${r.offline ? '<span class="chip chip-yellow" style="font-size:10px;margin-top:2px;display:inline-block;">local</span>' : ''}
+          </div>
+        </div>`;
+    }).join('');
+  },
+  /* ─ New arrival ─ */
+  startNewArrival() {
+    // Si un code avait été assigné sans être soumis, on le remet en stock
+    if (S.arr && S.arr.code && !S.arr.submitted) {
+      S.codeStock.unshift(S.arr.code);
+      localStorage.setItem(SK.CODE_STOCK, JSON.stringify(S.codeStock));
+      this._renderCodeStockBadge();
+    }
+    S.arr = { step: 1, module: null, code: '', photos: [], chauffeur: '', date: todayStr(), etat: '', submitted: false };
+    // Vide les champs DOM pour ne pas laisser les valeurs du formulaire précédent
+    ['inp-module-type','inp-num-module','inp-num-serie','inp-lv','inp-agence','inp-longueur','inp-chauffeur','inp-etat'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    const dateEl = document.getElementById('inp-date');
+    if (dateEl) dateEl.value = todayStr();
+    const grid = document.getElementById('photo-grid-2');
+    if (grid) grid.innerHTML = '';
+    this.go('new-arrival');
+    this.showStep(1);
+  },
+  showStep(n) {
+    [1,2,3,4].forEach(i => {
+      const el = document.getElementById('step-' + i);
+      if (el) el.style.display = (i === n) ? 'block' : 'none';
+    });
+    [1,2,3].forEach(i => {
+      const d = document.getElementById('dot-' + i);
+      if (!d) return;
+      d.className = 'step-dot' + (i === n ? ' active' : i < n ? ' done' : '');
+    });
+    S.arr.step = n;
+  },
+  selectModule(mod) {
+    S.arr.module = mod;
+    const m = MODULES[mod];
+    document.getElementById('step2-title').textContent = `${m.icon}  ${m.label}`;
+    // Affiche les champs spécifiques LOXAM uniquement pour ce module
+    document.getElementById('loxam-fields').style.display = mod === 'loxam' ? 'block' : 'none';
+    this.showStep(2);
+    this._genCode();
+    this._renderPhotoGrid('photo-grid-2', S.arr.photos, 'arrival');
+  },
+  /* ─ Stock de codes pré-chargés ─ */
+  _renderCodeStockBadge() {
+    const el = document.getElementById('code-stock-badge');
+    if (!el) return;
+    const n = S.codeStock.length;
+    if (n === 0) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    el.textContent   = n < 2 ? `⚠ ${n} code` : `${n} codes`;
+    el.style.color   = n < 2 ? 'rgba(251,191,36,0.95)' : 'rgba(255,255,255,0.55)';
+    el.style.background = n < 2 ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.12)';
+  },
+  async _refillCodeStock() {
+    if (!S.apiUrl || !navigator.onLine) return;
+    const TARGET = 5;
+    const needed = TARGET - S.codeStock.length;
+    if (needed <= 0) return;
+    try {
+      const results = await Promise.all(
+        Array.from({ length: needed }, () =>
+          _fetchWithTimeout(S.apiUrl + '?action=generate_code', {}, 10000)
+            .then(r => r.json())
+            .then(d => (d.status === 'ok' && d.code) ? d.code : null)
+            .catch(() => null)
+        )
+      );
+      const fresh = results.filter(Boolean);
+      if (!fresh.length) return;
+      S.codeStock = [...S.codeStock, ...fresh];
+      localStorage.setItem(SK.CODE_STOCK, JSON.stringify(S.codeStock));
+      this._renderCodeStockBadge();
+    } catch(e) { console.warn('Code stock refill:', e.message); }
+  },
+  _popCodeFromStock() {
+    if (!S.codeStock.length) return null;
+    const code = S.codeStock.shift();
+    localStorage.setItem(SK.CODE_STOCK, JSON.stringify(S.codeStock));
+    this._renderCodeStockBadge();
+    if (S.codeStock.length < 2) this._refillCodeStock();
+    return code;
+  },
+  async _genCode() {
+    const dispEl = document.getElementById('code-display');
+    const statEl = document.getElementById('code-status');
+    dispEl.textContent = '· · · · · ·';
+
+    let code = null;
+    let countMsg = '';
+
+    // 1. Stock pré-chargé (offline-ready)
+    code = this._popCodeFromStock();
+    if (code) {
+      const r = S.codeStock.length;
+      countMsg = `✓ Code pré-chargé · ${r} restant${r > 1 ? 's' : ''}`;
+    }
+
+    // 2. Génération live si stock vide
+    if (!code && S.apiUrl) {
+      statEl.textContent = 'Génération…';
+      try {
+        const r = await _fetchWithTimeout(S.apiUrl + '?action=generate_code', {}, 15000);
+        const d = await r.json();
+        if (d.status === 'ok' && d.code) {
+          code = d.code;
+          countMsg = d.count > 1 ? `✓ Unique parmi ${d.count} codes connus` : '';
+        }
+      } catch(_) { /* fallback local */ }
+    }
+
+    // 3. Fallback local
+    if (!code) {
+      if (S.codes.size === 0 && S.apiUrl) await this._fetchCodes();
+      let tries = 0;
+      do { code = _randCode(); tries++; } while (S.codes.has(code) && tries < 50000);
+      S.codes.add(code);
+      countMsg = S.codes.size > 1 ? `✓ Local · ${S.codes.size} codes connus` : '⚠ Mode hors-ligne complet';
+    }
+
+    S.arr.code = code;
+    dispEl.textContent = code;
+    dispEl.style.transition = 'transform 0.15s';
+    dispEl.style.transform = 'scale(1.06)';
+    setTimeout(() => { dispEl.style.transform = ''; }, 180);
+    statEl.textContent = countMsg;
+  },
+  regenerateCode() { this._genCode(); },
+  /* ─ Photos (shared) ─ */
+  triggerInput(id) { document.getElementById(id).click(); },
+  async handlePhotos(evt, target) {
+    const files = Array.from(evt.target.files);
+    if (!files.length) return;
+    for (const f of files) {
+      const dataUrl = await _compress(f, 1200, 0.82);
+      if (target === 'arrival')        S.arr.photos.push({ dataUrl, name: f.name });
+      else if (target === 'arr')      S.arrPhotos.push({ dataUrl, name: f.name });
+      else if (target === 'bcb-enlev') S.bcbEnlevPhotos.push({ dataUrl, name: f.name });
+      else                            S.depPhotos.push({ dataUrl, name: f.name });
+    }
+    evt.target.value = '';
+    if (target === 'arrival')        this._renderPhotoGrid('photo-grid-2', S.arr.photos, 'arrival');
+    else if (target === 'arr')       this._renderArrPhotoGrid();
+    else if (target === 'bcb-enlev') this._bcbRenderEnlevPhotoGrid();
+    else                             this._renderDepPhotoGrid();
+  },
+  _renderPhotoGrid(gridId, photos, target) {
+    const grid = document.getElementById(gridId);
+    if (!grid) return;
+    const countId = target === 'arrival' ? 'photo-count-2' : null;
+    if (countId) document.getElementById(countId).textContent = `${photos.length} photo${photos.length > 1 ? 's' : ''}`;
+    const inputId = target === 'arrival' ? 'photo-input-2' : 'dep-photo-input';
+    grid.innerHTML = photos.map((p, i) => `
+      <div class="photo-thumb">
+        <img src="${p.dataUrl}" loading="lazy">
+        <button class="rm-btn" onclick="App.removePhoto(${i},'${target}')">✕</button>
+      </div>`).join('') + `
+      <div class="photo-add-btn" onclick="App.triggerInput('${inputId}')">
+        <span style="font-size:26px;">📷</span><span>Ajouter</span>
+      </div>`;
+  },
+  removePhoto(idx, target) {
+    if (target === 'arrival') {
+      S.arr.photos.splice(idx, 1);
+      this._renderPhotoGrid('photo-grid-2', S.arr.photos, 'arrival');
+    } else if (target === 'arr') {
+      S.arrPhotos.splice(idx, 1);
+      this._renderArrPhotoGrid();
+    } else if (target === 'bcb-enlev') {
+      S.bcbEnlevPhotos.splice(idx, 1);
+      this._bcbRenderEnlevPhotoGrid();
+    } else {
+      S.depPhotos.splice(idx, 1);
+      this._renderDepPhotoGrid();
+    }
+  },
+  goToStep3() {
+    if (!S.arr.code || S.arr.code.length !== 6) { this.toast('Code manquant, actualisez'); return; }
+    const m = MODULES[S.arr.module] || {};
+    document.getElementById('s3-icon').textContent   = m.icon || '📦';
+    document.getElementById('s3-module').textContent = m.label || '';
+    document.getElementById('s3-code').textContent   = S.arr.code;
+    document.getElementById('s3-photos').textContent = `${S.arr.photos.length} photo(s)`;
+    document.getElementById('inp-date').value        = S.arr.date;
+    this.showStep(3);
+  },
+  /* ─ Submit arrival ─ */
+  async submitArrival() {
+    if (S.submitting) return;
+    S.arr.chauffeur = document.getElementById('inp-chauffeur').value.trim();
+    S.arr.date      = document.getElementById('inp-date').value || todayStr();
+    S.arr.etat      = document.getElementById('inp-etat').value.trim();
+    // Champs LOXAM
+    if (S.arr.module === 'loxam') {
+      S.arr.moduleType = document.getElementById('inp-module-type').value.trim();
+      S.arr.numModule  = document.getElementById('inp-num-module').value.trim();
+      S.arr.numSerie   = document.getElementById('inp-num-serie').value.trim();
+      S.arr.lv         = document.getElementById('inp-lv').value.trim();
+      S.arr.agence     = document.getElementById('inp-agence').value.trim();
+      S.arr.longueur   = document.getElementById('inp-longueur').value.trim();
+      // Validation champs obligatoires LOXAM
+      if (!S.arr.moduleType || !S.arr.numModule || !S.arr.lv || !S.arr.agence) {
+        this.toast('Remplissez Type, Num module, LV et Agence'); return;
+      }
+      if (!S.arr.longueur) {
+        this.toast('La longueur (ml) est obligatoire'); return;
+      }
+    }
+    const offline = !navigator.onLine || !S.apiUrl;
+    // Avertissement photos hors-ligne
+    if (offline && S.arr.photos.length > 0) {
+      const ok = await this._confirmOfflinePhotos(S.arr.photos.length);
+      if (!ok) return;
+    }
+    S.submitting = true;
+    // Réinitialise step-4 : _showSuccess() l'a remplacé lors de la soumission précédente
+    document.getElementById('step-4').innerHTML =
+      `<div class="spinner" id="send-spinner"></div>` +
+      `<p style="font-size:17px;font-weight:700;color:#1E293B;" id="send-msg">Envoi en cours...</p>` +
+      `<p style="font-size:13px;color:#64748B;margin-top:4px;" id="send-detail"></p>`;
+    this.showStep(4);
+    const { code, module, moduleType, numModule, numSerie, lv, agence, chauffeur, date, etat, longueur, photos } = S.arr;
+    const setMsg = (m, d='') => {
+      document.getElementById('send-msg').textContent    = m;
+      document.getElementById('send-detail').textContent = d;
+    };
+    const user = S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}`.trim() : '';
+    try {
+      if (offline) {
+        setMsg('💾 Sauvegarde hors ligne...', `Code ${code}`);
+        await _sleep(600);
+        this._addToOfflineQueue({ action: 'arrival', code, module, moduleType, numModule, numSerie, lv, agence, chauffeur, date, etat, longueur, saisie_par: user });
+        S.arr.submitted = true;
+        this._saveHistory({ code, module, chauffeur, date, etat, photos: photos.length, photosLost: photos.length > 0, type: 'arrival', offline: true, pending: true });
+        this._showSuccess(code, true, photos.length);
+        return;
+      }
+      setMsg('Envoi en cours...', `Code ${code} · ${photos.length} photo(s)`);
+      const payload = { action: 'arrival', code, module, moduleType, numModule, numSerie, lv, agence, chauffeur, date, etat, longueur, photos: photos.map(p => p.dataUrl), saisie_par: user };
+      const res = await _post(S.apiUrl, payload);
+      if (res.status !== 'ok' && res.status !== 'success') throw new Error(res.error || 'Réponse inattendue');
+      setMsg('✓ Enregistré !', `Code ${code}`);
+      S.arr.submitted = true;
+      this._saveHistory({ code, module, chauffeur, date, etat, photos: photos.length, type: 'arrival' });
+      await _sleep(700);
+      this._showSuccess(code, false);
+    } catch(err) {
+      console.error(err);
+      document.getElementById('send-spinner').style.display = 'none';
+      // Échec réseau inattendu : mise en file d'attente pour renvoi automatique
+      this._addToOfflineQueue({ action: 'arrival', code, module, moduleType, numModule, numSerie, lv, agence, chauffeur, date, etat, longueur, saisie_par: user });
+      S.arr.submitted = true;
+      this._saveHistory({ code, module, chauffeur, date, etat, photos: photos.length, photosLost: photos.length > 0, type: 'arrival', pending: true });
+      setMsg('⚠️ Échec réseau', 'Sauvegardé — renvoi auto au retour réseau');
+      await _sleep(2200);
+      this._showSuccess(code, true, photos.length);
+    } finally {
+      S.submitting = false;
+    }
+  },
+  _showSuccess(code, offline, photosCount = 0) {
+    const isReception = S.activity === 'reception';
+    const backBtn = isReception
+      ? `<button class="btn btn-primary" onclick="App.goHome()" style="max-width:220px;margin:0 auto 12px;">← Accueil</button>`
+      : `<button class="btn btn-primary" onclick="App.go('arrivals')" style="max-width:220px;margin:0 auto 12px;">← Arrivées</button>`;
+    const photosWarning = (offline && photosCount > 0) ? `
+      <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:10px 14px;margin:0 auto 16px;max-width:280px;text-align:left;">
+        <p style="font-size:12px;font-weight:700;color:#92400E;margin:0 0 4px;">📷 ${photosCount} photo${photosCount > 1 ? 's' : ''} non envoyée${photosCount > 1 ? 's' : ''}</p>
+        <p style="font-size:11px;color:#B45309;margin:0;">À ajouter manuellement depuis la fiche d'arrivée une fois en ligne.</p>
+      </div>` : '';
+    document.getElementById('step-4').innerHTML = `
+      <div style="text-align:center;padding:28px 0;">
+        <div style="font-size:60px;margin-bottom:14px;">${offline ? '💾' : '✅'}</div>
+        <p style="font-size:20px;font-weight:700;color:#1E293B;margin-bottom:8px;">
+          ${offline ? 'Données sauvegardées' : 'Arrivée enregistrée !'}
+        </p>
+        <div style="font-family:monospace;font-size:28px;font-weight:900;color:var(--brand);letter-spacing:6px;margin:16px 0 20px;">${code}</div>
+        ${photosWarning}
+        ${backBtn}
+        <br>
+        <button onclick="App.receptionDirecte()" style="background:none;border:none;color:var(--accent);font-size:15px;font-weight:600;cursor:pointer;padding:8px;">+ Nouvelle arrivée</button>
+      </div>`;
+  },
+  _confirmOfflinePhotos(count) {
+    return new Promise(resolve => {
+      const id = 'modal-offline-photos';
+      const existing = document.getElementById(id);
+      if (existing) existing.remove();
+      const el = document.createElement('div');
+      el.id = id;
+      el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;';
+      el.innerHTML = `
+        <div style="background:white;border-radius:16px;padding:24px;max-width:340px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+          <div style="font-size:36px;text-align:center;margin-bottom:12px;">📷</div>
+          <h3 style="font-size:16px;font-weight:700;color:#1E293B;margin:0 0 8px;text-align:center;">Photos hors ligne</h3>
+          <p style="font-size:13px;color:#475569;margin:0 0 6px;text-align:center;">
+            Vous avez <strong>${count} photo${count > 1 ? 's' : ''}</strong> jointe${count > 1 ? 's' : ''}.
+          </p>
+          <p style="font-size:13px;color:#475569;margin:0 0 20px;text-align:center;">
+            Sans réseau, elles ne peuvent pas être envoyées.<br>
+            Les données texte seront sauvegardées.<br>
+            Les photos seront à ajouter manuellement depuis la fiche une fois en ligne.
+          </p>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <button id="offph-ok" class="btn btn-primary" style="width:100%;">Continuer sans les photos</button>
+            <button id="offph-cancel" class="btn btn-secondary" style="width:100%;">Annuler — attendre le réseau</button>
+          </div>
+        </div>`;
+      document.body.appendChild(el);
+      document.getElementById('offph-ok').onclick     = () => { el.remove(); resolve(true);  };
+      document.getElementById('offph-cancel').onclick = () => { el.remove(); resolve(false); };
+    });
+  },
+  /* ─ File d'attente hors-ligne ─ */
+  _addToOfflineQueue(payload) {
+    const item = { id: `${Date.now()}_${payload.code}`, ts: Date.now(), payload };
+    S.offlineQueue.push(item);
+    localStorage.setItem(SK.OFFLINE_QUEUE, JSON.stringify(S.offlineQueue));
+    this._renderOfflineQueueBadge();
+  },
+  _renderOfflineQueueBadge() {
+    const el = document.getElementById('offline-queue-badge');
+    if (!el) return;
+    const n = S.offlineQueue.length;
+    if (n === 0) { el.style.display = 'none'; return; }
+    el.style.display  = '';
+    el.textContent    = `⏳ ${n}`;
+  },
+  async _processOfflineQueue() {
+    if (!navigator.onLine || !S.apiUrl || !S.offlineQueue.length) return;
+    const queue = [...S.offlineQueue];
+    for (const item of queue) {
+      try {
+        const res = await _post(S.apiUrl, item.payload);
+        if (res.status !== 'ok' && res.status !== 'success') continue;
+        S.offlineQueue = S.offlineQueue.filter(q => q.id !== item.id);
+        localStorage.setItem(SK.OFFLINE_QUEUE, JSON.stringify(S.offlineQueue));
+        this._renderOfflineQueueBadge();
+        this.toast(`✓ Arrivée ${item.payload.code} synchronisée`);
+        // Rafraîchit la liste si on est sur l'écran Arrivées
+        if (document.getElementById('view-arrivals') && document.getElementById('view-arrivals').style.display !== 'none') {
+          this.loadArrivals();
+        }
+      } catch(e) {
+        // On laisse l'item en file, il sera retenté au prochain retour réseau
+      }
+    }
+  },
+  /* ─ LOXAM Menu ─ */
+  async loxamMenuInit() {
+    const loaderEl = document.getElementById('lxmenu-loader');
+    const gridEl   = document.getElementById('lxmenu-grid');
+    const statusEl = document.getElementById('lxmenu-status');
+    this._loxamMenuRefreshCounts();
+    // Déjà chargé — grille immédiate
+    if (S.depsLoaded && S.arrivalsLoaded) {
+      if (loaderEl) loaderEl.style.display = 'none';
+      if (gridEl)   gridEl.style.display = 'block';
+      if (statusEl) { const n = new Date(); statusEl.textContent = 'MAJ ' + n.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}); }
+      if (!S.historyLoaded && !S.historyLoading) this._prefetchHistory();
+      return;
+    }
+    if (loaderEl) loaderEl.style.display = 'flex';
+    if (gridEl)   gridEl.style.display = 'none';
+    if (statusEl) statusEl.textContent = 'Chargement des données…';
+    if (!S.apiUrl) {
+      if (loaderEl) loaderEl.innerHTML = '<div style="text-align:center;color:#EF4444;font-size:13px;padding:12px;">⚠️ URL API non configurée</div>';
+      return;
+    }
+    await Promise.allSettled([
+      S.depsLoaded || S.depsLoading                     ? Promise.resolve() : this.loadDepartures(),
+      S.arrivalsLoaded                                   ? Promise.resolve() : this.loadArrivalsData(),
+      S.catalogLoaded || S.catalogLoading || S.stockLoaded ? Promise.resolve() : this._prefetchCatalog(),
+    ]);
+    // LV links non-bloquants (utiles dans la liste production)
+    if (!S.lvLinks || !Object.keys(S.lvLinks).length) this._prefetchLvLinks();
+    // Historique non-bloquant — alimente les pastilles de pose dans les départs
+    if (!S.historyLoaded && !S.historyLoading) this._prefetchHistory();
+    this._loxamMenuRefreshCounts();
+    if (loaderEl) loaderEl.style.display = 'none';
+    if (gridEl)   gridEl.style.display = 'block';
+    if (statusEl) { const n = new Date(); statusEl.textContent = 'MAJ ' + n.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}); }
+  },
+  _loxamMenuRefreshCounts() {
+    const enProd  = S.depsLoaded    ? S.deps.filter(d => !d.parti).length : null;
+    const arrPres = S.arrivalsLoaded ? S.arrivalsData.filter(a => !a.parti).length : null;
+    const badgeProd = document.getElementById('lxmenu-badge-prod');
+    if (badgeProd) {
+      if (enProd !== null && arrPres !== null) {
+        badgeProd.className = 'activity-badge badge-active';
+        badgeProd.textContent = `${enProd} en prod · ${arrPres} arrivée${arrPres!==1?'s':''}`;
+      } else {
+        badgeProd.className = 'activity-badge badge-loading';
+        badgeProd.textContent = '⟳ Chargement…';
+      }
+    }
+    const badgeStock = document.getElementById('lxmenu-badge-stock');
+    if (badgeStock) {
+      if (S.stockLoaded && S.stockData.length > 0) {
+        badgeStock.className = 'activity-badge badge-active';
+        badgeStock.textContent = `${S.stockData.length} réf.`;
+      }
+    }
+  },
+  loxamMenuGoStock(view) {
+    S.activity = 'stockage';
+    this.go(view);
+  },
+
+  /* ─ Departures ─ */
+  async loadDepartures(force = false) {
+    if (!force && (S.depsLoaded || S.depsLoading)) return;
+    if (force) { S.depsLoaded = false; S.depModuleFilter = 'all'; S.depDateFrom = ''; S.depDateTo = ''; }
+    S.depsLoading = true;
+    document.getElementById('dep-loading').style.display   = 'block';
+    document.getElementById('no-departures').style.display = 'none';
+    document.getElementById('dep-list').innerHTML          = '';
+    if (!S.apiUrl) {
+      document.getElementById('dep-loading').style.display   = 'none';
+      document.getElementById('no-departures').style.display = 'block';
+      return;
+    }
+    // Chargement en parallèle : données production + log photos départ
+    this._loadDepPhotosLog();
+    try {
+      const url  = S.apiUrl + '?action=production';
+      const resp = await _fetchWithTimeout(url, {}, 90000);
+      const data = await resp.json();
+      S.deps       = Array.isArray(data) ? data : (data.data || []);
+      S.depsLoaded = true;
+      this._buildModuleFilterBar();
+      this._renderDepList();
+    } catch(e) {
+      document.getElementById('dep-list').innerHTML = `
+        <div class="card" style="border-left:4px solid #F87171;">
+          <p style="color:#991B1B;font-weight:600;">Impossible de charger les départs</p>
+          <p style="font-size:12px;color:#64748B;margin-top:3px;">${e.message}</p>
+          <button onclick="App.loadDepsFromServer(true)" style="margin-top:10px;background:#FEE2E2;color:#991B1B;border:none;padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻ Réessayer</button>
+        </div>`;
+    } finally {
+      S.depsLoading = false;
+      document.getElementById('dep-loading').style.display = 'none';
+    }
+  },
+  // Retourne le statut courant d'un article (le plus avancé dans la séquence)
+  // Séquence : enCours → aControler → termine  (deCote est indépendant)
+  _depCurrentStatus(d) {
+    if (!d.status) return null;
+    if (d.status.deCote)     return 'deCote';
+    if (d.status.termine)    return 'termine';
+    if (d.status.aControler) return 'aControler';
+    if (d.status.enCours)    return 'enCours';
+    return null;
+  },
+  setDepFilter(filter) {
+    S.depFilter = filter;
+    document.querySelectorAll('.dep-filter-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.filter === filter);
+    });
+    this._renderDepList();
+  },
+  setDepModuleFilter(mod) {
+    S.depModuleFilter = mod;
+    document.querySelectorAll('.dep-module-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mod === mod);
+    });
+    this._updateDepFilterBadge();
+    this._renderDepList();
+  },
+  toggleDepSort() {
+    S.depSortAsc = !S.depSortAsc;
+    const icon  = document.getElementById('dep-sort-icon');
+    const label = document.getElementById('dep-sort-label');
+    if (icon)  icon.textContent  = S.depSortAsc ? '↑' : '↓';
+    if (label) label.textContent = S.depSortAsc ? 'En cours → Terminé' : 'Terminé → En cours';
+    this._renderDepList();
+  },
+  async _loadDepPhotosLog() {
+    if (!S.apiUrl) return;
+    try {
+      const resp = await _fetchWithTimeout(S.apiUrl + '?action=dep_photos_log', {}, 10000);
+      const data = await resp.json();
+      if (data.status === 'ok' && data.log) {
+        S.depPhotosLog = data.log;
+        if (S.depsLoaded) this._renderDepList(); // rafraîchit les badges si liste déjà affichée
+      }
+    } catch(e) { /* silencieux : les badges resteront vides */ }
+  },
+  toggleDepFilters() {
+    S.depFiltersOpen = !S.depFiltersOpen;
+    const panel   = document.getElementById('dep-filters-panel');
+    const chevron = document.getElementById('dep-filter-chevron');
+    if (panel)   panel.style.display   = S.depFiltersOpen ? 'block' : 'none';
+    if (chevron) chevron.style.transform = S.depFiltersOpen ? 'rotate(180deg)' : '';
+  },
+  onDepDateChange() {
+    S.depDateFrom = (document.getElementById('dep-date-from').value || '').trim();
+    S.depDateTo   = (document.getElementById('dep-date-to').value   || '').trim();
+    // Bouton "Tout" actif seulement si aucune date saisie
+    const allBtn = document.getElementById('dep-date-all-btn');
+    const hasDate = S.depDateFrom || S.depDateTo;
+    if (allBtn) {
+      allBtn.style.background   = hasDate ? 'white'          : 'var(--brand)';
+      allBtn.style.color        = hasDate ? 'var(--brand)'   : 'white';
+      allBtn.style.borderColor  = 'var(--brand)';
+    }
+    this._updateDepFilterBadge();
+    this._renderDepList();
+  },
+  resetDepDates() {
+    S.depDateFrom = ''; S.depDateTo = '';
+    const from = document.getElementById('dep-date-from');
+    const to   = document.getElementById('dep-date-to');
+    if (from) from.value = '';
+    if (to)   to.value   = '';
+    const allBtn = document.getElementById('dep-date-all-btn');
+    if (allBtn) { allBtn.style.background = 'var(--brand)'; allBtn.style.color = 'white'; }
+    this._updateDepFilterBadge();
+    this._renderDepList();
+  },
+  _updateDepFilterBadge() {
+    const toggle   = document.getElementById('dep-filter-toggle');
+    const badge    = document.getElementById('dep-filter-badge');
+    const hasDate  = S.depDateFrom || S.depDateTo;
+    const hasMod   = S.depModuleFilter !== 'all';
+    const hasScope = S.depScope === 'avecPartis';
+    const count    = (hasDate ? 1 : 0) + (hasMod ? 1 : 0) + (hasScope ? 1 : 0);
+    if (badge)  { badge.textContent = count; badge.style.display = count ? 'inline' : 'none'; }
+    if (toggle) { toggle.classList.toggle('filters-active', count > 0); }
+  },
+  _depDateOk(d, preferFin = false) {
+    if (!S.depDateFrom && !S.depDateTo) return true;
+    // Pour les Partis on filtre sur la date de départ (fin), pour les actifs sur debut
+    const ref = preferFin ? (d.fin || d.debut) : (d.debut || d.fin);
+    if (!ref) return false;
+    const dt = new Date(ref); dt.setHours(0,0,0,0);
+    if (S.depDateFrom && dt < new Date(S.depDateFrom)) return false;
+    if (S.depDateTo   && dt > new Date(S.depDateTo))   return false;
+    return true;
+  },
+  _onDepSearch(e) {
+    S.depSearch = (e.target.value || '').trim().toLowerCase();
+    this._renderDepList();
+  },
+  setDepScope(scope) {
+    S.depScope = scope;
+    document.querySelectorAll('.scope-btn').forEach(b => b.classList.toggle('active', b.dataset.scope === scope));
+    this._updateDepFilterBadge();
+    // Charger les archives si pas encore fait
+    if (scope === 'avecPartis' && !S.archiveLoaded) this.loadArchive();
+    else this._renderDepList();
+  },
+  _buildModuleFilterBar() {
+    const bar = document.getElementById('dep-module-filters');
+    if (!bar) return;
+    bar.innerHTML = '';
+    // Collecte les types uniques (col F non vides)
+    const types = [...new Set(S.deps.map(d => (d.module || '').trim()).filter(Boolean))].sort();
+    if (!types.length) return;
+    // Bouton "Tous types"
+    const allBtn = document.createElement('button');
+    allBtn.className   = 'dep-module-btn active';
+    allBtn.dataset.mod = 'all';
+    allBtn.textContent = 'Tous types';
+    allBtn.addEventListener('click', () => App.setDepModuleFilter('all'));
+    bar.appendChild(allBtn);
+    // Un bouton par type
+    types.forEach(t => {
+      const btn = document.createElement('button');
+      btn.className   = 'dep-module-btn';
+      btn.dataset.mod = t;
+      btn.textContent = t;
+      btn.addEventListener('click', () => App.setDepModuleFilter(t));
+      bar.appendChild(btn);
+    });
+  },
+  _renderDepList() {
+    const list = document.getElementById('dep-list');
+    const none = document.getElementById('no-departures');
+    const q    = S.depSearch;
+    // ── Filtre actifs : statut + module + recherche texte ─────────────────
+    const filtered = S.deps.filter(d => {
+      const statusOk = S.depFilter === 'all' || this._depCurrentStatus(d) === S.depFilter;
+      const moduleOk = S.depModuleFilter === 'all' || (d.module || '').trim() === S.depModuleFilter;
+      const dateOk   = this._depDateOk(d);
+      const searchOk = !q ||
+        (d.code       || '').toLowerCase().includes(q) ||
+        (d.codeModule || '').toLowerCase().includes(q) ||
+        (d.chantier   || '').toLowerCase().includes(q) ||
+        (d.module     || '').toLowerCase().includes(q);
+      return statusOk && moduleOk && dateOk && searchOk;
+    });
+    // Badges statut — tiennent compte du filtre module ET de la recherche texte
+    const baseByStatus = S.deps.filter(d => {
+      const moduleOk = S.depModuleFilter === 'all' || (d.module || '').trim() === S.depModuleFilter;
+      const searchOk = !q ||
+        (d.code       || '').toLowerCase().includes(q) ||
+        (d.codeModule || '').toLowerCase().includes(q) ||
+        (d.chantier   || '').toLowerCase().includes(q) ||
+        (d.module     || '').toLowerCase().includes(q);
+      return moduleOk && searchOk;
+    });
+    const counts = { all: baseByStatus.length, enCours: 0, aControler: 0, termine: 0, deCote: 0 };
+    baseByStatus.forEach(d => {
+      const cur = this._depCurrentStatus(d);
+      if (cur && counts[cur] !== undefined) counts[cur]++;
+    });
+    document.querySelectorAll('.dep-filter-btn').forEach(btn => {
+      const f   = btn.dataset.filter;
+      const cnt = counts[f] ?? 0;
+      const label = { all: 'Tous', enCours: 'En cours', aControler: 'À contrôler', termine: 'Terminé', deCote: 'De côté' }[f];
+      btn.textContent = cnt > 0 ? `${label} (${cnt})` : label;
+    });
+    // ── Partis filtrés par type de module + date (fin) + recherche texte ──
+    const filteredPartis = S.depScope === 'avecPartis' ? S.archive.filter(d => {
+      const moduleOk = S.depModuleFilter === 'all' || (d.module || '').trim() === S.depModuleFilter;
+      if (!moduleOk) return false;
+      if (!this._depDateOk(d, true)) return false;  // filtre par date de départ (fin)
+      if (!q) return true;
+      return (d.code       || '').toLowerCase().includes(q) ||
+             (d.codeModule || '').toLowerCase().includes(q) ||
+             (d.chantier   || '').toLowerCase().includes(q) ||
+             (d.module     || '').toLowerCase().includes(q);
+    }) : [];
+    if (!filtered.length && !filteredPartis.length) {
+      list.innerHTML = ''; none.style.display = 'block'; return;
+    }
+    none.style.display = 'none';
+    // Tri par statut (actifs seulement)
+    const _statusRank = { enCours: 0, aControler: 1, termine: 2, deCote: 3 };
+    filtered.sort((a, b) => {
+      const ra = _statusRank[this._depCurrentStatus(a)] ?? 4;
+      const rb = _statusRank[this._depCurrentStatus(b)] ?? 4;
+      return S.depSortAsc ? ra - rb : rb - ra;
+    });
+    list.innerHTML = filtered.map((d, i) => {
+      const realIdx  = S.deps.indexOf(d);
+      const code     = d.code || '------';
+      const titre    = d.module || code;
+      const cur      = this._depCurrentStatus(d);
+      const selected = S.depSelectMode && S.depSelected.has(code);
+      const chipMap  = {
+        enCours:    '<span class="chip chip-blue">En cours</span>',
+        aControler: '<span class="chip chip-yellow">À contrôler</span>',
+        termine:    '<span class="chip chip-green">Terminé</span>',
+        deCote:     '<span class="chip" style="background:#F3E8FF;color:#6B21A8;">De côté</span>',
+      };
+      const chips   = cur ? chipMap[cur] : '';
+      const dur     = _duration(d.debut, d.status && d.status.termine ? d.fin : null);
+      const lvSiblingsCount = d.lv ? this._depLvSiblingCodes(d.lv, code).length : 0;
+      const onclick = S.depSelectMode ? `App.toggleDepSelect('${code}')` : `App.openDep(${realIdx})`;
+      const cbHtml  = S.depSelectMode
+        ? `<div style="width:22px;height:22px;border-radius:6px;border:2px solid ${selected?'#1D4ED8':'#CBD5E1'};background:${selected?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;color:white;">${selected?'✓':''}</div>`
+        : '';
+      return `
+        <div class="dep-card${selected?' dep-selected':''}" onclick="${onclick}">
+          ${cbHtml}
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;width:38px;">
+            <div style="width:34px;height:34px;background:#EBF5FB;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;">📤</div>
+            <div style="font-family:'Courier New',monospace;font-size:9px;color:#94A3B8;text-align:center;line-height:1.1;max-width:38px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${code}</div>
+          </div>
+          <div class="dep-card-left">
+            <div class="code-mono" style="font-size:14px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.codeModule || '&nbsp;'}</div>
+            <div style="font-size:10px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titre !== code ? titre : '&nbsp;'}</div>
+          </div>
+          <div class="dep-card-right">
+            <div style="font-size:13px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${d.chantier || '&nbsp;'}</div>
+            ${d.description ? `<div style="font-size:11px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${d.description.length > 55 ? d.description.substring(0,53)+'…' : d.description}</div>` : ''}
+            <div style="display:flex;align-items:center;gap:4px;overflow:hidden;flex-wrap:wrap;">
+              ${chips}
+              ${d.status && d.status.grutage ? `<span class="chip" style="background:#FEF2F2;color:#991B1B;flex-shrink:0;">🏗 Grutage</span>` : ''}
+              ${d.livraisonPrevue ? `<span class="chip" style="background:#EFF6FF;color:#1D4ED8;flex-shrink:0;">📅 ${_fmtDateShort(d.livraisonPrevue)}</span>` : ''}
+              ${dur ? `<span style="font-size:10px;color:#94A3B8;white-space:nowrap;flex-shrink:0;">⏱ ${dur}</span>` : ''}
+              ${S.depPhotosLog[code] ? `<span style="font-size:10px;background:#F0FDF4;color:#166534;border-radius:6px;padding:1px 5px;white-space:nowrap;flex-shrink:0;">📷 ${S.depPhotosLog[code].count}</span>` : ''}
+            </div>
+          </div>
+          ${(d.lv || d.commande) ? `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0;min-width:52px;">${d.lv ? `<span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;border-radius:4px;padding:1px 5px;font-weight:600;white-space:nowrap;" title="${lvSiblingsCount ? lvSiblingsCount + ' autre(s) module(s) sur la même LV, marqué(s) parti avec celui-ci' : ''}">📄 ${d.lv}${lvSiblingsCount ? ` (+${lvSiblingsCount})` : ''}</span>` : ''}${d.commande ? `<span style="font-size:10px;background:#F1F5F9;color:#475569;border-radius:4px;padding:1px 5px;white-space:nowrap;">${d.commande}</span>` : ''}</div>` : ''}
+          ${S.depSelectMode ? '' : (() => {
+            const codeSafe   = code.replace(/'/g, "\\'");
+            const modSafe    = (d.codeModule || '').replace(/'/g, "\\'");
+            const chantSafe  = (d.chantier   || '').replace(/'/g, "\\'");
+            const hasPose    = S.poseHistory.has(code);
+            return `<button onclick="event.stopPropagation();App.openPoseModal('${codeSafe}','${modSafe}','${chantSafe}')"
+              title="Saisir pièces posées"
+              style="background:none;border:none;cursor:pointer;padding:5px 4px;display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0;opacity:${hasPose?'1':'0.4'};">
+              <span style="font-size:17px;line-height:1;">🔧</span>
+              ${hasPose ? '<span class="dep-pose-dot"></span>' : '<span style="width:7px;height:4px;display:block;"></span>'}
+            </button>
+            <span style="color:#CBD5E1;font-size:16px;flex-shrink:0;">›</span>`;
+          })()}
+        </div>`;
+    }).join('');
+    // ── Section Partis ────────────────────────────────────────────────────
+    if (S.depScope === 'avecPartis') {
+      if (!S.archiveLoaded) {
+        list.innerHTML += `<div class="partis-separator">Partis</div>
+          <div style="text-align:center;padding:20px 0;"><div class="spinner"></div></div>`;
+      } else if (filteredPartis.length) {
+        list.innerHTML += `<div class="partis-separator">Partis · ${filteredPartis.length}</div>`;
+        list.innerHTML += filteredPartis.map((d) => {
+          const realIdx  = S.archive.indexOf(d);
+          const code     = d.code || '------';
+          const titre    = d.module || code;
+          const dur      = _duration(d.debut, d.fin);
+          const codeSafe  = code.replace(/'/g, "\\'");
+          const modSafe   = (d.codeModule || '').replace(/'/g, "\\'");
+          const chantSafe = (d.chantier   || '').replace(/'/g, "\\'");
+          const hasPose   = S.poseHistory.has(code);
+          return `
+            <div class="dep-card" style="opacity:0.8;" onclick="App.openArchiveDep(${realIdx})">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;width:38px;">
+                <div style="width:34px;height:34px;background:#F1F5F9;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;">📦</div>
+                <div style="font-family:'Courier New',monospace;font-size:9px;color:#94A3B8;text-align:center;line-height:1.1;max-width:38px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${code}</div>
+              </div>
+              <div class="dep-card-left">
+                <div class="code-mono" style="font-size:14px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.codeModule || ' '}</div>
+                <div style="font-size:10px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titre !== code ? titre : ' '}</div>
+              </div>
+              <div class="dep-card-right">
+                <div style="font-size:13px;font-weight:600;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${d.chantier || ' '}</div>
+                <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+                  ${dur ? `<span style="font-size:10px;color:#94A3B8;white-space:nowrap;">⏱ ${dur}</span>` : ''}
+                  ${d.lv ? `<span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;border-radius:4px;padding:1px 5px;font-weight:600;white-space:nowrap;">📄 ${d.lv}</span>` : ''}
+                </div>
+              </div>
+              <button onclick="event.stopPropagation();App.openPoseModal('${codeSafe}','${modSafe}','${chantSafe}')"
+                title="Voir / ajouter pièces posées"
+                style="background:none;border:none;cursor:pointer;padding:5px 4px;display:flex;flex-direction:column;align-items:center;gap:1px;flex-shrink:0;opacity:${hasPose?'1':'0.4'};">
+                <span style="font-size:17px;line-height:1;">🔧</span>
+                ${hasPose ? '<span class="dep-pose-dot"></span>' : '<span style="width:7px;height:4px;display:block;"></span>'}
+              </button>
+              <span style="color:#CBD5E1;font-size:16px;flex-shrink:0;">›</span>
+            </div>`;
+        }).join('');
+      } else if (q) {
+        list.innerHTML += `<div class="partis-separator">Partis</div>
+          <p style="font-size:12px;color:#94A3B8;text-align:center;padding:12px 0;">Aucun parti correspondant</p>`;
+      }
+    }
+  },
+  // Codes des autres modules actifs (non partis) qui partagent le même n° de
+  // LV — sur cette LV, marquer un module parti marque toute la LV parti côté
+  // tableur (voir _markParti côté Apps Script, dédup par lvNum), donc ces
+  // modules "partent" ensemble qu'on les sélectionne ou non.
+  _depLvSiblingCodes(lv, excludeCode) {
+    if (!lv) return [];
+    return S.deps.filter(d => d.lv === lv && d.code !== excludeCode).map(d => d.code);
+  },
+  toggleDepSelectMode() {
+    S.depSelectMode = !S.depSelectMode;
+    S.depSelected.clear();
+    const fab = document.getElementById('fab-dep');
+    if (fab) {
+      fab.style.background = S.depSelectMode ? '#1D4ED8' : 'var(--brand)';
+      fab.style.boxShadow  = S.depSelectMode
+        ? '0 4px 16px rgba(29,78,216,0.5)'
+        : '0 4px 16px rgba(26,82,118,0.45)';
+    }
+    this._updateDepLvBar();
+    this._renderDepList();
+  },
+  toggleDepSelect(code) {
+    // Sélection strictement individuelle — le regroupement par LV n'intervient
+    // qu'au moment de "Parti" (voir depMarkParti/_updateDepLvBar), pas ici,
+    // pour ne pas contraindre la sélection si d'autres actions par module
+    // s'ajoutent un jour.
+    if (S.depSelected.has(code)) S.depSelected.delete(code);
+    else S.depSelected.add(code);
+    this._updateDepLvBar();
+    this._renderDepList();
+  },
+  // Codes réellement envoyés à dep_mark_parti : la sélection de l'utilisateur
+  // + les modules "frères" (même LV) non sélectionnés, pour que le voyage
+  // parte entièrement du Planning même si l'utilisateur n'a coché qu'un module.
+  _depExpandedSelection() {
+    const expanded = new Set(S.depSelected);
+    S.depSelected.forEach(code => {
+      const d = S.deps.find(x => x.code === code);
+      if (d && d.lv) this._depLvSiblingCodes(d.lv, code).forEach(c => expanded.add(c));
+    });
+    return [...expanded];
+  },
+  _updateDepLvBar() {
+    const bar     = document.getElementById('dep-lv-bar');
+    const count   = document.getElementById('dep-lv-count');
+    const partiBtn = document.getElementById('dep-mark-parti-btn');
+    if (!bar) return;
+    const n = S.depSelected.size;
+    bar.style.display = (S.depSelectMode && n > 0) ? '' : 'none';
+    if (count) count.textContent = `${n} module${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''}`;
+    if (partiBtn) {
+      const extra = this._depExpandedSelection().length - n;
+      partiBtn.textContent = extra > 0 ? `✅ Parti (+${extra}) →` : '✅ Parti →';
+    }
+  },
+  async depCreateLv() {
+    if (!S.depSelected.size) return;
+    const selectedDeps = S.deps.filter(d => S.depSelected.has(d.code));
+    if (!selectedDeps.length) return;
+    const userActs = S.currentUser?.activites || [];
+    if (!userActs.includes('lvu')) { this.toast('⛔ Accès LV non autorisé'); return; }
+
+    // Vérifier que tous les modules ont la même destination (code agence)
+    if (selectedDeps.length > 1) {
+      const agCodes = [...new Set(selectedDeps.map(d =>
+        (d.ag || ((d.chantier || '').match(/^(\d{3,6})/)||[])[1] || '').trim()
+      ).filter(Boolean))];
+      if (agCodes.length > 1) {
+        const ok = window.confirm(
+          `⚠️ Destinations différentes détectées (agences : ${agCodes.join(', ')}).\n` +
+          `Une LV est normalement par destination.\nContinuer quand même ?`
+        );
+        if (!ok) return;
+      }
+    }
+
+    // Réinitialiser la sélection
+    S.depSelectMode = false;
+    S.depSelected.clear();
+    // Pré-remplir les items LOXAM avec les modules sélectionnés
+    S.lvu.loxamItems    = selectedDeps;
+    S.lvu.selectedItems = new Set(selectedDeps.map(d => d.code));
+    // Basculer vers l'activité LVU
+    S.activity = 'lvu';
+    await this.lvuInit();
+    // Charger les agences en premier (await) pour que lvuApplyLoxam puisse pré-remplir le destinataire
+    await this.lvuLoadAgencies();
+    // Appliquer les modules (source loxam + marchandises + destinataire)
+    this.lvuSetSource('loxam');
+    this.lvuApplyLoxam();
+  },
+  async depMarkParti() {
+    if (!S.depSelected.size) return;
+    // Sélection + modules "frères" (même LV) — le voyage part en entier, même
+    // si l'utilisateur n'a coché qu'un seul module de la LV (voir badge
+    // "Parti (+N)" affiché sur ce bouton par _updateDepLvBar).
+    const codes = this._depExpandedSelection();
+    const extra = codes.length - S.depSelected.size;
+    const n = codes.length;
+    const extraNote = extra > 0 ? `\n\n(+${extra} module${extra > 1 ? 's' : ''} ajouté${extra > 1 ? 's' : ''} automatiquement, même LV)` : '';
+    const ok = window.confirm(`Marquer ${n} module${n > 1 ? 's' : ''} comme parti${n > 1 ? 's' : ''} ?\n\n${codes.join(', ')}${extraNote}`);
+    if (!ok || S.depPartiBusy) return;
+    // Bouton bloqué pendant l'appel (quelques secondes) pour éviter les clics répétés.
+    S.depPartiBusy = true;
+    const btn = document.getElementById('dep-mark-parti-btn');
+    const btnHtml = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; btn.innerHTML = '⏳ Envoi…'; }
+    this.toast('Mise à jour en cours…');
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ action:'dep_mark_parti', codes })
+      }, 30000);
+      const res = await r.json();
+      if (res.status === 'ok') {
+        const updatedSet = new Set((res.updated || []).map(c => c.toUpperCase()));
+        S.deps = S.deps.filter(d => !updatedSet.has((d.code || '').toUpperCase()));
+        S.depSelectMode = false;
+        S.depSelected.clear();
+        const fab = document.getElementById('fab-dep');
+        if (fab) { fab.style.background = 'var(--brand)'; fab.style.boxShadow = '0 4px 16px rgba(26,82,118,0.45)'; }
+        this._updateDepLvBar();
+        this._renderDepList();
+        this.toast(`✅ ${res.count} module${res.count > 1 ? 's' : ''} marqué${res.count > 1 ? 's' : ''} parti${res.count > 1 ? 's' : ''}`);
+        // Portail transporteur (Supabase) : synchronisé par le serveur (dep_mark_parti).
+      } else {
+        this.toast('❌ ' + (res.error || 'Erreur inconnue'));
+      }
+    } catch(e) {
+      this.toast('❌ Erreur réseau : ' + e.message);
+    } finally {
+      S.depPartiBusy = false;
+      if (btn) { btn.disabled = false; btn.style.opacity = ''; btn.innerHTML = btnHtml; }
+    }
+  },
+  openDep(idx) {
+    S.selDep        = S.deps[idx];
+    S.depFromArchive = false;
+    S.depPhotos     = [];
+    this.go('dep-detail');
+    this._renderDepDetail();
+  },
+  openArchiveDep(idx) {
+    S.selDep        = S.archive[idx];
+    S.depFromArchive = true;
+    S.depPhotos     = [];
+    this.go('dep-detail');
+    this._renderDepDetail();
+  },
+  _renderDepDetail() {
+    const d = S.selDep;
+    if (!d) return;
+    const code  = d.code || '------';
+    const titre = d.module || code;
+    document.getElementById('dep-detail-body').innerHTML = `
+      <div class="card" style="margin-bottom:12px;">
+        ${d.codeModule ? `<div class="code-mono" style="font-size:28px;letter-spacing:3px;margin-bottom:4px;">${d.codeModule}</div>` : ''}
+        ${d.status && d.status.grutage ? `<div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:8px 12px;margin-bottom:8px;display:flex;align-items:center;gap:8px;"><span style="font-size:18px;">🏗</span><span style="font-size:13px;font-weight:700;color:#991B1B;">GRUTAGE À LA LIVRAISON</span></div>` : ''}
+        <div style="font-size:16px;font-weight:600;color:#1E293B;margin-bottom:4px;">${d.chantier || '—'}${d.ag ? ' — Ag. ' + d.ag : ''}</div>
+        <div style="font-size:12px;color:#94A3B8;">📋 ${code}</div>
+        <div style="font-size:13px;color:#64748B;margin-top:2px;">${titre}</div>
+        ${d.description ? `<div style="font-size:12px;color:#94A3B8;margin-top:4px;line-height:1.4;">${d.description}</div>` : ''}
+        ${d.debut || d.fin ? `<div style="font-size:12px;color:#64748B;margin-top:6px;">
+          📅 ${d.debut ? 'Entrée le ' + _fmtDate(d.debut) : ''}
+          ${d.fin ? ' → ' + _fmtDate(d.fin) : (d.debut ? ' → auj.' : '')}
+          ${(() => { const finCalc = S.depFromArchive ? d.fin : (d.status && d.status.termine ? d.fin : null); const dur = _duration(d.debut, finCalc); return dur ? `<span style="margin-left:6px;background:#F1F5F9;border-radius:4px;padding:1px 6px;font-weight:600;">⏱ ${dur}</span>` : ''; })()}
+        </div>` : ''}
+        ${d.lv ? `<div style="font-size:12px;color:#1D4ED8;font-weight:600;margin-top:4px;">📄 LV N° ${d.lv}</div>` : ''}
+        ${d.commande ? `<div style="font-size:12px;color:#64748B;margin-top:2px;">🔖 Commande : ${d.commande}</div>` : ''}
+        <div style="font-size:12px;color:#1E293B;margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span>📅 Livraison prévue : ${d.livraisonPrevue ? _fmtDate(d.livraisonPrevue) : 'non renseignée'}</span>
+          ${!S.depFromArchive ? `<button onclick="App.toggleLivraisonPrevueEdit()" style="background:none;border:none;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer;padding:0;">Modifier</button>` : ''}
+        </div>
+        ${!S.depFromArchive ? `
+        <div id="livraison-prevue-edit" style="display:none;gap:6px;align-items:center;margin-top:8px;">
+          <input type="date" id="livraison-prevue-input" value="${_toIsoDateInput(d.livraisonPrevue)}" style="flex:1;padding:8px;border:1px solid #E2E8F0;border-radius:8px;font-size:13px;">
+          <button onclick="App.saveLivraisonPrevue()" style="background:var(--brand);color:white;border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">OK</button>
+        </div>` : ''}
+        <div id="dep-drive-section" style="margin-top:12px;">
+          <p style="font-size:12px;color:#94A3B8;">🔄 Vérification du dossier Drive…</p>
+        </div>
+      </div>
+      ${!S.depFromArchive ? `
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <p style="font-size:14px;font-weight:600;color:#1E293B;margin:0;">Photos du départ</p>
+          ${S.depPhotosLog[d.code] ? `<span style="font-size:11px;background:#F0FDF4;color:#166534;border-radius:6px;padding:2px 8px;font-weight:600;">📷 ${S.depPhotosLog[d.code].count} photo${S.depPhotosLog[d.code].count > 1 ? 's' : ''} · ${_fmtDate(S.depPhotosLog[d.code].date)}</span>` : ''}
+        </div>
+        <div class="photo-grid" id="dep-photo-grid" style="margin-bottom:10px;"></div>
+        <input type="file" id="dep-photo-input" accept="image/*" multiple style="display:none;" onchange="App.handlePhotos(event,'dep')">
+        <p id="dep-photo-count" style="font-size:12px;color:#64748B;margin-bottom:10px;">0 photo ajoutée</p>
+        <button onclick="App.triggerInput('dep-photo-input')" style="background:#EBF5FB;color:var(--brand);border:none;padding:12px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;width:100%;">📷 Ajouter des photos</button>
+      </div>
+      <div style="margin-top:14px;">
+        <button class="btn btn-primary" id="btn-dep-submit" onclick="App.submitDep()">📤 Enregistrer les photos de départ</button>
+      </div>` : `
+      <div class="card" style="background:#F0FDF4;border:1px solid #BBF7D0;">
+        <p style="font-size:14px;font-weight:600;color:#15803D;">✅ Article parti</p>
+        <p style="font-size:12px;color:#64748B;margin-top:4px;">Cet article a quitté le parc.</p>
+      </div>`}`;
+    if (!S.depFromArchive) this._renderDepPhotoGrid();
+    this._loadDriveLinkForDetail(d.code, S.depFromArchive ? 'archive' : 'production', 'dep-drive-section', 'drive-files-panel', 'btn-drive-files');
+  },
+  toggleLivraisonPrevueEdit() {
+    const box = document.getElementById('livraison-prevue-edit');
+    if (!box) return;
+    box.style.display = box.style.display === 'flex' ? 'none' : 'flex';
+  },
+  async saveLivraisonPrevue() {
+    const d = S.selDep;
+    if (!d) return;
+    const input = document.getElementById('livraison-prevue-input');
+    const date  = input ? input.value : '';
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ action:'dep_set_livraison_prevue', code: d.code, date })
+      }, 20000);
+      const res = await r.json();
+      if (res.status !== 'ok') { this.toast('❌ ' + (res.error || 'Erreur')); return; }
+      d.livraisonPrevue = date;
+      const box = document.getElementById('livraison-prevue-edit');
+      if (box) box.style.display = 'none';
+      this._renderDepDetail();
+      this._renderDepList();
+      this.toast('✅ Livraison prévue mise à jour');
+    } catch(e) {
+      this.toast('❌ Erreur : ' + e.message);
+    }
+  },
+  async loadDriveFiles(folderId, panelId = 'drive-files-panel', btnId = 'btn-drive-files') {
+    if (!folderId) return;
+    const panel = document.getElementById(panelId);
+    const btn   = document.getElementById(btnId);
+    if (!panel) return;
+    // Spinner pendant le chargement
+    if (btn) { btn.disabled = true; btn.textContent = 'Chargement…'; }
+    panel.innerHTML = '<p style="font-size:12px;color:#94A3B8;">Récupération des fichiers…</p>';
+    try {
+      const url  = S.apiUrl + '?action=drive_files&folderId=' + encodeURIComponent(folderId);
+      const resp = await _fetchWithTimeout(url, {}, 30000);
+      const data = await resp.json();
+      if (data.status !== 'ok' || !data.files?.length) {
+        panel.innerHTML = '<p style="font-size:12px;color:#94A3B8;">Dossier vide ou inaccessible.</p>';
+        if (btn) { btn.disabled = false; btn.textContent = '📂 Voir les fichiers'; }
+        return;
+      }
+      // Icône selon le type MIME
+      const icon = mime => {
+        if (mime.includes('image'))       return '🖼️';
+        if (mime.includes('pdf'))         return '📄';
+        if (mime.includes('spreadsheet')) return '📊';
+        if (mime.includes('document'))    return '📝';
+        if (mime.includes('video'))       return '🎬';
+        if (mime.includes('folder'))      return '📁';
+        return '📎';
+      };
+      panel.innerHTML = `
+        <div style="border-top:1px solid #F1F5F9;margin-top:4px;padding-top:8px;">
+          <p style="font-size:11px;color:#94A3B8;margin-bottom:6px;">${data.count} fichier${data.count > 1 ? 's' : ''} dans le dossier</p>
+          ${data.files.map(f => `
+            <a href="${f.url}" target="_blank" rel="noopener"
+               style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #F8FAFC;text-decoration:none;">
+              <span style="font-size:18px;flex-shrink:0;">${icon(f.mimeType)}</span>
+              <span style="font-size:13px;color:#1E293B;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.name}</span>
+              <span style="color:#CBD5E1;font-size:14px;">›</span>
+            </a>`).join('')}
+        </div>`;
+      if (btn) { btn.disabled = false; btn.textContent = '↺ Actualiser'; }
+    } catch(e) {
+      panel.innerHTML = `<p style="font-size:12px;color:#EF4444;">Erreur : ${e.message}</p>`;
+      if (btn) { btn.disabled = false; btn.textContent = '📂 Réessayer'; }
+    }
+  },
+  /* ─ Lazy-load Drive link for a detail card ─ */
+  async _loadDriveLinkForDetail(code, source, sectionId, panelId, btnId) {
+    const section = document.getElementById(sectionId);
+    if (!section || !code || code === '------') {
+      if (section) section.innerHTML = '';
+      return;
+    }
+    try {
+      const url  = `${S.apiUrl}?action=drive_link&code=${encodeURIComponent(code)}&source=${encodeURIComponent(source)}`;
+      const resp = await _fetchWithTimeout(url, {}, 20000);
+      const data = await resp.json();
+      // Section could have been replaced if user navigated away
+      const sec = document.getElementById(sectionId);
+      if (!sec) return;
+      if (data.status === 'ok' && data.lienDrive) {
+        const lien        = data.lienDrive;
+        const isFolder    = /\/folders\//.test(lien);
+        const folderMatch = isFolder ? (lien.match(/\/folders\/([a-zA-Z0-9_-]+)/) || [])[1] : null;
+        sec.innerHTML = `
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:6px;">
+            <a href="${lien}" target="_blank" rel="noopener"
+               style="font-size:13px;color:var(--accent);font-weight:600;text-decoration:none;">
+              📁 Ouvrir dans Drive
+            </a>
+            ${folderMatch ? `<button
+              id="${btnId}"
+              onclick="App.loadDriveFiles('${folderMatch}','${panelId}','${btnId}')"
+              style="background:none;border:none;color:#94A3B8;font-size:12px;cursor:pointer;padding:0;">
+              ↺ Actualiser
+            </button>` : ''}
+          </div>
+          <div id="${panelId}" style="margin-top:0;"></div>`;
+        // Chargement automatique des fichiers si c'est un dossier
+        if (folderMatch) this.loadDriveFiles(folderMatch, panelId, btnId);
+      } else {
+        sec.innerHTML = `
+          <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:8px 12px;">
+            <p style="font-size:12px;color:#92400E;margin:0;">⚠️ Aucun dossier Drive trouvé pour ce module</p>
+          </div>`;
+      }
+    } catch(e) {
+      const sec = document.getElementById(sectionId);
+      if (sec) sec.innerHTML = `<p style="font-size:12px;color:#EF4444;">Erreur Drive : ${e.message}</p>`;
+    }
+  },
+  /* ─ Archive (Partis) ─ */
+  async loadArchive(force = false) {
+    if (!force && S.archiveLoaded) return;
+    document.getElementById('archive-loading').style.display = 'block';
+    document.getElementById('no-archive').style.display      = 'none';
+    document.getElementById('archive-search').style.display  = 'none';
+    document.getElementById('archive-list').innerHTML        = '';
+    if (!S.apiUrl) {
+      document.getElementById('archive-loading').style.display = 'none';
+      document.getElementById('no-archive').style.display      = 'block';
+      return;
+    }
+    try {
+      const url  = S.apiUrl + '?action=archive';
+      const resp = await _fetchWithTimeout(url, {}, 40000);
+      const data = await resp.json();
+      S.archive       = Array.isArray(data) ? data : (data.data || []);
+      S.archiveLoaded = true;
+      // Si on est en mode "Avec partis", on rafraîchit la liste de production
+      if (S.depScope === 'avecPartis') { this._renderDepList(); return; }
+      this._renderArchiveList(S.archive);
+      document.getElementById('archive-search').style.display = S.archive.length ? 'block' : 'none';
+    } catch(e) {
+      document.getElementById('archive-list').innerHTML = `
+        <div class="card" style="border-left:4px solid #F87171;">
+          <p style="color:#991B1B;font-weight:600;">Impossible de charger les archives</p>
+          <p style="font-size:12px;color:#64748B;margin-top:3px;">${e.message}</p>
+        </div>`;
+    } finally {
+      document.getElementById('archive-loading').style.display = 'none';
+    }
+  },
+  _filterArchive() {
+    const q = (document.getElementById('archive-query')?.value || '').trim().toLowerCase();
+    if (!q) { this._renderArchiveList(S.archive); return; }
+    const filtered = S.archive.filter(d =>
+      (d.code    || '').toLowerCase().includes(q) ||
+      (d.chantier|| '').toLowerCase().includes(q) ||
+      (d.codeModule||'').toLowerCase().includes(q)
+    );
+    this._renderArchiveList(filtered);
+  },
+  _renderArchiveList(items) {
+    const list = document.getElementById('archive-list');
+    const none = document.getElementById('no-archive');
+    if (!items.length) { list.innerHTML = ''; none.style.display = 'block'; return; }
+    none.style.display = 'none';
+    list.innerHTML = items.map((d, i) => {
+      const realIdx = S.archive.indexOf(d);
+      const code  = d.code || '------';
+      const titre = d.module || code;
+      const dur   = _duration(d.debut, d.fin);
+      return `
+        <div class="dep-card" style="opacity:0.85;" onclick="App.openArchiveDep(${realIdx})">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;width:38px;">
+            <div style="width:34px;height:34px;background:#F1F5F9;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;">📦</div>
+            <div style="font-family:'Courier New',monospace;font-size:9px;color:#94A3B8;text-align:center;line-height:1.1;max-width:38px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${code}</div>
+          </div>
+          <div class="dep-card-left">
+            <div class="code-mono" style="font-size:14px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.codeModule || '\u00A0'}</div>
+            <div style="font-size:10px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${titre !== code ? titre : '\u00A0'}</div>
+          </div>
+          <div class="dep-card-right">
+            <div style="font-size:13px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${d.chantier || '\u00A0'}</div>
+            ${dur ? `<span style="font-size:10px;color:#94A3B8;">⏱ ${dur}</span>` : ''}
+          </div>
+          <span style="color:#CBD5E1;font-size:16px;flex-shrink:0;">›</span>
+        </div>`;
+    }).join('');
+  },
+  /* ─ Arrivals (serveur) ─ */
+  async loadArrivalsData(force = false) {
+    if (!force && S.arrivalsLoaded) return;
+    if (force) {
+      S.arrivalsLoaded = false; S.arrFullLoaded = false;
+      S.arrTypeFilter = 'all'; S.arrPartiFilter = 'present';
+      const s = document.getElementById('arr-search'); if (s) s.value = '';
+    }
+    document.getElementById('arr-loading').style.display = 'block';
+    document.getElementById('no-arrivals').style.display = 'none';
+    document.getElementById('arr-list').innerHTML = '';
+    if (!S.apiUrl) {
+      document.getElementById('arr-loading').style.display = 'none';
+      document.getElementById('no-arrivals').style.display = 'block';
+      return;
+    }
+    // Chargement en parallèle : données + log photos arrivée
+    this._loadArrPhotosLog();
+    try {
+      // Premier chargement : scope=active → seulement les articles sur parc
+      const resp = await _fetchWithTimeout(S.apiUrl + '?action=arrivals&scope=active', {}, 50000);
+      const data = await resp.json();
+      S.arrivalsData    = Array.isArray(data) ? data : (data.data || []);
+      S.arrivalsSummary = data.summary || {};
+      S.arrivalsLoaded  = true;
+      S.arrFullLoaded   = false;  // les partis ne sont pas encore chargés
+      this._renderArrivalsSummary();
+      this._buildArrTypeFilters();
+      this._filterAndRenderArrivals();
+    } catch(e) {
+      document.getElementById('arr-list').innerHTML = `
+        <div class="card" style="border-left:4px solid #F87171;">
+          <p style="color:#991B1B;font-weight:600;">Impossible de charger les arrivées</p>
+          <p style="font-size:12px;color:#64748B;margin-top:3px;">${e.message}</p>
+        </div>`;
+    } finally {
+      document.getElementById('arr-loading').style.display = 'none';
+    }
+  },
+  // Chargement complet des arrivées (déclenché à la demande quand l'utilisateur
+  // bascule sur "Partis" ou "Tous" alors que seules les données actives sont en mémoire).
+  async _loadFullArrivals() {
+    const list = document.getElementById('arr-list');
+    if (list) list.innerHTML = `
+      <div style="text-align:center;padding:30px;">
+        <div class="spinner"></div>
+        <p style="color:#64748B;font-size:13px;margin-top:10px;">Chargement de l'historique…</p>
+      </div>`;
+    // Atténuer les boutons Partis/Tous pendant le chargement
+    const btns = document.querySelectorAll('#arr-parti-filters .arr-seg-btn');
+    btns.forEach(b => { if (b.dataset.parti !== 'present') b.style.opacity = '0.5'; });
+    try {
+      const resp = await _fetchWithTimeout(S.apiUrl + '?action=arrivals', {}, 50000);
+      const data = await resp.json();
+      S.arrivalsData    = Array.isArray(data) ? data : (data.data || []);
+      S.arrivalsSummary = data.summary || {};
+      S.arrFullLoaded   = true;
+      this._renderArrivalsSummary();
+      this._buildArrTypeFilters();
+      this._filterAndRenderArrivals();
+    } catch(e) {
+      if (list) list.innerHTML = `
+        <div class="card" style="border-left:4px solid #F87171;">
+          <p style="color:#991B1B;font-weight:600;">Impossible de charger les données complètes</p>
+          <p style="font-size:12px;color:#64748B;margin-top:3px;">${e.message}</p>
+          <button onclick="App._loadFullArrivals()" style="margin-top:10px;background:#FEE2E2;color:#991B1B;border:none;padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻ Réessayer</button>
+        </div>`;
+    } finally {
+      btns.forEach(b => { b.style.opacity = ''; });
+    }
+  },
+  _renderArrivalsSummary() {
+    const wrap     = document.getElementById('arr-summary');
+    const inner    = document.getElementById('arr-summary-inner');
+    const totalEl  = document.getElementById('arr-summary-total');
+    if (!wrap || !inner || !totalEl) return;
+    const s = S.arrivalsSummary;
+    const entries = Object.entries(s).filter(([,n]) => n > 0);
+    if (!entries.length) { wrap.style.display = 'none'; return; }
+    const total = entries.reduce((acc, [,n]) => acc + n, 0);
+    totalEl.textContent = `🅿️ ${total} modules sur parc`;
+    // types séparés par un point médian
+    inner.innerHTML = entries.map(([type, n], i) =>
+      `<span style="font-size:12px;color:#64748B;">${i > 0 ? '<span style="color:#CBD5E1;margin:0 6px;">·</span>' : ''}${type} <strong style="color:#1D4ED8;">${n}</strong></span>`
+    ).join('');
+    wrap.style.display = 'block';
+  },
+  _buildArrTypeFilters() {
+    const bar = document.getElementById('arr-type-filters');
+    if (!bar) return;
+    bar.innerHTML = '';
+    const types = [...new Set(S.arrivalsData.map(a => (a.type || '').trim()).filter(Boolean))].sort();
+    if (!types.length) return;
+    const allBtn = document.createElement('button');
+    allBtn.className = 'dep-module-btn active'; allBtn.dataset.type = 'all'; allBtn.textContent = 'Tous types';
+    allBtn.addEventListener('click', () => App.setArrTypeFilter('all'));
+    bar.appendChild(allBtn);
+    types.forEach(t => {
+      const btn = document.createElement('button');
+      btn.className = 'dep-module-btn'; btn.dataset.type = t; btn.textContent = t;
+      btn.addEventListener('click', () => App.setArrTypeFilter(t));
+      bar.appendChild(btn);
+    });
+  },
+  setArrTypeFilter(f) {
+    S.arrTypeFilter = f;
+    document.querySelectorAll('#arr-type-filters .dep-module-btn').forEach(b => b.classList.toggle('active', b.dataset.type === f));
+    this._filterAndRenderArrivals();
+  },
+  setArrPartiFilter(f) {
+    S.arrPartiFilter = f;
+    document.querySelectorAll('#arr-parti-filters .arr-seg-btn').forEach(b => b.classList.toggle('active', b.dataset.parti === f));
+    // Si l'utilisateur veut voir les partis ou tout, et que les données
+    // complètes ne sont pas encore chargées → chargement lazy
+    if ((f === 'all' || f === 'parti') && !S.arrFullLoaded) {
+      this._loadFullArrivals();
+      return;
+    }
+    this._filterAndRenderArrivals();
+  },
+  _filterAndRenderArrivals() {
+    const q = (document.getElementById('arr-search')?.value || '').trim().toLowerCase();
+    const items = S.arrivalsData.filter(a => {
+      const typeOk  = S.arrTypeFilter  === 'all' || (a.type || '').trim() === S.arrTypeFilter;
+      const partiOk = S.arrPartiFilter === 'all'
+        || (S.arrPartiFilter === 'present' && !a.isParti)
+        || (S.arrPartiFilter === 'parti'   &&  a.isParti);
+      if (!typeOk || !partiOk) return false;
+      if (!q) return true;
+      return (a.numModule  || '').toLowerCase().includes(q)
+          || (a.code       || '').toLowerCase().includes(q)
+          || (a.type       || '').toLowerCase().includes(q)
+          || (a.chauffeur  || '').toLowerCase().includes(q)
+          || (a.agence     || '').toLowerCase().includes(q)
+          || (a.lv         || '').toLowerCase().includes(q)
+          || (a.numSerie   || '').toLowerCase().includes(q)
+          || (a.destination|| '').toLowerCase().includes(q);
+    });
+    // Compteur discret
+    const countEl = document.getElementById('arr-result-count');
+    if (countEl) {
+      const total = S.arrivalsData.length;
+      if (items.length < total) {
+        countEl.textContent = `${items.length} résultat${items.length > 1 ? 's' : ''} sur ${total}`;
+        countEl.style.display = 'block';
+      } else {
+        countEl.style.display = 'none';
+      }
+    }
+    this._renderArrivalCards(items);
+  },
+  _renderArrivalCards(items) {
+    const list = document.getElementById('arr-list');
+    const none = document.getElementById('no-arrivals');
+    if (!items.length) { list.innerHTML = ''; none.style.display = 'block'; return; }
+    none.style.display = 'none';
+    list.innerHTML = items.map((a) => {
+      const realIdx = S.arrivalsData.indexOf(a);
+      const primary = a.numModule || a.code;
+      const meta    = [a.chauffeur, _fmtDate(a.dateArrivee)].filter(Boolean).join(' · ');
+      return `
+        <div class="dep-card" onclick="App.openArrival(${realIdx})">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;width:38px;">
+            <div style="width:34px;height:34px;background:#EBF5FB;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;">📥</div>
+            <div style="font-family:'Courier New',monospace;font-size:9px;color:#94A3B8;text-align:center;line-height:1.1;max-width:38px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.code || ''}</div>
+          </div>
+          <div class="dep-card-left">
+            <div class="code-mono" style="font-size:14px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${primary || '\u00A0'}</div>
+            <div style="font-size:10px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.type || '\u00A0'}</div>
+          </div>
+          <div class="dep-card-right">
+            <div style="font-size:13px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${a.destination || '\u00A0'}</div>
+            ${a.description ? `<div style="font-size:11px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px;">${a.description.length > 55 ? a.description.substring(0,53)+'…' : a.description}</div>` : ''}
+            <div style="display:flex;align-items:center;gap:4px;overflow:hidden;">
+              ${a.isParti
+                ? `<span style="background:#DCFCE7;color:#15803D;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;flex-shrink:0;">Parti</span>`
+                : `<span style="background:#EFF6FF;color:#1D4ED8;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;flex-shrink:0;">Sur parc</span>`}
+              ${meta ? `<span style="font-size:10px;color:#94A3B8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${meta}</span>` : ''}
+              ${S.arrPhotosLog[a.code] ? `<span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;border-radius:6px;padding:1px 5px;white-space:nowrap;flex-shrink:0;">📷 ${S.arrPhotosLog[a.code].count}</span>` : ''}
+            </div>
+          </div>
+          <span style="color:#CBD5E1;font-size:16px;flex-shrink:0;">›</span>
+        </div>`;
+    }).join('');
+  },
+  openArrival(idx) {
+    S.selArrival = S.arrivalsData[idx];
+    S.arrPhotos  = [];
+    this.go('arr-detail');
+    this._renderArrivalDetail();
+  },
+  _renderArrivalDetail() {
+    const a = S.selArrival;
+    if (!a) return;
+    const primary = a.numModule || a.code;
+    const rows = [
+      a.numModule   && ['Code interne',  a.code],
+      a.destination && ['Chantier',      a.destination],
+      a.type        && ['Type',          a.type],
+      a.numSerie    && ['N° Série',      a.numSerie],
+      a.plaques     && ['Plaques',       a.plaques],
+      a.lv          && ['LV',            a.lv],
+      a.agence      && ['Agence',        a.agence],
+      a.chauffeur   && ['Chauffeur',     a.chauffeur],
+      a.bt          && ['BT',            a.bt],
+      a.pastille    && ['Pastille',      a.pastille],
+      a.commentaire && ['Commentaire',   a.commentaire],
+      a.colN        && ['Longueur',      a.colN],
+      // colO = isParti (vrai/faux) → affiché via le badge, pas en ligne de détail
+    ].filter(Boolean);
+    document.getElementById('arr-detail-body').innerHTML = `
+      <div class="card" style="margin-bottom:12px;">
+        <div style="margin-bottom:8px;">
+          ${a.isParti
+            ? `<span style="background:#DCFCE7;color:#15803D;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;">✅ Parti</span>`
+            : `<span style="background:#EFF6FF;color:#1D4ED8;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;">🅿️ Sur parc</span>`}
+        </div>
+        <div class="code-mono" style="font-size:28px;letter-spacing:3px;margin-bottom:4px;">${primary}</div>
+        ${a.dateArrivee ? `<div style="font-size:12px;color:#64748B;margin-bottom:4px;">📅 Arrivée le ${_fmtDate(a.dateArrivee)}</div>` : ''}
+        ${rows.length ? `
+        <div style="margin-top:10px;border-top:1px solid #F1F5F9;padding-top:10px;display:grid;grid-template-columns:auto 1fr;gap:5px 14px;">
+          ${rows.map(([k,v]) => `
+            <span style="font-size:12px;color:#94A3B8;white-space:nowrap;padding-top:1px;">${k}</span>
+            <span style="font-size:12px;color:#1E293B;font-weight:500;word-break:break-word;">${v}</span>`).join('')}
+        </div>` : ''}
+        <div id="arr-drive-section" style="margin-top:12px;">
+          <p style="font-size:12px;color:#94A3B8;">🔄 Vérification du dossier Drive…</p>
+        </div>
+      </div>
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <p style="font-size:14px;font-weight:600;color:#1E293B;margin:0;">Photos d'arrivée</p>
+          ${S.arrPhotosLog[a.code] ? `<span style="font-size:11px;background:#EFF6FF;color:#1D4ED8;border-radius:6px;padding:2px 8px;font-weight:600;">📷 ${S.arrPhotosLog[a.code].count} photo${S.arrPhotosLog[a.code].count > 1 ? 's' : ''} · ${_fmtDate(S.arrPhotosLog[a.code].date)}</span>` : ''}
+        </div>
+        <div class="photo-grid" id="arr-photo-grid" style="margin-bottom:10px;"></div>
+        <input type="file" id="arr-photo-input" accept="image/*" multiple style="display:none;" onchange="App.handlePhotos(event,'arr')">
+        <p id="arr-photo-count" style="font-size:12px;color:#64748B;margin-bottom:10px;">0 photo ajoutée</p>
+        <button onclick="App.triggerInput('arr-photo-input')" style="background:#EBF5FB;color:var(--brand);border:none;padding:12px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;width:100%;">📷 Ajouter des photos</button>
+      </div>
+      <div style="margin-top:14px;">
+        <button class="btn btn-primary" id="btn-arr-submit" onclick="App.submitArrivalPhoto()">📥 Enregistrer les photos d'arrivée</button>
+      </div>
+      ${S.currentUser?.role === 'admin' ? `
+      <div style="margin-top:24px;padding-top:16px;border-top:1px solid #FEE2E2;">
+        <button onclick="App.deleteArrival('${a.code}')" style="width:100%;background:#FEF2F2;color:#DC2626;border:1px solid #FCA5A5;border-radius:10px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;">🗑 Supprimer cette arrivée</button>
+      </div>` : ''}`;
+    this._renderArrPhotoGrid();
+    this._loadDriveLinkForDetail(a.code, 'arrivals', 'arr-drive-section', 'arr-drive-files-panel', 'arr-btn-drive-files');
+  },
+  _fillTestArrival() {
+    const types     = ['BATIX','GRAND BATIX','ISOLOX','MODULOX','6020','6020 GB','6021','SOLFAB PH','SOLFAB GH40','ECOLOX','LC20','LC20M'];
+    const agences   = ['ST QUENTIN','PARIS NORD','LYON SUD','BORDEAUX','NANTES','LILLE','STRASBOURG','RENNES','TOURS','ROUEN'];
+    const noms      = ['MARTIN Pierre','DUPONT Jean','ROBERT Michel','BERNARD Luc','PETIT Marc','THOMAS Eric'];
+    const longueurs = [3, 4.5, 6, 7.5, 9, 10.5, 12, 13.5, 15];
+    const rand      = arr => arr[Math.floor(Math.random() * arr.length)];
+    const randInt   = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
+    const y = new Date().getFullYear();
+    const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    setVal('inp-module-type', rand(types));
+    setVal('inp-num-module',  String(randInt(60000000, 69999999)));
+    setVal('inp-num-serie',   `SN-${y}-${String(randInt(100000, 999999))}`);
+    setVal('inp-lv',          String(randInt(100000, 999999)));
+    setVal('inp-agence',      rand(agences));
+    setVal('inp-longueur',    String(rand(longueurs)));
+    setVal('inp-chauffeur',   rand(noms));
+    setVal('inp-date',        todayStr());
+    setVal('inp-etat',        'TEST - Entrée de test PWA');
+  },
+  async deleteArrival(code) {
+    const confirmed = window.confirm(
+      `Supprimer l'arrivée ${code} ?\n\n• Supprime la ligne du sheet Arrivées\n• Met le dossier Drive à la corbeille\n• Retire le code du masterfile\n\nAction irréversible.`
+    );
+    if (!confirmed) return;
+    try {
+      this.toast('Suppression en cours...');
+      const res = await _post(S.apiUrl, { action: 'delete_arrival', code });
+      if (res.status !== 'ok' && res.status !== 'success') throw new Error(res.error || 'Erreur serveur');
+      S.arrivalsData = S.arrivalsData.filter(a => a.code !== code);
+      S.arrivalsLoaded = false; // force reload at next visit
+      this.toast(`✓ Arrivée ${code} supprimée`);
+      this.go('arrivals');
+      this._filterAndRenderArrivals();
+    } catch(e) {
+      this.toast('Erreur : ' + e.message);
+    }
+  },
+  _renderDepPhotoGrid() {
+    const grid = document.getElementById('dep-photo-grid');
+    const cnt  = document.getElementById('dep-photo-count');
+    if (!grid) return;
+    const n = S.depPhotos.length;
+    if (cnt) cnt.textContent = `${n} photo${n > 1 ? 's' : ''} ajoutée${n > 1 ? 's' : ''}`;
+    grid.innerHTML = S.depPhotos.map((p, i) => `
+      <div class="photo-thumb">
+        <img src="${p.dataUrl}">
+        <button class="rm-btn" onclick="App.removePhoto(${i},'dep')">✕</button>
+      </div>`).join('');
+  },
+  async submitDep() {
+    const d = S.selDep;
+    if (!d) return;
+    if (!S.depPhotos.length) { this.toast('Ajoutez au moins une photo'); return; }
+    const btn = document.getElementById('btn-dep-submit');
+    if (btn) { btn.disabled = true; btn.textContent = 'Envoi...'; }
+    const code = d.code;
+    try {
+      let res = null;
+      if (S.apiUrl) {
+        res = await _post(S.apiUrl, { action: 'departure_photo', code, photos: S.depPhotos.map(p => p.dataUrl), saisie_par: S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}`.trim() : '' });
+      }
+      this._saveHistory({ code, type: 'departure', photos: S.depPhotos.length, module: 'planning', date: todayStr() });
+      // Mise à jour locale immédiate depuis la réponse serveur (logEntry) ou par calcul
+      const entry = res && res.logEntry ? res.logEntry : { count: (S.depPhotosLog[code]?.count || 0) + S.depPhotos.length, date: todayStr() };
+      S.depPhotosLog[code] = entry;
+      S.depPhotos = []; // vider la grille
+      this.toast('✓ Photos enregistrées !');
+      this._renderDepDetail(); // rester sur la carte, rafraîchir le compteur
+    } catch(e) {
+      this.toast('Erreur : ' + e.message);
+      if (btn) { btn.disabled = false; btn.textContent = '📤 Enregistrer les photos de départ'; }
+    }
+  },
+  /* ─ Arrival extra photos ─ */
+  _renderArrPhotoGrid() {
+    const grid = document.getElementById('arr-photo-grid');
+    const cnt  = document.getElementById('arr-photo-count');
+    if (!grid) return;
+    const n = S.arrPhotos.length;
+    if (cnt) cnt.textContent = `${n} photo${n > 1 ? 's' : ''} ajoutée${n > 1 ? 's' : ''}`;
+    grid.innerHTML = S.arrPhotos.map((p, i) => `
+      <div class="photo-thumb">
+        <img src="${p.dataUrl}">
+        <button class="rm-btn" onclick="App.removePhoto(${i},'arr')">✕</button>
+      </div>`).join('') + `
+      <div class="photo-add-btn" onclick="App.triggerInput('arr-photo-input')">
+        <span style="font-size:26px;">📷</span><span>Ajouter</span>
+      </div>`;
+  },
+  async submitArrivalPhoto() {
+    const a = S.selArrival;
+    if (!a) return;
+    if (!S.arrPhotos.length) { this.toast('Ajoutez au moins une photo'); return; }
+    const btn = document.getElementById('btn-arr-submit');
+    if (btn) { btn.disabled = true; btn.textContent = 'Envoi...'; }
+    const code = a.code;
+    try {
+      let res = null;
+      if (S.apiUrl) {
+        res = await _post(S.apiUrl, { action: 'arrival_photo', code, photos: S.arrPhotos.map(p => p.dataUrl), saisie_par: S.currentUser ? `${S.currentUser.prenom} ${S.currentUser.nom}`.trim() : '' });
+      }
+      this._saveHistory({ code, type: 'arrival_extra', photos: S.arrPhotos.length, module: a.source || 'loxam', date: todayStr() });
+      // Mise à jour locale immédiate
+      const entry = res && res.logEntry
+        ? res.logEntry
+        : { count: (S.arrPhotosLog[code]?.count || 0) + S.arrPhotos.length, date: todayStr() };
+      S.arrPhotosLog[code] = entry;
+      S.arrPhotos = [];
+      this.toast('✓ Photos d\'arrivée enregistrées !');
+      this._renderArrivalDetail(); // rester sur la carte, rafraîchir le compteur
+    } catch(e) {
+      this.toast('Erreur : ' + e.message);
+      if (btn) { btn.disabled = false; btn.textContent = '📥 Enregistrer les photos d\'arrivée'; }
+    }
+  },
+  async _loadArrPhotosLog() {
+    if (!S.apiUrl) return;
+    try {
+      const resp = await _fetchWithTimeout(S.apiUrl + '?action=arr_photos_log', {}, 10000);
+      const data = await resp.json();
+      if (data.status === 'ok' && data.log) {
+        S.arrPhotosLog = data.log;
+        if (S.arrivalsLoaded) this._filterAndRenderArrivals();
+      }
+    } catch(e) { /* silencieux */ }
+  },
+  /* ─ History ─ */
+  _renderHistory() {
+    const list = document.getElementById('hist-list');
+    const none = document.getElementById('no-history');
+    const items = [...S.history].reverse();
+    if (!items.length) { list.innerHTML = ''; none.style.display = 'block'; return; }
+    none.style.display = 'none';
+    list.innerHTML = items.map(r => {
+      const isDepart = r.type === 'departure';
+      const m = MODULES[r.module] || { icon: isDepart ? '📤' : '📦', iconBg: '#F1F5F9', label: r.module || '' };
+      return `
+        <div class="history-row">
+          <div class="mod-icon" style="background:${isDepart ? '#F0FDF4' : m.iconBg};">${isDepart ? '📤' : m.icon}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span class="code-mono" style="font-size:15px;">${r.code}</span>
+              ${r.offline ? '<span class="chip chip-yellow" style="font-size:10px;">local</span>' : ''}
+              ${r.error   ? '<span class="chip" style="background:#FEF2F2;color:#991B1B;font-size:10px;">erreur</span>' : ''}
+            </div>
+            <div style="font-size:12px;color:#64748B;">${isDepart ? 'Départ' : m.label} · ${r.date || ''} · ${r.photos || 0} photo(s)</div>
+          </div>
+          <span style="font-size:10px;color:#94A3B8;flex-shrink:0;">${r.sentAt || ''}</span>
+        </div>`;
+    }).join('');
+  },
+  _saveHistory(entry) {
+    S.history.push({ ...entry, sentAt: _timeStr() });
+    if (S.history.length > 120) S.history = S.history.slice(-120);
+    localStorage.setItem(SK.HISTORY, JSON.stringify(S.history));
+  },
+  clearHistory() {
+    if (!confirm('Effacer tout l\'historique local ?')) return;
+    S.history = [];
+    localStorage.removeItem(SK.HISTORY);
+    this._renderHistory();
+    this._renderArrivalList();
+    this.toast('Historique effacé');
+  },
+  /* ─ Codes ─ */
+  async _fetchCodes() {
+    if (!S.apiUrl) return;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=codes', {}, 40000);
+      const d = await r.json();
+      if (Array.isArray(d.codes)) {
+        S.codes   = new Set(d.codes.map(c => c.toUpperCase()));
+        S.codesTs = Date.now();
+        localStorage.setItem(SK.CODES,    JSON.stringify(d.codes));
+        localStorage.setItem(SK.CODES_TS, S.codesTs.toString());
+      }
+    } catch(e) { console.warn('Codes fetch failed:', e.message); }
+  },
+  async reloadCodes() {
+    S.codesTs = 0;
+    await this._fetchCodes();
+    document.getElementById('info-codes').textContent = `Codes en cache : ${S.codes.size}`;
+    this.toast(`${S.codes.size} codes chargés`);
+  },
+  /* ─ Settings ─ */
+  _fillSettings() {
+    document.getElementById('set-url').value          = S.apiUrl;
+    document.getElementById('info-codes').textContent = `Codes en cache : ${S.codes.size}`;
+    document.getElementById('info-hist').textContent  = `Entrées historique : ${S.history.length}`;
+    // Infos utilisateur
+    const u = S.currentUser;
+    if (u) {
+      const roleLabels = { admin:'Administrateur', utilisateur:'Utilisateur', gestionnaire:'Utilisateur', chauffeur:'Utilisateur' };
+      document.getElementById('settings-user-name').textContent = `${u.prenom} ${u.nom}`;
+      document.getElementById('settings-user-role').textContent = roleLabels[u.role] || u.role;
+    }
+  },
+  saveSettings() {
+    const url = document.getElementById('set-url').value.trim();
+    S.apiUrl  = url;
+    localStorage.setItem(SK.API, url);
+    this.toast('✓ Réglages sauvegardés');
+    if (url) this._fetchCodes();
+    this._applyEnvMode();
+  },
+  /* ─ Diagnostic ─ */
+  async runDiag() {
+    const box = document.getElementById('diag-result');
+    box.style.display = 'block';
+    box.textContent = 'Tests en cours...\n';
+    const url = S.apiUrl;
+    if (!url) { box.textContent = '❌ URL API non configurée'; return; }
+    const log = s => { box.textContent += s + '\n'; };
+    // Test 1 : GET codes
+    try {
+      const t0 = Date.now();
+      const r  = await fetch(url + '?action=codes');
+      const d  = await r.json();
+      log(`✅ GET ?action=codes → ${d.count || d.codes?.length || '?'} codes (${Date.now()-t0}ms)`);
+    } catch(e) { log('❌ GET ?action=codes → ' + e.message); }
+    // Test 2 : GET codes — affiche aussi le log interne
+    try {
+      const t0  = Date.now();
+      const r   = await _fetchWithTimeout(url + '?action=codes', {}, 40000);
+      const d   = await r.json();
+      log(`✅ GET ?action=codes → ${d.count} codes (${Date.now()-t0}ms)`);
+      if (d.log) d.log.forEach(l => log('   · ' + l));
+    } catch(e) { log('❌ GET ?action=codes → ' + e.message); }
+    // Test 3 : GET production (nouvelle fonction safe)
+    try {
+      const t0  = Date.now();
+      const r   = await _fetchWithTimeout(url + '?action=production', {}, 40000);
+      const raw = await r.text();
+      let d;
+      try { d = JSON.parse(raw); }
+      catch { log('⚠️  Réponse non-JSON (' + raw.length + ' chars): ' + raw.substring(0,150)); throw new Error('JSON invalide'); }
+      if (d.status === 'error') {
+        log('❌ GET ?action=production → ' + (d.errorSafe || d.error || JSON.stringify(d)));
+      } else {
+        const n = d.data?.length ?? (Array.isArray(d) ? d.length : '?');
+        log(`✅ GET ?action=production → ${n} articles (${Date.now()-t0}ms)`);
+      }
+    } catch(e) { log('❌ GET ?action=production → ' + e.message); }
+    // Test 4 : GET debug_sheets (liste les onglets du Planning Script)
+    try {
+      const t0  = Date.now();
+      const r   = await _fetchWithTimeout(url + '?action=debug_sheets', {}, 20000);
+      const d   = await r.json();
+      if (d.status === 'ok') {
+        log(`✅ Planning Script : "${d.spreadsheetName}"`);
+        d.sheets.forEach(s => log(`   · Onglet "${s.name}" — ${s.rows} lignes × ${s.cols} cols`));
+      } else { log('❌ debug_sheets → ' + d.error); }
+    } catch(e) { log('❌ debug_sheets → ' + e.message); }
+    // Test 5 : POST FormData (ping)
+    try {
+      const t0   = Date.now();
+      const form = new FormData();
+      form.append('payload', JSON.stringify({ action: 'ping' }));
+      const r    = await fetch(url, { method: 'POST', body: form });
+      const raw  = await r.text();
+      log(`✅ POST FormData → ${raw.substring(0,80)} (${Date.now()-t0}ms)`);
+    } catch(e) { log('❌ POST FormData → ' + e.message); }
+    log('─── Fin des tests ───');
+  },
+  /* ─ BCB Consignes ─ */
+  BCB_LANGS: [
+    { code:'fr', flag:'🇫🇷', name:'Français', dir:'ltr',
+      rulesTitle:'Consignes de sécurité obligatoires',
+      formTitle:'Informations du conducteur',
+      fields:{ nom:'Nom', prenom:'Prénom', tracteur:'Immatriculation tracteur', remorque:'Immatriculation remorque', client:'Client de destination', clientAdresse:'Adresse du client', clientVille:'CP / Ville', clientPays:'Pays', transport:{ sectionTitle:'Transporteur', nom:'Nom entreprise', adresse:'Adresse', ville:'CP / Ville', pays:'Pays' } },
+      valider:'Valider l\'entrée', confirmTitle:'Entrée enregistrée', nouveau:'Nouveau chauffeur',
+      rules:['Limitation de vitesse : 10 km/h sur l\'ensemble du site.','Arrêt obligatoire à chaque panneau STOP.','Les piétons sont toujours prioritaires.','Port du gilet de sécurité haute visibilité obligatoire.','Chaussures de sécurité obligatoires sur tout le site.','Utilisation du téléphone portable interdite lors des manœuvres.','Interdit de fumer sur l\'ensemble du site.','Respectez les consignes du personnel à tout moment.','Ne laissez pas votre véhicule sans surveillance dans les zones de circulation.','Tout accident ou incident doit être signalé immédiatement au personnel.'] },
+    { code:'en', flag:'🇬🇧', name:'English', dir:'ltr',
+      rulesTitle:'Mandatory safety instructions',
+      formTitle:'Driver information',
+      fields:{ nom:'Last name', prenom:'First name', tracteur:'Tractor plate', remorque:'Trailer plate', client:'Destination client', clientAdresse:'Client address', clientVille:'Zip / City', clientPays:'Country', transport:{ sectionTitle:'Carrier', nom:'Company name', adresse:'Address', ville:'Zip / City', pays:'Country' } },
+      valider:'Validate entry', confirmTitle:'Entry recorded', nouveau:'New driver',
+      rules:['Speed limit: 10 km/h throughout the site.','Mandatory stop at all STOP signs.','Pedestrians always have right of way.','High-visibility safety vest is mandatory.','Safety footwear is required throughout the site.','Mobile phone use is prohibited during maneuvers.','Smoking is strictly prohibited on the entire site.','Follow all instructions from staff at all times.','Do not leave your vehicle unattended in traffic areas.','Any accident or incident must be reported immediately to staff.'] },
+    { code:'es', flag:'🇪🇸', name:'Español', dir:'ltr',
+      rulesTitle:'Instrucciones de seguridad obligatorias',
+      formTitle:'Información del conductor',
+      fields:{ nom:'Apellido', prenom:'Nombre', tracteur:'Matrícula tractora', remorque:'Matrícula remolque', client:'Cliente de destino', clientAdresse:'Dirección del cliente', clientVille:'CP / Ciudad', clientPays:'País', transport:{ sectionTitle:'Transportista', nom:'Nombre empresa', adresse:'Dirección', ville:'CP / Ciudad', pays:'País' } },
+      valider:'Validar entrada', confirmTitle:'Entrada registrada', nuevo:'Nuevo conductor',
+      rules:['Límite de velocidad: 10 km/h en todo el recinto.','Parada obligatoria en todas las señales de STOP.','Los peatones tienen prioridad en todo momento.','El uso del chaleco de seguridad de alta visibilidad es obligatorio.','Se requiere calzado de seguridad en todo el recinto.','Se prohíbe el uso del teléfono móvil durante las maniobras.','Está prohibido fumar en todo el recinto.','Siga las instrucciones del personal en todo momento.','No deje su vehículo sin vigilancia en zonas de circulación.','Todo accidente o incidente debe comunicarse inmediatamente al personal.'] },
+    { code:'pt', flag:'🇵🇹', name:'Português', dir:'ltr',
+      rulesTitle:'Instruções de segurança obrigatórias',
+      formTitle:'Informações do condutor',
+      fields:{ nom:'Apelido', prenom:'Nome próprio', tracteur:'Matrícula do tractor', remorque:'Matrícula do reboque', client:'Cliente de destino', clientAdresse:'Morada do cliente', clientVille:'CP / Localidade', clientPays:'País', transport:{ sectionTitle:'Transportador', nom:'Nome empresa', adresse:'Morada', ville:'CP / Localidade', pays:'País' } },
+      valider:'Validar entrada', confirmTitle:'Entrada registada', novo:'Novo condutor',
+      rules:['Limite de velocidade: 10 km/h em todo o local.','Paragem obrigatória em todos os sinais de STOP.','Os peões têm sempre prioridade.','O uso de colete de segurança de alta visibilidade é obrigatório.','Calçado de segurança obrigatório em todo o local.','É proibido utilizar o telemóvel durante as manobras.','É proibido fumar em todo o local.','Siga as instruções do pessoal em todo momento.','Não deixe o seu veículo sem vigilância nas zonas de circulação.','Qualquer acidente ou incidente deve ser comunicado imediatamente ao pessoal.'] },
+    { code:'ro', flag:'🇷🇴', name:'Română', dir:'ltr',
+      rulesTitle:'Instrucțiuni de securitate obligatorii',
+      formTitle:'Informații despre șofer',
+      fields:{ nom:'Nume', prenom:'Prenume', tracteur:'Nr. înmatriculare cap tractor', remorque:'Nr. înmatriculare remorcă', client:'Client de destinație', clientAdresse:'Adresa clientului', clientVille:'Cod / Localitate', clientPays:'Țară', transport:{ sectionTitle:'Transportator', nom:'Nume firmă', adresse:'Adresă', ville:'Cod / Localitate', pays:'Țară' } },
+      valider:'Validare intrare', confirmTitle:'Intrare înregistrată', nou:'Șofer nou',
+      rules:['Limita de viteză: 10 km/h pe întreg amplasamentul.','Oprire obligatorie la toate semnele STOP.','Pietonii au întotdeauna prioritate.','Purtarea vestei de siguranță cu vizibilitate ridicată este obligatorie.','Încălțămintea de protecție este obligatorie pe întreg amplasamentul.','Este interzisă utilizarea telefonului mobil în timpul manevrelor.','Fumatul este strict interzis pe întreg amplasamentul.','Respectați instrucțiunile personalului în orice moment.','Nu lăsați vehiculul nesupravegheat în zonele de circulație.','Orice accident sau incident trebuie raportat imediat personalului.'] },
+    { code:'pl', flag:'🇵🇱', name:'Polski', dir:'ltr',
+      rulesTitle:'Obowiązkowe instrukcje bezpieczeństwa',
+      formTitle:'Dane kierowcy',
+      fields:{ nom:'Nazwisko', prenom:'Imię', tracteur:'Nr rej. ciągnika', remorque:'Nr rej. naczepy', client:'Klient docelowy', clientAdresse:'Adres klienta', clientVille:'Kod poczt. / Miasto', clientPays:'Kraj', transport:{ sectionTitle:'Przewoźnik', nom:'Nazwa firmy', adresse:'Adres', ville:'Kod / Miasto', pays:'Kraj' } },
+      valider:'Zatwierdź wjazd', confirmTitle:'Wjazd zarejestrowany', nowy:'Nowy kierowca',
+      rules:['Ograniczenie prędkości: 10 km/h na terenie obiektu.','Obowiązkowe zatrzymanie przy wszystkich znakach STOP.','Piesi mają zawsze pierwszeństwo.','Obowiązkowe noszenie kamizelki odblaskowej.','Obuwie ochronne wymagane na terenie całego obiektu.','Używanie telefonu komórkowego podczas manewrów jest zabronione.','Palenie jest surowo zabronione na terenie całego obiektu.','Stosuj się do poleceń personelu w każdej chwili.','Nie pozostawiaj pojazdu bez nadzoru w strefach ruchu.','Każdy wypadek lub incydent należy niezwłocznie zgłosić personelowi.'] },
+    { code:'tr', flag:'🇹🇷', name:'Türkçe', dir:'ltr',
+      rulesTitle:'Zorunlu güvenlik talimatları',
+      formTitle:'Sürücü bilgileri',
+      fields:{ nom:'Soyadı', prenom:'Adı', tracteur:'Çekici plakası', remorque:'Dorse plakası', client:'Varış müşterisi', clientAdresse:'Müşteri adresi', clientVille:'Posta kodu / Şehir', clientPays:'Ülke', transport:{ sectionTitle:'Taşıyıcı', nom:'Firma adı', adresse:'Adres', ville:'Posta kodu / Şehir', pays:'Ülke' } },
+      valider:'Girişi onayla', confirmTitle:'Giriş kaydedildi', yeni:'Yeni sürücü',
+      rules:['Hız sınırı: tüm tesis genelinde 10 km/sa.','Tüm STOP işaretlerinde zorunlu duruş.','Yayaların her zaman önceliği vardır.','Yüksek görünürlüklü güvenlik yeleği takmak zorunludur.','Tesisin tamamında güvenlik ayakkabısı zorunludur.','Manevra sırasında cep telefonu kullanımı yasaktır.','Tesisin tamamında sigara içmek kesinlikle yasaktır.','Personelin talimatlarına her zaman uyun.','Araçınızı trafik alanlarında gözetimsiz bırakmayın.','Her kaza veya olay derhal personele bildirilmelidir.'] },
+    { code:'de', flag:'🇩🇪', name:'Deutsch', dir:'ltr',
+      rulesTitle:'Obligatorische Sicherheitsanweisungen',
+      formTitle:'Fahrerinformationen',
+      fields:{ nom:'Nachname', prenom:'Vorname', tracteur:'Kennzeichen Zugmaschine', remorque:'Kennzeichen Anhänger', client:'Zielkunde', clientAdresse:'Adresse des Kunden', clientVille:'PLZ / Ort', clientPays:'Land', transport:{ sectionTitle:'Spediteur', nom:'Firmenname', adresse:'Adresse', ville:'PLZ / Ort', pays:'Land' } },
+      valider:'Einfahrt bestätigen', confirmTitle:'Einfahrt erfasst', neu:'Neuer Fahrer',
+      rules:['Geschwindigkeitsbegrenzung: 10 km/h auf dem gesamten Gelände.','Obligatorischer Halt an allen STOP-Schildern.','Fußgänger haben stets Vorrang.','Das Tragen einer Warnweste ist Pflicht.','Sicherheitsschuhe sind auf dem gesamten Gelände vorgeschrieben.','Die Nutzung von Mobiltelefonen ist beim Rangieren verboten.','Das Rauchen ist auf dem gesamten Gelände streng verboten.','Folgen Sie jederzeit den Anweisungen des Personals.','Lassen Sie Ihr Fahrzeug in Verkehrsbereichen nicht unbeaufsichtigt.','Jeder Unfall oder Vorfall muss sofort dem Personal gemeldet werden.'] },
+    { code:'nl', flag:'🇳🇱', name:'Nederlands', dir:'ltr',
+      rulesTitle:'Verplichte veiligheidsinstructies',
+      formTitle:'Gegevens chauffeur',
+      fields:{ nom:'Achternaam', prenom:'Voornaam', tracteur:'Kenteken trekker', remorque:'Kenteken oplegger', client:'Bestemmingsklant', clientAdresse:'Adres van de klant', clientVille:'Postcode / Stad', clientPays:'Land', transport:{ sectionTitle:'Vervoerder', nom:'Bedrijfsnaam', adresse:'Adres', ville:'Postcode / Stad', pays:'Land' } },
+      valider:'Inrit bevestigen', confirmTitle:'Inrit geregistreerd', nieuw:'Nieuwe chauffeur',
+      rules:['Snelheidslimiet: 10 km/u op het hele terrein.','Verplicht stoppen bij alle STOP-borden.','Voetgangers hebben altijd voorrang.','Het dragen van een veiligheidshesje met hoge zichtbaarheid is verplicht.','Veiligheidsschoenen zijn vereist op het hele terrein.','Het gebruik van een mobiele telefoon tijdens manoeuvres is verboden.','Roken is streng verboden op het hele terrein.','Volg altijd de instructies van het personeel op.','Laat uw voertuig niet onbeheerd achter in rijgebieden.','Elk ongeluk of incident moet onmiddellijk aan het personeel worden gemeld.'] },
+    { code:'bg', flag:'🇧🇬', name:'Български', dir:'ltr',
+      rulesTitle:'Задължителни инструкции за безопасност',
+      formTitle:'Данни за шофьора',
+      fields:{ nom:'Фамилия', prenom:'Ime', tracteur:'Рег. номер влекач', remorque:'Рег. номер ремарке', client:'Клиент дестинация', clientAdresse:'Адрес на клиента', clientVille:'Пощ. код / Град', clientPays:'Държава', transport:{ sectionTitle:'Превозвач', nom:'Фирма', adresse:'Адрес', ville:'Пощ. код / Град', pays:'Държава' } },
+      valider:'Потвърди влизане', confirmTitle:'Влизането е регистрирано', nov:'Нов шофьор',
+      rules:['Ограничение на скоростта: 10 км/ч на целия обект.','Задължително спиране при всички знаци СТОП.','Пешеходците винаги имат предимство.','Носенето на светлоотразителна жилетка е задължително.','Предпазни обувки са задължителни на целия обект.','Използването на мобилен телефон по време на маневри е забранено.','Пушенето е строго забранено на целия обект.','Спазвайте указанията на персонала по всяко време.','Не оставяйте превозното средство без надзор в зоните за движение.','Всеки инцидент трябва незабавно да се докладва на персонала.'] },
+    { code:'sq', flag:'🇦🇱', name:'Shqip', dir:'ltr',
+      rulesTitle:'Udhëzime të detyrueshme sigurie',
+      formTitle:'Të dhëna të shoferit',
+      fields:{ nom:'Mbiemri', prenom:'Emri', tracteur:'Targa traktori', remorque:'Targa rimorkio', client:'Klienti i destinacionit', clientAdresse:'Adresa e klientit', clientVille:'Kodi / Qyteti', clientPays:'Vendi', transport:{ sectionTitle:'Transportuesi', nom:'Emri i kompanisë', adresse:'Adresa', ville:'Kodi / Qyteti', pays:'Vendi' } },
+      valider:'Konfirmo hyrjen', confirmTitle:'Hyrja është regjistruar', ri:'Shofer i ri',
+      rules:['Kufiri i shpejtësisë: 10 km/orë në të gjithë territorin.','Ndalim i detyrueshëm në të gjitha shenjat STOP.','Këmbësorët kanë gjithmonë përparësi.','Veshja e jelekut të sigurisë me dukshmëri të lartë është e detyrueshme.','Këpucët e sigurisë janë të detyrueshme në të gjithë territorin.','Përdorimi i telefonit celular gjatë manovrimit është i ndaluar.','Pirja e duhanit është rreptësisht e ndaluar në të gjithë territorin.','Ndiqni gjithmonë udhëzimet e personelit.','Mos e lini automjetin tuaj pa mbikëqyrje në zonat e qarkullimit.','Çdo aksident ose incident duhet të raportohet menjëherë tek personeli.'] },
+    { code:'ar', flag:'🇸🇦', name:'العربية', dir:'rtl',
+      rulesTitle:'تعليمات السلامة الإلزامية',
+      formTitle:'معلومات السائق',
+      fields:{ nom:'اللقب', prenom:'الاسم', tracteur:'لوحة الجرار', remorque:'لوحة المقطورة', client:'العميل المقصود', clientAdresse:'عنوان العميل', clientVille:'الرمز البريدي / المدينة', clientPays:'البلد', transport:{ sectionTitle:'الناقل', nom:'اسم الشركة', adresse:'العنوان', ville:'الرمز البريدي / المدينة', pays:'البلد' } },
+      valider:'تأكيد الدخول', confirmTitle:'تم تسجيل الدخول', jadid:'سائق جديد',
+      rules:['الحد الأقصى للسرعة: 10 كم/ساعة في جميع أنحاء الموقع.','التوقف إلزامي عند جميع إشارات STOP.','المشاة لهم الأولوية في جميع الأوقات.','ارتداء سترة السلامة عالية الوضوح إلزامي.','حذاء السلامة إلزامي في جميع أنحاء الموقع.','يُحظر استخدام الهاتف المحمول أثناء المناورات.','يُحظر التدخين بشكل صارم في جميع أنحاء الموقع.','اتبع تعليمات الموظفين في جميع الأوقات.','لا تترك مركبتك دون مراقبة في مناطق الحركة.','يجب الإبلاغ فوراً عن أي حادث أو واقعة للموظفين.'] },
+  ],
+  bcbInitLangGrid() {
+    const grid = document.getElementById('bcb-lang-grid');
+    if (!grid || grid.dataset.built) return;
+    grid.dataset.built = '1';
+    this.BCB_LANGS.forEach(l => {
+      const btn = document.createElement('button');
+      btn.style.cssText = 'background:white;border:1.5px solid #E2E8F0;border-radius:12px;padding:14px 10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:inherit;transition:border-color .15s,transform .12s;';
+      btn.innerHTML = `<span style="font-size:28px;">${l.flag}</span><span style="font-size:11px;font-weight:700;color:#94A3B8;letter-spacing:.5px;">${l.code.toUpperCase()}</span><span style="font-size:12px;font-weight:600;color:#1E293B;">${l.name}</span>`;
+      btn.addEventListener('click', () => this.bcbSelectLang(l.code));
+      btn.addEventListener('mouseenter', () => { btn.style.borderColor='#1D4ED8'; btn.style.transform='translateY(-2px)'; });
+      btn.addEventListener('mouseleave', () => { btn.style.borderColor='#E2E8F0'; btn.style.transform=''; });
+      grid.appendChild(btn);
+    });
+  },
+  bcbSelectLang(code) {
+    const l = this.BCB_LANGS.find(x => x.code === code);
+    if (!l) return;
+    S.bcbLang = l;
+    this._bcbEnsureAgencies();
+    // Populate rules
+    document.getElementById('bcb-lang-title').textContent = `${l.flag} ${l.name}`;
+    document.getElementById('bcb-rules-title').textContent = l.rulesTitle;
+    const ol = document.getElementById('bcb-rules-list');
+    ol.innerHTML = l.rules.map(r => `<li>${r}</li>`).join('');
+    // Labels form
+    document.getElementById('bcb-form-title').textContent = l.formTitle;
+    document.getElementById('bcb-lbl-nom').textContent = l.fields.nom;
+    document.getElementById('bcb-lbl-prenom').textContent = l.fields.prenom;
+    document.getElementById('bcb-lbl-tracteur').textContent = l.fields.tracteur;
+    document.getElementById('bcb-lbl-remorque').textContent = l.fields.remorque;
+    document.getElementById('bcb-lbl-client').textContent = l.fields.client;
+    document.getElementById('bcb-lbl-client-adresse').textContent = l.fields.clientAdresse;
+    document.getElementById('bcb-lbl-client-ville').textContent = l.fields.clientVille || 'CP / Ville';
+    document.getElementById('bcb-lbl-client-pays').textContent = l.fields.clientPays;
+    document.getElementById('bcb-lbl-transport-section').textContent = l.fields.transport.sectionTitle;
+    document.getElementById('bcb-lbl-transport-nom').textContent = l.fields.transport.nom;
+    document.getElementById('bcb-lbl-transport-adresse').textContent = l.fields.transport.adresse;
+    document.getElementById('bcb-lbl-transport-ville').textContent = l.fields.transport.ville;
+    document.getElementById('bcb-lbl-transport-pays').textContent = l.fields.transport.pays;
+    document.getElementById('bcb-btn-valider').textContent = l.valider;
+    // Direction RTL/LTR
+    const wrapper = document.getElementById('bcb-form-wrapper');
+    wrapper.style.direction = l.dir;
+    ol.style.direction = l.dir;
+    // Clear form
+    ['bcb-f-nom','bcb-f-prenom','bcb-f-tracteur','bcb-f-remorque','bcb-f-client','bcb-f-client-adresse','bcb-f-client-ville','bcb-f-client-pays','bcb-f-transport-nom','bcb-f-transport-adresse','bcb-f-transport-ville','bcb-f-transport-pays'].forEach(id => { document.getElementById(id).value = ''; });
+    ['transport','client'].forEach(t => { const el = document.getElementById('bcb-suggest-'+t); if (el) el.style.display = 'none'; });
+    const ecl = document.getElementById('bcb-extra-clients');
+    if (ecl) ecl.innerHTML = '';
+    // Show step 2
+    document.getElementById('bcb-step-lang').style.display = 'none';
+    document.getElementById('bcb-step-consignes').style.display = '';
+    document.getElementById('bcb-step-confirm').style.display = 'none';
+    // Scroll to top of view
+    document.getElementById('view-bcb-consignes').scrollTop = 0;
+  },
+  bcbBackToLang() {
+    document.getElementById('bcb-step-lang').style.display = '';
+    document.getElementById('bcb-step-consignes').style.display = 'none';
+    document.getElementById('bcb-step-confirm').style.display = 'none';
+    const ec = document.getElementById('bcb-extra-clients');
+    if (ec) ec.innerHTML = '';
+    document.getElementById('view-bcb-consignes').scrollTop = 0;
+  },
+  bcbSubmitConsigne() {
+    const l = S.bcbLang;
+    if (!l) return;
+    const nom              = document.getElementById('bcb-f-nom').value.trim();
+    const prenom           = document.getElementById('bcb-f-prenom').value.trim();
+    const tracteur         = document.getElementById('bcb-f-tracteur').value.trim().toUpperCase();
+    const remorque         = document.getElementById('bcb-f-remorque').value.trim().toUpperCase();
+    const client1          = document.getElementById('bcb-f-client').value.trim();
+    const client1Adresse   = document.getElementById('bcb-f-client-adresse').value.trim();
+    const client1Ville     = document.getElementById('bcb-f-client-ville').value.trim();
+    const client1Pays      = document.getElementById('bcb-f-client-pays').value.trim();
+    const transportNom     = document.getElementById('bcb-f-transport-nom').value.trim();
+    const transportAdresse = document.getElementById('bcb-f-transport-adresse').value.trim();
+    const transportVille   = document.getElementById('bcb-f-transport-ville').value.trim();
+    const transportPays    = document.getElementById('bcb-f-transport-pays').value.trim();
+    if (!nom || !tracteur || !client1) {
+      this.toast('⚠️ Veuillez remplir au moins le nom, le tracteur et le client.');
+      return;
+    }
+    // Collect extra client groups
+    const clients = [{ client: client1, clientAdresse: client1Adresse, clientVille: client1Ville, clientPays: client1Pays }];
+    const extraContainer = document.getElementById('bcb-extra-clients');
+    if (extraContainer) {
+      [...extraContainer.children].forEach(el => {
+        const idx = el.getAttribute('data-client-group');
+        if (!idx) return;
+        const c = (document.getElementById('bcb-extra-client-' + idx) || {}).value?.trim() || '';
+        if (!c) return;
+        clients.push({
+          client: c,
+          clientAdresse: (document.getElementById('bcb-extra-adresse-' + idx) || {}).value?.trim() || '',
+          clientVille:   (document.getElementById('bcb-extra-ville-' + idx)   || {}).value?.trim() || '',
+          clientPays:    (document.getElementById('bcb-extra-pays-' + idx)    || {}).value?.trim() || '',
+        });
+      });
+    }
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('fr-FR') + ' ' + now.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+    const base = { ts: now.toISOString(), lang: l.code, nom, prenom, tracteur, remorque, transportNom, transportAdresse, transportVille, transportPays };
+    const log = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+    // One entry per client, same driver/transport info
+    log.unshift(...clients.map(c => ({ ...base, ...c })));
+    if (log.length > 200) log.length = 200;
+    localStorage.setItem('snt_bcb_consignes', JSON.stringify(log));
+    // Confirmation
+    const f = l.fields;
+    document.getElementById('bcb-confirm-title').textContent = l.confirmTitle;
+    const btnNouv = document.getElementById('bcb-btn-nouveau');
+    btnNouv.textContent = l.nouveau || l.nowy || l.nov || l.ri || l.jadid || l.nieuw || l.neu || l.yeni || l.novo || 'Nouveau';
+    const clientsHtml = clients.map((c, i) =>
+      `${f.client}${clients.length > 1 ? ' ' + (i + 1) : ''} : <b>${c.client}</b>` +
+      (c.clientAdresse ? `<br>${f.clientAdresse} : <b>${c.clientAdresse}</b>` : '') +
+      (c.clientVille   ? `<br>${f.clientVille||'CP / Ville'} : <b>${c.clientVille}</b>` : '') +
+      (c.clientPays    ? `<br>${f.clientPays} : <b>${c.clientPays}</b>` : '')
+    ).join('<hr style="border:none;border-top:1px solid #D1FAE5;margin:6px 0;">');
+    document.getElementById('bcb-confirm-summary').innerHTML =
+      `<b>🗓 ${dateStr}</b><br>` +
+      `${f.nom} : <b>${nom}${prenom ? ' ' + prenom : ''}</b><br>` +
+      `${f.tracteur} : <b>${tracteur}</b><br>` +
+      (remorque ? `${f.remorque} : <b>${remorque}</b><br>` : '') +
+      (transportNom ? `${f.transport.nom} : <b>${transportNom}${transportVille ? ', ' + transportVille : ''}</b><br>` : '') +
+      clientsHtml;
+    document.getElementById('bcb-step-consignes').style.display = 'none';
+    document.getElementById('bcb-step-confirm').style.display = '';
+    document.getElementById('view-bcb-consignes').scrollTop = 0;
+  },
+  bcbNewConsigne() {
+    document.getElementById('bcb-step-lang').style.display = '';
+    document.getElementById('bcb-step-consignes').style.display = 'none';
+    document.getElementById('bcb-step-confirm').style.display = 'none';
+    const ec = document.getElementById('bcb-extra-clients');
+    if (ec) ec.innerHTML = '';
+    document.getElementById('view-bcb-consignes').scrollTop = 0;
+  },
+  async _bcbEnsureAgencies() {
+    if (S.annuaireData.length || S.lvu.agencies.length || !S.apiUrl) return;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_agencies', {}, 10000);
+      const d = await r.json();
+      if (d.status === 'ok') {
+        S.annuaireData   = d.agencies || [];
+        S.lvu.agencies   = S.annuaireData;
+        S.annuaireLoaded = true;
+      }
+    } catch(_) {}
+  },
+  bcbSuggestAgency(fieldType, val) {
+    const listEl = document.getElementById('bcb-suggest-' + fieldType);
+    if (!listEl) return;
+    const q = (val || '').toLowerCase().trim();
+    if (q.length < 2) { listEl.style.display = 'none'; return; }
+    const all = S.annuaireData.length ? S.annuaireData : S.lvu.agencies;
+    if (!all.length) { this._bcbEnsureAgencies(); return; }
+    const starts = all.filter(a => (a.nom||'').toLowerCase().startsWith(q) || (a.code||'').toLowerCase().startsWith(q));
+    const others = all.filter(a => !starts.includes(a) && (a.nom||'').toLowerCase().includes(q));
+    const matches = [...starts, ...others].slice(0, 6);
+    if (!matches.length) { listEl.style.display = 'none'; return; }
+    S._bcbSuggests = matches;
+    listEl.innerHTML = matches.map((a, i) =>
+      `<div onmousedown="App.bcbApplyAgency('${fieldType}',${i})"
+        style="padding:8px 10px;border-bottom:1px solid #F1F5F9;cursor:pointer;font-size:13px;line-height:1.3;"
+        onmouseenter="this.style.background='#EFF6FF'" onmouseleave="this.style.background=''">
+        <span style="font-weight:600;">${a.nom}</span>
+        ${a.ville ? `<span style="color:#64748B;font-size:11px;"> · ${a.cp ? a.cp+' ' : ''}${a.ville}</span>` : ''}
+      </div>`
+    ).join('');
+    listEl.style.display = '';
+  },
+  bcbApplyAgency(fieldType, idx) {
+    const a = (S._bcbSuggests || [])[idx];
+    if (!a) return;
+    document.getElementById('bcb-suggest-' + fieldType).style.display = 'none';
+    if (fieldType === 'transport') {
+      document.getElementById('bcb-f-transport-nom').value     = a.nom     || '';
+      document.getElementById('bcb-f-transport-adresse').value = a.adresse || '';
+      document.getElementById('bcb-f-transport-ville').value   = [a.cp, a.ville].filter(Boolean).join(' ');
+      document.getElementById('bcb-f-transport-pays').value    = a.pays    || '';
+    } else {
+      document.getElementById('bcb-f-client').value         = a.nom || '';
+      document.getElementById('bcb-f-client-adresse').value = [a.adresse, [a.cp, a.ville].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+      document.getElementById('bcb-f-client-pays').value    = a.pays || '';
+    }
+  },
+  bcbHideSuggest(fieldType) {
+    const el = document.getElementById('bcb-suggest-' + fieldType);
+    if (el) el.style.display = 'none';
+  },
+  _suggestKeyDown(e, listId, selectFn, defaultFirst) {
+    const list = document.getElementById(listId);
+    if (!list) return;
+    const rows = Array.from(list.children);
+    const open = list.style.display !== 'none' && rows.length > 0;
+    if (!open) { if (e.key === 'Escape') list.style.display = 'none'; return; }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Enter' && e.key !== 'Escape') { list._ni = -1; return; }
+    e.preventDefault();
+    if (e.key === 'Escape') { list.style.display = 'none'; list._ni = -1; return; }
+    let ni = list._ni !== undefined ? list._ni : -1;
+    if (e.key === 'ArrowDown')    ni = Math.min(ni + 1, rows.length - 1);
+    else if (e.key === 'ArrowUp') ni = Math.max(ni - 1, 0);
+    else if (e.key === 'Enter') {
+      const target = ni >= 0 ? ni : (defaultFirst ? 0 : -1);
+      if (target >= 0) selectFn(target);
+      list._ni = -1;
+      return;
+    }
+    list._ni = ni;
+    rows.forEach((r, i) => r.style.background = i === ni ? '#EFF6FF' : '');
+    if (ni >= 0 && rows[ni]) rows[ni].scrollIntoView({ block: 'nearest' });
+  },
+  _bcbBuyerKeyDown(e) {
+    this._suggestKeyDown(e, 'bcb-dep-buyer-results', i => {
+      const r = document.querySelectorAll('#bcb-dep-buyer-results .dest-result-row')[i];
+      if (r) r.click();
+    });
+  },
+  _lvuDestKeyDown(e) {
+    this._suggestKeyDown(e, 'lvu-dest-results', i => {
+      const r = document.querySelectorAll('#lvu-dest-results .dest-result-row')[i];
+      if (r) r.click();
+    });
+  },
+  bcbAddClientGroup() {
+    this._bcbEnsureAgencies();
+    const container = document.getElementById('bcb-extra-clients');
+    if (!container) return;
+    const idx = Date.now(); // unique key for this group
+    const num = container.children.length + 2;
+    const div = document.createElement('div');
+    div.setAttribute('data-client-group', idx);
+    div.style.cssText = 'border:1px solid #CCFBF1;border-radius:8px;padding:10px;background:#F0FDFA;margin-top:8px;';
+    div.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="font-size:10px;font-weight:700;color:#0F766E;text-transform:uppercase;letter-spacing:.5px;">Client ${num}</div>
+        <button type="button" onmousedown="App.bcbRemoveClientGroup(${idx})"
+          style="background:none;border:none;color:#EF4444;font-size:16px;cursor:pointer;line-height:1;padding:0 4px;">✕</button>
+      </div>
+      <div style="display:grid;gap:8px;">
+        <div style="position:relative;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Client</label>
+          <input id="bcb-extra-client-${idx}" type="text" autocomplete="nope"
+            style="width:100%;border:1px solid #CBD5E1;border-radius:6px;padding:9px 10px;font-size:13px;box-sizing:border-box;background:#fff;"
+            oninput="App.bcbSuggestExtraClient(${idx},this.value)"
+            onblur="App.bcbHideExtraSuggest(${idx})"
+            onkeydown="App._suggestKeyDown(event,'bcb-extra-suggest-${idx}',(i)=>App.bcbApplyExtraAgency(${idx},i))">
+          <div id="bcb-extra-suggest-${idx}" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #CBD5E1;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:100;max-height:180px;overflow-y:auto;"></div>
+        </div>
+        <div><label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Adresse</label>
+          <input id="bcb-extra-adresse-${idx}" type="text" autocomplete="nope"
+            style="width:100%;border:1px solid #CBD5E1;border-radius:6px;padding:9px 10px;font-size:13px;box-sizing:border-box;background:#fff;">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div><label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">CP / Ville</label>
+            <input id="bcb-extra-ville-${idx}" type="text" autocomplete="nope"
+              style="width:100%;border:1px solid #CBD5E1;border-radius:6px;padding:9px 10px;font-size:13px;box-sizing:border-box;background:#fff;">
+          </div>
+          <div><label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Pays</label>
+            <input id="bcb-extra-pays-${idx}" type="text" autocomplete="nope"
+              style="width:100%;border:1px solid #CBD5E1;border-radius:6px;padding:9px 10px;font-size:13px;box-sizing:border-box;background:#fff;">
+          </div>
+        </div>
+      </div>`;
+    container.appendChild(div);
+    // Re-number labels
+    [...container.children].forEach((el, i) => {
+      const lbl = el.querySelector('[style*="0F766E"]');
+      if (lbl) lbl.textContent = `Client ${i + 2}`;
+    });
+  },
+  bcbRemoveClientGroup(idx) {
+    const container = document.getElementById('bcb-extra-clients');
+    if (!container) return;
+    const el = container.querySelector(`[data-client-group="${idx}"]`);
+    if (el) container.removeChild(el);
+    [...container.children].forEach((el, i) => {
+      const lbl = el.querySelector('[style*="0F766E"]');
+      if (lbl) lbl.textContent = `Client ${i + 2}`;
+    });
+  },
+  bcbSuggestExtraClient(idx, val) {
+    const listEl = document.getElementById('bcb-extra-suggest-' + idx);
+    if (!listEl) return;
+    const q = (val || '').toLowerCase().trim();
+    if (q.length < 2) { listEl.style.display = 'none'; return; }
+    const all = S.annuaireData.length ? S.annuaireData : S.lvu.agencies;
+    if (!all.length) { this._bcbEnsureAgencies(); return; }
+    const starts = all.filter(a => (a.nom||'').toLowerCase().startsWith(q) || (a.code||'').toLowerCase().startsWith(q));
+    const others = all.filter(a => !starts.includes(a) && (a.nom||'').toLowerCase().includes(q));
+    const matches = [...starts, ...others].slice(0, 6);
+    if (!matches.length) { listEl.style.display = 'none'; return; }
+    if (!S._bcbExtraSuggests) S._bcbExtraSuggests = {};
+    S._bcbExtraSuggests[idx] = matches;
+    listEl.innerHTML = matches.map((a, i) =>
+      `<div onmousedown="App.bcbApplyExtraAgency(${idx},${i})"
+        style="padding:8px 10px;border-bottom:1px solid #F1F5F9;cursor:pointer;font-size:13px;line-height:1.3;"
+        onmouseenter="this.style.background='#EFF6FF'" onmouseleave="this.style.background=''">
+        <span style="font-weight:600;">${a.nom}</span>
+        ${a.ville ? `<span style="color:#64748B;font-size:11px;"> · ${a.cp ? a.cp+' ' : ''}${a.ville}</span>` : ''}
+      </div>`
+    ).join('');
+    listEl.style.display = '';
+  },
+  bcbApplyExtraAgency(idx, sugIdx) {
+    const a = ((S._bcbExtraSuggests || {})[idx] || [])[sugIdx];
+    if (!a) return;
+    document.getElementById('bcb-extra-suggest-' + idx).style.display = 'none';
+    document.getElementById('bcb-extra-client-' + idx).value  = a.nom || '';
+    document.getElementById('bcb-extra-adresse-' + idx).value = a.adresse || '';
+    document.getElementById('bcb-extra-ville-' + idx).value   = [a.cp, a.ville].filter(Boolean).join(' ');
+    document.getElementById('bcb-extra-pays-' + idx).value    = a.pays || '';
+  },
+  bcbHideExtraSuggest(idx) {
+    const el = document.getElementById('bcb-extra-suggest-' + idx);
+    if (el) el.style.display = 'none';
+  },
+
+  async bcbMenuInit() {
+    const loaderEl = document.getElementById('bcb-menu-loader');
+    const gridEl   = document.getElementById('bcb-menu-grid');
+    const statusEl = document.getElementById('bcb-menu-status');
+    // Refresh localStorage-based counts immediately
+    this._bcbMenuRefreshCounts();
+    // Already loaded — show grid right away
+    if (S.bcbLotsLoaded && S.bcbEnlevementsLoaded) {
+      if (loaderEl) loaderEl.style.display = 'none';
+      if (gridEl)   gridEl.style.display = 'block';
+      if (statusEl) { const n = new Date(); statusEl.textContent = 'MAJ ' + n.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}); }
+      return;
+    }
+    // Show loader
+    if (loaderEl) loaderEl.style.display = 'flex';
+    if (gridEl)   gridEl.style.display = 'none';
+    if (statusEl) statusEl.textContent = 'Chargement des données…';
+    if (!S.apiUrl) {
+      if (loaderEl) loaderEl.innerHTML = '<div style="text-align:center;color:#EF4444;font-size:13px;padding:12px;">⚠️ URL API non configurée</div>';
+      return;
+    }
+    await Promise.allSettled([
+      (async () => {
+        if (S.bcbLotsLoaded || S.bcbLotsLoading) return;
+        S.bcbLotsLoading = true;
+        try {
+          const r = await _fetchWithTimeout(S.apiUrl + '?action=bcb_lots', {}, 15000);
+          const d = await r.json();
+          if (d.status !== 'ok') throw new Error(d.error || 'Erreur');
+          S.bcbLots = d.lots || []; S.bcbByBuyer = d.byBuyer || {}; S.bcbLotsLoaded = true;
+        } catch(e) { this.toast('Erreur lots : ' + e.message); }
+        finally { S.bcbLotsLoading = false; }
+      })(),
+      (async () => {
+        if (S.bcbEnlevementsLoaded || S.bcbEnlevementsLoading) return;
+        S.bcbEnlevementsLoading = true;
+        try {
+          const r = await _fetchWithTimeout(S.apiUrl + '?action=bcb_enlevements_list', {}, 15000);
+          const d = await r.json();
+          if (d.status === 'ok') { S.bcbEnlevements = d.history || []; S.bcbEnlevementsLoaded = true; }
+        } catch(e) { this.toast('Erreur enlèvements'); }
+        finally { S.bcbEnlevementsLoading = false; }
+      })(),
+    ]);
+    this._bcbMenuRefreshCounts();
+    if (loaderEl) loaderEl.style.display = 'none';
+    if (gridEl)   gridEl.style.display = 'block';
+    if (statusEl) { const n = new Date(); statusEl.textContent = 'MAJ ' + n.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}); }
+  },
+  _bcbMenuRefreshCounts() {
+    const consList = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+    const procCons = new Set(JSON.parse(localStorage.getItem('snt_bcb_processed_consignes') || '[]'));
+    const pending  = consList.filter((_, i) => !procCons.has(i)).length;
+    const lotsBadge = document.getElementById('bcb-menu-badge-lots');
+    if (lotsBadge) {
+      if (!S.bcbLotsLoaded) {
+        lotsBadge.className = 'activity-badge badge-loading';
+        lotsBadge.textContent = '⟳ Chargement…';
+      } else if (S.bcbLots.length > 0) {
+        lotsBadge.className = 'activity-badge badge-active';
+        lotsBadge.textContent = `● ${S.bcbLots.length} lot${S.bcbLots.length > 1 ? 's' : ''}`;
+      } else {
+        lotsBadge.className = 'activity-badge badge-soon';
+        lotsBadge.textContent = 'Aucun lot';
+      }
+    }
+    const departBadge = document.getElementById('bcb-menu-badge-depart');
+    if (departBadge) {
+      if (pending > 0) {
+        departBadge.className = 'activity-badge badge-active';
+        departBadge.textContent = `● ${pending} en attente`;
+      } else if (consList.length > 0) {
+        departBadge.className = 'activity-badge badge-active';
+        departBadge.textContent = '✓ Tout traité';
+      } else {
+        departBadge.className = 'activity-badge badge-soon';
+        departBadge.textContent = '— Aucune consigne';
+      }
+    }
+  },
+
+  bcbPrintMenu() {
+    if (!S.bcbLotsLoaded || !S.bcbLots.length) { this.toast('Lots non chargés'); return; }
+    const bd = document.createElement('div');
+    bd.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:999;';
+    const menu = document.createElement('div');
+    menu.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.22);padding:18px 16px 12px;z-index:1000;width:270px;';
+    menu.innerHTML = `
+      <div style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:14px;">🖨 Listes par acheteur</div>
+      <button onclick="this.closest('div').remove();document.querySelector('[data-bcb-print-bd]').remove();App.bcbPrintByBuyer('page')"
+        style="width:100%;padding:11px 12px;background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:8px;text-align:left;display:block;">
+        📄 1 acheteur par page
+      </button>
+      <button onclick="this.closest('div').remove();document.querySelector('[data-bcb-print-bd]').remove();App.bcbPrintByBuyer('inline')"
+        style="width:100%;padding:11px 12px;background:#F8FAFC;color:#475569;border:1.5px solid #E2E8F0;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;text-align:left;display:block;">
+        📋 Tout à la suite
+      </button>
+      <button onclick="this.closest('div').remove();document.querySelector('[data-bcb-print-bd]').remove()"
+        style="width:100%;padding:7px;background:none;border:none;color:#94A3B8;font-size:12px;cursor:pointer;margin-top:4px;">Annuler</button>`;
+    bd.setAttribute('data-bcb-print-bd', '');
+    bd.onclick = () => { bd.remove(); menu.remove(); };
+    document.body.appendChild(bd);
+    document.body.appendChild(menu);
+  },
+
+  bcbPrintByBuyer(mode) {
+    const sold       = S.bcbLots.filter(l => l.vendu && l.acheteur);
+    const noAcheteur = S.bcbLots.filter(l => !l.acheteur);
+    const byBuyer = {};
+    sold.forEach(l => {
+      const b = l.acheteur.trim();
+      if (!byBuyer[b]) byBuyer[b] = [];
+      byBuyer[b].push(l);
+    });
+    const numVentes = [...new Set(sold.map(l => l.numVente).filter(Boolean))];
+    const venteLbl  = numVentes.length ? 'Vente ' + numVentes.map(v => 'n°' + v).join(', ') : '';
+    const dateGen   = new Date().toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
+
+    const fmtDate = (raw) => {
+      if (!raw) return '';
+      const d = new Date(raw);
+      return isNaN(d) ? raw : d.toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric' });
+    };
+
+    const makeRow = (l, i) => {
+      const cells = [
+        i + 1, l.idBcb||'', l.vendeur||l.inter||'', l.refVendeur||l.idSeller||'',
+        l.type||'', l.marque||'', l.modele||'', l.numSerie||'',
+        l.commentaire||'', fmtDate(l.dateVente), l.numVente||'',
+        `<input type="checkbox"${l.codeEnlevement?' checked':''} style="width:13px;height:13px;">`,
+      ];
+      return `<tr>${cells.map((c,ci)=>`<td${ci===4?' class="desc"':''}>${c}</td>`).join('')}</tr>`;
+    };
+
+    // Une seule table — un <tbody> par acheteur → colonnes parfaitement alignées
+    const bodies = Object.keys(byBuyer).sort().map(buyer => {
+      const lots = byBuyer[buyer];
+      return `<tbody><tr class="bhr"><td colspan="12"><strong>${buyer}</strong><span class="bc"> — ${lots.length} lot${lots.length>1?'s':''}</span></td></tr>${lots.map(makeRow).join('')}</tbody>`;
+    }).join('');
+
+    // Section lots sans acheteur
+    const sansAcheteurBody = noAcheteur.length
+      ? `<tbody><tr class="bhr-pending"><td colspan="12"><strong>Sans acheteur</strong><span class="bc"> — ${noAcheteur.length} lot${noAcheteur.length>1?'s':''} en attente</span></td></tr>${noAcheteur.map(makeRow).join('')}</tbody>`
+      : '';
+
+    const pageBreak = mode === 'page' ? 'tbody+tbody{page-break-before:always}' : '';
+    const totalMeta = [venteLbl, sold.length ? sold.length+' lot'+(sold.length>1?'s':'')+' vendus' : '', noAcheteur.length ? noAcheteur.length+' sans acheteur' : '', 'Généré le '+dateGen].filter(Boolean).join(' · ');
+
+    const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+<title>BCB — Listes acheteurs</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,sans-serif;font-size:9px;color:#1E293B;padding:8mm}
+  h1{font-size:14px;font-weight:800;margin-bottom:3px}
+  .meta{font-size:8.5px;color:#64748B;margin-bottom:12px}
+  table{width:100%;border-collapse:collapse;table-layout:fixed}
+  thead{display:table-header-group}
+  thead tr{background:#1E293B}
+  th{padding:4px 3px;text-align:left;font-size:7.5px;font-weight:700;color:white;white-space:nowrap;overflow:hidden}
+  td{padding:3px 3px;font-size:8.5px;border-bottom:1px solid #F1F5F9;vertical-align:top;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  td.desc{white-space:normal;word-break:break-word}
+  .bhr td{background:#475569;color:white;padding:5px 6px;font-size:10px;white-space:normal;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .bhr-pending td{background:#92400E;color:#FEF3C7;padding:5px 6px;font-size:10px;white-space:normal;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  thead tr{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .bc{font-size:8px;font-weight:400;opacity:.8}
+  colgroup col:nth-child(1){width:3%}
+  colgroup col:nth-child(2){width:7%}
+  colgroup col:nth-child(3){width:7%}
+  colgroup col:nth-child(4){width:6%}
+  colgroup col:nth-child(5){width:19%}
+  colgroup col:nth-child(6){width:7%}
+  colgroup col:nth-child(7){width:8%}
+  colgroup col:nth-child(8){width:9%}
+  colgroup col:nth-child(9){width:13%}
+  colgroup col:nth-child(10){width:7%}
+  colgroup col:nth-child(11){width:6%}
+  colgroup col:nth-child(12){width:4%}
+  ${pageBreak}
+  @media print{body{padding:5mm}}
+</style></head><body>
+<h1>BCB — Listes par acheteur</h1>
+<p class="meta">${totalMeta}</p>
+<table>
+<colgroup><col><col><col><col><col><col><col><col><col><col><col><col></colgroup>
+<thead><tr>
+  <th>#</th><th>ID BCB</th><th>Vendeur</th><th>Code</th><th>Description</th>
+  <th>Marque</th><th>Modèle</th><th>N° Série</th><th>Commentaire</th><th>Date vente</th><th>N° vente</th><th>Chargé</th>
+</tr></thead>
+${bodies}${sansAcheteurBody}
+</table>
+<script>window.addEventListener('load',function(){setTimeout(function(){window.print();},250)});<\/script>
+</body></html>`;
+
+    const blobUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    const w = window.open(blobUrl, '_blank');
+    if (!w) { this.toast('⚠ Autorisez les popups pour imprimer'); URL.revokeObjectURL(blobUrl); return; }
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+  },
+
+  async bcbLotsLoad(force) {
+    if (S.bcbLotsLoading) return;
+    if (S.bcbLotsLoaded && !force) { this.bcbSetView(S.bcbLotsView); return; }
+    if (!S.apiUrl) { this.toast('URL API non configurée'); return; }
+    if (force) { S.bcbLotsFilters = { acheteur: null, vendeur: null, vente: null }; this.bcbCloseFilter(); }
+    S.bcbLotsLoading = true;
+    document.getElementById('bcb-lots-loading').style.display = '';
+    document.getElementById('bcb-lots-content').style.display = 'none';
+    document.getElementById('bcb-lots-empty').style.display   = 'none';
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=bcb_lots', {}, 15000);
+      const d = await r.json();
+      if (d.status !== 'ok') throw new Error(d.error || 'Erreur serveur');
+      S.bcbLots       = d.lots     || [];
+      S.bcbByBuyer    = d.byBuyer  || {};
+      S.bcbLotsLoaded = true;
+    } catch(e) {
+      this.toast('Erreur chargement lots : ' + e.message);
+    } finally {
+      S.bcbLotsLoading = false;
+      document.getElementById('bcb-lots-loading').style.display = 'none';
+    }
+    this.bcbSetView(S.bcbLotsView);
+  },
+
+  bcbSetView(v) {
+    S.bcbLotsView = v;
+    this.bcbLotsRender();
+  },
+
+  bcbUpdateFilterUI() {
+    // Chips statut
+    const sfStyles = {
+      null:  { bg:'white',   color:'#64748B', border:'#E2E8F0' },
+      true:  { bg:'#D1FAE5', color:'#065F46', border:'#6EE7B7' },
+      false: { bg:'#FEF3C7', color:'#92400E', border:'#FCD34D' },
+    };
+    ['arrive','inspecte','vendu'].forEach(f => {
+      const btn = document.getElementById('bcb-sf-' + f);
+      if (!btn) return;
+      const s = sfStyles[String(S.bcbStatusFilter[f])] || sfStyles.null;
+      btn.style.background  = s.bg;
+      btn.style.color       = s.color;
+      btn.style.borderColor = s.border;
+    });
+    // Bouton tri
+    const sortBtn = document.getElementById('bcb-sort-btn');
+    if (sortBtn) {
+      const labels = { default:'↑ ID', id_desc:'↓ ID', date_asc:'↑ Date', date_desc:'↓ Date' };
+      sortBtn.textContent = labels[S.bcbSortField] || '↑ ID';
+    }
+    // Bouton sélection
+    const selBtn = document.getElementById('bcb-select-btn');
+    if (selBtn) {
+      selBtn.style.background  = S.bcbSelectMode ? '#1D4ED8' : 'white';
+      selBtn.style.color       = S.bcbSelectMode ? 'white'   : '#64748B';
+      selBtn.style.borderColor = S.bcbSelectMode ? '#1D4ED8' : '#E2E8F0';
+    }
+    // Boutons filtres colonne
+    const fltLabels = { acheteur:'Acheteur', vendeur:'Vendeur', vente:'Vente' };
+    ['acheteur','vendeur','vente'].forEach(f => {
+      const btn = document.getElementById('bcb-flt-' + f);
+      if (!btn) return;
+      const active = S.bcbLotsFilters[f] !== null;
+      const open   = S.bcbActiveFilter === f;
+      const n      = active ? S.bcbLotsFilters[f].size : null;
+      btn.textContent      = active ? `${fltLabels[f]} (${n}) ▾` : `${fltLabels[f]} ▾`;
+      btn.style.background  = (active||open) ? '#EFF6FF' : 'white';
+      btn.style.color       = (active||open) ? '#1D4ED8' : '#64748B';
+      btn.style.borderColor = (active||open) ? '#1D4ED8' : '#E2E8F0';
+      btn.style.fontWeight  = active          ? '700'     : '600';
+    });
+  },
+
+  bcbToggleStatus(field) {
+    const cur = S.bcbStatusFilter[field];
+    S.bcbStatusFilter[field] = cur === null ? true : cur === true ? false : null;
+    this.bcbLotsRender();
+  },
+
+  bcbCycleSort() {
+    const cycle = ['default','id_desc','date_asc','date_desc'];
+    S.bcbSortField = cycle[(cycle.indexOf(S.bcbSortField) + 1) % cycle.length];
+    this.bcbLotsRender();
+  },
+
+  bcbToggleSelect() {
+    S.bcbSelectMode = !S.bcbSelectMode;
+    if (!S.bcbSelectMode) S.bcbSelected.clear();
+    this.bcbLotsRender();
+  },
+
+  bcbToggleLotSelect(key, rowEl) {
+    if (S.bcbSelected.has(key)) {
+      S.bcbSelected.delete(key);
+    } else {
+      S.bcbSelected.add(key);
+    }
+    const isSel = S.bcbSelected.has(key);
+    if (rowEl) {
+      rowEl.style.background = isSel ? '#EFF6FF' : 'white';
+      const cbEl = rowEl.querySelector('[data-lot-cb]');
+      if (cbEl) {
+        cbEl.style.borderColor = isSel ? '#1D4ED8' : '#CBD5E1';
+        cbEl.style.background  = isSel ? '#1D4ED8' : 'white';
+        cbEl.textContent       = isSel ? '✓' : '';
+      }
+    }
+    this._bcbUpdateCount();
+  },
+
+  bcbSelectAll() {
+    const rows = [...document.querySelectorAll('#bcb-lots-content [data-lot-key]')];
+    const allSel = rows.length > 0 && rows.every(r => S.bcbSelected.has(r.dataset.lotKey));
+    rows.forEach(row => {
+      const key = row.dataset.lotKey;
+      if (allSel) {
+        S.bcbSelected.delete(key);
+      } else {
+        S.bcbSelected.add(key);
+      }
+      const isSel = S.bcbSelected.has(key);
+      row.style.background = isSel ? '#EFF6FF' : 'white';
+      const cbEl = row.querySelector('[data-lot-cb]');
+      if (cbEl) {
+        cbEl.style.borderColor = isSel ? '#1D4ED8' : '#CBD5E1';
+        cbEl.style.background  = isSel ? '#1D4ED8' : 'white';
+        cbEl.textContent       = isSel ? '✓' : '';
+      }
+    });
+    this._bcbUpdateCount();
+  },
+
+  bcbClearSelect() {
+    S.bcbSelected.clear();
+    S.bcbSelectMode = false;
+    this.bcbLotsRender();
+  },
+
+  _bcbUpdateCount() {
+    const cnt    = document.getElementById('bcb-select-count');
+    const allBtn = document.getElementById('bcb-select-all-btn');
+    const n = S.bcbSelected.size;
+    if (cnt) cnt.textContent = n ? `${n} lot${n>1?'s':''} sélectionné${n>1?'s':''}` : '0 sélectionné';
+    if (allBtn) {
+      const rows  = document.querySelectorAll('#bcb-lots-content [data-lot-key]');
+      const allSel = rows.length > 0 && [...rows].every(r => S.bcbSelected.has(r.dataset.lotKey));
+      allBtn.textContent = allSel ? 'Aucun' : 'Tout';
+    }
+  },
+
+  _bcbSyncSelectBar() {
+    const bar = document.getElementById('bcb-select-bar');
+    if (bar) bar.style.display = S.bcbSelectMode ? 'flex' : 'none';
+    const content = document.getElementById('bcb-lots-content');
+    if (content) content.style.paddingBottom = S.bcbSelectMode ? '68px' : '24px';
+    this._bcbUpdateCount();
+  },
+
+  bcbLotsRender() {
+    const content  = document.getElementById('bcb-lots-content');
+    const emptyEl  = document.getElementById('bcb-lots-empty');
+    const subtitle = document.getElementById('bcb-lots-subtitle');
+    if (!content) return;
+
+    this.bcbUpdateFilterUI();
+
+    // 1. Filtre texte
+    const q = (S.bcbLotsSearch || '').toLowerCase().trim();
+    let filtered = q
+      ? S.bcbLots.filter(l => [l.idBcb,l.inter,l.vendeur,l.marque,l.modele,l.type,l.refVendeur,l.numSerie,l.commentaire,l.numVente,l.acheteur]
+          .some(v => (v||'').toLowerCase().includes(q)))
+      : [...S.bcbLots];
+
+    // 2. Filtre statut
+    const sf = S.bcbStatusFilter;
+    if (sf.arrive   !== null) filtered = filtered.filter(l => l.arrive   === sf.arrive);
+    if (sf.inspecte !== null) filtered = filtered.filter(l => l.inspecte === sf.inspecte);
+    if (sf.vendu    !== null) filtered = filtered.filter(l => l.vendu    === sf.vendu);
+
+    // 3. Filtres colonne (Excel-like)
+    const cf = S.bcbLotsFilters;
+    if (cf.acheteur !== null) filtered = filtered.filter(l => cf.acheteur.has(l.acheteur||''));
+    if (cf.vendeur  !== null) filtered = filtered.filter(l => cf.vendeur.has(l.vendeur||''));
+    if (cf.vente    !== null) filtered = filtered.filter(l => cf.vente.has(l.numVente ? `Vente n°${l.numVente}` : ''));
+
+    // 4. Tri
+    const sortFn = {
+      default:   (a,b) => a.idBcb.localeCompare(b.idBcb),
+      id_desc:   (a,b) => b.idBcb.localeCompare(a.idBcb),
+      date_asc:  (a,b) => (a.dateArrivee||'').localeCompare(b.dateArrivee||''),
+      date_desc: (a,b) => (b.dateArrivee||'').localeCompare(a.dateArrivee||''),
+    };
+    filtered.sort(sortFn[S.bcbSortField] || sortFn.default);
+
+    if (!filtered.length) {
+      content.style.display='none'; emptyEl.style.display='';
+      subtitle.textContent = 'Aucun résultat';
+      this._bcbSyncSelectBar();
+      return;
+    }
+    emptyEl.style.display = 'none';
+    content.style.display = '';
+
+    // Map idx pour navigation détail
+    const idxMap = {};
+    S.bcbLots.forEach((l,i) => { idxMap[l.inter+'|'+l.idBcb] = i; });
+
+    const lotRow = lot => {
+      const key  = lot.inter + '|' + lot.idBcb;
+      const idx  = idxMap[key] ?? -1;
+      const isSel = S.bcbSelectMode && S.bcbSelected.has(key);
+      const bg   = isSel ? '#EFF6FF' : 'white';
+      const clickFn = S.bcbSelectMode
+        ? `App.bcbToggleLotSelect('${key.replace(/'/g,"\\'")}', this)`
+        : `App.bcbLotDetail(${idx})`;
+      const dotA = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.arrive?'#D1FAE5':'#F1F5F9'};color:${lot.arrive?'#065F46':'#94A3B8'};">A</span>`;
+      const dotI = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.inspecte?'#DBEAFE':'#F1F5F9'};color:${lot.inspecte?'#1D4ED8':'#94A3B8'};">I</span>`;
+      const dotV = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.vendu?'#FEF3C7':'#F1F5F9'};color:${lot.vendu?'#92400E':'#94A3B8'};">V</span>`;
+      const acheteurChip = lot.acheteur ? `<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:#FEF9C3;color:#713F12;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:1;">${lot.acheteur}</span>` : '';
+      const vente = lot.numVente ? `<span style="font-size:10px;color:#64748B;font-weight:600;margin-left:2px;">n°${lot.numVente}</span>` : '';
+      const desc  = [lot.vendeur, [lot.marque,lot.modele].filter(Boolean).join(' '), lot.type].filter(Boolean).join(' — ');
+      const sub   = [lot.refVendeur?`réf ${lot.refVendeur}`:'', lot.numSerie?`n° ${lot.numSerie}`:'', lot.poids?`${lot.poids}t`:'', lot.commentaire].filter(Boolean).join(' · ');
+      const cbHtml = S.bcbSelectMode
+        ? `<div data-lot-cb style="width:18px;height:18px;border-radius:5px;border:2px solid ${isSel?'#1D4ED8':'#CBD5E1'};background:${isSel?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:white;">${isSel?'✓':''}</div>`
+        : '';
+      return `<div data-lot-key="${key}" onclick="${clickFn}" style="background:${bg};border:1px solid #E2E8F0;border-radius:8px;padding:7px 10px;cursor:pointer;display:flex;align-items:center;gap:8px;" onmouseenter="if(!App._bcbIsSelected('${key}'))this.style.background='#F0F7FF'" onmouseleave="if(!App._bcbIsSelected('${key}'))this.style.background='white'">
+        ${cbHtml}
+        <div style="flex:1;min-width:0;overflow:hidden;">
+          <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;">
+            <span style="font-size:12px;font-weight:700;color:#1E293B;white-space:nowrap;">${lot.idBcb}</span>
+            ${lot.inter ? `<span style="font-size:10px;color:#94A3B8;font-family:monospace;white-space:nowrap;">${lot.inter}</span>` : ''}
+            <span style="font-size:11px;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:60px;">${desc}</span>
+          </div>
+          ${sub ? `<div style="font-size:10px;color:#94A3B8;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sub}</div>` : ''}
+        </div>
+        <div style="display:flex;align-items:center;gap:3px;flex-shrink:0;flex-wrap:nowrap;">${acheteurChip}${dotA}${dotI}${dotV}${vente}</div>
+      </div>`;
+    };
+
+    const groupSection = (key, lots, color) => `<div>
+      <div style="font-size:10px;font-weight:700;color:${color||'#1D4ED8'};text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;display:flex;align-items:center;gap:5px;">
+        <span>${key||'(non renseigné)'}</span>
+        <span style="background:#F1F5F9;color:#475569;font-size:10px;padding:0 7px;border-radius:10px;">${lots.length}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">${lots.map(lotRow).join('')}</div>
+    </div>`;
+
+    const v = S.bcbLotsView || 'acheteur';
+
+    if (v === 'lots') {
+      subtitle.textContent = `${filtered.length} lot${filtered.length>1?'s':''}`;
+      content.innerHTML = `<div style="display:flex;flex-direction:column;gap:4px;">${filtered.map(lotRow).join('')}</div>`;
+    } else {
+      const groupBy = v === 'acheteur' ? l => l.acheteur
+                    : v === 'vendeur'  ? l => l.vendeur
+                    : l => (l.numVente ? `Vente n°${l.numVente}` : '');
+      const color   = v === 'vendeur'  ? '#065F46' : v === 'vente' ? '#92400E' : '#1D4ED8';
+      const groups  = {};
+      filtered.forEach(l => { const k = groupBy(l)||''; (groups[k]=groups[k]||[]).push(l); });
+      const keys    = Object.keys(groups).sort((a,b) => { if(!a)return 1; if(!b)return -1; return a.localeCompare(b,'fr'); });
+      const word    = v === 'acheteur' ? 'acheteur' : v === 'vendeur' ? 'vendeur' : 'vente';
+      subtitle.textContent = `${filtered.length} lot${filtered.length>1?'s':''} · ${keys.length} ${word}${keys.length>1?'s':''}`;
+      content.innerHTML = keys.map(k => groupSection(k, groups[k], color)).join('');
+    }
+    this._bcbSyncSelectBar();
+  },
+
+  _bcbIsSelected(key) { return S.bcbSelected.has(key); },
+
+  bcbOpenFilter(evt, field) {
+    if (S.bcbActiveFilter === field) { this.bcbCloseFilter(); return; }
+    S.bcbActiveFilter = field;
+    const dropdown = document.getElementById('bcb-filter-dropdown');
+    if (!dropdown) return;
+    const getVal = l => field === 'acheteur' ? (l.acheteur||'')
+                      : field === 'vendeur'  ? (l.vendeur||'')
+                      : (l.numVente ? `Vente n°${l.numVente}` : '');
+    const allVals = [...new Set(S.bcbLots.map(getVal))]
+      .sort((a,b) => !a ? 1 : !b ? -1 : a.localeCompare(b,'fr'));
+    dropdown._bcbField = field;
+    dropdown._bcbVals  = allVals;
+    const activeSet = S.bcbLotsFilters[field];
+    const countMap  = {};
+    S.bcbLots.forEach(l => { const v = getVal(l); countMap[v] = (countMap[v]||0)+1; });
+    const labels = { acheteur:'Acheteur', vendeur:'Vendeur', vente:'Vente' };
+    document.getElementById('bcb-flt-title').textContent = labels[field];
+    document.getElementById('bcb-flt-items').innerHTML = allVals.map((v, i) => {
+      const checked = activeSet === null || activeSet.has(v);
+      return `<label style="display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;user-select:none;" onmouseenter="this.style.background='#F8FAFC'" onmouseleave="this.style.background=''">
+        <input type="checkbox" ${checked?'checked':''} onchange="App._bcbFltToggle(${i})" style="width:15px;height:15px;cursor:pointer;accent-color:#1D4ED8;flex-shrink:0;">
+        <span style="font-size:12px;color:#1E293B;flex:1;">${v||'(non renseigné)'}</span>
+        <span style="font-size:10px;color:#94A3B8;font-weight:600;">${countMap[v]||0}</span>
+      </label>`;
+    }).join('');
+    const btn  = evt.currentTarget;
+    const rect = btn.getBoundingClientRect();
+    dropdown.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 280)) + 'px';
+    dropdown.style.top  = (rect.bottom + 4) + 'px';
+    dropdown.style.display = 'flex';
+    this.bcbUpdateFilterUI();
+    if (this._bcbFltHandler) {
+      document.removeEventListener('mousedown', this._bcbFltHandler);
+      document.removeEventListener('touchstart', this._bcbFltHandler);
+    }
+    this._bcbFltHandler = e => {
+      const d = document.getElementById('bcb-filter-dropdown');
+      const btns = ['bcb-flt-acheteur','bcb-flt-vendeur','bcb-flt-vente'].map(id => document.getElementById(id));
+      if (d && !d.contains(e.target) && btns.every(b => !b || !b.contains(e.target))) this.bcbCloseFilter();
+    };
+    setTimeout(() => {
+      document.addEventListener('mousedown', this._bcbFltHandler);
+      document.addEventListener('touchstart', this._bcbFltHandler);
+    }, 0);
+  },
+
+  _bcbFltToggle(idx) {
+    const dropdown = document.getElementById('bcb-filter-dropdown');
+    if (!dropdown) return;
+    const field   = dropdown._bcbField;
+    const allVals = dropdown._bcbVals;
+    const value   = allVals[idx];
+    let cur = S.bcbLotsFilters[field];
+    if (cur === null) {
+      cur = new Set(allVals);
+      cur.delete(value);
+    } else {
+      if (cur.has(value)) cur.delete(value); else cur.add(value);
+      if (cur.size === allVals.length) cur = null;
+    }
+    S.bcbLotsFilters[field] = cur;
+    this.bcbUpdateFilterUI();
+    this.bcbLotsRender();
+  },
+
+  bcbFilterAll() {
+    const dropdown = document.getElementById('bcb-filter-dropdown');
+    if (!dropdown || !dropdown._bcbField) return;
+    S.bcbLotsFilters[dropdown._bcbField] = null;
+    this.bcbCloseFilter();
+    this.bcbLotsRender();
+  },
+
+  bcbFilterNone() {
+    const dropdown = document.getElementById('bcb-filter-dropdown');
+    if (!dropdown || !dropdown._bcbField) return;
+    S.bcbLotsFilters[dropdown._bcbField] = new Set();
+    document.querySelectorAll('#bcb-flt-items input[type=checkbox]').forEach(cb => cb.checked = false);
+    this.bcbUpdateFilterUI();
+    this.bcbLotsRender();
+  },
+
+  bcbCloseFilter() {
+    S.bcbActiveFilter = null;
+    const d = document.getElementById('bcb-filter-dropdown');
+    if (d) d.style.display = 'none';
+    if (this._bcbFltHandler) {
+      document.removeEventListener('mousedown', this._bcbFltHandler);
+      document.removeEventListener('touchstart', this._bcbFltHandler);
+      this._bcbFltHandler = null;
+    }
+    this.bcbUpdateFilterUI();
+  },
+
+  /* ─ BCB Import acheteurs ─ */
+  bcbImportInit() {
+    S.bcbImp = { step:1, rows:[], matched:[], notInFile:[] };
+    this._bcbImpShowStep(1);
+    const dateEl = document.getElementById('bcb-imp-date');
+    if (dateEl) dateEl.value = new Date().toISOString().slice(0,10);
+    if (!S.bcbLotsLoaded && !S.bcbLotsLoading) this.bcbLotsLoad();
+  },
+
+  _bcbImpShowStep(n) {
+    S.bcbImp.step = n;
+    [1,2,3,4].forEach(i => {
+      const el = document.getElementById('bcb-imp-step' + i);
+      if (el) el.style.display = (i === n) ? '' : 'none';
+    });
+    const labels = { 1:'Étape 1 — Chargement du fichier', 2:'Étape 2 — Sélection des colonnes', 3:'Étape 3 — Vérification et confirmation', 4:'Import terminé' };
+    const lbl = document.getElementById('bcb-imp-step-label');
+    if (lbl) lbl.textContent = labels[n] || '';
+  },
+
+  _loadSheetJs(cb) {
+    if (window.XLSX) { cb(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = cb;
+    s.onerror = () => this.toast('Impossible de charger le lecteur Excel');
+    document.head.appendChild(s);
+  },
+
+  _parseCsv(text) {
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (!lines.length) return [];
+    const delim = lines[0].split(';').length > lines[0].split(',').length ? ';' : ',';
+    return lines.map(line => {
+      const res = []; let inQ = false, cur = '';
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') { inQ = !inQ; }
+        else if (c === delim && !inQ) { res.push(cur.trim()); cur = ''; }
+        else cur += c;
+      }
+      res.push(cur.trim());
+      return res;
+    });
+  },
+
+  bcbImportHandleFile(file) {
+    if (!file) return;
+    const errEl  = document.getElementById('bcb-imp-s1-error');
+    const loadEl = document.getElementById('bcb-imp-s1-loading');
+    if (errEl)  errEl.style.display = 'none';
+    if (loadEl) loadEl.style.display = '';
+    const ext = file.name.split('.').pop().toLowerCase();
+    const done = (rows) => {
+      if (loadEl) loadEl.style.display = 'none';
+      if (!rows || rows.length < 2) {
+        if (errEl) { errEl.style.display = ''; errEl.textContent = 'Fichier vide ou illisible.'; } return;
+      }
+      S.bcbImp.rows = rows;
+      this._bcbImpShowStep(2);
+      this.bcbImportUpdateSelects();
+    };
+    if (ext === 'csv') {
+      const reader = new FileReader();
+      reader.onload = e => done(this._parseCsv(e.target.result));
+      reader.readAsText(file, 'UTF-8');
+    } else {
+      this._loadSheetJs(() => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          try {
+            const wb   = XLSX.read(new Uint8Array(e.target.result), { type:'array' });
+            const ws   = wb.Sheets[wb.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+            done(rows.map(r => r.map(c => String(c == null ? '' : c).trim())));
+          } catch(err) {
+            if (loadEl) loadEl.style.display = 'none';
+            if (errEl)  { errEl.style.display = ''; errEl.textContent = 'Erreur lecture : ' + err.message; }
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      });
+    }
+  },
+
+  bcbImportUpdateSelects() {
+    const rows = S.bcbImp.rows;
+    if (!rows.length) return;
+    const hasHeader = document.getElementById('bcb-imp-has-header')?.checked;
+    const headerRow = hasHeader ? rows[0] : null;
+    const ncols = Math.max(...rows.slice(0, 6).map(r => r.length));
+    const opts = Array.from({ length: ncols }, (_, i) => {
+      const lbl = headerRow && headerRow[i] ? `Col ${i+1} — ${headerRow[i]}` : `Colonne ${i+1}`;
+      return `<option value="${i}">${lbl}</option>`;
+    }).join('');
+    document.getElementById('bcb-imp-sel-bcb').innerHTML = opts;
+    document.getElementById('bcb-imp-sel-acheteur').innerHTML = opts;
+    document.getElementById('bcb-imp-sel-vente').innerHTML = `<option value="-1">(aucune)</option>` + opts;
+    if (hasHeader && headerRow) {
+      const try_ = (...kws) => { const i = headerRow.findIndex(h => kws.some(k => String(h).toLowerCase().includes(k))); return i >= 0 ? i : null; };
+      const bi = try_('bcb','id bcb','n° bcb','lot','code','ref bcb');
+      const ai = try_('achet','buyer','client','acquéreur');
+      const vi = try_('vente','sale','n° vente','num vente');
+      if (bi != null) document.getElementById('bcb-imp-sel-bcb').value = bi;
+      if (ai != null) document.getElementById('bcb-imp-sel-acheteur').value = ai;
+      if (vi != null) document.getElementById('bcb-imp-sel-vente').value = vi;
+    }
+    const previewRows = rows.slice(0, 8);
+    const maxC = Math.max(...previewRows.map(r => r.length));
+    const preview = document.getElementById('bcb-imp-preview');
+    if (preview) preview.innerHTML = `<table style="border-collapse:collapse;font-size:11px;min-width:${maxC*72}px;">` +
+      previewRows.map((row, ri) => {
+        const isH = ri === 0 && hasHeader;
+        return `<tr style="background:${isH?'#F1F5F9':'white'};border-bottom:1px solid #F1F5F9;">` +
+          Array.from({length:maxC}, (_,ci) =>
+            `<td style="padding:4px 8px;white-space:nowrap;${isH?'font-weight:700;color:#475569;':''}">${row[ci]||''}</td>`
+          ).join('') + '</tr>';
+      }).join('') + '</table>';
+  },
+
+  bcbImportAnalyze() {
+    const selBcb   = parseInt(document.getElementById('bcb-imp-sel-bcb')?.value);
+    const selAcht  = parseInt(document.getElementById('bcb-imp-sel-acheteur')?.value);
+    const selVente = parseInt(document.getElementById('bcb-imp-sel-vente')?.value ?? '-1');
+    const date     = document.getElementById('bcb-imp-date')?.value;
+    if (isNaN(selBcb) || isNaN(selAcht)) { this.toast('Sélectionnez les colonnes requises'); return; }
+    if (!date) { this.toast('Entrez une date de vente'); return; }
+    const hasHeader = document.getElementById('bcb-imp-has-header')?.checked;
+    const dataRows  = hasHeader ? S.bcbImp.rows.slice(1) : S.bcbImp.rows;
+    const lotsMap   = {};
+    S.bcbLots.forEach(l => { lotsMap[l.idBcb.trim().toUpperCase()] = l; });
+    const seen = {}, matched = [];
+    dataRows.forEach(row => {
+      const idBcb    = String(row[selBcb]  || '').trim();
+      const acheteur = String(row[selAcht] || '').trim();
+      const numVente = selVente >= 0 ? String(row[selVente] || '').trim() : '';
+      if (!idBcb) return;
+      const key  = idBcb.toUpperCase();
+      const isDup = !!seen[key]; seen[key] = true;
+      const lot  = lotsMap[key] || null;
+      matched.push({ idBcb, acheteur, numVente, dateVente: date, lot, isDup, alreadyVendu: lot?.vendu||false });
+    });
+    S.bcbImp.matched   = matched;
+    S.bcbImp.notInFile = S.bcbLots.filter(l => !seen[l.idBcb.toUpperCase()]);
+    this._bcbImpShowStep(3);
+    this._bcbImpRenderPreview();
+  },
+
+  _bcbImpRenderPreview() {
+    const { matched, notInFile } = S.bcbImp;
+    const found    = matched.filter(m => m.lot && !m.isDup);
+    const dups     = matched.filter(m => m.isDup);
+    const notFound = matched.filter(m => !m.lot && !m.isDup);
+    const alreadyV = matched.filter(m => m.lot && m.alreadyVendu && !m.isDup);
+    const statsEl  = document.getElementById('bcb-imp-stats');
+    if (statsEl) statsEl.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px;">
+      <div style="background:#D1FAE5;border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:22px;font-weight:800;color:#065F46;">${found.length}</div>
+        <div style="font-size:10px;color:#065F46;font-weight:600;">Lots trouvés</div>
+      </div>
+      <div style="background:${notFound.length?'#FEF3C7':'#F1F5F9'};border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:22px;font-weight:800;color:${notFound.length?'#92400E':'#94A3B8'};">${notFound.length}</div>
+        <div style="font-size:10px;color:${notFound.length?'#92400E':'#94A3B8'};font-weight:600;">Non trouvés</div>
+      </div>
+      ${dups.length?`<div style="background:#FEE2E2;border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:22px;font-weight:800;color:#DC2626;">${dups.length}</div>
+        <div style="font-size:10px;color:#DC2626;font-weight:600;">Doublons fichier</div></div>`:''}
+      ${alreadyV.length?`<div style="background:#EDE9FE;border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:22px;font-weight:800;color:#7C3AED;">${alreadyV.length}</div>
+        <div style="font-size:10px;color:#7C3AED;font-weight:600;">Déjà vendus</div></div>`:''}
+    </div>`;
+    const hasVente = matched.some(m => m.numVente);
+    const tableEl  = document.getElementById('bcb-imp-match-table');
+    if (tableEl) tableEl.innerHTML = `<div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;">Détail — ${matched.length} ligne${matched.length>1?'s':''} fichier</div>
+      <div style="overflow:auto;border:1px solid #E2E8F0;border-radius:10px;max-height:200px;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr style="background:#F8FAFC;border-bottom:1px solid #E2E8F0;">
+            <th style="padding:5px 8px;font-size:10px;text-align:left;color:#64748B;">N° BCB</th>
+            <th style="padding:5px 8px;font-size:10px;text-align:left;color:#64748B;">Acheteur</th>
+            ${hasVente?'<th style="padding:5px 8px;font-size:10px;text-align:left;color:#64748B;">N° vente</th>':''}
+            <th style="padding:5px 8px;font-size:10px;text-align:left;color:#64748B;">Statut</th>
+          </tr></thead><tbody>
+          ${matched.slice(0,60).map(m => {
+            const color = m.isDup?'#DC2626':!m.lot?'#D97706':m.alreadyVendu?'#7C3AED':'#065F46';
+            const icon  = m.isDup?'⚠️ doublon':!m.lot?'❌ inconnu':m.alreadyVendu?'🔄 déjà vendu':'✅';
+            return `<tr style="border-bottom:1px solid #F8FAFC;">
+              <td style="padding:4px 8px;font-size:11px;font-family:monospace;font-weight:600;">${m.idBcb}</td>
+              <td style="padding:4px 8px;font-size:11px;color:#475569;">${m.acheteur}</td>
+              ${hasVente?`<td style="padding:4px 8px;font-size:10px;color:#94A3B8;">${m.numVente}</td>`:''}
+              <td style="padding:4px 8px;font-size:11px;font-weight:600;color:${color};">${icon}</td>
+            </tr>`;
+          }).join('')}
+          ${matched.length>60?`<tr><td colspan="4" style="padding:5px 8px;font-size:10px;color:#94A3B8;text-align:center;">… et ${matched.length-60} autres</td></tr>`:''}
+          </tbody></table></div>`;
+    const unsoldEl = document.getElementById('bcb-imp-unsold');
+    if (unsoldEl) unsoldEl.innerHTML = notInFile.length ? `<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;padding:12px 14px;">
+      <div style="font-size:11px;font-weight:700;color:#92400E;margin-bottom:8px;">⚠️ ${notInFile.length} lot${notInFile.length>1?'s':''} absent${notInFile.length>1?'s':''} du fichier (non vendus)</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;">${notInFile.map(l=>`<span style="background:white;border:1px solid #FED7AA;border-radius:5px;padding:1px 7px;font-size:10px;font-family:monospace;color:#92400E;">${l.idBcb}</span>`).join('')}</div>
+    </div>` : '';
+    const toImport = found.concat(alreadyV);
+    const btn = document.getElementById('bcb-imp-confirm-btn');
+    if (btn) {
+      btn.disabled     = !toImport.length;
+      btn.style.opacity = toImport.length ? '1' : '.4';
+      btn.textContent  = toImport.length ? `✅ Importer ${toImport.length} lot${toImport.length>1?'s':''}` : 'Aucun lot à importer';
+    }
+  },
+
+  async bcbImportConfirm() {
+    const toImport = S.bcbImp.matched.filter(m => m.lot && !m.isDup);
+    if (!toImport.length) return;
+    const btn = document.getElementById('bcb-imp-confirm-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Import en cours…'; }
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ action:'bcb_import_acheteurs', lots: toImport.map(m=>({ idBcb:m.idBcb, acheteur:m.acheteur, numVente:m.numVente, dateVente:m.dateVente })) })
+      }, 30000);
+      const d = await r.json();
+      if (d.status !== 'ok') throw new Error(d.error || 'Erreur serveur');
+      toImport.forEach(m => {
+        const lot = S.bcbLots.find(l => l.idBcb === m.idBcb);
+        if (lot) { lot.acheteur = m.acheteur; lot.vendu = true; lot.dateVente = m.dateVente; if (!lot.numVente) lot.numVente = m.numVente; }
+      });
+      const nGarde = d.venteGardee?.length || 0;
+      this._bcbImpShowStep(4);
+      const resultEl = document.getElementById('bcb-imp-result');
+      if (resultEl) resultEl.innerHTML = `
+        <div style="font-size:48px;margin-bottom:12px;">✅</div>
+        <div style="font-size:20px;font-weight:800;color:#1E293B;margin-bottom:6px;">${d.updated||toImport.length} lot${(d.updated||toImport.length)>1?'s':''} importé${(d.updated||toImport.length)>1?'s':''}</div>
+        ${d.notFound?.length?`<div style="font-size:12px;color:#D97706;margin-top:8px;">⚠️ ${d.notFound.length} N° BCB introuvable${d.notFound.length>1?'s':''} dans le sheet</div>`:''}
+        ${nGarde?`<div style="font-size:12px;color:#475569;margin-top:8px;">ℹ️ ${nGarde} lot${nGarde>1?'s':''} déjà passé${nGarde>1?'s':''} en vente : n° de première vente conservé</div>`:''}
+        <div style="font-size:12px;color:#64748B;margin-top:8px;">Statut "vendu", acheteur et date de vente mis à jour dans Google Sheets.</div>`;
+    } catch(e) {
+      if (btn) { btn.disabled = false; btn.textContent = '↩ Réessayer'; }
+      this.toast('Erreur import : ' + e.message);
+    }
+  },
+
+  bcbImportBack2() { this._bcbImpShowStep(2); },
+
+  bcbImportReset() {
+    S.bcbImp = { step:1, rows:[], matched:[], notInFile:[] };
+    const fi = document.getElementById('bcb-imp-file');
+    if (fi) fi.value = '';
+    const errEl = document.getElementById('bcb-imp-s1-error');
+    if (errEl) errEl.style.display = 'none';
+    this._bcbImpShowStep(1);
+  },
+
+  bcbLotDetail(idx) {
+    const lot = S.bcbLots[idx];
+    if (!lot) return;
+    S.bcbSelLot = lot;
+    const body = document.getElementById('bcb-lot-detail-body');
+    if (!body) return;
+
+    const row = (label, val, opts) => {
+      if (!val && !opts?.always) return '';
+      return `<div style="display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid #F1F5F9;gap:12px;">
+        <span style="font-size:11px;color:#64748B;flex-shrink:0;">${label}</span>
+        <span style="font-size:12px;font-weight:600;color:#1E293B;text-align:right;">${val||'—'}</span>
+      </div>`;
+    };
+    const dotA = `<span style="padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700;background:${lot.arrive?'#D1FAE5':'#F1F5F9'};color:${lot.arrive?'#065F46':'#94A3B8'};">Arrivé</span>`;
+    const dotI = `<span style="padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700;background:${lot.inspecte?'#DBEAFE':'#F1F5F9'};color:${lot.inspecte?'#1D4ED8':'#94A3B8'};">Inspecté</span>`;
+    const dotV = `<span style="padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700;background:${lot.vendu?'#FEF3C7':'#F1F5F9'};color:${lot.vendu?'#92400E':'#94A3B8'};">Vendu</span>`;
+    const driveUrl = lot.inter ? `https://drive.google.com/drive/search?q=${encodeURIComponent(lot.inter)}` : '';
+
+    body.innerHTML = `
+      <!-- En-tête -->
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px;">
+        <div>
+          <div style="font-size:20px;font-weight:800;color:#1E293B;">${lot.idBcb}</div>
+          ${lot.inter ? `<div style="font-size:12px;color:#94A3B8;font-family:monospace;margin-top:2px;">${lot.inter}</div>` : ''}
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end;">${dotA}${dotI}${dotV}</div>
+      </div>
+
+      <!-- Bloc identification -->
+      <div style="background:white;border:1px solid #E2E8F0;border-radius:10px;padding:4px 12px;margin-bottom:10px;">
+        ${row('Vendeur', lot.vendeur)}
+        ${row('Réf vendeur', lot.refVendeur)}
+        ${row('Type', lot.type)}
+        ${row('Marque', lot.marque)}
+        ${row('Modèle', lot.modele)}
+        ${row('N° de série', lot.numSerie)}
+        ${row('Poids', lot.poids ? lot.poids+' t' : '')}
+        ${row('Commentaire', lot.commentaire)}
+      </div>
+
+      <!-- Bloc vente -->
+      <div style="background:white;border:1px solid #E2E8F0;border-radius:10px;padding:4px 12px;margin-bottom:10px;">
+        ${row('Acheteur', lot.acheteur)}
+        ${row('N° vente', lot.numVente)}
+        ${row('Date de vente', lot.dateVente)}
+        ${row('Coût', lot.cout != null ? lot.cout+' €' : '')}
+      </div>
+
+      <!-- Bloc logistique -->
+      <div style="background:white;border:1px solid #E2E8F0;border-radius:10px;padding:4px 12px;margin-bottom:10px;">
+        ${row('Date arrivée', lot.dateArrivee)}
+        ${row('Chauffeur', lot.chauffeur)}
+        ${row('LV', lot.lv)}
+        ${row('Code enlèvement', lot.codeEnlevement)}
+      </div>
+
+      <!-- Bouton Drive -->
+      ${driveUrl ? `<a href="${driveUrl}" target="_blank" rel="noopener"
+          style="display:flex;align-items:center;justify-content:center;gap:8px;background:white;border:1.5px solid #E2E8F0;border-radius:10px;padding:12px;font-size:13px;font-weight:600;color:#1D4ED8;text-decoration:none;margin-bottom:10px;">
+          <span style="font-size:18px;">📁</span> Ouvrir le dossier Drive
+        </a>` : ''}
+    `;
+    this.go('bcb-lot-detail');
+  },
+
+  /* ─ BCB Enlèvements ─ */
+  async bcbEnlevementsLoad(force) {
+    if (S.bcbEnlevementsLoading) return;
+    if (S.bcbEnlevementsLoaded && !force) { this.bcbEnlevementsRender(); return; }
+    const loadEl = document.getElementById('bcb-enlevs-loading');
+    const listEl = document.getElementById('bcb-enlevs-list');
+    const emptyEl = document.getElementById('bcb-enlevs-empty');
+    if (loadEl) loadEl.style.display = '';
+    if (listEl) listEl.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'none';
+    S.bcbEnlevementsLoading = true;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=bcb_enlevements_list', {}, 15000);
+      const d = await r.json();
+      if (d.status === 'ok') {
+        S.bcbEnlevements = d.history || [];
+        S.bcbEnlevementsLoaded = true;
+      }
+    } catch(e) { this.toast('Erreur chargement enlèvements'); }
+    S.bcbEnlevementsLoading = false;
+    if (loadEl) loadEl.style.display = 'none';
+    this.bcbEnlevementsRender();
+  },
+
+  bcbEnlevementsRender() {
+    const listEl  = document.getElementById('bcb-enlevs-list');
+    const emptyEl = document.getElementById('bcb-enlevs-empty');
+    const subEl   = document.getElementById('bcb-enlevs-subtitle');
+    if (!listEl) return;
+    const h = S.bcbEnlevements;
+    if (subEl) subEl.textContent = h.length ? `${h.length} bon${h.length>1?'s':''}` : '';
+    if (!h.length) { if (emptyEl) emptyEl.style.display = ''; listEl.innerHTML = ''; return; }
+    if (emptyEl) emptyEl.style.display = 'none';
+    listEl.innerHTML = h.map((e, i) => {
+      const lots    = (e.lots || []).length;
+      const hasCmr  = !!e.cmrNumero;
+      const nPhotos = e.photosCount || 0;
+      const photoBadge = nPhotos > 0
+        ? `<span style="font-size:10px;background:#CCFBF1;color:#0F766E;border-radius:4px;padding:2px 6px;font-weight:700;">📷 ${nPhotos}</span>`
+        : `<span style="font-size:10px;background:#F1F5F9;color:#94A3B8;border-radius:4px;padding:2px 6px;">📷 —</span>`;
+      return `<div style="background:white;border:1px solid ${nPhotos>0?'#99F6E4':'#E2E8F0'};border-radius:8px;padding:10px 12px;margin-bottom:6px;">
+        <div onclick="App.bcbViewEnlevement(${i})" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:700;color:#1E293B;">${e.numero}</div>
+            <div style="font-size:11px;color:#64748B;">${e.date} · ${e.chauffeur||'—'} · ${lots} lot${lots>1?'s':''}</div>
+            <div style="font-size:11px;color:#64748B;margin-top:1px;">${e.destination||''}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">
+            ${photoBadge}
+            ${e.pdfUrl ? '<span style="font-size:10px;background:#EFF6FF;color:#1D4ED8;border-radius:4px;padding:2px 6px;">PDF ✓</span>' : ''}
+            ${hasCmr  ? `<span style="font-size:10px;background:#F0FDF4;color:#065F46;border-radius:4px;padding:2px 6px;">CMR ${e.cmrNumero}</span>` : '<span style="font-size:10px;background:#FEF9C3;color:#92400E;border-radius:4px;padding:2px 6px;">Sans CMR</span>'}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px;border-top:1px solid #F1F5F9;padding-top:8px;align-items:center;">
+          ${e.pdfUrl ? `<a href="${e.pdfUrl}" target="_blank" rel="noopener" style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;text-decoration:none;">📄 PDF</a>` : ''}
+          ${hasCmr ? `<a href="${e.cmrUrl}" target="_blank" rel="noopener" style="background:#F0FDF4;color:#065F46;border:1.5px solid #BBF7D0;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;text-decoration:none;">📋 CMR ${e.cmrNumero}</a>` : ''}
+          ${nPhotos > 0 ? `<span style="font-size:11px;color:#0F766E;font-weight:600;">📷 ${nPhotos} photo${nPhotos>1?'s':''}</span>` : ''}
+          <button onclick="App.bcbDeleteEnlevement('${e.numero}')" style="margin-left:auto;background:#FEE2E2;color:#B91C1C;border:none;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;">🗑</button>
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  bcbViewEnlevement(idx) {
+    const e = S.bcbEnlevements[idx];
+    if (!e) return;
+    S.bcbCurEnlevement = e;
+    this._bcbRenderEnlevDetail();
+    this.go('bcb-enlevement');
+  },
+
+  async bcbDeleteEnlevement(numero) {
+    if (!confirm(`Supprimer le bon d'enlèvement ${numero} et mettre ses fichiers à la corbeille ?`)) return;
+    // Récupérer l'enlèvement avant suppression pour réinitialiser l'état local
+    const enlevement = S.bcbEnlevements.find(e => e.numero === numero);
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'bcb_enlevement_delete', numero })
+      }, 40000);
+      const d = await r.json();
+      if (d.status === 'ok') {
+        S.bcbEnlevements = S.bcbEnlevements.filter(e => e.numero !== numero);
+        if (S.bcbCurEnlevement?.numero === numero) S.bcbCurEnlevement = null;
+        // Remettre les lots comme non-partis localement
+        if (enlevement) {
+          const deletedIds = new Set((enlevement.lots || []).map(l => l.idBcb));
+          S.bcbLots.forEach(l => { if (deletedIds.has(l.idBcb)) l.parti = false; });
+          // Démarquer la consigne chauffeur
+          const consList = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+          const idx = consList.findIndex(c => [c.prenom, c.nom].filter(Boolean).join(' ') === enlevement.chauffeur);
+          if (idx > -1) {
+            const procCons = new Set(JSON.parse(localStorage.getItem('snt_bcb_processed_consignes') || '[]'));
+            procCons.delete(idx);
+            localStorage.setItem('snt_bcb_processed_consignes', JSON.stringify([...procCons]));
+          }
+        }
+        this.toast('Enlèvement ' + numero + ' supprimé');
+        this.bcbEnlevementsRender();
+      } else this.toast('Erreur : ' + (d.error || 'inconnue'));
+    } catch(e) { this.toast('Erreur : ' + e.message); }
+  },
+
+  _bcbRenderEnlevDetail() {
+    const e     = S.bcbCurEnlevement;
+    const title = document.getElementById('bcb-enlev-title');
+    const sub   = document.getElementById('bcb-enlev-subtitle');
+    const body  = document.getElementById('bcb-enlev-body');
+    if (!e || !body) return;
+    S.bcbEnlevPhotos = [];
+    if (title) title.textContent = 'Enl. ' + e.numero;
+    const nPhotos = e.photosCount || 0;
+    if (sub) sub.innerHTML = e.date
+      + (e.cmrNumero ? ' · CMR ' + e.cmrNumero : '')
+      + (nPhotos > 0
+        ? ` · <span style="color:#0F766E;font-weight:700;">📷 ${nPhotos} photo${nPhotos>1?'s':''}</span>`
+        : ' · <span style="color:#94A3B8;">📷 aucune photo</span>');
+    const lots = e.lots || [];
+    const row  = (label, val) => val ? `<tr><td style="padding:4px 8px;font-size:11px;color:#64748B;white-space:nowrap;">${label}</td><td style="padding:4px 8px;font-size:12px;color:#1E293B;">${val}</td></tr>` : '';
+    const lotRows = lots.map((l, i) => `
+      <tr style="background:${i%2?'#F8FAFC':'white'}">
+        <td style="padding:4px 6px;font-size:11px;text-align:center;">${i+1}</td>
+        <td style="padding:4px 6px;font-size:11px;">${l.inter||''}</td>
+        <td style="padding:4px 6px;font-size:11px;font-weight:600;">${l.idBcb||''}</td>
+        <td style="padding:4px 6px;font-size:11px;">${l.idSeller||''}</td>
+        <td style="padding:4px 6px;font-size:11px;">${[l.marque,l.modele].filter(Boolean).join(' ')||l.type||''}</td>
+        <td style="padding:4px 6px;font-size:11px;">${l.marque||''}</td>
+        <td style="padding:4px 6px;font-size:11px;">${l.modele||''}</td>
+        <td style="padding:4px 6px;font-size:11px;">${l.numSerie||''}</td>
+        <td style="padding:4px 6px;font-size:11px;">${l.commentaire||''}</td>
+        <td style="padding:4px 6px;font-size:11px;">${l.dateVente||''}</td>
+        <td style="padding:4px 6px;font-size:11px;">${l.acheteur||''}</td>
+        <td style="padding:4px 6px;font-size:11px;text-align:right;">${l.poids||''}</td>
+      </tr>`).join('');
+    const thStyle = 'padding:4px 6px;font-size:10px;font-weight:700;color:white;background:#1E293B;white-space:nowrap;';
+    const driverForm = !e.chauffeur ? `
+      <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:12px;margin-bottom:10px;">
+        <div style="font-size:12px;font-weight:700;color:#92400E;margin-bottom:10px;">Infos chauffeur manquantes</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div style="grid-column:1/-1;">
+            <label style="font-size:11px;color:#64748B;display:block;margin-bottom:3px;">Chauffeur *</label>
+            <input id="bcb-enlev-drv-chauffeur" type="text" autocomplete="nope" placeholder="Prénom NOM"
+              style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:7px 10px;font-size:13px;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#64748B;display:block;margin-bottom:3px;">Tracteur</label>
+            <input id="bcb-enlev-drv-tracteur" type="text" autocomplete="nope" placeholder="Immat."
+              style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:7px 10px;font-size:13px;box-sizing:border-box;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#64748B;display:block;margin-bottom:3px;">Remorque</label>
+            <input id="bcb-enlev-drv-remorque" type="text" autocomplete="nope" placeholder="Immat."
+              style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:7px 10px;font-size:13px;box-sizing:border-box;">
+          </div>
+          <div style="grid-column:1/-1;">
+            <label style="font-size:11px;color:#64748B;display:block;margin-bottom:3px;">Transporteur</label>
+            <input id="bcb-enlev-drv-transport" type="text" autocomplete="nope" placeholder="Nom société transport"
+              style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:7px 10px;font-size:13px;box-sizing:border-box;">
+          </div>
+        </div>
+        <button id="bcb-enlev-drv-save" onclick="App.bcbEnlevSaveDriver()"
+          style="width:100%;background:#1D4ED8;color:white;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;">
+          Enregistrer
+        </button>
+      </div>` : '';
+    body.innerHTML = driverForm + `
+      <div style="background:white;border:1px solid #E2E8F0;border-radius:10px;padding:4px 12px;margin-bottom:10px;">
+        <table style="width:100%;border-collapse:collapse;">
+          ${row('Chauffeur', e.chauffeur)} ${row('Tracteur', e.tracteur)} ${row('Remorque', e.remorque)}
+          ${row('Destination', e.destination)}
+          ${e.folderUrl ? `<tr><td style="padding:4px 8px;font-size:11px;color:#64748B;">Dossier Drive</td><td style="padding:4px 8px;"><a href="${e.folderUrl}" target="_blank" style="font-size:11px;color:#1D4ED8;">📁 Ouvrir</a></td></tr>` : ''}
+          ${e.cmrNumero ? `<tr><td style="padding:4px 8px;font-size:11px;color:#64748B;">CMR</td><td style="padding:4px 8px;"><a href="${e.cmrUrl}" target="_blank" style="font-size:11px;color:#1D4ED8;">CMR ${e.cmrNumero}</a></td></tr>` : ''}
+        </table>
+      </div>
+      <div style="overflow-x:auto;background:white;border:1px solid #E2E8F0;border-radius:10px;margin-bottom:14px;">
+        <table style="width:100%;border-collapse:collapse;min-width:700px;">
+          <thead><tr>
+            <th style="${thStyle}">#</th><th style="${thStyle}">Inter</th><th style="${thStyle}">ID BCB</th>
+            <th style="${thStyle}">ID Seller</th><th style="${thStyle}">Description</th><th style="${thStyle}">Brand</th>
+            <th style="${thStyle}">Model</th><th style="${thStyle}">VIN</th><th style="${thStyle}">Comment</th>
+            <th style="${thStyle}">Selling date</th><th style="${thStyle}">Buyer</th><th style="${thStyle}">Poids t</th>
+          </tr></thead>
+          <tbody>${lotRows}</tbody>
+        </table>
+      </div>
+      <div style="background:white;border:1px solid #E2E8F0;border-radius:10px;padding:12px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-size:12px;font-weight:700;color:#1E293B;">📷 Photos du chargement</div>
+          <span id="bcb-enlev-photo-count" style="font-size:11px;color:#64748B;">${e.photosCount ? e.photosCount + ' photo' + (e.photosCount > 1 ? 's' : '') + ' envoyée' + (e.photosCount > 1 ? 's' : '') : 'Aucune photo'}</span>
+        </div>
+        <div class="photo-grid" id="bcb-enlev-photo-grid"></div>
+        <input type="file" id="bcb-enlev-photo-input" accept="image/*" multiple capture="environment" style="display:none;" onchange="App.handlePhotos(event,'bcb-enlev')">
+        <button id="bcb-enlev-upload-btn" onclick="App.bcbUploadPhotos()" style="display:none;margin-top:10px;width:100%;background:#0F766E;color:white;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;">
+          Envoyer les photos
+        </button>
+      </div>`;
+    this._bcbRenderEnlevPhotoGrid();
+  },
+
+  async bcbEnlevSaveDriver() {
+    const e = S.bcbCurEnlevement;
+    if (!e) return;
+    const chauffeur    = document.getElementById('bcb-enlev-drv-chauffeur')?.value.trim();
+    const tracteur     = document.getElementById('bcb-enlev-drv-tracteur')?.value.trim();
+    const remorque     = document.getElementById('bcb-enlev-drv-remorque')?.value.trim();
+    const transportNom = document.getElementById('bcb-enlev-drv-transport')?.value.trim();
+    if (!chauffeur) { this.toast('Nom du chauffeur requis'); return; }
+    const btn = document.getElementById('bcb-enlev-drv-save');
+    if (btn) btn.textContent = '…';
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'bcb_enlevement_update', numero: e.numero,
+          chauffeur, tracteur, remorque, transportNom })
+      }, 10000);
+      const d = await r.json();
+      if (d.status === 'ok') {
+        Object.assign(e, { chauffeur, tracteur, remorque, transportNom });
+        const idx = S.bcbEnlevements.findIndex(x => x.numero === e.numero);
+        if (idx > -1) Object.assign(S.bcbEnlevements[idx], { chauffeur, tracteur, remorque, transportNom });
+        this._bcbRenderEnlevDetail();
+        this.toast('Infos chauffeur enregistrées');
+      } else {
+        if (btn) btn.textContent = 'Enregistrer';
+        this.toast('Erreur : ' + (d.error || 'inconnue'));
+      }
+    } catch(err) {
+      if (btn) btn.textContent = 'Enregistrer';
+      this.toast('Erreur : ' + err.message);
+    }
+  },
+
+  _bcbRenderEnlevPhotoGrid() {
+    const grid      = document.getElementById('bcb-enlev-photo-grid');
+    const uploadBtn = document.getElementById('bcb-enlev-upload-btn');
+    if (!grid) return;
+    grid.innerHTML = S.bcbEnlevPhotos.map((p, i) => `
+      <div class="photo-thumb">
+        <img src="${p.dataUrl}" loading="lazy">
+        <button class="rm-btn" onclick="App.removePhoto(${i},'bcb-enlev')">✕</button>
+      </div>`).join('') + `
+      <div class="photo-add-btn" onclick="App.triggerInput('bcb-enlev-photo-input')">
+        <span style="font-size:26px;">📷</span><span>Ajouter</span>
+      </div>`;
+    if (uploadBtn) uploadBtn.style.display = S.bcbEnlevPhotos.length > 0 ? '' : 'none';
+  },
+
+  async bcbUploadPhotos() {
+    const e = S.bcbCurEnlevement;
+    if (!e || !S.bcbEnlevPhotos.length) return;
+    const btn = document.getElementById('bcb-enlev-upload-btn');
+    if (btn) btn.textContent = 'Envoi…';
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'bcb_enlevement_photo',
+          numero: e.numero,
+          photos: S.bcbEnlevPhotos.map(p => p.dataUrl)
+        })
+      }, 60000);
+      const d = await r.json();
+      if (d.status === 'ok') {
+        e.photosCount = (e.photosCount || 0) + d.count;
+        const idx = S.bcbEnlevements.findIndex(x => x.numero === e.numero);
+        if (idx > -1) S.bcbEnlevements[idx].photosCount = e.photosCount;
+        S.bcbEnlevPhotos = [];
+        const countEl = document.getElementById('bcb-enlev-photo-count');
+        if (countEl) countEl.textContent = e.photosCount + ' photo' + (e.photosCount > 1 ? 's' : '') + ' envoyée' + (e.photosCount > 1 ? 's' : '');
+        const sub = document.getElementById('bcb-enlev-subtitle');
+        if (sub) sub.innerHTML = e.date
+          + (e.cmrNumero ? ' · CMR ' + e.cmrNumero : '')
+          + ` · <span style="color:#0F766E;font-weight:700;">📷 ${e.photosCount} photo${e.photosCount>1?'s':''}</span>`;
+        this._bcbRenderEnlevPhotoGrid();
+        this.toast(d.count + ' photo' + (d.count > 1 ? 's' : '') + ' envoyée' + (d.count > 1 ? 's' : ''));
+      } else {
+        if (btn) btn.textContent = 'Envoyer les photos';
+        this.toast('Erreur : ' + (d.error || 'inconnue'));
+      }
+    } catch(err) {
+      if (btn) btn.textContent = 'Envoyer les photos';
+      this.toast('Erreur : ' + err.message);
+    }
+  },
+
+  bcbDeleteCurEnlevement() {
+    const e = S.bcbCurEnlevement;
+    if (!e) return;
+    this.bcbDeleteEnlevement(e.numero).then(() => {
+      if (!S.bcbCurEnlevement) this.go('bcb-enlevements');
+    });
+  },
+
+  bcbPrintEnlevement() {
+    const e = S.bcbCurEnlevement;
+    if (!e) return;
+    const doc = _generateBcbPicklist(e);
+    doc.save(`Enlevement_${e.numero}.pdf`);
+  },
+
+  async bcbEnlevementCreateCmr() {
+    const e = S.bcbCurEnlevement;
+    if (!e) return;
+    const list = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+    const c    = list.find(x => [x.prenom, x.nom].filter(Boolean).join(' ') === e.chauffeur) || {};
+    S.lvu.transporteur = { id: 'autre', nom: c.transportNom || '', adresse: c.transportAdresse || '', ville: c.transportVille || '' };
+    S.lvu.marchandises = (e.lots || []).map(l => ({
+      qte: '1',
+      description: [l.idBcb, [l.marque, l.modele].filter(Boolean).join(' ') || l.type].filter(Boolean).join(' — '),
+      poids: l.poids ? String(l.poids) : '',
+      note: l.inter || '', ml: ''
+    }));
+    S.activity = 'lvu';
+    await this.lvuInit();
+    this.lvuSetType('CMR');
+    this.lvuSetSource('bcb');
+    this._lvuRenderMarchandises();
+    // Stocker le n° d'enlèvement pour le passer à lv_save
+    S.lvu.enlevementNumero = e.numero;
+    const acheteur = (e.lots && e.lots.length > 0) ? (e.lots[0].acheteur || '') : '';
+    setTimeout(() => {
+      const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+      set('lvu-f-conducteur',   e.chauffeur   || '');
+      set('lvu-f-immat-moteur', e.tracteur    || '');
+      set('lvu-f-immat-semi',   e.remorque    || '');
+      set('lvu-f-doc',          'Enl. ' + e.numero);
+      set('lvu-f-donneur',      acheteur);
+      set('lvu-f-exp-nom',      'BCB OFF MARKET');
+      set('lvu-f-exp-adresse',  'ZA Renardières');
+      set('lvu-f-exp-ville',    'JAVRON-LES-CHAPELLES');
+      set('lvu-f-exp-pays',     'FR - France');
+      const dest = e.destination || '';
+      if (dest) set('lvu-f-dest-nom', dest);
+    }, 100);
+  },
+
+  async bcbCreateEnlevement() {
+    const list = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+    const c    = S.bcbPrepMode ? {} : list[S.bcbDepartConsigne];
+    if (!S.bcbPrepMode && !c) { this.toast('Sélectionnez un chauffeur.'); return; }
+    const selectedLots = S.bcbLots.filter(l => S.bcbDepartSelected.has(l.idBcb));
+    if (!selectedLots.length) { this.toast('Sélectionnez au moins un lot.'); return; }
+    // Verrou anti double-appui : avant, 2-3 appuis rapprochés créaient autant de bons
+    // pour les mêmes lots (ex. 3 « La Michaudière » dans la même minute, 2026-09-29).
+    if (S._bcbCreating) { this.toast('Création déjà en cours, patientez…'); return; }
+    S._bcbCreating = true;
+    this.toast('Génération du bon d\'enlèvement…');
+    try {
+      // 1. Obtenir le numéro
+      const rn = await _fetchWithTimeout(S.apiUrl + '?action=bcb_enlevement_next_number', {}, 10000);
+      const dn = await rn.json();
+      if (dn.status !== 'ok') throw new Error(dn.error || 'Numéro indisponible');
+      const numero = dn.numero;
+      const now    = new Date();
+      const date   = now.toLocaleDateString('fr-FR');
+      const chauffeur = [c.prenom, c.nom].filter(Boolean).join(' ');
+      const clientName  = S.bcbDepartBuyer || c.client;
+      const destination = [clientName, c.clientAdresse, c.clientVille, c.clientPays].filter(Boolean).join(' — ');
+      // 2. Construire l'objet enlèvement
+      const enlevement = {
+        numero, date, chauffeur,
+        tracteur:    c.tracteur  || '',
+        remorque:    c.remorque  || '',
+        destination,
+        expediteur:  { nom:'BCB OFF MARKET', adresse:'ZA Renardières', ville:'53250 JAVRON-LES-CHAPELLES' },
+        lots: selectedLots.map(l => ({
+          idBcb: l.idBcb, inter: l.inter || '', idSeller: l.refVendeur || '',
+          marque: l.marque || '', modele: l.modele || '', type: l.type || '',
+          numSerie: l.numSerie || '', commentaire: l.commentaire || '',
+          dateVente: l.dateVente || '', acheteur: l.acheteur || '',
+          poids: l.poids || '', numVente: l.numVente || ''
+        }))
+      };
+      // 3. Générer PDF
+      const doc = _generateBcbPicklist(enlevement);
+      const b64 = doc.output('datauristring').split(',')[1];
+      // 4. Sauvegarder dans Drive
+      const payload = {
+        action: 'bcb_enlevement_save', numero, date, chauffeur,
+        tracteur: enlevement.tracteur, remorque: enlevement.remorque,
+        destination, lots: enlevement.lots, pdf_b64: b64
+      };
+      const rs = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }, 30000);
+      const ds = await rs.json();
+      if (ds.status !== 'ok') throw new Error(ds.error || 'Erreur sauvegarde');
+      if (ds.avertissement) App.toast('⚠ Bon enregistré, mais ' + ds.avertissement + ' — prévenir Hugo');
+      enlevement.pdfUrl    = ds.pdfUrl    || '';
+      enlevement.folderUrl = ds.folderUrl || '';
+      enlevement.cmrNumero = '';
+      enlevement.cmrUrl    = '';
+      // 5. Marquer les lots comme partis localement (disparaissent de la liste immédiatement)
+      const departedIds = new Set(selectedLots.map(l => l.idBcb));
+      S.bcbLots.forEach(l => { if (departedIds.has(l.idBcb)) l.parti = true; });
+      S.bcbDepartSelected = new Set();
+      // 6. Marquer la consigne chauffeur comme traitée
+      const procCons = new Set(JSON.parse(localStorage.getItem('snt_bcb_processed_consignes') || '[]'));
+      procCons.add(S.bcbDepartConsigne);
+      localStorage.setItem('snt_bcb_processed_consignes', JSON.stringify([...procCons]));
+      // 7. Afficher
+      S.bcbCurEnlevement = enlevement;
+      S.bcbEnlevements.unshift(enlevement);
+      this._bcbRenderEnlevDetail();
+      this.go('bcb-enlevement');
+    } catch(err) {
+      this.toast('Erreur : ' + err.message);
+    } finally {
+      S._bcbCreating = false;
+    }
+  },
+
+  /* ─ BCB Départ ─ */
+  bcbDepartInit() {
+    S.bcbDepartConsigne = null;
+    S.bcbDepartSelected = new Set();
+    S.bcbDepartBuyer    = null;
+    S.bcbPrepMode       = false;
+    this._bcbDepRenderConsignes();
+    this._bcbDepResetPrepBtn();
+    const lotsSection = document.getElementById('bcb-dep-lots-section');
+    const bar = document.getElementById('bcb-dep-bar');
+    if (lotsSection) lotsSection.style.display = 'none';
+    if (bar) bar.style.display = 'none';
+    // Charger et afficher les chargements préparés
+    if (S.bcbEnlevementsLoaded) {
+      this._bcbRenderPreparedSection();
+    } else if (!S.bcbEnlevementsLoading && S.apiUrl) {
+      this.bcbEnlevementsLoad().then(() => this._bcbRenderPreparedSection());
+    }
+  },
+
+  bcbStartPrepMode() {
+    S.bcbPrepMode       = true;
+    S.bcbDepartConsigne = null;
+    S.bcbDepartSelected = new Set();
+    S.bcbDepartBuyer    = null;
+    this._bcbDepRenderConsignes();
+    const btn = document.getElementById('bcb-prep-btn');
+    if (btn) { btn.style.background = '#EFF6FF'; btn.style.borderColor = '#1D4ED8'; btn.style.color = '#1D4ED8'; }
+    const lotsSection = document.getElementById('bcb-dep-lots-section');
+    if (lotsSection) lotsSection.style.display = '';
+    this._bcbDepRenderLots();
+  },
+
+  _bcbDepResetPrepBtn() {
+    const btn = document.getElementById('bcb-prep-btn');
+    if (btn) { btn.style.background = 'white'; btn.style.borderColor = '#E2E8F0'; btn.style.color = '#475569'; }
+  },
+
+  _bcbRenderPreparedSection() {
+    const section = document.getElementById('bcb-dep-prepared-section');
+    const list    = document.getElementById('bcb-dep-prepared-list');
+    if (!section || !list) return;
+    const prepared = S.bcbEnlevements.filter(e => !e.cmrNumero && e.statut !== 'parti');
+    if (!prepared.length) { section.style.display = 'none'; return; }
+    section.style.display = '';
+    list.innerHTML = prepared.map(e => {
+      const hasChauffeur = !!e.chauffeur;
+      const badgeTxt   = hasChauffeur ? 'En cours' : 'Préparé';
+      const badgeBg    = hasChauffeur ? '#DBEAFE' : '#FEF9C3';
+      const badgeColor = hasChauffeur ? '#1D4ED8' : '#92400E';
+      return `<div style="background:white;border:1px solid #E2E8F0;border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:8px;">
+        <div onclick="App.bcbGoToEnlevement('${e.numero}')" style="flex:1;cursor:pointer;min-width:0;">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+            <span style="font-size:13px;font-weight:700;color:#1E293B;">${e.numero}</span>
+            <span style="font-size:10px;font-weight:600;padding:1px 7px;border-radius:10px;background:${badgeBg};color:${badgeColor};">${badgeTxt}</span>
+          </div>
+          <div style="font-size:11px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.date} · ${e.destination || '—'}</div>
+        </div>
+        <button onclick="App.bcbEnlevMarkParti('${e.numero}')" style="background:#F1F5F9;border:1px solid #E2E8F0;border-radius:8px;padding:5px 10px;font-size:11px;font-weight:600;color:#475569;cursor:pointer;white-space:nowrap;flex-shrink:0;">✓ Parti</button>
+      </div>`;
+    }).join('');
+  },
+
+  bcbGoToEnlevement(numero) {
+    const e = S.bcbEnlevements.find(x => x.numero === numero);
+    if (!e) return;
+    S.bcbCurEnlevement = e;
+    this._bcbRenderEnlevDetail();
+    this.go('bcb-enlevement');
+  },
+
+  async bcbEnlevMarkParti(numero) {
+    if (!confirm('Marquer cet enlèvement comme parti ?')) return;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'bcb_enlevement_update', numero, statut: 'parti' })
+      }, 10000);
+      const d = await r.json();
+      if (d.status === 'ok') {
+        const idx = S.bcbEnlevements.findIndex(x => x.numero === numero);
+        if (idx > -1) S.bcbEnlevements[idx].statut = 'parti';
+        this._bcbRenderPreparedSection();
+        this.toast('Marqué comme parti');
+      } else {
+        this.toast('Erreur : ' + (d.error || 'inconnue'));
+      }
+    } catch(e) { this.toast('Erreur : ' + e.message); }
+  },
+
+  bcbDepartClear() {
+    const procCons = new Set(JSON.parse(localStorage.getItem('snt_bcb_processed_consignes') || '[]'));
+    if (procCons.size === 0) return;
+    if (!confirm('Supprimer les consignes chauffeurs traités ?')) return;
+    // Supprimer les consignes traitées de la liste (indices décroissants pour ne pas décaler)
+    const list    = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+    const indices = [...procCons].sort((a, b) => b - a);
+    indices.forEach(i => { if (i >= 0 && i < list.length) list.splice(i, 1); });
+    localStorage.setItem('snt_bcb_consignes', JSON.stringify(list));
+    localStorage.removeItem('snt_bcb_processed_consignes');
+    S.bcbDepartConsigne = null;
+    S.bcbDepartSelected = new Set();
+    S.bcbDepartBuyer    = null;
+    S.bcbPrepMode       = false;
+    const active   = document.getElementById('bcb-dep-buyer-active');
+    const search   = document.getElementById('bcb-dep-buyer-search');
+    const lotsSection = document.getElementById('bcb-dep-lots-section');
+    const bar      = document.getElementById('bcb-dep-bar');
+    const clearBtn = document.getElementById('bcb-dep-clear-btn');
+    if (active)    active.style.display = 'none';
+    if (search)    search.value = '';
+    if (lotsSection) lotsSection.style.display = 'none';
+    if (bar)       bar.style.display = 'none';
+    if (clearBtn)  clearBtn.style.display = 'none';
+    this._bcbDepResetPrepBtn();
+    this._bcbDepRenderConsignes();
+    this.toast(`${indices.length} consigne${indices.length > 1 ? 's' : ''} supprimée${indices.length > 1 ? 's' : ''}`);
+  },
+
+  _bcbDepRenderConsignes() {
+    const container = document.getElementById('bcb-dep-consigne-picker');
+    if (!container) return;
+    const list = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+    if (!list.length) {
+      container.innerHTML = '<div style="padding:10px;text-align:center;color:#94A3B8;font-size:13px;">Aucune consigne enregistrée</div>';
+      return;
+    }
+    const procCons = new Set(JSON.parse(localStorage.getItem('snt_bcb_processed_consignes') || '[]'));
+    const clearBtn = document.getElementById('bcb-dep-clear-btn');
+    if (clearBtn) clearBtn.style.display = procCons.size > 0 ? '' : 'none';
+    container.innerHTML = list.map((c, i) => {
+      const isSel  = S.bcbDepartConsigne === i;
+      const isDone = procCons.has(i);
+      const name   = [c.prenom, c.nom].filter(Boolean).join(' ') || 'Chauffeur';
+      const truck  = [c.tracteur, c.remorque].filter(Boolean).join(' + ') || '—';
+      const badge  = isDone ? `<span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:5px;background:#DCFCE7;color:#16A34A;white-space:nowrap;">✓ Traité</span>` : '';
+      const clientLine = c.client ? `<div style="font-size:12px;font-weight:600;color:#0F766E;margin-top:2px;">→ ${c.client}${c.clientVille ? ' · ' + c.clientVille : ''}</div>` : '';
+      return `<div onclick="App.bcbDepSelectConsigne(${i})"
+        style="background:${isSel?'#EFF6FF':isDone?'#F0FDF4':'white'};border:1px solid ${isSel?'#1D4ED8':isDone?'#86EFAC':'#E2E8F0'};border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer;display:flex;align-items:center;gap:8px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:700;color:#1E293B;">${name}</div>
+          <div style="font-size:11px;color:#64748B;">${c.transportNom||'—'} · ${truck}</div>
+          ${clientLine}
+        </div>
+        ${badge}
+        <button onmousedown="event.stopPropagation();App.bcbDepDeleteConsigne(${i})"
+          style="background:none;border:none;color:#CBD5E1;font-size:16px;cursor:pointer;padding:4px;flex-shrink:0;line-height:1;"
+          title="Supprimer cette consigne"
+          onmouseenter="this.style.color='#EF4444'" onmouseleave="this.style.color='#CBD5E1'">✕</button>
+      </div>`;
+    }).join('');
+  },
+  bcbDepDeleteConsigne(idx) {
+    const list = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+    const c = list[idx];
+    const name = c ? ([c.prenom, c.nom].filter(Boolean).join(' ') || 'cette consigne') : 'cette consigne';
+    if (!confirm(`Supprimer la consigne de ${name} ?`)) return;
+    list.splice(idx, 1);
+    localStorage.setItem('snt_bcb_consignes', JSON.stringify(list));
+    // Adjust processed indices: remove idx, decrement all > idx
+    const procCons = new Set(JSON.parse(localStorage.getItem('snt_bcb_processed_consignes') || '[]'));
+    procCons.delete(idx);
+    const adjusted = new Set([...procCons].map(i => i > idx ? i - 1 : i));
+    localStorage.setItem('snt_bcb_processed_consignes', JSON.stringify([...adjusted]));
+    // Reset selection if deleted entry was selected
+    if (S.bcbDepartConsigne === idx) {
+      S.bcbDepartConsigne = null;
+      S.bcbDepartSelected = new Set();
+      const lotsSection = document.getElementById('bcb-dep-lots-section');
+      const bar = document.getElementById('bcb-dep-bar');
+      if (lotsSection) lotsSection.style.display = 'none';
+      if (bar) bar.style.display = 'none';
+    } else if (S.bcbDepartConsigne > idx) {
+      S.bcbDepartConsigne--;
+    }
+    this._bcbDepRenderConsignes();
+  },
+
+  bcbDepSelectConsigne(idx) {
+    S.bcbDepartConsigne = idx;
+    S.bcbDepartSelected = new Set();
+    S.bcbDepartBuyer    = null;
+    S.bcbPrepMode       = false;
+    this._bcbDepResetPrepBtn();
+    this._bcbDepRenderConsignes();
+    const lotsSection = document.getElementById('bcb-dep-lots-section');
+    if (lotsSection) lotsSection.style.display = '';
+    // Pré-remplir la recherche acheteur avec le client de la consigne
+    const list = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+    const c = list[idx];
+    const searchEl = document.getElementById('bcb-dep-buyer-search');
+    if (searchEl) {
+      searchEl.value = c?.client || '';
+      if (c?.client) this.bcbDepBuyerSearch(c.client);
+    }
+    this._bcbDepRenderLots();
+  },
+
+  bcbDepBuyerSearch(val) {
+    const q   = val.trim().toLowerCase();
+    const res = document.getElementById('bcb-dep-buyer-results');
+    if (!res) return;
+    if (!q) { res.style.display = 'none'; res.innerHTML = ''; return; }
+    // Acheteurs uniques des lots non partis
+    const buyers = [...new Set(
+      S.bcbLots.filter(l => !l.parti && l.acheteur).map(l => l.acheteur)
+    )].filter(b => b.toLowerCase().includes(q)).slice(0, 8);
+    if (!buyers.length) {
+      res.innerHTML = '<div style="padding:10px 12px;color:#94A3B8;font-size:12px;">Aucun acheteur trouvé</div>';
+      res.style.display = 'block';
+      return;
+    }
+    res.innerHTML = buyers.map(b => {
+      const count = S.bcbLots.filter(l => !l.parti && l.acheteur === b).length;
+      return `<div class="dest-result-row" onclick="App.bcbDepBuyerSelect('${b.replace(/'/g,"\\'")}')">
+        <span style="font-size:13px;color:#1E293B;flex:1;">${b}</span>
+        <span style="font-size:11px;color:#64748B;">${count} lot${count>1?'s':''}</span>
+      </div>`;
+    }).join('');
+    res.style.display = 'block';
+  },
+
+  bcbDepBuyerSelect(buyer) {
+    S.bcbDepartBuyer = buyer;
+    const res = document.getElementById('bcb-dep-buyer-results');
+    const inp = document.getElementById('bcb-dep-buyer-search');
+    if (res) { res.style.display = 'none'; res.innerHTML = ''; }
+    if (inp) inp.value = '';
+    const active = document.getElementById('bcb-dep-buyer-active');
+    const name   = document.getElementById('bcb-dep-buyer-name');
+    if (name)   name.textContent = buyer;
+    if (active) active.style.display = 'flex';
+    this._bcbDepRenderLots();
+  },
+
+  bcbDepBuyerClear() {
+    S.bcbDepartBuyer = null;
+    const active = document.getElementById('bcb-dep-buyer-active');
+    if (active) active.style.display = 'none';
+    this._bcbDepRenderLots();
+  },
+
+  _bcbDepRenderLots() {
+    const lotsSection = document.getElementById('bcb-dep-lots-section');
+    const lotsList    = document.getElementById('bcb-dep-lots-list');
+    if (!lotsSection || !lotsList) return;
+    lotsSection.style.display = '';
+    const all  = S.bcbLots.filter(l => !l.parti);
+    const lots = S.bcbDepartBuyer
+      ? all.filter(l => l.acheteur === S.bcbDepartBuyer)
+      : all;
+    // Group by buyer
+    const groups = {};
+    lots.forEach(l => {
+      const key = l.acheteur || '(sans acheteur)';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(l);
+    });
+    let html = '';
+    for (const buyer of Object.keys(groups).sort()) {
+      html += `<div style="margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">${buyer}</div>`;
+      groups[buyer].forEach(lot => {
+        const key   = lot.idBcb;
+        const isSel = S.bcbDepartSelected.has(key);
+        const cb    = `<div data-dep-cb style="width:18px;height:18px;border-radius:5px;border:2px solid ${isSel?'#1D4ED8':'#CBD5E1'};background:${isSel?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:white;">${isSel?'✓':''}</div>`;
+        const dotV  = `<span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:${lot.vendu?'#FEF9C3':'#F1F5F9'};color:${lot.vendu?'#92400E':'#94A3B8'};">V</span>`;
+        const desc  = [lot.marque, lot.modele].filter(Boolean).join(' ') || lot.type || '—';
+        html += `<div onclick="App.bcbDepartToggleLot('${key}')" data-dep-lot="${key}"
+          style="background:${isSel?'#EFF6FF':'white'};border:1px solid ${isSel?'#93C5FD':'#E2E8F0'};border-radius:8px;padding:8px 10px;margin-bottom:4px;cursor:pointer;display:flex;align-items:center;gap:8px;">
+          ${cb}
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;font-weight:700;color:#1E293B;">${lot.idBcb}</div>
+            <div style="font-size:11px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${desc}${lot.inter?' · '+lot.inter:''}</div>
+          </div>
+          <div style="display:flex;gap:3px;align-items:center;">${dotV}${lot.numVente?`<span style="font-size:10px;color:#64748B;margin-left:2px;">${lot.numVente}</span>`:''}</div>
+        </div>`;
+      });
+      html += `</div>`;
+    }
+    if (!html) html = '<div style="padding:16px;text-align:center;color:#94A3B8;font-size:13px;">Aucun lot disponible</div>';
+    lotsList.innerHTML = html;
+    this._bcbDepUpdateBar();
+  },
+
+  bcbDepartToggleLot(key) {
+    if (S.bcbDepartSelected.has(key)) {
+      S.bcbDepartSelected.delete(key);
+    } else {
+      S.bcbDepartSelected.add(key);
+    }
+    const isSel = S.bcbDepartSelected.has(key);
+    const row   = document.querySelector(`[data-dep-lot="${key}"]`);
+    if (row) {
+      row.style.background  = isSel ? '#EFF6FF' : 'white';
+      row.style.borderColor = isSel ? '#93C5FD' : '#E2E8F0';
+      const cbEl = row.querySelector('[data-dep-cb]');
+      if (cbEl) {
+        cbEl.style.borderColor = isSel ? '#1D4ED8' : '#CBD5E1';
+        cbEl.style.background  = isSel ? '#1D4ED8' : 'white';
+        cbEl.textContent       = isSel ? '✓' : '';
+      }
+    }
+    this._bcbDepUpdateBar();
+  },
+
+  _bcbDepUpdateBar() {
+    const bar = document.getElementById('bcb-dep-bar');
+    const cnt = document.getElementById('bcb-dep-count');
+    const n   = S.bcbDepartSelected.size;
+    if (cnt) cnt.textContent = n ? `${n} lot${n>1?'s':''} sélectionné${n>1?'s':''}` : '0 lot sélectionné';
+    if (bar) bar.style.display = ((S.bcbDepartConsigne !== null || S.bcbPrepMode) && n > 0) ? 'flex' : 'none';
+  },
+
+  async bcbDepartCreateCmr() {
+    const list = JSON.parse(localStorage.getItem('snt_bcb_consignes') || '[]');
+    const c    = list[S.bcbDepartConsigne];
+    if (!c) return;
+    const selectedLots = S.bcbLots.filter(l => S.bcbDepartSelected.has(l.idBcb));
+    if (!selectedLots.length) { this.toast('Sélectionnez au moins un lot.'); return; }
+    S.lvu.transporteur = { id: 'autre', nom: c.transportNom || '', adresse: c.transportAdresse || '', ville: c.transportVille || '' };
+    S.lvu.marchandises = selectedLots.map(l => ({
+      qte: '1',
+      description: [l.idBcb, [l.marque, l.modele].filter(Boolean).join(' ') || l.type].filter(Boolean).join(' — '),
+      poids: l.poids ? String(l.poids) : '',
+      note: l.inter || '',
+      ml: ''
+    }));
+    S.activity = 'lvu';
+    await this.lvuInit();
+    this.lvuSetType('CMR');
+    this.lvuSetSource('bcb');
+    this._lvuRenderMarchandises();
+    setTimeout(() => {
+      const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+      set('lvu-f-conducteur',   [c.prenom, c.nom].filter(Boolean).join(' '));
+      set('lvu-f-immat-moteur', c.tracteur  || '');
+      set('lvu-f-immat-semi',   c.remorque  || '');
+      set('lvu-f-donneur',      c.client    || '');
+      set('lvu-f-exp-nom',      'BCB OFF MARKET');
+      set('lvu-f-exp-adresse',  'ZA Renardières');
+      set('lvu-f-exp-ville',    'JAVRON-LES-CHAPELLES');
+      set('lvu-f-exp-pays',     'FR - France');
+      if (c.client)        set('lvu-f-dest-nom',     c.client);
+      if (c.clientAdresse) set('lvu-f-dest-adresse', c.clientAdresse);
+      if (c.clientPays)    set('lvu-f-dest-pays',    c.clientPays);
+    }, 100);
+  },
+
+  /* ─ LVU ─ */
+  async lvuInit() {
+    this.go('lvu-form');
+    if (!S.lvu.transporteur) S.lvu.transporteur = LVU_TRANSPORTEURS[0];
+    this._lvuRenderTransporteurUI();
+    // Fetch next number (non-bloquant)
+    if (S.apiUrl && !S.lvu.numero) {
+      try {
+        const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_next_number', {}, 10000);
+        const d = await r.json();
+        if (d.status === 'ok') { S.lvu.numero = d.numero; S.lvu.display = d.display; }
+      } catch (_) {}
+    }
+  },
+
+  lvuSetType(type) {
+    S.lvu.type = type;
+    document.getElementById('lvu-btn-lv').style.cssText  += `;background:${type==='LV' ?'#1D4ED8':'white'};color:${type==='LV'?'white':'#64748B'};border-color:${type==='LV'?'#1D4ED8':'#E2E8F0'}`;
+    document.getElementById('lvu-btn-cmr').style.cssText += `;background:${type==='CMR'?'#1D4ED8':'white'};color:${type==='CMR'?'white':'#64748B'};border-color:${type==='CMR'?'#1D4ED8':'#E2E8F0'}`;
+  },
+
+  lvuSetSource(src) {
+    S.lvu.source = src;
+    ['manual','loxam','bcb','stock'].forEach(s => {
+      const btn = document.getElementById('lvu-src-' + s);
+      if (!btn) return;
+      btn.style.borderColor = s === src ? '#1D4ED8' : '#E2E8F0';
+      btn.style.background  = s === src ? '#EFF6FF' : 'white';
+      btn.style.color       = s === src ? '#1D4ED8' : '#64748B';
+    });
+    document.getElementById('lvu-loxam-picker').style.display = src === 'loxam' ? '' : 'none';
+    document.getElementById('lvu-bcb-picker').style.display   = src === 'bcb'   ? '' : 'none';
+    document.getElementById('lvu-stock-picker').style.display = src === 'stock' ? '' : 'none';
+    if (src === 'loxam') { this.lvuLoadLoxam(); this.lvuLoadAgencies(); }
+    if (src === 'bcb'   && S.lvu.bcbArrivals.length === 0) this.lvuLoadBcb();
+    if (src === 'stock') this._lvuRenderStockList();
+  },
+
+  lvuLoadLoxam() {
+    const el = document.getElementById('lvu-loxam-list');
+    if (!el) return;
+    // Réutilise si déjà chargé dans cette session
+    if (S.lvu.loxamItems.length > 0) { this._lvuRenderLoxamList(); return; }
+    if (!S.apiUrl) { el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">URL API non configurée</div>'; return; }
+    el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">Chargement…</div>';
+    // Source : Planning (modules à expédier), pas Arrivées
+    _fetchWithTimeout(S.apiUrl + '?action=lv_loxam_planning', {}, 30000)
+      .then(r => r.json())
+      .then(d => {
+        S.lvu.loxamItems = d.data || [];
+        this._lvuRenderLoxamList();
+      })
+      .catch(err => { el.innerHTML = `<div style="padding:12px;color:#EF4444;font-size:13px;">Erreur : ${err.message}</div>`; });
+  },
+
+  _lvuRenderLoxamList() {
+    const el = document.getElementById('lvu-loxam-list');
+    if (!el) return;
+    const q = (document.getElementById('lvu-loxam-search')?.value || '').toLowerCase();
+    const items = S.lvu.loxamItems.filter(i => {
+      if (!q) return true;
+      return (i.codeModule  || '').toLowerCase().includes(q)
+          || (i.code        || '').toLowerCase().includes(q)
+          || (i.chantier    || '').toLowerCase().includes(q)
+          || (i.ag          || '').toLowerCase().includes(q)
+          || (i.module      || '').toLowerCase().includes(q)
+          || (i.description || '').toLowerCase().includes(q)
+          || (i.numModule   || '').toLowerCase().includes(q);
+    });
+    if (!items.length) {
+      el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">'
+        + (S.lvu.loxamItems.length === 0 ? 'Aucun module présent' : 'Aucun résultat pour cette recherche') + '</div>';
+      return;
+    }
+    el.innerHTML = items.map(i => {
+      const key = i.code || i.codeModule || i.module || '';
+      const sel = S.lvu.selectedItems.has(key);
+      const numM  = i.codeModule || i.numModule || '';
+      const label = numM ? `Module N° ${numM}` : (i.description || i.module || key || '—');
+      const sub   = [key, i.module, i.chantier].filter(Boolean).join(' · ');
+      return `<div onclick="App.lvuToggleLoxam('${key.replace(/'/g,"&#39;")}')"
+        style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #F1F5F9;cursor:pointer;background:${sel?'#EFF6FF':'white'}">
+        <div style="width:20px;height:20px;border-radius:4px;border:2px solid ${sel?'#1D4ED8':'#CBD5E1'};background:${sel?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          ${sel?'<span style="color:white;font-size:12px;">✓</span>':''}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:#1E293B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
+          <div style="font-size:11px;color:#64748B;">${sub}</div>
+        </div>
+        ${i.status && i.status.grutage ? `<span style="font-size:10px;background:#FEF2F2;color:#991B1B;border-radius:4px;padding:2px 6px;white-space:nowrap;flex-shrink:0;font-weight:600;">🏗 Grutage</span>` : ''}
+      </div>`;
+    }).join('');
+  },
+
+  lvuToggleLoxam(key) {
+    if (S.lvu.selectedItems.has(key)) S.lvu.selectedItems.delete(key);
+    else S.lvu.selectedItems.add(key);
+    this._lvuRenderLoxamList();
+  },
+
+  lvuToggleLivraisonPrevue() {
+    const cb   = document.getElementById('lvu-f-livraison-check');
+    const date = document.getElementById('lvu-f-livraison-date');
+    if (!cb || !date) return;
+    date.style.display = cb.checked ? 'block' : 'none';
+  },
+
+  lvuApplyLoxam() {
+    const rows = [];
+    let firstAgence = null;
+    S.lvu.loxamItems.forEach(i => {
+      const key = i.code || i.codeModule || i.module || '';
+      if (!S.lvu.selectedItems.has(key)) return;
+      const numM = i.codeModule || i.numModule || '';
+      const modele = (i.module || '').trim();
+      const isContainer = /^LC/i.test(modele) || /^(container|conteneur)$/i.test(modele);
+      const desc = isContainer
+        ? `Container n° ${numM || key}`
+        : (numM ? `Module N° ${numM}` : (i.description || modele || key));
+      rows.push({ qte: 1, description: desc, poids: '2.5', note: key, ml: i.ml || '' });
+      // Code agence : col "ag" (D) du Planning, sinon parse depuis "1043 - 72 ARNAGE Cedex"
+      const agCode = i.ag || ((i.chantier || '').match(/^(\d{3,6})/)||[])[1] || '';
+      if (agCode && !firstAgence) firstAgence = agCode;
+    });
+    if (rows.length) {
+      S.lvu.marchandises = rows;
+      this._lvuRenderMarchandises();
+      // Expéditeur : SONOTRAD (toujours pour source loxam)
+      const fExpN = document.getElementById('lvu-f-exp-nom');
+      const fExpA = document.getElementById('lvu-f-exp-adresse');
+      const fExpV = document.getElementById('lvu-f-exp-ville');
+      const fExpP = document.getElementById('lvu-f-exp-pays');
+      if (fExpN && !fExpN.value) fExpN.value = 'SONOTRAD';
+      if (fExpA && !fExpA.value) fExpA.value = '9 Z.A. des Renardières';
+      if (fExpV && !fExpV.value) fExpV.value = '53250 JAVRON-LES-CHAPELLES';
+      if (fExpP && !fExpP.value) fExpP.value = 'FR - France';
+      // Donneur d'ordre : LOXAM 72 CRM
+      const fDon = document.getElementById('lvu-f-donneur');
+      if (fDon && !fDon.value) fDon.value = 'LOXAM 72 CRM';
+      // Destinataire : agence de destination
+      if (firstAgence && S.lvu.agencies.length > 0) {
+        const ag = S.lvu.agencies.find(a => a.code === firstAgence || a.code === firstAgence.padStart(4,'0') || a.code.replace(/^0+/,'') === firstAgence.replace(/^0+/,''));
+        if (ag) {
+          const fn = document.getElementById('lvu-f-dest-nom');
+          const fa = document.getElementById('lvu-f-dest-adresse');
+          const fv = document.getElementById('lvu-f-dest-ville');
+          const fpAg = document.getElementById('lvu-f-dest-pays');
+          if (fn && !fn.value)     fn.value  = ag.nom;
+          if (fa && !fa.value)     fa.value  = ag.adresse;
+          if (fv && !fv.value)     fv.value  = `${ag.cp} ${ag.ville}`.trim();
+          if (fpAg && !fpAg.value) fpAg.value = ag.pays || 'FR - France';
+        }
+      }
+    }
+    // Pré-remplir la note si un module nécessite un grutage à la livraison
+    const anyGrutage = [...S.lvu.selectedItems].some(key => {
+      const item = S.lvu.loxamItems.find(i => (i.code || i.codeModule || i.module || '') === key);
+      return item && item.status && item.status.grutage;
+    });
+    if (anyGrutage) {
+      const fn = document.getElementById('lvu-f-note');
+      if (fn && !fn.value.includes('GRUTAGE'))
+        fn.value = '!!! GRUTAGE A LA LIVRAISON !!!' + (fn.value ? '\n' + fn.value : '');
+    }
+    // Pré-remplir la date de livraison prévue si connue en Production LOXAM
+    const livPrevue = [...S.lvu.selectedItems]
+      .map(key => S.lvu.loxamItems.find(i => (i.code || i.codeModule || i.module || '') === key))
+      .find(i => i && i.livraisonPrevue)?.livraisonPrevue;
+    const cbLiv = document.getElementById('lvu-f-livraison-check');
+    const dateLiv = document.getElementById('lvu-f-livraison-date');
+    if (livPrevue && cbLiv && dateLiv) {
+      cbLiv.checked = true;
+      dateLiv.value = _toIsoDateInput(livPrevue);
+      dateLiv.style.display = 'block';
+    }
+    document.getElementById('lvu-loxam-picker').style.display = 'none';
+    this.toast(`${rows.length} module(s) importé(s)${anyGrutage ? ' — ⚠️ Grutage' : ''}`);
+  },
+
+  async lvuLoadBcb() {
+    if (!S.apiUrl) return;
+    const el = document.getElementById('lvu-bcb-list');
+    el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">Chargement…</div>';
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=bcb_arrivals&user=' + encodeURIComponent(S.currentUser?.login || ''), {}, 15000);
+      const d = await r.json();
+      S.lvu.bcbArrivals = d.arrivals || [];
+      this._lvuRenderBcbList();
+    } catch (_) {
+      el.innerHTML = '<div style="padding:12px;color:#EF4444;font-size:13px;">Erreur de chargement</div>';
+    }
+  },
+
+  _lvuRenderBcbList() {
+    const el = document.getElementById('lvu-bcb-list');
+    if (!el) return;
+    const items = S.lvu.bcbArrivals;
+    if (!items.length) { el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">Aucune arrivée disponible</div>'; return; }
+    el.innerHTML = items.map((i, idx) => {
+      const sel   = S.lvu.selectedBcb.has(idx);
+      const label = i.client || i.ref || `Arrivée ${idx + 1}`;
+      return `<div onclick="App.lvuToggleBcb(${idx})"
+        style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #F1F5F9;cursor:pointer;background:${sel?'#EFF6FF':'white'}">
+        <div style="width:20px;height:20px;border-radius:4px;border:2px solid ${sel?'#1D4ED8':'#CBD5E1'};background:${sel?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          ${sel?'<span style="color:white;font-size:12px;">✓</span>':''}
+        </div>
+        <div style="font-size:13px;color:#1E293B;">${label}</div>
+      </div>`;
+    }).join('');
+  },
+
+  lvuToggleBcb(idx) {
+    if (S.lvu.selectedBcb.has(idx)) S.lvu.selectedBcb.delete(idx);
+    else S.lvu.selectedBcb.add(idx);
+    this._lvuRenderBcbList();
+  },
+
+  lvuApplyBcb() {
+    const rows = [];
+    [...S.lvu.selectedBcb].forEach(idx => {
+      const i = S.lvu.bcbArrivals[idx];
+      if (i) rows.push({ qte: 1, description: i.client || i.ref || '', poids: '', note: '' });
+    });
+    if (rows.length) { S.lvu.marchandises = rows; this._lvuRenderMarchandises(); }
+    document.getElementById('lvu-bcb-picker').style.display = 'none';
+    this.toast(`${rows.length} article(s) importé(s)`);
+  },
+
+  _lvuRenderStockList() {
+    const el = document.getElementById('lvu-stock-list');
+    if (!el) return;
+    const q     = (document.getElementById('lvu-stock-search')?.value || '').toLowerCase();
+    const items = (S.stockData || []).filter(i =>
+      !q || (i.ref || '').toLowerCase().includes(q) || (i.designation || '').toLowerCase().includes(q)
+    ).slice(0, 80);
+    if (!S.stockData || !S.stockData.length) {
+      el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">Catalogue Stockage non chargé — accédez d\'abord à l\'activité Stockage</div>';
+      return;
+    }
+    if (!items.length) { el.innerHTML = '<div style="padding:12px;color:#94A3B8;font-size:13px;">Aucun résultat</div>'; return; }
+    el.innerHTML = items.map(i => {
+      const key = i.ref || '';
+      const sel = (S.lvu.selectedStock || new Set()).has(key);
+      return `<div onclick="App.lvuToggleStock('${key.replace(/'/g,"&#39;")}')"
+        style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid #F1F5F9;cursor:pointer;background:${sel?'#EFF6FF':'white'}">
+        <div style="width:20px;height:20px;border-radius:4px;border:2px solid ${sel?'#1D4ED8':'#CBD5E1'};background:${sel?'#1D4ED8':'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          ${sel?'<span style="color:white;font-size:12px;">✓</span>':''}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:#1E293B;">${i.ref || '—'}</div>
+          <div style="font-size:11px;color:#64748B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${i.description || ''}</div>
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  lvuToggleStock(key) {
+    if (!S.lvu.selectedStock) S.lvu.selectedStock = new Set();
+    if (S.lvu.selectedStock.has(key)) S.lvu.selectedStock.delete(key);
+    else S.lvu.selectedStock.add(key);
+    this._lvuRenderStockList();
+  },
+
+  lvuApplyStock() {
+    if (!S.lvu.selectedStock) return;
+    const rows = [];
+    (S.stockData || []).forEach(i => {
+      if (!S.lvu.selectedStock.has(i.ref)) return;
+      rows.push({ qte: 1, description: (i.ref ? i.ref + ' - ' : '') + (i.designation || ''), poids: '', note: i.ref || '' });
+    });
+    if (rows.length) { S.lvu.marchandises = rows; this._lvuRenderMarchandises(); }
+    document.getElementById('lvu-stock-picker').style.display = 'none';
+    this.toast(`${rows.length} référence(s) importée(s)`);
+  },
+
+  _lvuSyncFromDom() {
+    // Lit les valeurs actuelles des inputs dans le state avant tout re-rendu
+    const tbody = document.getElementById('lvu-marchandises-body');
+    if (!tbody) return;
+    tbody.querySelectorAll('tr').forEach((tr, i) => {
+      if (!S.lvu.marchandises[i]) return;
+      const inputs = tr.querySelectorAll('input[type="number"], input[type="text"]');
+      if (inputs[0]) S.lvu.marchandises[i].qte          = inputs[0].value;
+      if (inputs[1]) S.lvu.marchandises[i].description  = inputs[1].value;
+      if (inputs[2]) S.lvu.marchandises[i].poids        = inputs[2].value;
+    });
+  },
+
+  _lvuRenderMarchandises() {
+    const tbody = document.getElementById('lvu-marchandises-body');
+    if (!tbody) return;
+    if (!S.lvu.marchandises || !S.lvu.marchandises.length) {
+      S.lvu.marchandises = [{ qte: '', description: '', poids: '', note: '' }];
+    }
+    tbody.innerHTML = S.lvu.marchandises.map((r, i) => {
+      const canRemove = S.lvu.marchandises.length > 1;
+      return `<tr>
+        <td style="padding:3px 2px;"><input type="number" min="1" value="${r.qte||''}"
+          style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:5px 4px;font-size:12px;outline:none;box-sizing:border-box;"></td>
+        <td style="padding:3px 2px;"><input type="text" value="${(r.description||'').replace(/"/g,'&quot;')}"
+          style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:5px 4px;font-size:12px;outline:none;box-sizing:border-box;"></td>
+        <td style="padding:3px 2px;"><input type="number" min="0" step="0.001" value="${r.poids||''}"
+          style="width:100%;border:1px solid #E2E8F0;border-radius:6px;padding:5px 4px;font-size:12px;outline:none;box-sizing:border-box;"></td>
+        <td style="padding:3px 2px;text-align:center;width:28px;">
+          ${canRemove ? `<button onclick="App.lvuRemoveRow(${i})" style="background:none;border:none;color:#EF4444;font-size:16px;cursor:pointer;padding:0 4px;line-height:1;">✕</button>` : ''}
+        </td>
+      </tr>`;
+    }).join('');
+  },
+
+  lvuAddRow() {
+    if ((S.lvu.marchandises || []).length >= 10) { this.toast('Maximum 10 lignes'); return; }
+    this._lvuSyncFromDom();
+    if (!S.lvu.marchandises) S.lvu.marchandises = [];
+    S.lvu.marchandises.push({ qte: '', description: '', poids: '', note: '' });
+    this._lvuRenderMarchandises();
+  },
+
+  lvuRemoveRow(i) {
+    this._lvuSyncFromDom();
+    S.lvu.marchandises.splice(i, 1);
+    this._lvuRenderMarchandises();
+  },
+
+  _lvuCollectFormData() {
+    this._lvuSyncFromDom(); // lit les valeurs DOM avant tout
+    const v = id => (document.getElementById(id)?.value || '').trim();
+    const today = new Date();
+    const dateStr = `${String(today.getDate()).padStart(2,'0')}/${String(today.getMonth()+1).padStart(2,'0')}/${today.getFullYear()}`;
+    const marchandises = (S.lvu.marchandises || [])
+      .filter(r => (r.description || '').trim() || (r.qte || '').toString().trim())
+      .map(r => ({ qte: r.qte || 1, description: r.description || '', poids: r.poids || '', note: r.note || '', ml: r.ml || '' }));
+    let totalPoidsNum = 0, totalML = 0;
+    marchandises.forEach(r => {
+      const p = parseFloat(r.poids);
+      if (!isNaN(p)) totalPoidsNum += p * (Number(r.qte) || 1);
+      const m = parseFloat(r.ml);
+      if (!isNaN(m)) totalML += m;
+    });
+    const total = {};
+    if (totalPoidsNum > 0) total.poids = parseFloat(totalPoidsNum.toFixed(2)) + ' t';
+    if (totalML > 0) total.ml = parseFloat(totalML.toFixed(2)) + ' ml';
+    return {
+      type:         S.lvu.type || 'LV',
+      display:      S.lvu.display || '00000',
+      date:         dateStr,
+      conducteur:   v('lvu-f-conducteur'),
+      immat_moteur: v('lvu-f-immat-moteur').toUpperCase(),
+      immat_semi:   v('lvu-f-immat-semi').toUpperCase(),
+      donneur_ordre: v('lvu-f-donneur'),
+      transporteur: S.lvu.transporteur || LVU_TRANSPORTEURS[0],
+      expediteur:   { nom: v('lvu-f-exp-nom'), adresse: v('lvu-f-exp-adresse'), ville: v('lvu-f-exp-ville'), pays: v('lvu-f-exp-pays') || 'FR - France' },
+      destinataire: { nom: v('lvu-f-dest-nom'), adresse: v('lvu-f-dest-adresse'), ville: v('lvu-f-dest-ville'), pays: v('lvu-f-dest-pays') },
+      marchandises,
+      total,
+      doc_annexe:   v('lvu-f-doc'),
+      commande:     v('lvu-f-commande'),
+      remplace:     v('lvu-f-remplace'),
+      note:         v('lvu-f-note'),
+      livraisonPrevue: (document.getElementById('lvu-f-livraison-check')?.checked && v('lvu-f-livraison-date')) ? v('lvu-f-livraison-date') : '',
+      convoi:       document.getElementById('lvu-convoi-oui')?.checked || false,
+      source:       S.lvu.source || 'manual',
+    };
+  },
+
+  async lvuGenerate() {
+    if (S.lvu.generating) return;
+    S.lvu.generating = true;
+    const btnText = document.getElementById('lvu-btn-generate-text');
+    if (btnText) btnText.textContent = '⏳ Génération…';
+    try {
+      if (!S.lvu.numero && S.apiUrl) {
+        try {
+          const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_next_number', {}, 10000);
+          const d = await r.json();
+          if (d.status === 'ok') { S.lvu.numero = d.numero; S.lvu.display = d.display; }
+        } catch (_) {}
+      }
+      const data = this._lvuCollectFormData();
+      const doc  = _generateLvu(data);
+      S.lvu.lastDoc  = doc;
+      S.lvu.lastData = data;
+      const res   = document.getElementById('lvu-result');
+      const title = document.getElementById('lvu-result-title');
+      const info  = document.getElementById('lvu-result-info');
+      if (res)   res.style.display = '';
+      if (title) title.textContent = `✅ ${data.type} N° ${data.display} générée`;
+      if (info)  info.textContent  = `${data.date} · ${data.destinataire?.nom || '—'} · ${data.marchandises?.length || 0} ligne(s)`;
+      if (document.getElementById('lvu-save-status')) document.getElementById('lvu-save-status').textContent = '';
+      res?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e) {
+      this.toast('Erreur génération : ' + e.message);
+    } finally {
+      S.lvu.generating = false;
+      if (btnText) btnText.textContent = '📄 Générer la lettre de voiture';
+    }
+  },
+
+  lvuPrint() {
+    if (!S.lvu.lastDoc || !S.lvu.lastData) return;
+    const d = S.lvu.lastData;
+    S.lvu.lastDoc.save(`LV_${d.display}_${(d.destinataire?.nom || 'transport').replace(/[^a-zA-Z0-9]/g,'_')}.pdf`);
+  },
+
+  async lvuSaveToDrive(_renumerote = false) {
+    if (!S.lvu.lastDoc || !S.lvu.lastData) return;
+    if (!S.apiUrl) { this.toast('URL API non configurée'); return; }
+    if (S.lvu.saving && !_renumerote) return;
+    if (S.lvu.enregistree && S.lvu.enregistree === S.lvu.lastData.display) { this.toast(`N° ${S.lvu.enregistree} déjà enregistrée`); return; }
+    S.lvu.saving = true;
+    try { await this._lvuSave(_renumerote); } finally { S.lvu.saving = false; }
+  },
+
+  async _lvuSave(_renumerote) {
+    const statusEl = document.getElementById('lvu-save-status');
+    if (statusEl) statusEl.textContent = '⏳ Enregistrement…';
+    const d = S.lvu.lastData;
+    try {
+      const b64 = S.lvu.lastDoc.output('datauristring').split(',')[1];
+      const payload = {
+        action: 'lv_save',
+        pdf_b64: b64,
+        numero_attendu: d.display, // le serveur refuse ('renumber') si le PDF ne porte pas le bon numéro
+        type: d.type, conducteur: d.conducteur,
+        immat_moteur: d.immat_moteur, immat_semi: d.immat_semi,
+        expediteur: d.expediteur?.nom || '', destinataire: d.destinataire?.nom || '',
+        doc_annexe: d.doc_annexe || '', commande: d.commande || '',
+        note: d.note || '', convoi: d.convoi ? 'Oui' : 'Non',
+        livraison_prevue: d.livraisonPrevue || '',
+        poids: (d.marchandises || []).reduce((s, r) => s + (parseFloat(r.poids) || 0), 0).toFixed(3),
+        ml: parseFloat(d.total?.ml) || '',
+        source: d.source || 'manual',
+        transporteur_id: d.transporteur?.id || '',
+        planning_codes: (d.marchandises || []).map(m => m.note).filter(Boolean),
+        marchandises_desc: (d.marchandises || []).map(m => m.description).filter(Boolean).join(', '),
+        grutage: this._lvuCalcGrutage(d),
+        remplace: d.remplace || '', // LV annulée que celle-ci remplace (lien posé par le serveur)
+      };
+      // 60s (pas 30s) : _saveLv fait Drive + 2 sheets + Planning multi-fichiers + verrou
+      // LockService — dépasse régulièrement 30s, ce qui abortait le fetch côté client
+      // AVANT que la réponse 'ok' n'arrive (incident LV 01714, 2026-09-03 : sauvegarde
+      // réussie à 100% côté serveur, mais _syncVoyageSupabase jamais appelée car le code
+      // qui la déclenche ne tourne que dans le bloc de traitement de la réponse — jamais
+      // atteint si le fetch abort avant. Voir CLAUDE_LV.md.
+      const r   = await _fetchWithTimeout(S.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) }, 60000);
+      const res = await r.json();
+      if (res.status === 'renumber' && res.numero && !_renumerote) {
+        // Envoi précédent resté sans réponse : le compteur a avancé peut-être parce qu'il
+        // a abouti. On le cherche dans l'Archive avant de renuméroter (sinon doublon).
+        if (S.lvu.incertain === d.display) {
+          const trouvee = await this._lvuChercherDansArchive(d, 1);
+          if (trouvee) return this._lvuEnregistree(d, d.display, trouvee.pdfUrl);
+        }
+        // Le PDF portait un numéro faux (ex. 00000 si lv_next_number avait échoué) :
+        // rien n'a été enregistré. On régénère avec le numéro du serveur et on renvoie.
+        const data = { ...d, display: res.numero };
+        S.lvu.numero = Number(res.numero); S.lvu.display = res.numero;
+        S.lvu.lastDoc  = _generateLvu(data);
+        S.lvu.lastData = data;
+        S.lvu.incertain = null;
+        const t = document.getElementById('lvu-result-title');
+        if (t) t.textContent = `✅ ${data.type} N° ${data.display} générée`;
+        return this._lvuSave(true);
+      }
+      if (res.status === 'ok') {
+        await this._lvuEnregistree(d, res.numero || d.display, res.pdfUrl, res.remplace_erreur);
+      } else if (res.status === 'partial') {
+        // PDF envoyé sur Drive mais jamais archivé (numéro/compteur non mis à
+        // jour côté serveur) — ne JAMAIS traiter comme un succès : pas de sync
+        // Supabase (donnée non fiable, cause de l'incident LV 01711 du
+        // 2026-09-03), pas de reset de l'état pour permettre un nouvel essai propre.
+        if (statusEl) statusEl.textContent = '⚠️ PDF envoyé mais NON archivé (' + (res.error || 'erreur inconnue') + ') — réessayez, ce n\'est PAS enregistré.';
+        this.toast('⚠️ Échec archivage — réessayez l\'enregistrement', 6000);
+      } else {
+        if (statusEl) statusEl.textContent = '❌ ' + (res.error || 'erreur inconnue');
+      }
+    } catch (e) {
+      // Délai dépassé ou coupure réseau : Apps Script a souvent fini malgré tout.
+      // On regarde l'Archive avant de laisser recommencer.
+      if (statusEl) statusEl.textContent = '⏳ Pas de réponse du serveur — vérification dans l\'archive…';
+      const trouvee = await this._lvuChercherDansArchive(d, 3);
+      if (trouvee) return this._lvuEnregistree(d, d.display, trouvee.pdfUrl);
+      S.lvu.incertain = d.display;
+      if (statusEl) statusEl.textContent = `⚠️ ${d.type} N° ${d.display} introuvable dans l'archive pour l'instant (${e.message}). `
+        + 'Vous pouvez réessayer : si elle a été enregistrée entre-temps, aucun doublon ne sera créé.';
+    }
+  },
+
+  // Cherche la LV dans l'Archive (lv_history = source de vérité) : même numéro, même
+  // type, même destinataire — un collègue a pu prendre ce numéro entre-temps.
+  async _lvuChercherDansArchive(d, essais) {
+    const norm = s => String(s || '').trim().toLowerCase();
+    for (let i = 0; i < essais; i++) {
+      if (i > 0) await _sleep(8000);
+      try {
+        const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_history&limit=15', {}, 20000);
+        const h = (await r.json()).history || [];
+        const x = h.find(l => Number(l.numero) === Number(d.display)
+          && norm(l.type || 'LV') === norm(d.type || 'LV')
+          && norm(l.destinataire) === norm(d.destinataire?.nom));
+        if (x) return x;
+      } catch (_) {}
+    }
+    return null;
+  },
+
+  async _lvuEnregistree(d, savedDisplay, pdfUrl, remplaceErreur) {
+    const statusEl = document.getElementById('lvu-save-status');
+    if (statusEl) statusEl.textContent = `✅ N° ${savedDisplay} enregistré sur Drive`
+      + (d.remplace ? (remplaceErreur ? ` — ⚠️ lien avec la LV annulée ${d.remplace} non fait : ${remplaceErreur}` : ` — remplace la LV annulée ${d.remplace}`) : '');
+    if (d.remplace) this._lvuChargerAnnulees();
+    S.lvu.numero = null; S.lvu.display = null; S.lvu.incertain = null;
+    S.lvu.enregistree = d.display; // un second clic ne crée pas de doublon
+    if (document.getElementById('lvu-result-title')) document.getElementById('lvu-result-title').textContent = `✅ ${d.type} N° ${savedDisplay} enregistrée`;
+    this.toast(`LV N° ${savedDisplay} enregistrée !`);
+    this._syncVoyageSupabase(d, savedDisplay, pdfUrl); // portail transporteur — best-effort, ne bloque jamais le flux principal
+    if (S.lvu.fromOpKey) {
+      this._saveLvLinkRemote(S.lvu.fromOpKey, savedDisplay, savedDisplay);
+      S.lvu.fromOpKey = null; S.lvu.fromOpNote = '';
+    }
+    // Lier la CMR à son bon d'enlèvement si applicable
+    if (S.lvu.enlevementNumero && pdfUrl) {
+      try {
+        await _fetchWithTimeout(S.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ action:'bcb_enlevement_update_cmr',
+            numero: S.lvu.enlevementNumero, cmrNumero: savedDisplay, cmrUrl: pdfUrl })
+        }, 10000);
+        // Mettre à jour l'entrée en mémoire
+        const ei = S.bcbEnlevements.findIndex(e => e.numero === S.lvu.enlevementNumero);
+        if (ei > -1) { S.bcbEnlevements[ei].cmrNumero = savedDisplay; S.bcbEnlevements[ei].cmrUrl = pdfUrl; }
+        if (S.bcbCurEnlevement?.numero === S.lvu.enlevementNumero) {
+          S.bcbCurEnlevement.cmrNumero = savedDisplay; S.bcbCurEnlevement.cmrUrl = pdfUrl;
+        }
+      } catch(_) {}
+      S.lvu.enlevementNumero = null;
+    }
+  },
+
+  // ── Portail transporteur — synchro Supabase (temps réel) ────────────────────
+  // Appelée juste après le succès de l'enregistrement AppScript/Drive existant.
+  // Best-effort : une erreur ici ne doit jamais bloquer ni afficher d'erreur
+  // dans le flux principal de création de LV — seule une trace console suffit.
+  _lvuCalcGrutage(d) {
+    return (S.lvu.loxamItems || []).some(i => {
+      const key = i.code || i.codeModule || i.module || '';
+      return (d.marchandises || []).some(m => m.note === key) && i.status && i.status.grutage;
+    });
+  },
+
+  // Géocodage réel de l'adresse de destination (Nominatim/OpenStreetMap, même
+  // fournisseur que la carte du portail — pas de clé API). Un seul appel par
+  // création de LV (jamais en boucle/bulk), résultat mis en cache dans
+  // Supabase (destination_lat/lon) — respecte la politique d'usage Nominatim
+  // (max 1 req/s, pas de géocodage répété). Best-effort : si le géocodage
+  // échoue ou ne trouve rien, le portail retombe sur la table VILLES.
+  async _geocodeAdresse(adresse) {
+    if (!adresse || !S.apiUrl) return null;
+    try {
+      // Passe par api/geocode.js (même déploiement Vercel que S.apiUrl) plutôt
+      // que d'appeler Nominatim directement depuis le navigateur : le WiFi
+      // SONOTRAD bloque les fetch() vers des domaines externes non familiers
+      // (même raison d'être que api/proxy.js pour Apps Script — voir
+      // CLAUDE_PORTAIL.md).
+      const geocodeUrl = new URL(S.apiUrl).origin + '/api/geocode';
+      const r = await fetch(geocodeUrl + '?q=' + encodeURIComponent(adresse));
+      const data = await r.json();
+      if (data && data[0]) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    } catch (e) {
+      console.warn('[_geocodeAdresse] échec :', e.message);
+    }
+    return null;
+  },
+
+  async _syncVoyageSupabase(d, numero, pdfUrl) {
+    if (!S.apiUrl || !numero) return;
+    try {
+      const destinationAdresse = [d.destinataire?.adresse, d.destinataire?.ville].filter(Boolean).join(', ');
+      // Repli sur la ville seule si l'adresse complète ne donne aucun résultat
+      // (formats "ZA ... - B.P ..." fréquents en zone industrielle, que
+      // Nominatim ne sait pas toujours parser) — mieux vaut un point centre-
+      // ville précis que pas de coordonnées du tout.
+      const geo = (await this._geocodeAdresse(destinationAdresse))
+        || (await this._geocodeAdresse(d.destinataire?.ville));
+      // Réutilise d.total.poids (déjà calculé par _lvuCollectFormData, qté incluse)
+      // plutôt que de recalculer — ce total est celui affiché sur la LV générée.
+      // Écrit par Apps Script (clé secrète) : enregistrer_voyage n'accepte plus la clé publique.
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action:       'voyage_enregistrer',
+          p_numero_lv:    String(numero),
+          p_type:         d.type || 'LV',
+          p_destination:  d.destinataire?.nom || '',
+          p_doc_annexe:   d.doc_annexe || '',
+          p_commande:     d.commande || '',
+          p_commentaire:  d.note || '',
+          p_poids:        parseFloat(d.total?.poids) || null,
+          p_ml:           parseFloat(d.total?.ml) || null,
+          p_grutage:      this._lvuCalcGrutage(d),
+          p_transporteur: d.transporteur?.nom || d.transporteur?.id || '',
+          // BCB : la CMR est créée au moment du départ du matériel (contrairement
+          // à LOXAM, créée en avance) — donc déjà parti à la création.
+          p_parti:        d.source === 'bcb',
+          p_marchandises_desc:   (d.marchandises || []).map(m => m.description).filter(Boolean).join(', '),
+          p_destination_adresse: destinationAdresse,
+          p_destination_lat:     geo?.lat ?? null,
+          p_destination_lon:     geo?.lon ?? null,
+          // Champs internes (jamais exposés au portail public) — pour l'essai
+          // Historique via Supabase, voir CLAUDE_PORTAIL.md.
+          p_conducteur:   d.conducteur || '',
+          p_immat_moteur: d.immat_moteur || '',
+          p_immat_semi:   d.immat_semi || '',
+          p_expediteur:   d.expediteur?.nom || '',
+          p_convoi:       !!d.convoi,
+          p_pdf_url:      pdfUrl || '',
+          p_livraison_prevue: d.livraisonPrevue || null,
+        })
+      }, 30000);
+      const res = await r.json();
+      if (res.status !== 'ok' || res.portail_ok === false) console.warn('[_syncVoyageSupabase] portail non synchronisé :', res.error || 'refus Supabase');
+    } catch (e) {
+      console.warn('[_syncVoyageSupabase] portail non synchronisé :', e.message);
+    }
+  },
+
+  lvuSelectTransporteur(idx) {
+    // Copie de l'objet pour ne pas muter le tableau LVU_TRANSPORTEURS
+    S.lvu.transporteur = Object.assign({}, LVU_TRANSPORTEURS[idx]) || null;
+    this._lvuRenderTransporteurUI();
+  },
+
+  lvuUpdateTransporteurField(field, val) {
+    if (S.lvu.transporteur?.id === 'autre') S.lvu.transporteur[field] = val;
+  },
+
+  _lvuRenderTransporteurUI() {
+    const el = document.getElementById('lvu-transporteur-btns');
+    if (!el) return;
+    const selId = S.lvu.transporteur?.id;
+    const tl    = S.lvu.transporteur || {};
+    let html = LVU_TRANSPORTEURS.map((t, i) => {
+      const sel = selId === t.id;
+      const subtitle = t.id === 'autre'
+        ? (sel && tl.nom ? `<div style="font-size:11px;color:#64748B;margin-top:2px;">${tl.nom}</div>` : '')
+        : `<div style="font-size:11px;color:#64748B;margin-top:2px;">${t.adresse} · ${t.ville}</div>`;
+      return `<button onclick="App.lvuSelectTransporteur(${i})"
+        style="text-align:left;width:100%;padding:10px 12px;border-radius:10px;border:2px solid ${sel?'#1D4ED8':'#E2E8F0'};background:${sel?'#EFF6FF':'white'};cursor:pointer;margin-bottom:4px;">
+        <div style="font-size:13px;font-weight:700;color:${sel?'#1D4ED8':'#1E293B'};">${t.id === 'autre' ? 'Autre transporteur' : t.nom}</div>
+        ${subtitle}
+      </button>`;
+    }).join('');
+    if (selId === 'autre') {
+      const esc = s => (s || '').replace(/"/g, '&quot;');
+      html += `<div style="margin-top:4px;display:flex;flex-direction:column;gap:6px;">
+        <input class="input-field" placeholder="Nom du transporteur *" value="${esc(tl.nom)}"
+          oninput="App.lvuUpdateTransporteurField('nom',this.value)" style="font-size:13px;">
+        <input class="input-field" placeholder="Adresse (optionnel)" value="${esc(tl.adresse)}"
+          oninput="App.lvuUpdateTransporteurField('adresse',this.value)" style="font-size:13px;">
+        <input class="input-field" placeholder="CP / Ville (optionnel)" value="${esc(tl.ville)}"
+          oninput="App.lvuUpdateTransporteurField('ville',this.value)" style="font-size:13px;">
+        <div style="display:flex;gap:6px;">
+          <input class="input-field" placeholder="SIRET (optionnel)" value="${esc(tl.siret)}"
+            oninput="App.lvuUpdateTransporteurField('siret',this.value)" style="font-size:13px;flex:1;">
+          <input class="input-field" placeholder="Téléphone (optionnel)" value="${esc(tl.telephone)}"
+            oninput="App.lvuUpdateTransporteurField('telephone',this.value)" style="font-size:13px;flex:1;">
+        </div>
+      </div>`;
+    }
+    el.innerHTML = html;
+  },
+
+  async lvuLoadAgencies() {
+    if (S.lvu.agencies.length > 0 || !S.apiUrl) return;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_agencies', {}, 10000);
+      const d = await r.json();
+      if (d.status === 'ok') S.lvu.agencies = d.agencies || [];
+    } catch (_) {}
+  },
+
+  lvuDestSearch(val) {
+    const q   = val.trim().toLowerCase();
+    const res = document.getElementById('lvu-dest-results');
+    if (!res) return;
+    if (!q) { res.style.display = 'none'; res.innerHTML = ''; return; }
+    if (!S.lvu.agencies.length) { this.lvuLoadAgencies(); }
+    const hits = S.lvu.agencies.filter(a =>
+      a.code.toLowerCase().includes(q) ||
+      a.nom.toLowerCase().includes(q)  ||
+      a.ville.toLowerCase().includes(q)
+    ).slice(0, 10);
+    if (!hits.length) {
+      res.innerHTML = '<div style="padding:10px 12px;color:#94A3B8;font-size:12px;">Aucun résultat</div>';
+      res.style.display = 'block';
+      return;
+    }
+    res.innerHTML = hits.map((a, i) => `
+      <div class="dest-result-row" onclick="App.lvuDestSelect(${S.lvu.agencies.indexOf(a)})">
+        <span style="font-size:11px;font-weight:700;color:#1D4ED8;min-width:38px;">${a.code}</span>
+        <span style="font-size:13px;color:#1E293B;flex:1;">${a.nom}</span>
+        <span style="font-size:11px;color:#64748B;">${a.cp} ${a.ville}</span>
+      </div>`).join('');
+    res.style.display = 'block';
+  },
+
+  lvuDestSelect(idx) {
+    const a = S.lvu.agencies[idx];
+    if (!a) return;
+    const fn = document.getElementById('lvu-f-dest-nom');
+    const fa = document.getElementById('lvu-f-dest-adresse');
+    const fv = document.getElementById('lvu-f-dest-ville');
+    const fs = document.getElementById('lvu-dest-search');
+    const fr = document.getElementById('lvu-dest-results');
+    const fp = document.getElementById('lvu-f-dest-pays');
+    if (fn) fn.value = a.nom;
+    if (fa) fa.value = a.adresse;
+    if (fv) fv.value = `${a.cp} ${a.ville}`.trim();
+    if (fp) fp.value = a.pays || 'FR - France';
+    if (fs) fs.value = '';
+    if (fr) { fr.style.display = 'none'; fr.innerHTML = ''; }
+  },
+
+  lvuNew() {
+    S.lvu.lastDoc = null; S.lvu.lastData = null;
+    S.lvu.marchandises = [];
+    S.lvu.fromOpKey = null; S.lvu.fromOpNote = '';
+    S.lvu.enlevementNumero = null;
+    S.lvu.selectedItems.clear(); S.lvu.selectedBcb.clear();
+    if (S.lvu.selectedStock) S.lvu.selectedStock.clear();
+    const res = document.getElementById('lvu-result');
+    if (res) res.style.display = 'none';
+    const ds = document.getElementById('lvu-dest-search'); if (ds) ds.value = '';
+    const dr = document.getElementById('lvu-dest-results'); if (dr) { dr.style.display = 'none'; dr.innerHTML = ''; }
+    ['lvu-f-conducteur','lvu-f-immat-moteur','lvu-f-immat-semi','lvu-f-donneur',
+     'lvu-f-exp-nom','lvu-f-exp-adresse','lvu-f-exp-ville','lvu-f-exp-pays',
+     'lvu-f-dest-nom','lvu-f-dest-adresse','lvu-f-dest-ville','lvu-f-dest-pays',
+     'lvu-f-doc','lvu-f-commande','lvu-f-remplace','lvu-f-note','lvu-f-livraison-date'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    const nonEl = document.getElementById('lvu-convoi-non');
+    if (nonEl) nonEl.checked = true;
+    const livCb = document.getElementById('lvu-f-livraison-check');
+    if (livCb) livCb.checked = false;
+    const livDate = document.getElementById('lvu-f-livraison-date');
+    if (livDate) livDate.style.display = 'none';
+    this._lvuRenderMarchandises();
+    const v = document.getElementById('view-lvu-form'); if (v) v.scrollTop = 0;
+  },
+
+  async lvuLoadHistory() {
+    if (!S.apiUrl) {
+      document.getElementById('lvu-history-list').innerHTML =
+        '<div style="padding:20px;color:#94A3B8;text-align:center;">URL API non configurée</div>';
+      return;
+    }
+    const el = document.getElementById('lvu-history-list');
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:#94A3B8;font-size:14px;">Chargement…</div>';
+    try {
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=lv_history_supabase&limit=100', {}, 15000);
+      const d    = await r.json();
+      S.lvuHistoryRows = d.history || d.rows || [];
+      this._renderLvHistoryList();
+    } catch (e) {
+      el.innerHTML = `<div style="text-align:center;padding:40px;color:#EF4444;font-size:13px;">Erreur : ${e.message}</div>`;
+    }
+  },
+
+  // ── Actualisation en direct de l'Historique ──────────────────────────────
+  // L'Historique lit l'Archive Google Sheet via Apps Script (pas Supabase),
+  // donc on ne peut pas rendre directement depuis le payload Realtime — mais
+  // les 3 chemins qui touchent le statut Parti (case Départs, toggle
+  // Historique, marquage en masse Départs) écrivent tous dans Supabase, donc
+  // un changement sur la table voyages est un signal fiable pour refaire un
+  // fetch complet (comme le fait le portail transporteur). Débounce léger
+  // pour éviter une rafale de refetch si plusieurs lignes changent d'un coup.
+  _lvuSubscribeHistoryRealtime() {
+    if (S.lvuHistoryRealtimeChannel || !window.SupabaseDB) return;
+    S.lvuHistoryRealtimeChannel = window.SupabaseDB
+      .channel('lvu-history-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'voyages' }, () => {
+        clearTimeout(S.lvuHistoryRealtimeDebounce);
+        S.lvuHistoryRealtimeDebounce = setTimeout(() => this.lvuLoadHistory(), 1200);
+      })
+      .subscribe();
+  },
+
+  _lvuUnsubscribeHistoryRealtime() {
+    clearTimeout(S.lvuHistoryRealtimeDebounce);
+    if (S.lvuHistoryRealtimeChannel) {
+      window.SupabaseDB?.removeChannel(S.lvuHistoryRealtimeChannel);
+      S.lvuHistoryRealtimeChannel = null;
+    }
+  },
+
+  // Note encodée en préfixe texte à la création (voir _lvuCollectFormData /
+  // masterfile _saveLv) — même convention pour décoder.
+  _lvuParseNote(raw) {
+    const marker = '!!! GRUTAGE A LA LIVRAISON !!!';
+    const text = String(raw || '');
+    if (text.startsWith(marker)) {
+      return { grutage: true, commentaire: text.slice(marker.length).replace(/^\n/, '') };
+    }
+    return { grutage: false, commentaire: text };
+  },
+
+  lvuSetHistoryFilter(filter) {
+    S.lvuHistoryFilter = filter;
+    document.querySelectorAll('#lvu-history-filters button').forEach(b => {
+      const active = b.dataset.filter === filter;
+      b.style.background = active ? '#1E293B' : 'white';
+      b.style.color      = active ? 'white'   : '#475569';
+    });
+    this._renderLvHistoryList();
+  },
+
+  _renderLvHistoryList() {
+    const el     = document.getElementById('lvu-history-list');
+    const filter = S.lvuHistoryFilter || 'disponibles';
+    const all    = S.lvuHistoryRows || [];
+    const rows   = all.filter(row => {
+      if (filter === 'disponibles') return !row.annulee && !row.parti;
+      if (filter === 'partis')      return !row.annulee && !!row.parti;
+      if (filter === 'annulees')    return !!row.annulee;
+      return true;
+    });
+    // Seule la dernière LV créée peut être supprimée (pas de trou dans la numérotation) ;
+    // les autres s'annulent. Le serveur refuse de toute façon.
+    const dernier = all.reduce((m, r) => (Number(r.numero) > Number(m?.numero || 0) ? r : m), null);
+    const supprimable = dernier && !dernier.annulee ? String(dernier.numero) : null;
+    if (!rows.length) {
+      el.innerHTML = '<div style="text-align:center;padding:40px;color:#94A3B8;font-size:14px;">Aucun document trouvé</div>';
+      return;
+    }
+    el.innerHTML = `
+      <div style="overflow-x:auto;max-height:70vh;">
+      <table class="lvu-hist-table">
+        <thead>
+          <tr>
+            ${['LV','Créée le','Destinataire','Marchandise','Conducteur','Commande','Note','Grutage','Livraison prévue','Parti','Actions']
+              .map(h => `<th>${h}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(row => {
+            const { grutage, commentaire } = this._lvuParseNote(row.note);
+            const ann = row.annulee
+              ? `Annulée le ${row.annulee_le || '?'}${row.annulee_par ? ' par ' + row.annulee_par : ''} : ${row.annulation_motif || ''}${row.remplacee_par ? ' — remplacée par n° ' + row.remplacee_par : ''}`
+              : '';
+            return `
+            <tr class="${row.annulee ? 'lvu-hist-annulee' : row.parti ? 'lvu-hist-parti' : ''}">
+              <td style="white-space:nowrap;"><strong>${row.numero||'—'}</strong><span class="lvu-hist-type">${row.type||'LV'}</span>${row.remplace ? `<div style="font-size:10px;color:#64748B;">remplace n° ${this._escHtml(row.remplace)}</div>` : ''}</td>
+              <td style="white-space:nowrap;color:#64748B;">${row.date||''}</td>
+              <td class="ellipsis" title="${row.destinataire||''}">
+                ${row.destinataire||'—'}
+                ${row.expediteur && row.expediteur !== 'SONOTRAD' ? `<div style="font-size:10px;color:#94A3B8;">${row.expediteur}</div>` : ''}
+                ${ann ? `<div style="font-size:10.5px;color:#B91C1C;white-space:normal;">${this._escHtml(ann)}</div>` : ''}
+              </td>
+              <td class="ellipsis" style="color:#475569;" title="${row.marchandises_desc||''}">${row.marchandises_desc||'<span style="color:#CBD5E1;">-</span>'}</td>
+              <td style="white-space:nowrap;color:#94A3B8;">${row.conducteur?`${row.conducteur} · ${row.immat_moteur||''}`:'-'}</td>
+              <td style="white-space:nowrap;color:#94A3B8;">${row.commande||'-'}</td>
+              <td class="ellipsis" style="color:#92400E;font-style:italic;" title="${commentaire}">${commentaire||'<span style="color:#CBD5E1;font-style:normal;">-</span>'}</td>
+              <td style="white-space:nowrap;">${grutage?'<span style="font-size:10.5px;font-weight:700;background:#FEF3C7;color:#92400E;border-radius:6px;padding:2px 7px;">grutage</span>':'<span style="color:#CBD5E1;">-</span>'}</td>
+              <td style="white-space:nowrap;color:#1D4ED8;">${row.livraison_prevue||'<span style="color:#CBD5E1;">-</span>'}</td>
+              <td style="white-space:nowrap;">${row.annulee?'<span style="font-size:10.5px;font-weight:700;color:#B91C1C;">⊘ Annulée</span>':row.parti?'<span style="font-size:10.5px;font-weight:700;color:#64748B;">🚚 Parti</span>':'<span style="font-size:10.5px;font-weight:700;color:#15803D;">✅ Dispo</span>'}</td>
+              <td style="white-space:nowrap;">
+                <div style="display:flex;align-items:center;gap:6px;">
+                  ${row.pdfUrl?`<a href="${row.pdfUrl}" target="_blank" rel="noopener" title="PDF" class="lvu-hist-action pdf">📄</a>`:''}
+                  ${row.annulee ? (row.remplacee_par ? '' : `<button onclick="App.openLvLinkModal('${row.numero}')" title="Lier à la LV qui la remplace" class="lvu-hist-action">🔗</button>`) : `
+                  <button onclick="App.openLvNoteModal('${row.numero}')" title="Éditer note/grutage" class="lvu-hist-action">✏️</button>
+                  <button onclick="App.lvuTogglePartiHistory('${row.numero}', ${row.parti===true}, this)" title="${row.parti?'Remettre disponible':'Marquer parti'}" class="lvu-hist-action">${row.parti?'↩':'🚚'}</button>
+                  <button onclick="App.openLvCancelModal('${row.numero}')" title="Annuler (reste dans l'historique)" class="lvu-hist-action delete">⊘</button>
+                  ${String(row.numero) === supprimable ? `<button onclick="App.lvuDeleteLv('${row.numero}')" title="Supprimer (dernière LV créée : son numéro sera repris)" class="lvu-hist-action delete">🗑</button>` : ''}`}
+                </div>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      </div>`;
+  },
+
+  async lvuDeleteLv(numero) {
+    if (!confirm(`Supprimer la LV ${numero} (la dernière créée) ?\n\nElle disparaît de l'historique, le PDF part à la corbeille et la prochaine LV reprendra ce numéro.\nSi elle a déjà été remise au chauffeur, utilisez plutôt « Annuler » (⊘).`)) return;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'lv_delete', numero })
+      }, 40000);
+      const d = await r.json();
+      if (d.status === 'ok') {
+        this.toast('LV N° ' + numero + ' supprimée');
+        // Nettoyer le lien CMR en mémoire dans les enlèvements BCB
+        S.bcbEnlevements.forEach(e => { if (e.cmrNumero === numero) { e.cmrNumero = ''; e.cmrUrl = ''; } });
+        if (S.bcbCurEnlevement?.cmrNumero === numero) { S.bcbCurEnlevement.cmrNumero = ''; S.bcbCurEnlevement.cmrUrl = ''; }
+        this.lvuLoadHistory();
+      } else this.toast('Erreur : ' + (d.error || 'inconnue'));
+    } catch(e) { this.toast('Erreur : ' + e.message); }
+  },
+
+  // Liste « Remplace la LV annulée » : seulement les annulées sans remplaçante, pour ne
+  // pas pouvoir lier n'importe quelle LV. Le serveur revérifie de toute façon.
+  async _lvuChargerAnnulees() {
+    const sel = document.getElementById('lvu-f-remplace');
+    if (!sel || !S.apiUrl) return;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_history_supabase&limit=50', {}, 15000);
+      const d = await r.json();
+      if (d.status !== 'ok') return;
+      S.lvuHistoryRows = d.history || [];
+      const libres = S.lvuHistoryRows.filter(x => x.annulee && !x.remplacee_par);
+      const garde = sel.value;
+      sel.innerHTML = `<option value="">${libres.length ? '— Aucune —' : 'Aucune LV annulée à remplacer'}</option>`
+        + libres.map(x => `<option value="${this._escHtml(x.numero)}">${this._escHtml(`${x.type || 'LV'} ${x.numero} — ${x.destinataire || ''} (${x.annulation_motif || 'annulée'})`)}</option>`).join('');
+      sel.disabled = !libres.length;
+      if (libres.some(x => String(x.numero) === garde)) sel.value = garde;
+    } catch (_) {}
+  },
+
+  openLvLinkModal(numero) {
+    const rows = S.lvuHistoryRows || [];
+    const row = rows.find(r => String(r.numero) === String(numero));
+    if (!row) return;
+    S._lvLinkNumero = numero;
+    document.getElementById('lvlink-modal-ref').textContent = `${row.type||'LV'} N° ${row.numero} — ${row.destinataire||''} (annulée)`;
+    const cands = rows.filter(r => !r.annulee && Number(r.numero) > Number(numero))
+      .sort((a, b) => Number(b.numero) - Number(a.numero));
+    const sel = document.getElementById('lvlink-modal-select');
+    sel.innerHTML = cands.length
+      ? cands.map(r => `<option value="${this._escHtml(r.numero)}">${this._escHtml(`${r.type||'LV'} ${r.numero} — ${r.destinataire||''} — ${r.marchandises_desc||''}`)}</option>`).join('')
+      : '<option value="">Aucune LV plus récente</option>';
+    document.getElementById('lvlink-modal').style.display = 'flex';
+  },
+
+  closeLvLinkModal() {
+    document.getElementById('lvlink-modal').style.display = 'none';
+    S._lvLinkNumero = null;
+  },
+
+  async saveLvLinkModal() {
+    const annulee = S._lvLinkNumero;
+    const remplacante = document.getElementById('lvlink-modal-select').value;
+    if (!annulee || !remplacante) return;
+    const btn = document.getElementById('lvlink-modal-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'lv_link_replacement', annulee, remplacante })
+      }, 30000);
+      const d = await r.json();
+      if (d.status !== 'ok') throw new Error(d.error || 'erreur inconnue');
+      this.toast(`LV ${annulee} remplacée par ${remplacante}`);
+      this.closeLvLinkModal();
+      this.lvuLoadHistory();
+    } catch (e) {
+      this.toast('Erreur : ' + e.message);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '🔗 Lier'; }
+    }
+  },
+
+  // ── Annulation : la LV reste dans l'historique (motif, auteur, remplaçante) ──
+  openLvCancelModal(numero) {
+    const row = (S.lvuHistoryRows || []).find(r => String(r.numero) === String(numero));
+    if (!row) return;
+    S._lvCancelNumero = numero;
+    const refEl = document.getElementById('lvcancel-modal-ref');
+    if (refEl) refEl.textContent = `${row.type||'LV'} N° ${row.numero} — ${row.destinataire||''}`;
+    document.getElementById('lvcancel-modal-motif').value = '';
+    document.getElementById('lvcancel-modal').style.display = 'flex';
+  },
+
+  closeLvCancelModal() {
+    document.getElementById('lvcancel-modal').style.display = 'none';
+    S._lvCancelNumero = null;
+  },
+
+  async saveLvCancelModal() {
+    const numero = S._lvCancelNumero;
+    if (!numero) return;
+    const motif = document.getElementById('lvcancel-modal-motif').value.trim();
+    if (!motif) { this.toast('Le motif est obligatoire'); return; }
+    const btn = document.getElementById('lvcancel-modal-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'lv_cancel', numero, motif })
+      }, 40000);
+      const d = await r.json();
+      if (d.status !== 'ok') throw new Error(d.error || 'erreur inconnue');
+      S.bcbEnlevements.forEach(e => { if (e.cmrNumero === numero) { e.cmrNumero = ''; e.cmrUrl = ''; } });
+      if (S.bcbCurEnlevement?.cmrNumero === numero) { S.bcbCurEnlevement.cmrNumero = ''; S.bcbCurEnlevement.cmrUrl = ''; }
+      const lib = (d.liberes || []).length ? ` — module(s) libéré(s) : ${d.liberes.join(', ')}` : '';
+      this.toast(`LV N° ${numero} annulée${lib}${d.portail_ok === false ? ' (portail non synchronisé)' : ''}`, 5000);
+      this.closeLvCancelModal();
+      this.lvuLoadHistory();
+    } catch (e) {
+      this.toast('Erreur : ' + e.message);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '⊘ Annuler cette LV'; }
+    }
+  },
+
+  // ── Édition note/grutage depuis l'Historique (sans toucher au PDF déjà généré) ──
+  openLvNoteModal(numero) {
+    const row = (S.lvuHistoryRows || []).find(r => String(r.numero) === String(numero));
+    if (!row) return;
+    S._lvNoteModalNumero = numero;
+    const { grutage, commentaire } = this._lvuParseNote(row.note);
+    const refEl = document.getElementById('lvnote-modal-ref');
+    if (refEl) refEl.textContent = `${row.type||'LV'} N° ${row.numero} — ${row.destinataire||''}`;
+    const ta = document.getElementById('lvnote-modal-textarea');
+    if (ta) { ta.value = commentaire; }
+    const cb = document.getElementById('lvnote-modal-grutage');
+    if (cb) cb.checked = grutage;
+    const dateEl = document.getElementById('lvnote-modal-livraison');
+    if (dateEl) dateEl.value = _toIsoDateInput(row.livraison_prevue);
+    const modal = document.getElementById('lvnote-modal');
+    if (modal) modal.style.display = 'flex';
+  },
+
+  closeLvNoteModal() {
+    const modal = document.getElementById('lvnote-modal');
+    if (modal) modal.style.display = 'none';
+    S._lvNoteModalNumero = null;
+  },
+
+  async saveLvNoteModal() {
+    const numero = S._lvNoteModalNumero;
+    if (!numero) return;
+    const commentaire = document.getElementById('lvnote-modal-textarea')?.value.trim() || '';
+    const grutage     = document.getElementById('lvnote-modal-grutage')?.checked === true;
+    const livraisonPrevue = document.getElementById('lvnote-modal-livraison')?.value || '';
+    const btn = document.getElementById('lvnote-modal-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'lv_update_note', numero, commentaire, grutage, livraison_prevue: livraisonPrevue })
+      }, 20000);
+      const d = await r.json();
+      if (d.status !== 'ok') throw new Error(d.error || 'erreur inconnue (tableur)');
+
+      // Portail transporteur (Supabase) : mis à jour par le serveur (lv_update_note).
+      // Un échec reste visible (voyage inconnu de Supabase, ou erreur).
+      const portailKo = d.portail_ok === false;
+
+      this.toast(portailKo
+        ? 'Note mise à jour (tableur) — portail non synchronisé'
+        : 'Note mise à jour pour ' + numero);
+      this.closeLvNoteModal();
+      this.lvuLoadHistory();
+    } catch (e) {
+      this.toast('Erreur : ' + e.message);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '✓ Enregistrer'; }
+    }
+  },
+
+  // ── Marquer/démarquer "Parti" depuis l'Historique ────────────────────────
+  async lvuTogglePartiHistory(numero, currentParti, btn) {
+    // Bouton bloqué pendant l'appel (quelques secondes) pour éviter les clics répétés.
+    if (btn && btn.disabled) return;
+    const btnHtml = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; btn.innerHTML = '⏳'; }
+    const nextParti = !currentParti;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'lv_mark_parti_by_numero', numero, parti: nextParti })
+      }, 20000);
+      const d = await r.json();
+      if (d.status !== 'ok') throw new Error(d.error || 'erreur inconnue (tableur)');
+
+      // Portail transporteur (Supabase) : mis à jour par le serveur (lv_mark_parti_by_numero).
+      const portailKo = d.portail_ok === false;
+
+      const label = nextParti ? 'LV ' + numero + ' marquée partie' : 'LV ' + numero + ' remise disponible';
+      this.toast(portailKo ? label + ' (tableur) — portail non synchronisé' : label);
+      this.lvuLoadHistory();
+    } catch (e) {
+      this.toast('Erreur : ' + e.message);
+    } finally {
+      if (btn && btn.isConnected) { btn.disabled = false; btn.style.opacity = ''; btn.innerHTML = btnHtml; }
+    }
+  },
+
+  /* ─ Annuaire ─ */
+
+  async annuaireLoad(force = false) {
+    if (!force && S.annuaireLoaded) { this.annuaireRender(); return; }
+    if (!S.apiUrl) return;
+    const loadEl = document.getElementById('ann-loading');
+    if (loadEl) loadEl.style.display = 'block';
+    document.getElementById('ann-list').innerHTML = '';
+    try {
+      const r    = await _fetchWithTimeout(S.apiUrl + '?action=lv_agencies', {}, 10000);
+      const data = await r.json();
+      if (data.status === 'ok') {
+        S.annuaireData  = data.agencies || [];
+        S.lvu.agencies  = S.annuaireData; // sync avec le pool LVU
+        S.annuaireLoaded = true;
+      }
+    } catch(e) { this.toast('Erreur chargement annuaire'); }
+    if (loadEl) loadEl.style.display = 'none';
+    this.annuaireRender();
+  },
+
+  annuaireRender() {
+    const list = document.getElementById('ann-list');
+    if (!list) return;
+    const q = (document.getElementById('ann-search')?.value || '').trim().toLowerCase();
+    let items = S.annuaireData;
+    if (q) items = items.filter(a =>
+      a.code.toLowerCase().includes(q) ||
+      a.nom.toLowerCase().includes(q)  ||
+      a.ville.toLowerCase().includes(q) ||
+      a.cp.includes(q)
+    );
+    if (!items.length) {
+      list.innerHTML = `<div style="text-align:center;padding:40px 0;color:#94A3B8;font-size:13px;">
+        ${S.annuaireData.length ? 'Aucune agence ne correspond.' : 'Annuaire vide — ajoutez une première agence.'}</div>`;
+      return;
+    }
+    list.innerHTML = items.map(a => {
+      const codeEsc  = encodeURIComponent(a.code);
+      const isLoxam  = a.source === 'loxam';
+      const srcBadge = isLoxam
+        ? `<span class="ann-src-loxam">LOXAM</span>`
+        : `<span class="ann-src-custom">Personnalisé</span>`;
+      const delBtn = isLoxam
+        ? `<button class="ann-btn-del" style="opacity:.4" onclick="App.toast('Les agences LOXAM ne peuvent pas être supprimées. Modifiez-les pour créer une entrée personnalisée.')">🗑 Supprimer</button>`
+        : `<button class="ann-btn-del" onclick="App.annuaireDelete('${codeEsc}')">🗑 Supprimer</button>`;
+      return `<div class="ann-card">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <span class="ann-code">${a.code}</span>
+          <span class="ann-nom">${a.nom}</span>
+          ${srcBadge}
+        </div>
+        ${a.adresse || a.ville || a.pays ? `<div class="ann-meta">${[a.adresse, [a.cp, a.ville].filter(Boolean).join(' '), (a.pays && a.pays.toLowerCase()!=='france' ? a.pays : '')].filter(x=>x&&x.trim()).join(' · ')}</div>` : ''}
+        ${(a.email || a.tel) ? `<div class="ann-contact">
+          ${a.email ? `<span>✉ ${a.email}</span>` : ''}
+          ${a.tel   ? `<span>📞 ${a.tel}</span>`   : ''}
+        </div>` : ''}
+        ${a.note ? `<div class="ann-note">${a.note}</div>` : ''}
+        <div class="ann-actions">
+          <button class="ann-btn-edit" onclick="App.annuaireOpenModal('${codeEsc}')">✏️ Modifier</button>
+          ${delBtn}
+        </div>
+      </div>`;
+    }).join('');
+  },
+
+  annuaireOpenModal(encodedCode) {
+    const modal = document.getElementById('ann-modal');
+    const title = document.getElementById('ann-modal-title');
+    const orig  = document.getElementById('ann-f-orig-code');
+    if (!modal) return;
+    const fields = { code:'', nom:'', adresse:'', cp:'', ville:'', pays:'FR - France', email:'', tel:'', note:'' };
+    if (encodedCode) {
+      const code = decodeURIComponent(encodedCode);
+      const a    = S.annuaireData.find(x => x.code === code);
+      if (a) Object.assign(fields, a);
+      if (!fields.pays) fields.pays = 'FR - France';
+      if (title) title.textContent = 'Modifier l\'agence';
+    } else {
+      if (title) title.textContent = 'Nouvelle agence';
+    }
+    ['code','nom','adresse','cp','ville','pays','email','tel'].forEach(f => {
+      const el = document.getElementById('ann-f-' + f);
+      if (el) el.value = fields[f];
+    });
+    const noteEl = document.getElementById('ann-f-note');
+    if (noteEl) noteEl.value = fields.note;
+    if (orig) orig.value = fields.code;
+    modal.style.display = 'flex';
+  },
+
+  annuaireCloseModal() {
+    const modal = document.getElementById('ann-modal');
+    if (modal) modal.style.display = 'none';
+    this.annGeoHideSugg();
+  },
+
+  annGeoHideSugg() {
+    const s1 = document.getElementById('ann-cp-sugg');
+    const s2 = document.getElementById('ann-ville-sugg');
+    if (s1) s1.style.display = 'none';
+    if (s2) s2.style.display = 'none';
+  },
+
+  annGeoApply(cp, ville) {
+    const cpEl    = document.getElementById('ann-f-cp');
+    const villeEl = document.getElementById('ann-f-ville');
+    if (cpEl)    cpEl.value    = cp;
+    if (villeEl) villeEl.value = ville;
+    this.annGeoHideSugg();
+  },
+
+  _isFrance() {
+    const p = (document.getElementById('ann-f-pays')?.value || '').toLowerCase().trim();
+    return p.startsWith('fr') || p === 'france';
+  },
+
+  annPaysNormalize(fieldId = 'ann-f-pays') {
+    const el = document.getElementById(fieldId || 'ann-f-pays');
+    if (!el || !el.value.trim()) return;
+    const q       = el.value.trim().toLowerCase();
+    const options = [...document.querySelectorAll('#ann-pays-list option')].map(o => o.value);
+    if (options.some(o => o.toLowerCase() === q)) return;
+    const match = options.find(o => o.toLowerCase().startsWith(q))
+               || options.find(o => o.toLowerCase().includes(q));
+    if (match) el.value = match;
+  },
+
+  annGeoCp(val) {
+    const sugg = document.getElementById('ann-cp-sugg');
+    if (!sugg) return;
+    if (!this._isFrance() || !/^\d{5}$/.test(val.trim())) { sugg.style.display = 'none'; return; }
+    clearTimeout(this._annGeoTimer);
+    this._annGeoTimer = setTimeout(async () => {
+      try {
+        const r    = await fetch(`https://geo.api.gouv.fr/communes?codePostal=${val.trim()}&fields=nom&limit=6`);
+        const data = await r.json();
+        if (!data.length) { sugg.style.display = 'none'; return; }
+        sugg.innerHTML = data.map(c =>
+          `<div class="ann-geo-row" onclick="App.annGeoApply('${val.trim()}','${c.nom.replace(/'/g,"\\'")}')">📍 ${c.nom}</div>`
+        ).join('');
+        sugg.style.display = 'block';
+      } catch(e) { sugg.style.display = 'none'; }
+    }, 250);
+  },
+
+  annGeoVille(val) {
+    const sugg = document.getElementById('ann-ville-sugg');
+    if (!sugg) return;
+    if (!this._isFrance() || val.trim().length < 3) { sugg.style.display = 'none'; return; }
+    clearTimeout(this._annGeoTimer);
+    this._annGeoTimer = setTimeout(async () => {
+      try {
+        const r    = await fetch(`https://geo.api.gouv.fr/communes?nom=${encodeURIComponent(val.trim())}&fields=codesPostaux&boost=population&limit=6`);
+        const data = await r.json();
+        if (!data.length) { sugg.style.display = 'none'; return; }
+        sugg.innerHTML = data.map(c => {
+          const cp = (c.codesPostaux || [])[0] || '';
+          return `<div class="ann-geo-row" onclick="App.annGeoApply('${cp}','${c.nom.replace(/'/g,"\\'")}')">📍 ${cp} — ${c.nom}</div>`;
+        }).join('');
+        sugg.style.display = 'block';
+      } catch(e) { sugg.style.display = 'none'; }
+    }, 400);
+  },
+
+  async annuaireSave() {
+    const v = id => document.getElementById(id)?.value.trim() || '';
+    const origCode = document.getElementById('ann-f-orig-code')?.value || '';
+    const payload = {
+      action:   'save_agency',
+      code:     v('ann-f-code'),
+      nom:      v('ann-f-nom'),
+      adresse:  v('ann-f-adresse'),
+      cp:       v('ann-f-cp'),
+      ville:    v('ann-f-ville'),
+      pays:     v('ann-f-pays') || 'France',
+      email:    v('ann-f-email'),
+      tel:      v('ann-f-tel'),
+      note:     document.getElementById('ann-f-note')?.value.trim() || '',
+    };
+    if (!payload.code || !payload.nom) { this.toast('Code et nom obligatoires'); return; }
+    // Vérifier doublon de code uniquement à la création
+    if (!origCode && S.annuaireData.some(a => a.code === payload.code)) {
+      this.toast('⛔ Ce code existe déjà dans l\'annuaire');
+      return;
+    }
+    if (!S.apiUrl) return;
+    try {
+      const r   = await _fetchWithTimeout(S.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) }, 15000);
+      const res = await r.json();
+      if (res.status === 'ok') {
+        // Mise à jour locale
+        const savedCode = origCode || payload.code;
+        const idx = S.annuaireData.findIndex(a => a.code === savedCode);
+        const entry = { code:payload.code, nom:payload.nom, adresse:payload.adresse, cp:payload.cp, ville:payload.ville, pays:payload.pays, email:payload.email, tel:payload.tel, note:payload.note, source:'custom' };
+        if (idx > -1) S.annuaireData[idx] = entry; else S.annuaireData.push(entry);
+        S.annuaireData.sort((a,b) => a.code.localeCompare(b.code));
+        S.lvu.agencies = S.annuaireData;
+        this.annuaireCloseModal();
+        this.annuaireRender();
+        this.toast('✓ Agence enregistrée');
+      } else { this.toast('Erreur : ' + (res.error || 'inconnue')); }
+    } catch(e) { this.toast('Erreur réseau : ' + e.message); }
+  },
+
+  async annuaireDelete(encodedCode) {
+    const code = decodeURIComponent(encodedCode);
+    const a    = S.annuaireData.find(x => x.code === code);
+    if (!a) return;
+    if (!confirm(`Supprimer "${a.nom}" (${a.code}) ?`)) return;
+    if (!S.apiUrl) return;
+    try {
+      const r   = await _fetchWithTimeout(S.apiUrl, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ action:'delete_agency', code }) }, 15000);
+      const res = await r.json();
+      if (res.status === 'ok') {
+        S.annuaireData = S.annuaireData.filter(x => x.code !== code);
+        S.lvu.agencies = S.annuaireData;
+        this.annuaireRender();
+        this.toast('✓ Agence supprimée');
+      } else { this.toast('Erreur : ' + (res.error || 'inconnue')); }
+    } catch(e) { this.toast('Erreur réseau : ' + e.message); }
+  },
+
+  /* ─ Toast ─ */
+  toast(msg, ms = 2800) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.style.opacity = '1';
+    setTimeout(() => { el.style.opacity = '0'; }, ms);
+  },
+};
+// ── UTILS ────────────────────────────────────────────────────────────────────
+function _randCode() {
+  const C = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  return Array.from({ length: 6 }, () => C[Math.floor(Math.random() * 26)]).join('');
+}
+// ── LVU — Transporteurs pré-enregistrés ──────────────────────────────────────
+const LVU_TRANSPORTEURS = [
+  { id: 'mesnager', nom: 'TRANSPORTS MESNAGER', adresse: 'ZA Renardière - B.P 10', ville: '53250 JAVRON-LES-CHAPELLES', info: 'SAS au capital de 500 000 €, Tél. 02.43.03.43.41', rcs: 'RCS LAVAL 314 901 869 - N° TVA FR 18 314 901 869' },
+  { id: 'autre', nom: '', adresse: '', ville: '', siret: '', telephone: '' },
+];
+
+// ── BCB — Bon d'enlèvement / Pick-list (jsPDF, paysage A4) ───────────────────
+// enlevement = { numero, date, chauffeur, tracteur, remorque, destination,
+//   expediteur:{nom,adresse,ville}, lots:[{idBcb,inter,idSeller,marque,modele,
+//   numSerie,commentaire,dateVente,acheteur,poids}] }
+function _generateBcbPicklist(enlevement) {
+  const { jsPDF } = window.jspdf;
+  const doc  = new jsPDF({ unit:'mm', format:'a4', orientation:'landscape' });
+  const W    = 297; const H = 210;
+  const ML   = 10;  const MR = 10; const MT = 10;
+  const CW   = W - ML - MR; // 277mm
+  // Colonnes : #, Inter, ID BCB, ID Seller, Brand, Model, VIN, Comment, Selling date, Buyer, Poids t
+  const COLS = [
+    { h:'#',           w: 8  },
+    { h:'Inter',       w: 18 },
+    { h:'ID BCB',      w: 18 },
+    { h:'ID Seller',   w: 22 },
+    { h:'Brand',       w: 20 },
+    { h:'Model',       w: 22 },
+    { h:'VIN',         w: 30 },
+    { h:'Comment',     w: 28 },
+    { h:'Selling date',w: 20 },
+    { h:'Buyer',       w: 43 },
+    { h:'Poids t',     w: 14 },
+  ]; // total = 243mm, reste 34mm pour padding — on ajuste Description
+  let y = MT;
+
+  // ── En-tête ──────────────────────────────────────────────────────────────
+  doc.setFillColor(30, 41, 59); doc.rect(ML, y, CW, 12, 'F');
+  doc.setFontSize(13); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+  doc.text('BCB OFF MARKET — BON D\'ENLÈVEMENT', ML + 4, y + 8);
+  doc.setFontSize(11);
+  doc.text('N° ' + enlevement.numero, W - MR - 4, y + 5, { align:'right' });
+  doc.setFontSize(9); doc.setFont('helvetica','normal');
+  doc.text(enlevement.date || '', W - MR - 4, y + 9.5, { align:'right' });
+  doc.setTextColor(0,0,0);
+  y += 19;
+
+  // ── Bloc chargement / transport ──────────────────────────────────────────
+  doc.setFontSize(8.5); doc.setFont('helvetica','bold');
+  doc.text('Lieu de chargement :', ML, y);
+  doc.setFont('helvetica','normal');
+  doc.text('ZA Renardières — 53250 JAVRON-LES-CHAPELLES', ML + 34, y);
+  doc.setFont('helvetica','bold');
+  doc.text('Chauffeur :', W/2 + 2, y);
+  doc.setFont('helvetica','normal');
+  doc.text(enlevement.chauffeur || '—', W/2 + 22, y);
+  y += 5;
+
+  doc.setFont('helvetica','bold'); doc.text('Tracteur :', ML, y);
+  doc.setFont('helvetica','normal'); doc.text(enlevement.tracteur || '—', ML + 18, y);
+  doc.setFont('helvetica','bold'); doc.text('Semi-remorque :', ML + 55, y);
+  doc.setFont('helvetica','normal'); doc.text(enlevement.remorque || '—', ML + 83, y);
+  doc.setFont('helvetica','bold'); doc.text('Destination :', W/2 + 2, y);
+  doc.setFont('helvetica','normal');
+  doc.text(enlevement.destination || '—', W/2 + 24, y, { maxWidth: W/2 - MR - 26 });
+  y += 8;
+
+  // ── Ligne séparatrice ────────────────────────────────────────────────────
+  doc.setDrawColor(226,232,240); doc.line(ML, y, W - MR, y); y += 3;
+
+  // ── En-tête tableau ──────────────────────────────────────────────────────
+  let x = ML;
+  doc.setFillColor(30, 41, 59);
+  doc.rect(ML, y, CW, 6.5, 'F');
+  doc.setFontSize(7.5); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+  COLS.forEach(col => {
+    doc.text(col.h, x + 1, y + 4.5); x += col.w;
+  });
+  doc.setTextColor(0,0,0); doc.setFont('helvetica','normal');
+  y += 6.5;
+
+  // ── Lignes tableau ───────────────────────────────────────────────────────
+  const ROW_H = 6;
+  (enlevement.lots || []).forEach((lot, idx) => {
+    if (y + ROW_H > H - 55) { doc.addPage(); y = MT; }
+    if (idx % 2 === 0) { doc.setFillColor(248,250,252); doc.rect(ML, y, CW, ROW_H, 'F'); }
+    doc.setFontSize(7.5); doc.setFont('helvetica','normal');
+    x = ML;
+    const vals = [
+      String(idx + 1), lot.inter||'', lot.idBcb||'', lot.idSeller||'',
+      lot.marque||'', lot.modele||'', lot.numSerie||'', lot.commentaire||'',
+      lot.dateVente||'', lot.acheteur||'', lot.poids ? String(lot.poids) : ''
+    ];
+    COLS.forEach((col, ci) => {
+      const txt = String(vals[ci] || '');
+      doc.text(txt.length > Math.floor(col.w / 1.9) ? txt.slice(0, Math.floor(col.w / 1.9)) + '…' : txt, x + 1, y + 4.3);
+      x += col.w;
+    });
+    doc.setDrawColor(226,232,240); doc.line(ML, y + ROW_H, W - MR, y + ROW_H);
+    y += ROW_H;
+  });
+
+  // ── Ligne total ──────────────────────────────────────────────────────────
+  const totalLots  = (enlevement.lots || []).length;
+  const totalPoids = (enlevement.lots || []).reduce((sum, l) => {
+    const p = parseFloat(String(l.poids || '').replace(',', '.'));
+    return sum + (isNaN(p) ? 0 : p);
+  }, 0);
+  doc.setFillColor(30, 41, 59); doc.rect(ML, y, CW, 6, 'F');
+  doc.setFontSize(7.5); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+  doc.text('TOTAL : ' + totalLots + ' lot' + (totalLots > 1 ? 's' : ''), ML + 2, y + 4.2);
+  if (totalPoids > 0) {
+    doc.text(totalPoids.toFixed(3).replace('.', ',') + ' t', W - MR - 2, y + 4.2, { align:'right' });
+  }
+  doc.setTextColor(0,0,0);
+
+  // ── Zone signature (ancrée en bas de page) ───────────────────────────────
+  const sigY = H - 38;
+  doc.setDrawColor(180,180,180);
+  doc.setFontSize(8); doc.setFont('helvetica','bold');
+  doc.text('Signature chauffeur :', ML, sigY);
+  doc.rect(ML, sigY + 2, 70, 16);
+  doc.text('Signature émetteur / BCB OFF MARKET :', W/2 - 10, sigY);
+  doc.rect(W/2 - 10, sigY + 2, 90, 16);
+  // Cachet BCB dans la case émetteur
+  doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setTextColor(30, 41, 59);
+  doc.text('BCB OFF MARKET', W/2 - 10 + 45, sigY + 8, { align:'center' });
+  doc.setFontSize(6.5); doc.setFont('helvetica','normal'); doc.setTextColor(100,116,139);
+  doc.text('ZA Renardières · 53250 JAVRON-LES-CHAPELLES', W/2 - 10 + 45, sigY + 13, { align:'center' });
+  doc.setTextColor(0,0,0);
+  // Pied de page
+  doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(100,116,139);
+  doc.text('BCB OFF MARKET · ZA Renardières · 53250 JAVRON-LES-CHAPELLES', W/2, H - 4, { align:'center' });
+
+  return doc;
+}
+
+// ── LVU — Lettre de Voiture Unique (jsPDF) ───────────────────────────────────
+// data = { type:'LV'|'CMR', display:'01446', date:'24/04/2026',
+//   conducteur, immat_moteur, immat_semi, donneur_ordre,
+//   transporteur:{nom,adresse,ville,info,tel,rcs},
+//   expediteur:{nom,adresse,ville}, destinataire:{nom,adresse,ville},
+//   marchandises:[{qte,description,poids,note}],
+//   doc_annexe, commande, note, convoi:bool }
+function _generateLvu(data) {
+  const { jsPDF } = window.jspdf;
+  const isCMR = (data.type || 'LV').toUpperCase() === 'CMR';
+  const BANDS = [
+    { rgb: [192, 57, 43],  label: 'ORIGINAL 1 - EXPÉDITEUR / SENDER' },
+    { rgb: [39, 174, 96],  label: 'ORIGINAL 2 - ACCOMPAGNE LA MARCHANDISE / WITH THE GOODS' },
+    { rgb: [41, 128, 185], label: 'ORIGINAL 3 - TRANSPORTEUR / CARRIER' },
+  ];
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  for (let c = 0; c < 3; c++) {
+    if (c > 0) doc.addPage();
+    _lvuRecto(doc, data, isCMR, BANDS[c]);
+    doc.addPage();
+    _lvuVerso(doc);
+  }
+  return doc;
+}
+
+function _lvuRecto(doc, d, isCMR, band) {
+  const x0 = LV.MARGIN;
+  const CW = LV.CONTENT_W;
+  const rx = x0 + LV.TOP_LEFT_W;   // X colonne droite (N° + DATE)
+
+  const sf  = (s, z) => { doc.setFont('helvetica', s); doc.setFontSize(z); };
+  const fc  = (...c) => doc.setFillColor(...c);
+  const tc  = (...c) => doc.setTextColor(...c);
+  const dc  = (...c) => doc.setDrawColor(...c);
+  const lw  = w  => doc.setLineWidth(w);
+  const bx  = (x, y, w, h, s = 'S') => doc.rect(x, y, w, h, s);
+  const ln  = (x1, y1, x2, y2) => doc.line(x1, y1, x2, y2);
+  const tx  = (t, x, y, a = 'left') => doc.text(String(t ?? ''), x, y, { align: a });
+  const sp  = (t, w) => doc.splitTextToSize(String(t ?? ''), w);
+  const vc  = (y, h, s) => y + h / 2 + s * 0.176;
+  const chk = (x, cy, sz, on) => {
+    bx(x, cy, sz, sz);
+    if (on) { ln(x + .5, cy + .5, x + sz - .5, cy + sz - .5); ln(x + sz - .5, cy + .5, x + .5, cy + sz - .5); }
+  };
+  dc(0, 0, 0); tc(0, 0, 0); lw(LV.STROKE_INTRA);
+  let y = LV.Y_TITLE;
+
+  // ── Bande CMR colorée (exemplaires multiples) ────────────────────────────
+  if (band) {
+    fc(...band.rgb); bx(x0, y, CW, 6, 'F');
+    tc(...LV.COLOR_WHITE); sf('bold', LV.FONT_MARC_ROW);
+    tx(band.label, x0 + CW / 2, y + 4.3, 'center');
+    tc(0, 0, 0); y += 7;
+  }
+
+  // ═══ ZONE SUPÉRIEURE : col. gauche (TOP_LEFT_W) + col. droite (TOP_RIGHT_W)
+
+  // ── Section 1 : Titre (zone gauche) ─────────────────────────────────────
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  fc(...LV.COLOR_PRIMARY); bx(x0, y, LV.TOP_LEFT_W, LV.H_TITLE, 'FD');
+  tc(...LV.COLOR_WHITE); sf('bold', LV.FONT_TITLE_MAIN);
+  tx('LETTRE DE VOITURE UNIQUE', x0 + LV.TOP_LEFT_W / 2, vc(y, LV.H_TITLE, LV.FONT_TITLE_MAIN), 'center');
+
+  // ── Section 4a : Bloc N° (colonne droite) ────────────────────────────────
+  bx(rx, y, LV.TOP_RIGHT_W, LV.H_NUM_BLOCK);
+  tc(...LV.COLOR_PRIMARY);
+  sf('bold', LV.FONT_NUM_LABEL);
+  tx('N°', rx + 5, vc(y, LV.H_NUM_BLOCK, LV.FONT_NUM_LABEL));
+  sf('bold', LV.FONT_NUM_VALUE);
+  tx(String(d.numero ?? d.display ?? ''), rx + 13, vc(y, LV.H_NUM_BLOCK, LV.FONT_NUM_VALUE));
+  tc(0, 0, 0); lw(LV.STROKE_INTRA);
+
+  // ── Section 2 : NATIONALE / INTERNATIONALE (zone gauche) ─────────────────
+  const y2 = y + LV.H_TITLE;
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y2, LV.W_NATCMR_HALF, LV.H_NATCMR);
+  bx(x0 + LV.W_NATCMR_HALF, y2, LV.W_NATCMR_HALF, LV.H_NATCMR);
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  sf('bold', LV.FONT_NATCMR); tc(0, 0, 0);
+  const chkY  = y2 + (LV.H_NATCMR - LV.CHECKBOX_SIZE) / 2;
+  const txtVY = vc(y2, LV.H_NATCMR, LV.FONT_NATCMR);
+  chk(x0 + LV.CELL_PAD_X, chkY, LV.CHECKBOX_SIZE, !isCMR);
+  tx('NATIONALE', x0 + LV.CELL_PAD_X + LV.CHECKBOX_SIZE + 2, txtVY);
+  const intlX = x0 + LV.W_NATCMR_HALF;
+  chk(intlX + LV.CELL_PAD_X, chkY, LV.CHECKBOX_SIZE, isCMR);
+  tx('INTERNATIONALE', intlX + LV.CELL_PAD_X + LV.CHECKBOX_SIZE + 2, txtVY);
+  // Étiquette CMR (toujours visible)
+  const cmrLogoX = intlX + LV.W_NATCMR_HALF - LV.CMR_LOGO_W - LV.CELL_PAD_X;
+  const cmrLogoY = y2 + (LV.H_NATCMR - LV.CMR_LOGO_H) / 2;
+  dc(...LV.COLOR_PRIMARY); lw(0.8);
+  doc.roundedRect(cmrLogoX, cmrLogoY, LV.CMR_LOGO_W, LV.CMR_LOGO_H, LV.CMR_LOGO_RADIUS, LV.CMR_LOGO_RADIUS, 'S');
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_CMR_LOGO);
+  doc.setCharSpace(0.3);
+  tx('CMR', cmrLogoX + LV.CMR_LOGO_W / 2, vc(cmrLogoY, LV.CMR_LOGO_H, LV.FONT_CMR_LOGO), 'center');
+  doc.setCharSpace(0);
+
+  // ── Section 4b : Bandeau DATE (colonne droite) ────────────────────────────
+  const dateHdrY = y + LV.H_NUM_BLOCK;
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  fc(...LV.COLOR_PRIMARY); bx(rx, dateHdrY, LV.TOP_RIGHT_W, LV.H_DATE_HEADER, 'FD');
+  tc(...LV.COLOR_WHITE); sf('bold', LV.FONT_DATE_HEADER);
+  doc.setCharSpace(1);
+  tx('DATE', rx + LV.TOP_RIGHT_W / 2, vc(dateHdrY, LV.H_DATE_HEADER, LV.FONT_DATE_HEADER), 'center');
+  doc.setCharSpace(0);
+
+  // ── Section 3 : Mentions légales (zone gauche) ────────────────────────────
+  const y3 = y2 + LV.H_NATCMR;
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y3, LV.W_LEGAL_HALF, LV.H_LEGAL);
+  bx(x0 + LV.W_LEGAL_HALF, y3, LV.W_LEGAL_HALF, LV.H_LEGAL);
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  sf('italic', LV.FONT_LEGAL); tc(0, 0, 0);
+  doc.text(sp("À défaut de convention écrite entre les parties au contrat de transport ou de déclaration de valeur spécifiée par le donneur d'ordre, la responsabilité du transporteur, en cas de perte ou avarie survenue aux marchandises ou en cas de retard à la livraison, est limitée au montant de l'indemnité prévue par le contrat type concernant le transport.", LV.W_LEGAL_HALF - LV.CELL_PAD_X * 2), x0 + LV.CELL_PAD_X, y3 + LV.CELL_PAD_Y * 2);
+  doc.text(sp("Ce transport est soumis, nonobstant toute clause contraire, à la Convention relative au contrat de transport international de marchandises par route (CMR).\nThis carriage is subject, notwithstanding any clause to the contrary, to the Convention on the Contract for the international Carriage of goods by road (CMR).", LV.W_LEGAL_HALF - LV.CELL_PAD_X * 2), x0 + LV.W_LEGAL_HALF + LV.CELL_PAD_X, y3 + LV.CELL_PAD_Y * 2);
+
+  // ── Section 4c : Valeur de la date (colonne droite) ──────────────────────
+  const dateValY = dateHdrY + LV.H_DATE_HEADER;
+  const dateValH = (y3 + LV.H_LEGAL) - dateValY;  // reste jusqu'à Y_TRANSPORTEUR
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(rx, dateValY, LV.TOP_RIGHT_W, dateValH);
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_DATE_VALUE);
+  tx(d.date ?? '', rx + LV.TOP_RIGHT_W / 2, vc(dateValY, dateValH, LV.FONT_DATE_VALUE), 'center');
+  tc(0, 0, 0); dc(0, 0, 0); lw(LV.STROKE_INTRA);
+
+  // ═══ ZONE PLEINE LARGEUR
+  y = y3 + LV.H_LEGAL;   // = LV.Y_TRANSPORTEUR (+ décalage bande si CMR)
+
+  // ── Section 5 : Transporteur + Conducteurs / Immatriculations ─────────────
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y, CW, LV.H_TRANSPORTEUR);
+  lw(LV.STROKE_DOC_BORDER); ln(x0 + LV.W_TRANS_LEFT, y, x0 + LV.W_TRANS_LEFT, y + LV.H_TRANSPORTEUR);
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_LABEL);
+  tx('Transporteur / Carrier (nom, adresse, pays / name, address, country)', x0 + LV.CELL_PAD_X, y + 3.2);
+  const tl = d.transporteur ?? {};
+  const _tlIsCustom = tl.id === 'autre';
+  const _tlFb = (val, fallback) => (val != null && val !== '') ? val : (_tlIsCustom ? '' : fallback);
+  tc(0, 0, 0); sf('bold', LV.FONT_TRANS_NAME);
+  let ty = y + 8;
+  tx(_tlFb(tl.nom, 'TRANSPORTS MESNAGER'), x0 + LV.CELL_PAD_X, ty); ty += 4.2;
+  sf('normal', LV.FONT_BODY);
+  const _tlInfoLine = tl.siret
+    ? 'SIRET : ' + tl.siret + (tl.telephone ? ' · ' + tl.telephone : '')
+    : (_tlIsCustom && tl.telephone ? 'Tél. ' + tl.telephone : _tlFb(tl.info, 'SAS au capital de 500 000 €'));
+  for (const l of [
+    _tlFb(tl.adresse, 'Z.A. des Renardières - B.P 10'),
+    tl.cp_ville || _tlFb(tl.ville, '53250 JAVRON LES CHAPELLES'),
+    _tlInfoLine,
+    _tlIsCustom ? '' : (tl.rcs || 'RCS LAVAL 314 901 869'),
+  ].filter(Boolean)) { tx(l, x0 + LV.CELL_PAD_X, ty); ty += 3.7; }
+  const cx2 = x0 + LV.W_TRANS_LEFT;
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_LABEL);
+  tx('CONDUCTEURS / Drivers', cx2 + LV.CELL_PAD_X, y + 3.2);
+  tc(0, 0, 0); sf('normal', LV.FONT_BODY);
+  tx(d.conducteur ?? '', cx2 + LV.CELL_PAD_X, y + LV.H_COND / 2 + 2.5);
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_INTRA);
+  ln(cx2 + 1, y + LV.H_COND, x0 + CW - 1, y + LV.H_COND);
+  const imY = y + LV.H_COND;
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_LABEL);
+  tx('IMMATRICULATIONS / Plate N°', cx2 + LV.CELL_PAD_X, imY + 4);
+  tc(0, 0, 0); sf('normal', LV.FONT_LABEL);
+  tx('Véhicule moteur :', cx2 + LV.CELL_PAD_X, imY + 9);
+  sf('normal', LV.FONT_BODY);
+  tx(d.vehicule ?? d.immat_moteur ?? '', cx2 + LV.CELL_PAD_X + 23, imY + 9);
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_INTRA);
+  ln(cx2 + 1, imY + 10.5, x0 + CW - 1, imY + 10.5);
+  sf('normal', LV.FONT_LABEL); tx('(Semi-)remorque :', cx2 + LV.CELL_PAD_X, imY + 16);
+  sf('normal', LV.FONT_BODY);  tx(d.remorque ?? d.immat_semi ?? '', cx2 + LV.CELL_PAD_X + 23, imY + 16);
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_TRANSPORTEUR;
+
+  // ── Section 6 : Donneur d'ordre ───────────────────────────────────────────
+  fc(...LV.COLOR_SOFT_BG); bx(x0, y, CW, LV.H_DONNEUR, 'F');
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y, CW, LV.H_DONNEUR);
+  ln(x0 + LV.W_DONNEUR_LABEL, y, x0 + LV.W_DONNEUR_LABEL, y + LV.H_DONNEUR);
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_BODY);
+  tx("Donneur d'ordre :", x0 + LV.CELL_PAD_X, vc(y, LV.H_DONNEUR, LV.FONT_BODY));
+  tc(0, 0, 0); sf('normal', LV.FONT_BODY + 1.5);
+  const doVal = sp(String(d.donneurOrdre ?? d.donneur_ordre ?? ''), CW - LV.W_DONNEUR_LABEL - LV.CELL_PAD_X * 2);
+  if (doVal[0]) tx(doVal[0], x0 + LV.W_DONNEUR_LABEL + LV.CELL_PAD_X, vc(y, LV.H_DONNEUR, LV.FONT_BODY + 1.5));
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_DONNEUR;
+
+  // ── Section 7 : Header MARCHANDISES / GOODS ──────────────────────────────
+  fc(...LV.COLOR_PRIMARY); bx(x0, y, CW, LV.H_MARC_HEADER, 'F');
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y, CW, LV.H_MARC_HEADER, 'S');
+  tc(...LV.COLOR_WHITE); sf('bold', LV.FONT_SECTION);
+  doc.setCharSpace(0.5);
+  tx('MARCHANDISES / GOODS', x0 + CW / 2, vc(y, LV.H_MARC_HEADER, LV.FONT_SECTION), 'center');
+  doc.setCharSpace(0);
+  tc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_MARC_HEADER;
+
+  // ── Section 8 : En-têtes colonnes ─────────────────────────────────────────
+  const W_NAT   = CW - LV.W_MARC_NOMBRE - LV.W_MARC_POIDS - LV.W_MARC_NOTE;
+  const X_NAT   = x0 + LV.W_MARC_NOMBRE;
+  const X_POIDS = X_NAT + W_NAT;
+  const X_NOTE  = X_POIDS + LV.W_MARC_POIDS;
+  fc(...LV.COLOR_LIGHT_BLUE); bx(x0, y, CW, LV.H_MARC_COLS, 'F');
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0,     y, LV.W_MARC_NOMBRE, LV.H_MARC_COLS);
+  bx(X_NAT,  y, W_NAT,            LV.H_MARC_COLS);
+  bx(X_POIDS,y, LV.W_MARC_POIDS,  LV.H_MARC_COLS);
+  bx(X_NOTE, y, LV.W_MARC_NOTE,   LV.H_MARC_COLS);
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_MARC_COL);
+  doc.setCharSpace(0.3);
+  doc.text(sp('NOMBRE\nNumber', LV.W_MARC_NOMBRE - 2), x0 + LV.W_MARC_NOMBRE / 2, y + LV.CELL_PAD_Y + 1, { align: 'center' });
+  doc.text(sp('NATURE DE LA MARCHANDISE / Nature of the goods', W_NAT - 4), X_NAT + W_NAT / 2, y + LV.CELL_PAD_Y + 1, { align: 'center' });
+  doc.text(sp('POIDS / M.L.\nWeight / Lin. m.', LV.W_MARC_POIDS - 2), X_POIDS + LV.W_MARC_POIDS / 2, y + LV.CELL_PAD_Y + 1, { align: 'center' });
+  tx('NOTE', X_NOTE + LV.W_MARC_NOTE / 2, vc(y, LV.H_MARC_COLS, LV.FONT_MARC_COL), 'center');
+  doc.setCharSpace(0);
+  tc(0, 0, 0); dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_MARC_COLS;
+
+  // ── Section 9 : Lignes marchandises + ligne TOTAL ─────────────────────────
+  const marchs = Array.isArray(d.marchandises) ? d.marchandises : [];
+  for (let i = 0; i < LV.N_MARC_ROWS; i++) {
+    const r = marchs[i] ?? {};
+    if (i % 2 === 0) { fc(...LV.COLOR_ALT_ROW); bx(x0, y, CW, LV.H_MARC_ROW, 'F'); }
+    dc(...LV.COLOR_GREY_BLUE); lw(LV.STROKE_INTRA);
+    bx(x0,     y, LV.W_MARC_NOMBRE, LV.H_MARC_ROW);
+    bx(X_NAT,  y, W_NAT,            LV.H_MARC_ROW);
+    bx(X_POIDS,y, LV.W_MARC_POIDS,  LV.H_MARC_ROW);
+    bx(X_NOTE, y, LV.W_MARC_NOTE,   LV.H_MARC_ROW);
+    tc(0, 0, 0);
+    const rowY  = vc(y, LV.H_MARC_ROW, LV.FONT_MARC_ROW);
+    const nombre = String(r.nombre ?? r.qte ?? '');
+    const nature = String(r.nature ?? r.description ?? '');
+    const poids  = String(r.poids ?? '');
+    const note   = String(r.note ?? '');
+    sf('normal', LV.FONT_MARC_ROW);
+    if (nombre) tx(nombre, x0 + LV.CELL_PAD_X, rowY);
+    if (nature) tx((sp(nature, W_NAT - LV.CELL_PAD_X * 2))[0] ?? '', X_NAT + LV.CELL_PAD_X, rowY);
+    if (poids)  tx(poids + (poids.match(/[tT]\s*$/) ? '' : ' t'), X_POIDS + LV.W_MARC_POIDS / 2, rowY, 'center');
+    if (note)   { sf('normal', LV.FONT_MARC_COL); tx(note, X_NOTE + LV.CELL_PAD_X, rowY); }
+    y += LV.H_MARC_ROW;
+  }
+  // Ligne TOTAL
+  const tot = d.total ?? {};
+  fc(...LV.COLOR_LIGHT_BLUE); bx(x0, y, CW, LV.H_MARC_ROW, 'F');
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_TOTAL); ln(x0, y, x0 + CW, y);
+  lw(LV.STROKE_INTRA);
+  bx(x0,     y, LV.W_MARC_NOMBRE, LV.H_MARC_ROW);
+  bx(X_NAT,  y, W_NAT,            LV.H_MARC_ROW);
+  bx(X_POIDS,y, LV.W_MARC_POIDS,  LV.H_MARC_ROW);
+  bx(X_NOTE, y, LV.W_MARC_NOTE,   LV.H_MARC_ROW);
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_MARC_TOTAL);
+  const totY = vc(y, LV.H_MARC_ROW, LV.FONT_MARC_TOTAL);
+  tx('TOTAL / Total', X_NAT + W_NAT - LV.CELL_PAD_X, totY, 'right');
+  if (tot.poids) tx(String(tot.poids), X_POIDS + LV.W_MARC_POIDS / 2, totY, 'center');
+  if (tot.ml) { sf('normal', LV.FONT_MARC_TOTAL); tx(String(tot.ml), X_NOTE + LV.CELL_PAD_X, totY); }
+  // Convoi exceptionnel dans la cellule NOMBRE (ligne TOTAL)
+  const cv2 = d.convoiExceptionnel === true || d.convoi === true || d.convoi === 'Oui';
+  sf('bold', 5); tc(...LV.COLOR_PRIMARY);
+  tx('Convoi except.', x0 + LV.CELL_PAD_X, y + 3.2);
+  tc(0, 0, 0); dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  chk(x0 + LV.CELL_PAD_X,      y + 4.3, 3.0, cv2);
+  sf('normal', 5.5); tx('OUI', x0 + LV.CELL_PAD_X + 4.2, y + 7.0);
+  chk(x0 + LV.CELL_PAD_X + 12, y + 4.3, 3.0, !cv2);
+  tx('NON', x0 + LV.CELL_PAD_X + 16.2, y + 7.0);
+  tc(0, 0, 0); dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_MARC_ROW;
+
+  // ── Section 10 : Refus de signature ──────────────────────────────────────
+  fc(...LV.COLOR_SOFT_BG); bx(x0, y, CW, LV.H_REFUS, 'F');
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y, CW / 2, LV.H_REFUS);
+  bx(x0 + CW / 2, y, CW / 2, LV.H_REFUS);
+  sf('italic', LV.FONT_REFUS); tc(0, 0, 0);
+  const refusExp  = "Le refus non motivé de signature engage la responsabilité de l'expéditeur-remettant.";
+  const refusDest = "Le refus non motivé de signature engage la responsabilité du destinataire.";
+  doc.text(sp(refusExp,  CW / 2 - LV.CELL_PAD_X * 2), x0 +           LV.CELL_PAD_X, y + LV.CELL_PAD_Y * 2);
+  doc.text(sp(refusDest, CW / 2 - LV.CELL_PAD_X * 2), x0 + CW / 2 + LV.CELL_PAD_X, y + LV.CELL_PAD_Y * 2);
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_REFUS;
+
+  // ── Section 11 : Réserves Chargement / Déchargement ──────────────────────
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y, CW / 2, LV.H_RESERVES);
+  bx(x0 + CW / 2, y, CW / 2, LV.H_RESERVES);
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_BODY);
+  tx('Réserves AU CHARGEMENT',   x0 + LV.CELL_PAD_X,           y + 3.5);
+  tx('Réserves AU DÉCHARGEMENT', x0 + CW / 2 + LV.CELL_PAD_X, y + 3.5);
+  tc(0, 0, 0); sf('normal', LV.FONT_BODY);
+  const resC = String(d.reservesChargement ?? d.reserves_chargement ?? '');
+  const resD = String(d.reservesDechargement ?? d.reserves_dechargement ?? '');
+  if (resC) { const ls = sp(resC, CW / 2 - LV.CELL_PAD_X * 2); doc.text(ls.slice(0, 2), x0 + LV.CELL_PAD_X, y + 9); }
+  if (resD) { const ls = sp(resD, CW / 2 - LV.CELL_PAD_X * 2); doc.text(ls.slice(0, 2), x0 + CW / 2 + LV.CELL_PAD_X, y + 9); }
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_RESERVES;
+
+  // ── Section 12 : Documents annexes + Commande / Note de livraison ─────────
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y, CW / 2, LV.H_DOCS);
+  bx(x0 + CW / 2, y, CW / 2, LV.H_DOCS);
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_BODY);
+  tx('Documents annexes / Documents attached', x0 + LV.CELL_PAD_X,           y + 3.2);
+  tx('Note de livraison',                      x0 + CW / 2 + LV.CELL_PAD_X, y + 3.2);
+  tc(0, 0, 0); sf('normal', LV.FONT_BODY);
+  const docStr = String(d.documentsAnnexes ?? d.doc_annexe ?? '');
+  const cmdStr = d.commande ? 'Cde : ' + d.commande : '';
+  if (docStr) tx(docStr, x0 + LV.CELL_PAD_X, y + 7.0);
+  if (cmdStr) tx(cmdStr, x0 + LV.CELL_PAD_X, y + (docStr ? 9.5 : 7.0));
+  if (d.livraisonPrevue) tx('Livraison prévue le ' + _fmtDateFR(d.livraisonPrevue), x0 + CW / 2 + LV.CELL_PAD_X, y + 7.0);
+  if (d.note) {
+    const noteStr = String(d.note);
+    const isGrutage = noteStr.startsWith('!!!');
+    const noteY = d.livraisonPrevue ? y + 9.5 : y + 7.0;
+    if (isGrutage) {
+      doc.setFillColor(255, 230, 0);
+      doc.rect(x0 + CW / 2 + 0.5, noteY - 2.5, CW / 2 - 1, 5.5, 'F');
+      tc(185, 28, 28); sf('bold', LV.FONT_BODY);
+      tx(noteStr, x0 + CW / 2 + LV.CELL_PAD_X, noteY);
+      tc(0, 0, 0); sf('normal', LV.FONT_BODY);
+    } else {
+      tx(noteStr, x0 + CW / 2 + LV.CELL_PAD_X, noteY);
+    }
+  }
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_DOCS;
+
+  // ── Section 13 : Expéditeur / Destinataire ────────────────────────────────
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  bx(x0, y, CW / 2, LV.H_ADDR);
+  bx(x0 + CW / 2, y, CW / 2, LV.H_ADDR);
+  tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_BODY);
+  tx('EXPÉDITEUR / Sender - Chargement',    x0 + LV.CELL_PAD_X,           y + 3.5);
+  tx('DESTINATAIRE / Consignee - Livraison', x0 + CW / 2 + LV.CELL_PAD_X, y + 3.5);
+  tc(0, 0, 0); sf('normal', LV.FONT_BODY);
+  const _cname = p => String(p || '').replace(/^[A-Z]{2,3}\s*[-–]\s*/i, '').toUpperCase();
+  let ey = y + 9.5;
+  const expPays  = _cname(d.expediteur?.pays || 'FR - France');
+  const expNom   = (d.expediteur?.nom    || '').trim() || 'SONOTRAD';
+  const expAdr   = (d.expediteur?.adresse|| '').trim() || '9 Z.A. des Renardières';
+  const expVille = (d.expediteur?.ville  || '').trim() || '53250 JAVRON-LES-CHAPELLES';
+  for (const l of [expNom, expAdr, expVille, expPays].filter(Boolean)) { tx(l, x0 + LV.CELL_PAD_X, ey); ey += 4; }
+  const dst = d.destinataire ?? {};
+  const dstPays = _cname(dst.pays);
+  let dy2 = y + 9.5;
+  for (const l of [dst.nom, dst.adresse, dst.cp_ville ?? dst.ville, dstPays].filter(Boolean)) { tx(l, x0 + CW / 2 + LV.CELL_PAD_X, dy2); dy2 += 4; }
+  dc(0, 0, 0); lw(LV.STROKE_INTRA);
+  y += LV.H_ADDR;
+
+  // ── Section 14 : Signatures (3 colonnes) ─────────────────────────────────
+  const SW = CW / LV.N_SIG_COLS;
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SECTION);
+  for (let i = 0; i < LV.N_SIG_COLS; i++) bx(x0 + SW * i, y, SW, LV.H_SIG);
+  fc(...LV.COLOR_LIGHT_BLUE);
+  for (let i = 0; i < LV.N_SIG_COLS; i++) bx(x0 + SW * i, y, SW, LV.H_SIG_HEADER, 'F');
+  const sigLabels = [
+    ["CACHET EXPÉDITEUR", "Sender's stamp"],
+    ["NOM & SIGNATURE CONDUCTEUR", "Driver's name and signature"],
+    ["CACHET DESTINATAIRE", "Consignee's stamp"],
+  ];
+  for (let i = 0; i < LV.N_SIG_COLS; i++) {
+    const sx = x0 + SW * i + SW / 2;
+    tc(...LV.COLOR_PRIMARY); sf('bold', LV.FONT_SIG_HEADER);
+    tx(sigLabels[i][0], sx, y + LV.H_SIG_HEADER * 0.55, 'center');
+    tc(...LV.COLOR_TEXT_MUTED); sf('italic', LV.FONT_SIG_SUB);
+    tx(sigLabels[i][1], sx, y + LV.H_SIG_HEADER * 0.92, 'center');
+  }
+  const cachX = x0 + SW / 2;
+  tc(0, 0, 0);
+  if (d.source === 'bcb') {
+    sf('bold', 10);             tx('BCB OFF MARKET',              cachX, y + 9.5,  'center');
+    sf('normal', LV.FONT_BODY); tx('ZA Renardières',              cachX, y + 14.5, 'center');
+                                 tx('53250 JAVRON-LES-CHAPELLES', cachX, y + 18.5, 'center');
+  } else {
+    sf('bold', 10);             tx('SONOTRAD',                         cachX, y + 9.5,  'center');
+    sf('normal', 5.5);          tx('S.a.R.L au capital de 100 000 €', cachX, y + 13,   'center');
+    sf('normal', LV.FONT_BODY); tx('9 Z.A. des Renardières',          cachX, y + 16.5, 'center');
+                                 tx('53250 JAVRON-LES-CHAPELLES',      cachX, y + 20,   'center');
+                                 tx('Tél. 02.49.66.10.42',             cachX, y + 23.5, 'center');
+    sf('normal', 5.5);          tx('R.C.S LAVAL 409 002 326',          cachX, y + 26.5, 'center');
+  }
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_SIG_LINE);
+  doc.setLineDash([1.5, 1]);
+  const sigLineY = y + LV.H_SIG - LV.SIG_LINE_BOTTOM;
+  for (let i = 0; i < LV.N_SIG_COLS; i++) {
+    ln(x0 + SW * i + LV.SIG_LINE_MARGIN, sigLineY, x0 + SW * (i + 1) - LV.SIG_LINE_MARGIN, sigLineY);
+  }
+  doc.setLineDash([]);
+  // Bordure externe du document (par-dessus toutes les sections)
+  const docTopY = LV.Y_TITLE + (band ? 7 : 0);
+  dc(...LV.COLOR_PRIMARY); lw(LV.STROKE_DOC_BORDER);
+  bx(x0, docTopY, CW, y + LV.H_SIG - docTopY, 'S');
+  lw(LV.STROKE_INTRA);
+}
+
+function _lvuVerso(doc) {
+  const x0 = LV.MARGIN;
+  const CW = LV.CONTENT_W;
+  const HW = (CW - LV.V_COL_GAP) / 2;   // 96mm par colonne
+  const c2x = x0 + HW + LV.V_COL_GAP;
+
+  const sf  = (s, z) => { doc.setFont('helvetica', s); doc.setFontSize(z); };
+  const fc  = (...c) => doc.setFillColor(...c);
+  const tc  = (...c) => doc.setTextColor(...c);
+  const dc  = (...c) => doc.setDrawColor(...c);
+  const lw  = w  => doc.setLineWidth(w);
+  const bx  = (x, y, w, h, s = 'S') => doc.rect(x, y, w, h, s);
+  const ln  = (x1, y1, x2, y2) => doc.line(x1, y1, x2, y2);
+  const tx  = (t, x, y, a = 'left') => doc.text(String(t ?? ''), x, y, { align: a });
+  const sp  = (t, w) => doc.splitTextToSize(String(t ?? ''), w);
+  const lh  = s => s * 0.353 * 1.55;   // hauteur de ligne pour fonte s (pt)
+
+  // ── En-tête ──────────────────────────────────────────────────────────────
+  let y = LV.MARGIN;
+  tc(...LV.V_TITLE_MAIN); sf('bold', LV.V_HEADER_TITLE_FONT);
+  doc.setCharSpace(0.2);
+  tx('CONDITIONS DE TRANSPORT - PLAFONDS DE RESPONSABILITÉ', x0 + CW / 2, y + 7, 'center');
+  doc.setCharSpace(0);
+  tc(...LV.V_SUBTITLE); sf('italic', LV.V_HEADER_SUB_FONT);
+  tx("Articles L.133-1 et suivants du Code de Commerce · Contrats types publiés par arrêtés ministériels", x0 + CW / 2, y + 13, 'center');
+  dc(...LV.V_BORDER); lw(LV.STROKE_VERSO);
+  ln(x0, y + 16, x0 + CW, y + 16);
+  y += 16 + LV.V_HEADER_MARGIN_BOTTOM;
+
+  // ── Calcul des hauteurs de blocs ─────────────────────────────────────────
+  const footerY = LV.PAGE_H - LV.MARGIN;
+  const blocksH = footerY - y - 2;
+  const BH_L = (blocksH - (LV.V_BLOCKS_LEFT  - 1) * LV.V_BLOCK_GAP) / LV.V_BLOCKS_LEFT;
+  const BH_R = (blocksH - (LV.V_BLOCKS_RIGHT - 1) * LV.V_BLOCK_GAP) / LV.V_BLOCKS_RIGHT;
+  const BLOCK_HDR_H = LV.V_BLOCK_TITLE_PAD_Y * 2 + LV.V_BLOCK_TITLE_FONT * 0.353;
+
+  // ── Rendu d'un bloc ───────────────────────────────────────────────────────
+  function drawBlock(col, blockY, bh, title, items) {
+    const bLeft = col === 0 ? x0 : c2x;
+    dc(...LV.V_BORDER); lw(LV.STROKE_VERSO);
+    bx(bLeft, blockY, HW, bh);
+    fc(...LV.V_BG_HEADER); bx(bLeft, blockY, HW, BLOCK_HDR_H, 'F');
+    dc(...LV.V_BORDER); lw(LV.STROKE_VERSO);
+    ln(bLeft, blockY + BLOCK_HDR_H, bLeft + HW, blockY + BLOCK_HDR_H);
+    tc(...LV.V_TITLE_BLOCK); sf('bold', LV.V_BLOCK_TITLE_FONT);
+    tx(title, bLeft + LV.V_BLOCK_TITLE_PAD_X, blockY + LV.V_BLOCK_TITLE_PAD_Y + LV.V_BLOCK_TITLE_FONT * 0.353);
+    let cy = blockY + BLOCK_HDR_H + LV.V_BLOCK_PAD_Y;
+    for (const item of items) {
+      if (item.t === 'sub') {
+        tc(...LV.V_TITLE_BLOCK); sf('bold', LV.V_BLOCK_BODY_FONT);
+        const lines = sp(item.v, HW - LV.V_BLOCK_PAD_X * 2);
+        doc.text(lines, bLeft + LV.V_BLOCK_PAD_X, cy);
+        cy += lines.length * lh(LV.V_BLOCK_BODY_FONT) + 1;
+      } else if (item.t === 'bullet') {
+        tc(...LV.V_BULLET); sf('normal', 13);
+        tx('·', bLeft + LV.V_BLOCK_PAD_X, cy);
+        tc(...LV.V_TEXT); sf('normal', LV.V_BLOCK_LIST_FONT);
+        const lines = sp(item.v, HW - LV.V_BLOCK_PAD_X * 2 - 4);
+        doc.text(lines, bLeft + LV.V_BLOCK_PAD_X + 3.5, cy);
+        cy += lines.length * lh(LV.V_BLOCK_LIST_FONT) + 0.8;
+      } else if (item.t === 'retard') {
+        cy += 2.0;
+        dc(...LV.V_BORDER_LIGHTER); lw(LV.STROKE_VERSO);
+        doc.setLineDash([0.8, 0.8]);
+        ln(bLeft + LV.V_BLOCK_PAD_X, cy, bLeft + HW - LV.V_BLOCK_PAD_X, cy);
+        doc.setLineDash([]);
+        cy += 2.5;
+        tc(...LV.V_SUBTITLE); sf('italic', LV.V_BLOCK_LIST_FONT);
+        const lines = sp(item.v, HW - LV.V_BLOCK_PAD_X * 2);
+        doc.text(lines, bLeft + LV.V_BLOCK_PAD_X, cy);
+        cy += lines.length * lh(LV.V_BLOCK_LIST_FONT) + 1;
+      } else {
+        tc(...LV.V_TEXT); sf('normal', LV.V_BLOCK_BODY_FONT);
+        const lines = sp(item.v, HW - LV.V_BLOCK_PAD_X * 2);
+        doc.text(lines, bLeft + LV.V_BLOCK_PAD_X, cy);
+        cy += lines.length * lh(LV.V_BLOCK_BODY_FONT) + 1.5;
+      }
+    }
+  }
+
+  // ── Blocs colonne gauche (5 blocs) ────────────────────────────────────────
+  const LEFT = [
+    { title: 'TRAFIC INTÉRIEUR · ENVOIS >= 3 TONNES', items: [
+      { t: 'body',   v: 'Réf. Décret 2017-461 du 31 mars 2017' },
+      { t: 'bullet', v: 'Perte ou avarie : 20 €/kg de poids brut manquant ou avarié' },
+      { t: 'bullet', v: 'Plafond global : nb de tonnes × 3 200 €' },
+      { t: 'body',   v: "La plus faible des deux limites s'applique." },
+      { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
+    ]},
+    { title: 'TRAFIC INTÉRIEUR · ENVOIS < 3 TONNES', items: [
+      { t: 'body',   v: 'Réf. Décret 2017-461 du 31 mars 2017' },
+      { t: 'bullet', v: 'Perte ou avarie : 33 €/kg, maximum 1 000 €/colis' },
+      { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
+    ]},
+    { title: 'TRANSPORT SOUS TEMPÉRATURE DIRIGÉE', items: [
+      { t: 'bullet', v: 'Envois >= 3 t : 14 EUR/kg - plafond : nb tonnes x 4 000 EUR' },
+      { t: 'bullet', v: 'Envois < 3 t : 23 EUR/kg - plafond : 750 EUR/colis' },
+      { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
+    ]},
+    { title: 'TRANSPORT EN CITERNES', items: [
+      { t: 'bullet', v: 'Marchandise : 3 €/kg ou litre - plafond55 000 €/envoi' },
+      { t: 'bullet', v: 'Autres dommages : plafond 300 000 €/envoi' },
+      { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
+    ]},
+    { title: "TRANSPORT D'ANIMAUX VIVANTS", items: [
+      { t: 'body',   v: 'Indemnisation selon plafond par animal (art. D3222-4 Code des transports).' },
+      { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
+    ]},
+  ];
+
+  // ── Blocs colonne droite (4 blocs) ───────────────────────────────────────
+  const RIGHT = [
+    { title: 'TRANSPORT DE MASSES INDIVISIBLES', items: [
+      { t: 'bullet', v: 'Dommages directs : 60 000 €/envoi' },
+      { t: 'bullet', v: 'Autres dommages : double du prix du transport' },
+      { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
+    ]},
+    { title: 'TRANSPORT DE VÉHICULES ROULANTS', items: [
+      { t: 'bullet', v: 'Véhicule neuf : valeur de remplacement HT au tarif constructeur' },
+      { t: 'bullet', v: 'Occasion coté Argus : valeur Argus' },
+      { t: 'bullet', v: 'Occasion non coté : 800 €' },
+      { t: 'bullet', v: 'Autres dommages : 500 €/véhicule' },
+      { t: 'retard', v: 'Retard : indemnisation limitée au prix du transport.' },
+    ]},
+    { title: 'TRAFIC INTERNATIONAL · CONVENTION CMR', items: [
+      { t: 'body',   v: "Sauf déclaration de valeur, intérêt spécial, vol ou faute lourde :" },
+      { t: 'bullet', v: 'Indemnisation limitée à 8,33 DTS/kg de poids brut manquant ou avarié' },
+      { t: 'body',   v: 'Remboursement : prix du transport, droits de douane et frais liés.' },
+      { t: 'retard', v: "Retard : prix du transport sauf déclaration d'intérêt spécial (CMR art. 23 et 29)." },
+    ]},
+    { title: 'LITIGES · COMPÉTENCE JURIDICTIONNELLE', items: [
+      { t: 'body',   v: "Tout litige relatif à l'exécution du contrat de transport relève de la compétence exclusive des tribunaux du siège social du transporteur, même en cas de pluralité de défendeurs ou d'appel en garantie." },
+    ]},
+    { title: 'DÉCLARATIONS DE VALEUR', items: [
+      { t: 'body',   v: "Les limites ci-dessus ne s'appliquent pas en cas de déclaration de valeur (pertes et avaries) ou de déclaration d'intérêt spécial à la livraison (retard), établies par le donneur d'ordre préalablement au transport." },
+    ]},
+  ];
+
+  for (let i = 0; i < LEFT.length;  i++) drawBlock(0, y + i * (BH_L + LV.V_BLOCK_GAP), BH_L, LEFT[i].title,  LEFT[i].items);
+  for (let i = 0; i < RIGHT.length; i++) drawBlock(1, y + i * (BH_R + LV.V_BLOCK_GAP), BH_R, RIGHT[i].title, RIGHT[i].items);
+
+}
+
+function todayStr() { return new Date().toISOString().split('T')[0]; }
+function _timeStr()  { return new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
+// Date au format français court : "2 jan. 2025"
+function _fmtDate(str) {
+  if (!str) return '';
+  const d = new Date(str);
+  if (isNaN(d)) return str;
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+// Format court JJ/MM (chips) — retombe sur la chaîne brute si non parsable
+function _fmtDateShort(str) {
+  if (!str) return '';
+  const d = new Date(str);
+  if (isNaN(d)) return str;
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+}
+// Format JJ/MM/AAAA (PDF LV/CMR)
+function _fmtDateFR(str) {
+  if (!str) return '';
+  const d = new Date(str);
+  if (isNaN(d)) return str;
+  const p = n => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+// Convertit une date (string Sheets/ISO/dd-mm-yyyy FR) en yyyy-mm-dd pour <input type="date">
+// new Date("11/07/2026") est ambigu et interprété par JS en MM/DD/YYYY (7 novembre au lieu du
+// 11 juillet) — toute chaîne jj/mm/aaaa doit donc être parsée à la main avant tout fallback.
+function _toIsoDateInput(str) {
+  if (!str) return '';
+  const m = String(str).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  const d = new Date(str);
+  if (isNaN(d)) return '';
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+// Durée entre debut et (fin ou aujourd'hui), retourne ex: "3j", "2 sem", "1 mois"
+function _duration(debut, fin) {
+  if (!debut) return '';
+  const start = new Date(debut);
+  if (isNaN(start)) return '';
+  const end = (fin && !isNaN(new Date(fin))) ? new Date(fin) : new Date();
+  const days = Math.round((end - start) / 86400000);
+  if (days < 0)  return '';
+  if (days === 0) return 'auj.';
+  if (days === 1) return '1j';
+  if (days < 14)  return days + 'j';
+  if (days < 60)  return Math.round(days / 7) + ' sem';
+  return Math.round(days / 30) + ' mois';
+}
+function _sleep(ms)  { return new Promise(r => setTimeout(r, ms)); }
+// Fetch avec timeout (AppScript peut être lent)
+function _fetchWithTimeout(resource, options = {}, timeoutMs = 45000) {
+  const ctrl = new AbortController();
+  let expire = false;
+  const tid  = setTimeout(() => { expire = true; ctrl.abort(); }, timeoutMs);
+  return fetch(resource, { ...options, signal: ctrl.signal })
+    .catch(err => {
+      // Délai dépassé : le serveur (Apps Script) a souvent fini malgré tout — on le dit
+      // plutôt qu'afficher « signal is aborted without reason ».
+      if (expire) throw new Error('le serveur met trop de temps à répondre — l\'action a peut-être abouti, vérifiez avant de recommencer');
+      throw err;
+    })
+    .finally(() => clearTimeout(tid));
+}
+async function _post(url, payload) {
+  // FormData évite le CORS preflight (multipart/form-data est une "simple request")
+  // AppScript reçoit les données via e.parameter.payload
+  const form = new FormData();
+  form.append('payload', JSON.stringify(payload));
+  const r = await _fetchWithTimeout(url, { method: 'POST', body: form }, 60000);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const text = await r.text();
+  try { return JSON.parse(text); } catch { return { status: 'ok', raw: text }; }
+}
+// Jeton de session (délivré par l'action 'auth', voir _checkSession dans pwa_master.js) :
+// ajouté ici à TOUS les appels vers S.apiUrl plutôt qu'à chacun des ~90 appels du fichier.
+// GET → paramètre ?tk= ; POST FormData → champ tk ; POST JSON → propriété tk.
+(function () {
+  const _fetch = window.fetch.bind(window);
+  window.fetch = function (resource, options) {
+    const tk    = S.currentUser && S.currentUser.token;
+    const isApi = !!S.apiUrl && typeof resource === 'string' && resource.startsWith(S.apiUrl);
+    if (tk && isApi) {
+      const method = ((options && options.method) || 'GET').toUpperCase();
+      if (method === 'GET') {
+        resource += (resource.includes('?') ? '&' : '?') + 'tk=' + encodeURIComponent(tk);
+      } else if (options && options.body instanceof FormData) {
+        options.body.set('tk', tk);
+      } else if (options && typeof options.body === 'string') {
+        try {
+          const o = JSON.parse(options.body);
+          if (o && typeof o === 'object' && !Array.isArray(o)) {
+            o.tk = tk;
+            options = { ...options, body: JSON.stringify(o) };
+          }
+        } catch {}
+      }
+    }
+    // 401 = jeton refusé par le serveur (absent, expiré, ou secret changé) → re-saisie du PIN.
+    return _fetch(resource, options).then(r => {
+      if (isApi && r.status === 401) App._sessionExpiree();
+      return r;
+    });
+  };
+})();
+function _compress(file, maxW = 1200, q = 0.82) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      let { width: w, height: h } = img;
+      if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', q));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      const fr = new FileReader();
+      fr.onload = e => resolve(e.target.result);
+      fr.readAsDataURL(file);
+    };
+    img.src = url;
+  });
+}
+// ── INIT ─────────────────────────────────────────────────────────────────────
+function _updateOnline() {
+  S.online = navigator.onLine;
+  const d = document.getElementById('status-dot');
+  const t = document.getElementById('status-text');
+  if (d) { d.className = 'status-dot ' + (navigator.onLine ? 'online' : 'offline'); }
+  if (t) { t.textContent = navigator.onLine ? 'En ligne' : 'Hors ligne'; }
+  if (navigator.onLine) {
+    App._refillCodeStock();
+    App._processOfflineQueue();
+  }
+}
+window.addEventListener('online',  _updateOnline);
+window.addEventListener('offline', _updateOnline);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && navigator.onLine) {
+    App._refillCodeStock();
+    App._processOfflineQueue();
+  }
+});
+setTimeout(() => App._refillCodeStock(), 1500);
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW:', e));
+}
+// ── Pull-to-refresh ──────────────────────────────────────────────────────────
+Object.assign(App, {
+  _ptrSetup() {
+    const mainEl = document.querySelector('.main-content');
+    const ind    = document.getElementById('ptr-indicator');
+    if (!mainEl) return;
+    let startY = 0, startX = 0, pulling = false, refreshing = false;
+    const THRESHOLD = 70;
+
+    const _show = (dy) => {
+      if (!ind) return;
+      const pct = Math.min(dy / THRESHOLD, 1);
+      ind.style.opacity   = String(Math.min(pct * 1.5, 1));
+      ind.style.transform = `translateX(-50%) translateY(${-54 + pct * 54}px)`;
+      const icon = document.getElementById('ptr-icon');
+      if (icon) { icon.style.animation = ''; icon.style.transform = `rotate(${pct * 180}deg)`; icon.textContent = '↓'; }
+    };
+    const _hide = () => {
+      if (!ind) return;
+      ind.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
+      ind.style.opacity    = '0';
+      ind.style.transform  = 'translateX(-50%) translateY(-54px)';
+    };
+
+    mainEl.addEventListener('touchstart', e => {
+      if (refreshing) return;
+      startY = e.touches[0].clientY;
+      startX = e.touches[0].clientX;
+      pulling = mainEl.scrollTop <= 0;
+      if (ind) ind.style.transition = 'none';
+    }, { passive: true });
+
+    mainEl.addEventListener('touchmove', e => {
+      if (!pulling || refreshing) return;
+      const dy = e.touches[0].clientY - startY;
+      const dx = Math.abs(e.touches[0].clientX - startX);
+      if (dx > 30 || dy <= 0) { pulling = false; _hide(); return; }
+      _show(dy);
+    }, { passive: true });
+
+    mainEl.addEventListener('touchend', e => {
+      if (!pulling || refreshing) return;
+      pulling = false;
+      const dy = e.changedTouches[0].clientY - startY;
+      if (dy >= THRESHOLD) {
+        refreshing = true;
+        const icon = document.getElementById('ptr-icon');
+        if (icon) { icon.textContent = '⟳'; icon.style.transform = ''; icon.style.animation = 'spin 0.6s linear infinite'; }
+        if (ind) { ind.style.transition = 'none'; _show(THRESHOLD); }
+        setTimeout(() => {
+          App._ptrRefresh();
+          _hide();
+          setTimeout(() => { refreshing = false; }, 350);
+        }, 350);
+      } else {
+        _hide();
+      }
+    });
+  },
+
+  _ptrRefresh() {
+    const v = S.view;
+    if      (v === 'departures')      this.loadDepartures(true);
+    else if (v === 'arrivals')        this.loadArrivalsData(true);
+    else if (v === 'loxam-menu')      { S.depsLoaded = false; S.arrivalsLoaded = false; this.loxamMenuInit(); }
+    else if (v === 'stock-dashboard') this.loadStockDashboard(true);
+    else if (v === 'stock')           { S.stockLoaded = false; this.loadStockCatalog(); }
+    else if (v === 'stock-history')   this.loadStockHistory(true);
+    else if (v === 'bcb-lots')        this.bcbLotsLoad(true);
+    else if (v === 'bcb-enlevements') this.bcbEnlevementsLoad(true);
+    else if (v === 'lvu-history')     this.lvuLoadHistory();
+    else if (v === 'annuaire')        this.annuaireLoad(true);
+    else                              this.toast('↺ Actualisé');
+  },
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Vérifie la session → affiche login ou accueil
+  App._initAuth();
+  // Détecte le mode TEST via l'API (ADR-007 — non-breaking si GAS actuel)
+  App._applyEnvMode();
+  _updateOnline();
+  App._renderCodeStockBadge();
+  App._renderOfflineQueueBadge();
+  App._ptrSetup();
+  // ── Drag-and-drop sur la dropzone XLS ────────────────────────────────────
+  const dz = document.getElementById('xls-dropzone');
+  if (dz) {
+    dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag'); });
+    dz.addEventListener('dragleave', ()  => dz.classList.remove('drag'));
+    dz.addEventListener('drop', e => {
+      e.preventDefault();
+      dz.classList.remove('drag');
+      const file = e.dataTransfer?.files?.[0];
+      if (file) App._xlsLoadFile(file);
+    });
+  }
+});
