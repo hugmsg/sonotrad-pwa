@@ -5,9 +5,11 @@
 PWA Sonotrad — Application web progressive de gestion des transports pour SONOTRAD (Javron-les-Chapelles, 53).
 La PWA permet de créer, remplir et exporter des Lettres de Voiture Uniques (LV nationales) et des CMR (transport international).
 
-**Fichier principal :** `index.html`
-**Fonction de rendu recto :** `_lvuRecto()` — ligne 6203
-**Fonction de rendu verso :** `_lvuVerso()` — ✅ Implémentée — ligne 6551
+**Fichier principal :** `lv.js` depuis le découpage du 2026-10-26 (formulaire, enregistrement,
+historique, annulation, `_generateLvu`, `_lvuRecto`, `_lvuVerso`) — les numéros de ligne et les
+mentions de `index.html` plus bas datent d'avant : chercher la fonction par son nom.
+**Fonction de rendu recto :** `_lvuRecto()`
+**Fonction de rendu verso :** `_lvuVerso()` — ✅ Implémentée
 **Librairie PDF :** jsPDF (coordonnées en mm, origine en haut à gauche)
 **Format :** A4 portrait, 210 × 297 mm
 

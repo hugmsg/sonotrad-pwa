@@ -603,3 +603,13 @@ sonotrad-pwa/
 ├── index.html                                         ← _syncVoyageSupabase() + _lvuCalcGrutage() après lvuSaveToDrive()
 └── CLAUDE_PORTAIL.md (ce fichier)
 ```
+
+---
+
+## LV annulées (2026-10-26)
+
+Annuler une LV dans la PWA (`lv_cancel`, voir `CLAUDE_LV.md` « Annuler / supprimer une LV »)
+appelle `annuler_voyage` (clé secrète) : la fiche est copiée dans `voyages_annules` (aucune
+policy, lue seulement par `lire_historique_voyages`) puis supprimée de `voyages` — elle disparaît
+donc du portail, qui ne lit que `voyages`. Le lien avec la LV qui la remplace est dans
+`voyages_annules.remplacee_par` (`lier_remplacement_voyage`). Rien à changer côté portail.
