@@ -284,6 +284,7 @@
     .sc-bdg   { font-size:10px; font-weight:600; padding:1px 5px; border-radius:10px; white-space:nowrap; }
     .sc-bdg.fam  { background:#EDE9FE; color:#5B21B6; }
     .sc-bdg.fou  { background:#E0F2FE; color:#0369A1; }
+    .sc-bdg.ret  { background:#FEF3C7; color:#92400E; }
     .sc-rfourn   { font-size:10px; color:#94A3B8; }
     /* ── Indicateur tendance & rupture dans les cartes catalogue ── */
     .sc-trend    { font-size:11px; font-weight:700; flex-shrink:0; line-height:1; }

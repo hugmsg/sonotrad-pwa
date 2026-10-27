@@ -237,6 +237,7 @@ Object.assign(App, {
           </div>
           <div class="sc-desc">${desc}</div>
           <div class="sc-foot">
+            ${d.retiree     ? `<span class="sc-bdg ret" title="Absente du dernier fichier du client, encore en stock">Retirée du catalogue client</span>` : ''}
             ${d.famille     ? `<span class="sc-bdg fam">${d.famille}</span>` : ''}
             ${d.fournisseur ? `<span class="sc-bdg fou">${d.fournisseur}</span>` : ''}
             ${d.refFourn    ? `<span class="sc-rfourn">${d.refFourn}</span>` : ''}
@@ -2587,8 +2588,14 @@ Object.assign(App, {
                 <b>${data.updated}</b> modifiée${data.updated>1?'s':''} &nbsp;·&nbsp;
                 <b>${data.deactivated}</b> désactivée${data.deactivated>1?'s':''} &nbsp;·&nbsp;
                 <b>${data.unchanged}</b> inchangée${data.unchanged>1?'s':''}
+                ${data.prixModifies ? `<br>💶 <b>${data.prixModifies}</b> prix nouveau${data.prixModifies>1?'x':''} ou modifié${data.prixModifies>1?'s':''} (ancien prix gardé dans l'historique)` : ''}
               </div>
             </div>
+            ${(data.retireesEnStock || []).length ? `
+            <div style="background:#FEF3C7;border-radius:10px;padding:12px 14px;margin-bottom:8px;font-size:12px;color:#92400E;line-height:1.6;">
+              ⚠ <b>${data.retireesEnStock.length}</b> référence${data.retireesEnStock.length>1?'s':''} retirée${data.retireesEnStock.length>1?'s':''} du catalogue client mais encore en stock :
+              <b>${data.retireesEnStock.join(', ')}</b>. Elles restent visibles (étiquette « Retirée ») jusqu'à ce que leur stock soit à zéro.
+            </div>` : ''}
             ${data.sheetUrl ? `
             <a href="${data.sheetUrl}" target="_blank"
               style="display:flex;align-items:center;gap:8px;background:#EFF6FF;border:1.5px solid #BFDBFE;
