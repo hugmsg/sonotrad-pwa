@@ -818,29 +818,6 @@ const App = {
     document.getElementById('login-setup-panel').style.display = 'none';
     document.getElementById('pin-error-msg').textContent = '';
     this.toast('✓ URL enregistrée');
-    this._applyEnvMode();
-  },
-
-  /**
-   * Détecte si l'API connectée est en mode TEST et applique l'indicateur visuel.
-   * ADR-007 : header rouge + badge "⚠ TEST" si env=test.
-   * Non-breaking : le GAS actuel ne répond pas à ?action=env → catch silencieux.
-   */
-  async _applyEnvMode() {
-    if (!S.apiUrl) return;
-    try {
-      const resp = await fetch(S.apiUrl + '?action=env',
-        { signal: AbortSignal.timeout(3000) });
-      const data = await resp.json();
-      if (data.env === 'test') {
-        document.body.classList.add('env-test');
-      } else {
-        document.body.classList.remove('env-test');
-      }
-    } catch(e) {
-      // GAS ne connaît pas ?action=env → silencieux, pas de changement visuel
-      document.body.classList.remove('env-test');
-    }
   },
 
   /* ─ Toast ─ */
@@ -1088,8 +1065,6 @@ Object.assign(App, {
 document.addEventListener('DOMContentLoaded', () => {
   // Vérifie la session → affiche login ou accueil
   App._initAuth();
-  // Détecte le mode TEST via l'API (ADR-007 — non-breaking si GAS actuel)
-  App._applyEnvMode();
   _updateOnline();
   App._renderCodeStockBadge();
   App._renderOfflineQueueBadge();

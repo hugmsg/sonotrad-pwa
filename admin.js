@@ -324,7 +324,6 @@ Object.assign(App, {
     localStorage.setItem(SK.API, url);
     this.toast('✓ Réglages sauvegardés');
     if (url) this._fetchCodes();
-    this._applyEnvMode();
   },
   /* ─ Diagnostic ─ */
   async runDiag() {

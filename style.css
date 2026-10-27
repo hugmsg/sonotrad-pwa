@@ -1,9 +1,4 @@
     :root { --brand: #1A5276; --accent: #2E86C1; }
-    /* Mode TEST : header rouge + badge visible (voir ADR-007 dans sonotrad-api) */
-    body.env-test { --brand: #b91c1c; --accent: #dc2626; }
-    #env-test-badge { display: none; background: #dc2626; color: white; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; letter-spacing: 0.5px; border: 1px solid rgba(255,255,255,0.4); animation: pulse-test 2s ease-in-out infinite; }
-    body.env-test #env-test-badge { display: inline-flex; align-items: center; gap: 3px; }
-    @keyframes pulse-test { 0%,100% { opacity:1; } 50% { opacity:0.7; } }
     * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
     html, body { height: 100%; background: white; }
     body {
