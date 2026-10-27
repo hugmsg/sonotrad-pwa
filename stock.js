@@ -115,15 +115,18 @@ Object.assign(App, {
   },
 
   async toggleStockPref(ref) {
-    if (S.stockPrefs.has(ref)) { S.stockPrefs.delete(ref); }
-    else                        { S.stockPrefs.add(ref);    }
+    const on = !S.stockPrefs.has(ref);
+    if (on) S.stockPrefs.add(ref); else S.stockPrefs.delete(ref);
     this._renderStockList(); // re-render immédiat
-    // Sauvegarde en fond
+    // Sauvegarde en fond : on n'envoie que la réf changée (la liste locale peut ne pas être chargée,
+    // ex. depuis la fiche d'une réf ouverte par le tableau de bord — l'envoyer en entier effaçait les autres).
     try {
       const fd = new FormData();
-      fd.append('payload', JSON.stringify({ action:'save_stock_prefs', relevant: [...S.stockPrefs] }));
-      await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
-    } catch(e) { /* silencieux — sauvegardé localement de toute façon */ }
+      fd.append('payload', JSON.stringify({ action:'save_stock_pref', ref, on }));
+      const r = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 15000);
+      const d = await r.json();
+      if (d.status !== 'ok') this.toast('Étoile non enregistrée : ' + (d.error || 'erreur'));
+    } catch(e) { this.toast('Étoile non enregistrée (réseau)'); }
   },
 
   _renderStockFamilleFilters() {
@@ -1281,7 +1284,8 @@ Object.assign(App, {
   async submitSaisie() {
     const items = Object.entries(S.saisieItems).filter(([, qty]) => Number(qty) > 0 || S.saisieType === 'inventaire');
     if (!items.length) { this.toast('Aucune pièce saisie'); return; }
-    const user = S.user?.nom || '';
+    const u    = S.currentUser;
+    const user = u ? `${u.prenom} ${u.nom}` : 'inconnu';
     const note = S.saisieNote || '';
     const btn  = document.getElementById('saisie-submit-btn');
     if (btn) btn.disabled = true;
