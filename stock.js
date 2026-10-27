@@ -300,6 +300,90 @@ Object.assign(App, {
       .sort((a, b) => (a.date < b.date ? 1 : -1));
   },
 
+  // Après une saisie : ajoute les mouvements créés (renvoyés par le serveur) à l'historique
+  // et réaffiche tout de suite l'écran ouvert, sans recharger tout l'historique.
+  _stockApresSaisie(mouvements) {
+    if (!Array.isArray(mouvements) || !mouvements.length) { S.historyLoaded = false; this._stockRafraichirVues(); return; }
+    const neufs = mouvements.slice().reverse();   // plus récent en premier, comme l'historique
+    if (S.historyLoaded) {
+      S.historyData = neufs.concat(S.historyData);
+      S.historyOps  = this._groupMovements(S.historyData);
+      this._buildPoseHistory();
+    }
+    if (Array.isArray(S.stockRecentMvs)) S.stockRecentMvs = neufs.concat(S.stockRecentMvs);
+    this._stockRafraichirVues();
+  },
+
+  _stockRafraichirVues() {
+    if (S.view === 'stock-history') { if (S.historyLoaded) this._renderHistoryList(); else this.loadStockHistory(true); }
+    if (S.view === 'stock-dashboard') this._renderDashboard();
+    if (S.view === 'stock') this._renderStockList();
+  },
+
+  // Bouton « Annuler cette opération » (les poses se gèrent dans la fenêtre 🔧 du départ).
+  _btnAnnulerOp(op, dt) {
+    if (dt === 'pose' || op._consolidated || !op.items.length || op.items.some(m => !m.id)) return '';
+    return `<button onclick="event.stopPropagation();App.annulerOperation('${encodeURIComponent(op.key)}')"
+      style="margin-top:8px;padding:6px 12px;background:#FEF2F2;color:#B91C1C;border:1.5px solid #FECACA;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;width:100%;">
+      🗑 Annuler cette opération</button>`;
+  },
+
+  async annulerOperation(encodedKey) {
+    const key = decodeURIComponent(encodedKey);
+    const src = S.historyLoaded ? S.historyData : (S.stockRecentMvs || []);
+    const op  = this._groupMovements(src).find(o => o.key === key);
+    if (!op) { this.toast('Opération introuvable — rechargez l\'historique'); return; }
+    const labels = { entrée:'entrée', sortie:'sortie', inventaire:'inventaire' };
+    const quand  = new Date(op.date).toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+    const lignes = op.items.map(m => `• ${m.ref} × ${m.qty}`).join('\n');
+    const lv     = S.lvLinks[key];
+    let msg = `Annuler cette ${labels[op.type] || op.type} du ${quand} ?\n\n${lignes}\n\n` +
+              `Le stock sera recalculé. L'annulation est enregistrée (qui, quand).`;
+    if (lv) msg += `\n\n⚠ Opération liée à la LV N° ${lv.display || lv.numero} : la LV elle-même n'est pas annulée.`;
+    if (!confirm(msg)) return;
+
+    const ids = op.items.map(m => m.id);
+    this.toast('⏳ Annulation…');
+    try {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify({ action:'stock_cancel_operation', ids }));
+      const r    = await _fetchWithTimeout(S.apiUrl, { method:'POST', body:fd }, 20000);
+      const data = await r.json();
+      if (data.status !== 'ok') { this.toast('Erreur : ' + (data.error || 'inconnue')); return; }
+
+      const idSet = new Set(ids);
+      if (S.historyLoaded) {
+        S.historyData = S.historyData.filter(m => !idSet.has(m.id));
+        S.historyOps  = this._groupMovements(S.historyData);
+        this._buildPoseHistory();
+      }
+      if (Array.isArray(S.stockRecentMvs)) S.stockRecentMvs = S.stockRecentMvs.filter(m => !idSet.has(m.id));
+      S.analyticsLoaded = false;
+      S.dashboardLoaded = false;
+
+      if (op.type === 'inventaire') {
+        // Le stock d'après dépend de l'inventaire précédent : on relit les quantités au serveur.
+        try {
+          const rc = await _fetchWithTimeout(S.apiUrl + '?action=stock_catalog', {}, 40000);
+          const dc = await rc.json();
+          if (dc.status === 'ok') S.stockData = dc.data || [];
+        } catch(e) {}
+      } else {
+        const sens = op.type === 'entrée' ? -1 : 1;
+        op.items.forEach(m => {
+          const item = S.stockData.find(i => i.ref === m.ref);
+          if (!item || item.qte === null) return;
+          item.qte += sens * Number(m.qty);
+          item.stockStatus = item.seuil !== null ? (item.qte >= item.seuil ? 'ok' : 'low') : 'ok';
+        });
+      }
+      this.toast(`✓ Opération annulée (${data.count} ligne${data.count > 1 ? 's' : ''})`);
+      this._stockRafraichirVues();
+    } catch(e) {
+      this.toast('Erreur réseau : ' + e.message);
+    }
+  },
+
   _opDisplayType(type, note) {
     if (type === 'sortie' && note.startsWith('[Pose ')) return 'pose';
     return type;
@@ -464,6 +548,7 @@ Object.assign(App, {
           </table>
           ${op.note && dt !== 'pose' ? `<div style="margin-top:6px;font-size:10px;color:#94A3B8;">Note : ${op.note}</div>` : ''}
           ${op.items[0]?.user ? `<div style="margin-top:2px;font-size:10px;color:#94A3B8;">Par : ${op.items[0].user}</div>` : ''}
+          ${this._btnAnnulerOp(op, dt)}
         </div>
       </div>`;
     }).join('');
@@ -1222,11 +1307,10 @@ Object.assign(App, {
           if (S.saisieType === 'inventaire') item.qte = Number(qty);
           else if (item.qte !== null) item.qte = (item.qte || 0) + sign * Number(qty);
         });
-        S.historyLoaded   = false;
         S.analyticsLoaded = false;
         S.dashboardLoaded = false;
         this.closeSaisieModal();
-        if (S.view === 'stock') this._renderStockList();
+        this._stockApresSaisie(data.mouvements);
       } else {
         this.toast('Erreur : ' + (data.error || 'inconnue'));
       }
@@ -1365,8 +1449,9 @@ Object.assign(App, {
           if (b) { b.style.background='#F8FAFC'; b.style.borderColor='#E2E8F0'; b.style.color='#64748B'; }
         });
         this._updateBatchHeader();
-        // Retour au tableau de bord
+        // Retour au tableau de bord, nouvelle opération déjà visible
         this.go('stock-dashboard');
+        this._stockApresSaisie(data.mouvements);
       } else {
         this.toast('Erreur : ' + (data.error || 'inconnue'));
         console.error('[submitBatchMv]', data);
@@ -1737,6 +1822,7 @@ Object.assign(App, {
         if (document.getElementById('mv-note')) document.getElementById('mv-note').value = '';
         // Re-rendre le détail (stock calculé mis à jour) et recharger l'historique
         this._renderStockDetail();
+        this._stockApresSaisie(data.mouvements);
       } else {
         this.toast('Erreur : ' + (data.error || 'inconnue'));
         console.error('[submitMouvement]', data);
@@ -2050,6 +2136,7 @@ Object.assign(App, {
                 <span style="font-size:11px;font-weight:700;color:#1E293B;flex-shrink:0;">×${m.qty}</span>
               </div>`;
             }).join('')}
+            ${this._btnAnnulerOp(op, dt)}
           </div>
         </div>`;
       }).join('');
