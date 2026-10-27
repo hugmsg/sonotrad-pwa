@@ -1463,11 +1463,19 @@ function _lvuRecto(doc, d, isCMR, band) {
   }
   const cachX = x0 + SW / 2;
   tc(0, 0, 0);
-  if (d.source === 'bcb') {
+  // Cachet imprimé seulement si l'envoi part de chez nous (Javron) au nom de SONOTRAD ou BCB ;
+  // sinon la case reste vide pour le tampon du vrai expéditeur.
+  const expNomMaj  = expNom.toUpperCase();
+  const departChezNous = /JAVRON|53250/i.test(expVille);
+  const cachet = !departChezNous ? null
+    : expNomMaj.includes('BCB') ? 'bcb'
+    : expNomMaj.includes('SONOTRAD') ? 'sonotrad'
+    : null;
+  if (cachet === 'bcb') {
     sf('bold', 10);             tx('BCB OFF MARKET',              cachX, y + 9.5,  'center');
     sf('normal', LV.FONT_BODY); tx('ZA Renardières',              cachX, y + 14.5, 'center');
                                  tx('53250 JAVRON-LES-CHAPELLES', cachX, y + 18.5, 'center');
-  } else {
+  } else if (cachet === 'sonotrad') {
     sf('bold', 10);             tx('SONOTRAD',                         cachX, y + 9.5,  'center');
     sf('normal', 5.5);          tx('S.a.R.L au capital de 100 000 €', cachX, y + 13,   'center');
     sf('normal', LV.FONT_BODY); tx('9 Z.A. des Renardières',          cachX, y + 16.5, 'center');
