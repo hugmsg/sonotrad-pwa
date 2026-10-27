@@ -25,15 +25,6 @@ Object.assign(App, {
       .subscribe();
   },
 
-  async _fetchRhEmployes() {
-    if (!window.SupabaseDB) return [];
-    // Annuaire minimal (id, nom, prénom, poste, a_fiche_rh) — la fiche RH complète
-    // (get_employes_rh : coordonnées perso, taux horaire…) est réservée aux admins rh-metal.
-    const { data, error } = await window.SupabaseDB.rpc('get_employes_annuaire');
-    if (error) { console.error('[Admin] get_employes_annuaire:', error); return []; }
-    return data || [];
-  },
-
   _normalizeName(s) {
     return String(s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   },
@@ -48,15 +39,14 @@ Object.assign(App, {
     if (loading) loading.style.display = 'block';
     if (list)    list.innerHTML = '';
     try {
-      const [gasData, employes] = await Promise.all([
-        _fetchWithTimeout(S.apiUrl + '?action=users_list', {}, 45000).then(r => r.json()),
-        this._fetchRhEmployes(),
-      ]);
+      // users_list renvoie aussi l'annuaire minimal (id, nom, prénom, poste, a_fiche_rh), lu par
+      // Apps Script avec la clé secrète — la fiche RH complète reste réservée aux admins rh-metal.
+      const gasData = await _fetchWithTimeout(S.apiUrl + '?action=users_list', {}, 45000).then(r => r.json());
       if (seq !== S._adminUsersSeq) return;
       if (gasData.status === 'ok') {
         const users = gasData.users || [];
         this._renderAdminUsers(users);
-        this._renderRhUnlinked(employes, users);
+        this._renderRhUnlinked(gasData.employes || [], users);
       } else if (list) {
         list.innerHTML = `<div class="card" style="border-left:4px solid #F87171;"><p style="color:#991B1B;">${gasData.error || 'Erreur'}</p></div>`;
       }
