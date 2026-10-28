@@ -15,6 +15,8 @@ S.ot = {
   recherche: { pieces: '', sanitaire: '', bureau: '' }, sugg: { pieces: [], sanitaire: [], bureau: [] },
   calc: [],        // lignes telles que calculées par le serveur (mo_ligne, piece_ligne…), même ordre
   masquer: false,  // contrôle : masquer les lignes sans quantité
+  familles: (() => { try { return localStorage.getItem('snt_ot_familles') !== '0'; } catch { return true; } })(),
+  groupesAffiches: [],
 };
 
 const OT_STATUTS = {
@@ -682,8 +684,12 @@ Object.assign(App, {
           <section class="sx-principal sx-carte" aria-labelledby="ot-t-ctrl">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;flex-wrap:wrap;">
               <h2 class="sx-h2" id="ot-t-ctrl">Opérations</h2>
-              <label class="sx-case-a-cocher"><input type="checkbox" ${S.ot.masquer ? 'checked' : ''}
-                onchange="S.ot.masquer=this.checked;App._otRendreTableControle()">Masquer les lignes sans quantité</label>
+              <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                <label class="sx-case-a-cocher"><input type="checkbox" ${S.ot.familles ? 'checked' : ''}
+                  onchange="App.otBasculerFamilles(this.checked)">Regrouper par famille</label>
+                <label class="sx-case-a-cocher"><input type="checkbox" ${S.ot.masquer ? 'checked' : ''}
+                  onchange="S.ot.masquer=this.checked;App._otRendreTableControle()">Masquer les lignes sans quantité</label>
+              </div>
             </div>
             <div class="sx-table-boite" id="ot-table-ctrl"></div>
             ${modif ? `<div style="padding:12px 14px;border-top:1px solid var(--sx-separateur);display:flex;flex-direction:column;gap:8px;">
@@ -693,7 +699,7 @@ Object.assign(App, {
                   value="${_otEsc(S.ot.recherche.bureau)}" oninput="App._otRechercher('bureau', this.value)">
               </div>
               <div id="ot-sugg-bureau"></div>
-              <span class="sx-aide">Quantités et montants modifiables. Un montant tapé remplace le tarif (case orange) ; vider la case revient au tarif.
+              <span class="sx-aide">Quantités et montants modifiables. Un montant tapé remplace le tarif (case orange) ; ↺ ou case vidée = retour au tarif.
                 Une ligne sans quantité n'apparaît pas dans les documents.</span>
             </div>` : ''}
           </section>
@@ -722,53 +728,85 @@ Object.assign(App, {
     this._otRendreTableControle();
   },
 
+  // Groupes du tableau de contrôle. Regroupé : opérations d'office et forfaits, une famille de pièces
+  // (catégorie de la réf.) par groupe, travaux, sanitaire. Sinon : un seul groupe, dans l'ordre de saisie.
+  _otGroupesControle() {
+    const rang = { diverses: 0, pieces: 0, travaux: 1, sanitaire: 2 };
+    const lignes = S.ot.lignes.map((l, i) => ({ l, i }))
+      .filter(x => !S.ot.masquer || Number(x.l.quantite) > 0)
+      .sort((a, b) => rang[a.l.bloc] - rang[b.l.bloc] || a.i - b.i);
+    if (!S.ot.familles) return [{ cle: 'tout', titre: '', items: lignes }];
+    const groupes = new Map();
+    const ajouter = (cle, titre, ordre, x) => {
+      if (!groupes.has(cle)) groupes.set(cle, { cle, titre, ordre, items: [] });
+      groupes.get(cle).items.push(x);
+    };
+    lignes.forEach(x => {
+      const l = x.l;
+      const r = S.ot.refs.get(l.ref);
+      if (l.bloc === 'sanitaire') return ajouter('sanitaire', 'Sanitaire', 9, x);
+      if (l.bloc === 'travaux')   return ajouter('travaux', 'Travaux en plus', 8, x);
+      if (l.bloc === 'diverses' || S.ot.forfaits.has(l.ref) || /^SON-/.test(l.ref || ''))
+        return ajouter('operations', 'Opérations et forfaits', 0, x);
+      const fam = r && r.categorie && r.categorie !== '-' ? r.categorie : 'Autres pièces';
+      ajouter('f-' + fam, fam, fam === 'Autres pièces' ? 7 : 1, x);
+    });
+    return [...groupes.values()].sort((a, b) => a.ordre - b.ordre || a.titre.localeCompare(b.titre, 'fr'));
+  },
+
   _otRendreTableControle() {
     const z = document.getElementById('ot-table-ctrl');
     if (!z) return;
     const modif = this._otModifiable();
     const dis = modif ? '' : 'disabled';
     const nomsBlocs = { pieces: '', diverses: '', sanitaire: 'SANITAIRE', travaux: 'TRAVAUX' };
-    // Ordre d'affichage : pièces et diverses, travaux, puis sanitaire suivi de sa ligne calculée.
-    const rang = { diverses: 0, pieces: 0, travaux: 1, sanitaire: 2 };
-    const lignes = S.ot.lignes.map((l, i) => ({ l, i }))
-      .filter(x => !S.ot.masquer || Number(x.l.quantite) > 0)
-      .sort((a, b) => rang[a.l.bloc] - rang[b.l.bloc] || a.i - b.i);
-    const html = lignes.map(({ l, i }) => {
+    const ligneHtml = ({ l, i }) => {
       const vide = !(Number(l.quantite) > 0);
       const r = S.ot.refs.get(l.ref);
       const forfait = S.ot.forfaits.has(l.ref);
       const sanitaire = l.bloc === 'sanitaire';
       const interne = /^SON-/.test(l.ref || '') || !l.ref;
       const sansTarif = l.ref && !forfait && !r;
+      const manuel = l.mo_saisi !== null;
       const etiquettes = [
-        nomsBlocs[l.bloc] ? `<span class="sx-etiquette sx-e-bloc">${nomsBlocs[l.bloc]}</span>` : '',
+        !S.ot.familles && nomsBlocs[l.bloc] ? `<span class="sx-etiquette sx-e-bloc">${nomsBlocs[l.bloc]}</span>` : '',
         l.occasion ? '<span class="sx-etiquette sx-e-occasion">OCCASION</span>' : '',
         forfait ? '<span class="sx-etiquette sx-e-bloc">FORFAIT</span>' : '',
         l.origine === 'bureau' ? '<span class="sx-etiquette sx-e-bloc">AJOUT BUREAU</span>' : '',
-        sansTarif && l.mo_saisi === null ? '<span class="sx-etiquette sx-e-alerte">SANS TARIF</span>' : '',
+        sansTarif ? `<span class="sx-etiquette sx-e-alerte" id="ot-st-alerte-${i}"${manuel ? ' hidden' : ''}>SANS TARIF</span>` : '',
       ].join('');
       const montant = sanitaire
         ? `<span class="sx-aide" id="ot-mo-${i}"></span>`
-        : `<input id="ot-mo-${i}" class="sx-case sx-case-mo${l.mo_saisi !== null ? ' sx-manuel' : ''}" type="text" inputmode="decimal" ${dis}
-             aria-label="Main-d'œuvre en euros" value="${l.mo_saisi !== null ? _otQte(l.mo_saisi) : ''}" oninput="App._otSaisirMo(${i}, this)">`;
+        : `<span style="display:inline-flex;align-items:center;gap:2px;">
+             ${modif ? `<button type="button" class="sx-retirer" id="ot-raz-${i}" style="width:28px;height:28px;font-size:15px;${manuel ? '' : 'visibility:hidden;'}"
+               title="Revenir au tarif" aria-label="Revenir au tarif" onclick="App._otTarifLigne(${i})">↺</button>` : ''}
+             <input id="ot-mo-${i}" class="sx-case sx-case-mo${manuel ? ' sx-manuel' : ''}" type="text" inputmode="decimal" ${dis}
+               aria-label="Montant de la ligne en euros" value="${manuel ? _otQte(l.mo_saisi) : ''}" oninput="App._otSaisirMo(${i}, this)"></span>`;
       return `<tr class="${vide ? 'sx-vide-ligne' : ''}">
         <td><span class="sx-ref">${_otEsc(l.ref || '—')}</span></td>
         <td>${_otEsc(l.libelle || (r && r.description) || '')}${etiquettes}</td>
         <td class="sx-centre"><input id="ot-q-${i}" class="sx-case" type="text" inputmode="decimal" placeholder="—" ${dis}
           aria-label="Quantité" value="${_otQte(l.quantite)}" oninput="App._otSaisirQteCtrl(${i}, this.value)"></td>
         <td class="sx-aide">${_otEsc(l.unite === 'u' ? 'u.' : l.unite)}</td>
-        <td class="sx-aide">${_otEsc(forfait ? '—' : (r && r.op_code) || '—')}</td>
+        <td class="sx-num sx-aide" id="ot-pu-${i}"></td>
         <td class="sx-num">${montant}</td>
         <td>${vide ? '<span class="sx-aide">—</span>' : interne ? '<span class="sx-non">Non (code SON)</span>' : '<span class="sx-oui">Oui</span>'}</td>
         <td>${modif ? `<button type="button" class="sx-retirer" aria-label="Supprimer la ligne" onclick="App._otRetirer(${i})">✕</button>` : ''}</td>
       </tr>`;
-    }).join('');
+    };
+    const groupes = this._otGroupesControle();
+    S.ot.groupesAffiches = groupes.map(g => ({ cle: g.cle, indices: g.items.map(x => x.i) }));
+    const corps = groupes.map(g => (g.titre
+      ? `<tr class="sx-groupe"><td colspan="5">${_otEsc(g.titre)} <span class="sx-aide">· ${g.items.length}</span></td>
+           <td class="sx-num" id="ot-st-${_otEsc(g.cle)}"></td><td colspan="2"></td></tr>` : '')
+      + g.items.map(ligneHtml).join('')).join('');
     z.innerHTML = `<table class="sx-table">
       <thead><tr><th scope="col">Réf.</th><th scope="col">Description</th><th scope="col" class="sx-centre">Qté</th>
-        <th scope="col">Unité</th><th scope="col">OP</th><th scope="col" class="sx-num">MO €</th><th scope="col">Vu par LOXAM</th><th scope="col"><span class="sx-sr">Supprimer</span></th></tr></thead>
-      <tbody>${html || '<tr><td colspan="8" class="sx-centre sx-aide">Aucune ligne.</td></tr>'}
+        <th scope="col">Unité</th><th scope="col" class="sx-num">PU €</th><th scope="col" class="sx-num">Montant €</th>
+        <th scope="col">Vu par LOXAM</th><th scope="col"><span class="sx-sr">Supprimer</span></th></tr></thead>
+      <tbody>${corps || '<tr><td colspan="8" class="sx-centre sx-aide">Aucune ligne.</td></tr>'}
         <tr class="sx-calculee" id="ot-ligne-mop"><td><span class="sx-ref">SON-0100</span></td><td>Main d'œuvre pièces (sanitaire, calculée)</td>
-          <td></td><td></td><td class="sx-aide">OP55A</td><td class="sx-num" id="ot-mop"></td><td><span class="sx-non">Non (code SON)</span></td><td></td></tr>
+          <td></td><td></td><td></td><td class="sx-num" id="ot-mop"></td><td><span class="sx-non">Non (code SON)</span></td><td></td></tr>
       </tbody></table>`;
     this._otMajMontants();
   },
@@ -777,15 +815,30 @@ Object.assign(App, {
   _otMajMontants() {
     const aJour = S.ot.rev === S.ot.revEnvoyee;
     const calc = aJour ? S.ot.calc : [];
+    const nombre = n => _otQte(Math.round(Number(n) * 100) / 100);
     S.ot.lignes.forEach((l, i) => {
       const c = calc[i];
+      const pu = document.getElementById('ot-pu-' + i);
+      if (pu) pu.textContent = !c ? (aJour ? '' : '…')
+        : l.bloc === 'sanitaire' ? (Number(c.prix_piece_unitaire) ? nombre(c.prix_piece_unitaire) : '—')
+        : l.mo_saisi !== null ? 'manuel' : (Number(c.mo_unitaire) ? nombre(c.mo_unitaire) : '—');
       const champ = document.getElementById('ot-mo-' + i);
       if (!champ) return;
       if (l.bloc === 'sanitaire') {
         champ.textContent = c && Number(c.piece_ligne) > 0 ? 'pièce ' + _otEuros(c.piece_ligne) : (aJour ? '—' : '…');
-      } else if (l.mo_saisi === null) {
-        champ.placeholder = c ? _otQte(Math.round(Number(c.mo_ligne) * 100) / 100) : (aJour ? '0' : '…');
+      } else if (l.mo_saisi === null && champ !== document.activeElement) {
+        champ.value = c && Number(c.mo_ligne) ? nombre(c.mo_ligne) : '';
+        champ.placeholder = aJour ? '0' : '…';
       }
+    });
+    // Sous-totaux par groupe (MO des lignes ; le sanitaire montre le prix des pièces)
+    (S.ot.groupesAffiches || []).forEach(g => {
+      const el = document.getElementById('ot-st-' + g.cle);
+      if (!el) return;
+      if (!aJour) { el.textContent = '…'; return; }
+      const champ = g.cle === 'sanitaire' ? 'piece_ligne' : 'mo_ligne';
+      const s = g.indices.reduce((t, i) => t + (Number(calc[i]?.[champ]) || 0), 0);
+      el.textContent = (g.cle === 'sanitaire' ? 'pièces ' : '') + _otEuros(s);
     });
     const t = S.ot.fiche.totaux || {};
     const mop = document.getElementById('ot-mop');
@@ -799,6 +852,19 @@ Object.assign(App, {
     if (det) det.textContent = aJour
       ? `MO des lignes ${_otEuros(t.mo_lignes)} + main-d'œuvre pièces ${_otEuros(t.mo_pieces)} (pièces sanitaire ${_otEuros(t.somme_pieces)} + 0,50, × ${maj}, arrondi au 0,50)`
       : 'Recalcul par le serveur à l\'enregistrement…';
+  },
+
+  otBasculerFamilles(on) {
+    S.ot.familles = on;
+    try { localStorage.setItem('snt_ot_familles', on ? '1' : '0'); } catch {}
+    this._otRendreTableControle();
+  },
+
+  _otTarifLigne(i) {
+    const l = S.ot.lignes[i];
+    if (!l) return;
+    l.mo_saisi = null;
+    this._otModifie();
   },
 
   _otSaisirQteCtrl(i, v) {
@@ -818,6 +884,10 @@ Object.assign(App, {
     const n = parseFloat(v.replace(',', '.'));
     l.mo_saisi = v === '' || isNaN(n) ? null : Math.max(0, n);
     champ.classList.toggle('sx-manuel', l.mo_saisi !== null);
+    const raz = document.getElementById('ot-raz-' + i);
+    if (raz) raz.style.visibility = l.mo_saisi !== null ? '' : 'hidden';
+    const alerte = document.getElementById('ot-st-alerte-' + i);
+    if (alerte) alerte.hidden = l.mo_saisi !== null;
     this._otModifie(false);
     this._otMajMontants();
   },

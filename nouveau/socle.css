@@ -42,6 +42,7 @@ body.socle { background: var(--sx-fond); }
   font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   display: flex;
   flex-direction: column;
+  position: relative;   /* contient les .sx-sr (sinon ils allongent toute la page : double barre de défilement) */
 }
 .sx-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
@@ -262,6 +263,7 @@ body.socle { background: var(--sx-fond); }
 .sx-table th:first-child, .sx-table td:first-child { padding-left: 14px; }
 .sx-table th:last-child, .sx-table td:last-child { padding-right: 14px; }
 .sx-table tr.sx-vide-ligne td { background: #FAFBFD; color: var(--sx-gris); }
+.sx-table tr.sx-groupe td { background: var(--sx-fond); font-weight: 700; font-size: 13px; color: var(--sx-bleu-fonce); padding-top: 10px; }
 .sx-table tr.sx-calculee td { background: var(--sx-bleu-clair); font-weight: 700; }
 .sx-num { text-align: right; white-space: nowrap; }
 .sx-centre { text-align: center; }
