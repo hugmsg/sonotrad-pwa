@@ -896,7 +896,12 @@ Object.assign(App, {
     this._otMajMontants();
   },
 
-  /* ═════════════════════════════ TARIFS (administrateur) ═════════════════════════════ */
+  /* ═════════════════════════════ TARIFS (administrateur) ═════════════════════════════
+     Mécanique (la même qu'en base, _ot_mo_calculee) — une seule source : le taux horaire.
+       Au temps        : base = temps × taux de base ÷ 60, arrondie à l'€ sup. ; MO = base × taux ÷ taux de base, arrondie au 0,50 sup.
+       Montant de base : MO = base × taux ÷ taux de base, arrondie au 0,50 sup. (forfaits A–S aussi)
+       Heure / minute  : MO = taux (SON-0102) / taux ÷ 60 (SON-0101)
+       Prix en dur     : ne suit pas le taux, à revoir à chaque hausse. */
 
   async otOuvrirTarifs() {
     if (!this._otAdmin()) { this.toast('⛔ Réservé aux administrateurs'); return; }
@@ -904,7 +909,8 @@ Object.assign(App, {
   },
 
   async otTarifsInit() {
-    S.ot.tarifsVue = S.ot.tarifsVue || { recherche: '', journal: null, modifs: {} };
+    S.ot.tarifsVue = S.ot.tarifsVue || { recherche: '', filtre: 'impose', journal: null, apercu: null };
+    S.ot.tarifsVue.apercu = null;
     this._otRendreTarifs();
     try {
       S.ot.tarifs = null;                       // toujours les tarifs à jour en entrant
@@ -914,6 +920,18 @@ Object.assign(App, {
     }
     this._otRendreTarifs();
     this._otChargerJournal();
+  },
+
+  _otArrondiSup(x) { return Math.round(Math.ceil(x * 2 - 0.000001) / 2 * 100) / 100; },
+
+  // MO calculée côté écran (aperçu pendant la saisie) ; le serveur refait le même calcul à l'enregistrement.
+  _otMoCalculee(mode, temps, base) {
+    const p = S.ot.tarifs.parametres, t = Number(p.taux_horaire), tb = Number(p.taux_base);
+    if (mode === 'temps')  return temps > 0 ? this._otArrondiSup(Math.ceil(temps * tb / 60 - 0.000001) * t / tb) : null;
+    if (mode === 'base')   return base !== null && base >= 0 ? this._otArrondiSup(base * t / tb) : null;
+    if (mode === 'heure')  return t;
+    if (mode === 'minute') return Math.round(t / 60 * 10000) / 10000;
+    return null;
   },
 
   async _otChargerJournal() {
@@ -931,147 +949,310 @@ Object.assign(App, {
     const el = document.getElementById('ot-tarifs-root');
     if (!el) return;
     const t = S.ot.tarifs;
-    const p = (t && t.parametres) || {};
-    const champParam = (cle, libelle, unite, aide) => `
-      <div style="display:flex;flex-direction:column;gap:4px;flex:1 1 200px;">
-        <label for="ot-p-${cle}" style="font-size:13px;font-weight:700;">${libelle}</label>
-        <div style="display:flex;gap:6px;align-items:center;">
-          <input id="ot-p-${cle}" class="sx-champ" style="flex:1;" type="text" inputmode="decimal" value="${_otQte(p[cle])}">
-          <span class="sx-aide" style="min-width:34px;">${unite}</span>
-          <button type="button" class="sx-btn sx-btn-second" style="height:46px;" onclick="App._otEnregistrerParam('${cle}')">Enregistrer</button>
-        </div>
-        <span class="sx-aide">${aide}</span>
-      </div>`;
-    el.innerHTML = `<div class="sx-ecran">
-      ${this._otEntete({ retour: { texte: 'Fiches', action: "App.go('ot-liste')" }, titre: 'Tarifs',
-          sousTitre: 'Main-d\'œuvre facturée à LOXAM · chaque changement est noté au journal', large: true })}
+    const entete = this._otEntete({ retour: { texte: 'Fiches', action: "App.go('ot-liste')" }, titre: 'Tarifs',
+      sousTitre: 'Main-d\'œuvre facturée à LOXAM · tout part du taux horaire', large: true });
+    if (!t) { el.innerHTML = `<div class="sx-ecran">${entete}<main class="sx-contenu sx-large"><div class="sx-chargement">Chargement des tarifs…</div></main></div>`; return; }
+    const p = t.parametres;
+    const refs = t.references || [];
+    const n = m => refs.filter(r => (r.mode || null) === m).length;
+    // Exemple chiffré : une réf. au temps réelle
+    const ex = refs.find(r => r.ref === '156' && r.mode === 'temps') || refs.find(r => r.mode === 'temps');
+    const exBase = ex ? Math.ceil(ex.temps_min * p.taux_base / 60 - 0.000001) : 0;
+    const filtres = [
+      { cle: 'impose', nom: `Prix en dur · ${n('impose')}` },
+      { cle: 'temps',  nom: `Au temps · ${n('temps')}` },
+      { cle: 'base',   nom: `Montant de base · ${n('base')}` },
+      { cle: 'aucun',  nom: `Sans MO · ${n(null)}` },
+      { cle: 'tout',   nom: `Toutes · ${refs.length}` },
+    ];
+    el.innerHTML = `<div class="sx-ecran">${entete}
       <main class="sx-contenu sx-large">
-        ${!t ? '<div class="sx-chargement">Chargement des tarifs…</div>' : `
-        <div class="sx-bandeau sx-bandeau-info">Un changement de tarif s'applique aux fiches non validées. Les fiches validées gardent les prix figés à leur validation.</div>
 
-        <section class="sx-section" aria-labelledby="ot-t-param">
-          <h2 class="sx-h2" id="ot-t-param">Paramètres</h2>
-          <div class="sx-carte sx-carte-pad sx-ligne-champs" style="gap:16px;">
-            ${champParam('majoration_pieces', 'Coefficient « main-d\'œuvre pièces »', '×', 'Appliqué au total des pièces sanitaire (+ 0,50 €), arrondi au 0,50.')}
-            ${champParam('taux_horaire', 'Taux horaire négocié', '€/h', 'Repère seulement : la MO au temps vient des réf. SON-0102 (h) et SON-0101 (min) ; changer ce taux ne recalcule aucune réf.')}
-            ${champParam('taux_base', 'Ancien taux (repère)', '€/h', 'Historique, pour ajuster les prix devenus trop chers.')}
+        <section class="sx-section" aria-labelledby="ot-t-meca">
+          <h2 class="sx-h2" id="ot-t-meca">1. Le taux horaire</h2>
+          <div class="sx-carte sx-carte-pad" style="display:flex;flex-direction:column;gap:12px;">
+            <div class="sx-ligne-champs" style="align-items:flex-end;">
+              <div style="display:flex;flex-direction:column;gap:4px;">
+                <label for="ot-taux" style="font-size:13px;font-weight:700;">Taux horaire facturé à LOXAM</label>
+                <div style="display:flex;gap:6px;align-items:center;">
+                  <input id="ot-taux" class="sx-champ" style="width:110px;font-size:20px;font-weight:700;" type="text" inputmode="decimal" value="${_otQte(p.taux_horaire)}">
+                  <span class="sx-aide">€/h</span>
+                </div>
+              </div>
+              <button type="button" class="sx-btn sx-btn-second" onclick="App.otApercuTaux()">Voir l'effet d'un nouveau taux</button>
+            </div>
+            <div style="font-size:14px;line-height:1.6;">
+              <strong>Tout part de ce taux.</strong> Chaque réf. facturée au temps a un temps de pose en minutes :
+              <ul style="margin:6px 0 0;padding-left:20px;">
+                <li><strong>Au temps</strong> (${n('temps')} réf.) : temps × ${_otQte(p.taux_base)} €/h ÷ 60, arrondi à l'euro sup. = <em>montant de base</em> ;
+                  puis × ${_otQte(p.taux_horaire)} ÷ ${_otQte(p.taux_base)}, arrondi au 0,50 sup. = <em>MO facturée</em>.
+                  ${ex ? `<br><span class="sx-aide">Exemple réf. ${_otEsc(ex.ref)} : ${_otQte(ex.temps_min)} min → base ${_otQte(exBase)} € → MO ${_otEuros(ex.mo)}.</span>` : ''}</li>
+                <li><strong>Montant de base</strong> (${n('base')} réf.) : pas de temps, une base en € multipliée de la même façon.</li>
+                <li><strong>Forfaits</strong> (${(t.forfaits || []).length}) : vous saisissez le prix au taux actuel ; il suit ensuite le taux de la même façon.</li>
+                <li><strong>MO au temps passé</strong> : SON-0102 = le taux (${_otEuros(p.taux_horaire)}/h), SON-0101 = le taux ÷ 60 par minute.</li>
+                <li><strong>Prix en dur</strong> (${n('impose')} réf., en orange) : ne suivent pas le taux, <strong>à revoir à chaque hausse</strong>.</li>
+              </ul>
+              <span class="sx-aide">${_otQte(p.taux_base)} €/h est l'ancien taux, un rouage du calcul hérité de la matrice : il ne se modifie pas ici.</span>
+            </div>
+            <div id="ot-apercu"></div>
           </div>
-          <span class="sx-aide">Mode essai : ${Number(p.essai) === 1 ? 'oui (numéros ESSAI-…, pas de sortie de stock)' : 'non'}.</span>
         </section>
 
         <section class="sx-section" aria-labelledby="ot-t-refs">
-          <div class="sx-section-tete"><h2 class="sx-h2" id="ot-t-refs">Références</h2>
-            <span class="sx-aide">${(t.references || []).length} réf.</span></div>
+          <div class="sx-section-tete"><h2 class="sx-h2" id="ot-t-refs">2. Références</h2></div>
+          <div class="sx-ligne-champs">
+            ${filtres.map(f => `<button type="button" class="sx-bascule sx-filtre" aria-pressed="${S.ot.tarifsVue.filtre === f.cle}"
+              onclick="S.ot.tarifsVue.filtre='${f.cle}';App._otRendreTarifs()">${f.nom}</button>`).join('')}
+          </div>
           <div class="sx-recherche">${_OT_SVG_LOUPE}
             <label for="ot-rech-tarif" class="sx-sr">Chercher une référence</label>
             <input id="ot-rech-tarif" type="search" placeholder="Réf., désignation ou famille… (ou la réf. à créer)" autocomplete="off"
               value="${_otEsc(S.ot.tarifsVue.recherche)}" oninput="S.ot.tarifsVue.recherche=this.value;App._otRendreRefsTarifs()">
           </div>
           <div class="sx-carte"><div class="sx-table-boite" id="ot-refs-tarifs"></div></div>
-          <span class="sx-aide">MO = montant facturé par unité. Prix pièce = prix d'achat d'une pièce sanitaire (refacturée en « main-d'œuvre pièces »).
-            Plafond = montant maximum par ligne (ex. laine de verre 200 €). Case vide = aucun.</span>
+          <span class="sx-aide">Vous saisissez la case blanche (temps, base ou prix en dur) ; la MO facturée se calcule.
+            Prix pièce : prix d'achat d'une pièce sanitaire (refacturée en « main-d'œuvre pièces »). Plafond : maximum par ligne de fiche.</span>
         </section>
 
         <section class="sx-section" aria-labelledby="ot-t-forf">
-          <h2 class="sx-h2" id="ot-t-forf">Forfaits</h2>
+          <h2 class="sx-h2" id="ot-t-forf">3. Forfaits</h2>
           <div class="sx-carte"><div class="sx-table-boite">${this._otHtmlForfaitsTarifs()}</div></div>
         </section>
 
+        <section class="sx-section" aria-labelledby="ot-t-pieces">
+          <h2 class="sx-h2" id="ot-t-pieces">4. Pièces sanitaire</h2>
+          <div class="sx-carte sx-carte-pad sx-ligne-champs" style="align-items:flex-end;">
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <label for="ot-p-majoration_pieces" style="font-size:13px;font-weight:700;">Coefficient « main-d'œuvre pièces »</label>
+              <input id="ot-p-majoration_pieces" class="sx-champ" style="width:110px;" type="text" inputmode="decimal" value="${_otQte(p.majoration_pieces)}">
+            </div>
+            <button type="button" class="sx-btn sx-btn-second" onclick="App._otEnregistrerParam('majoration_pieces')">Enregistrer</button>
+            <span class="sx-aide" style="flex:1 1 260px;">Total des prix des pièces sanitaire de la fiche, + 0,50 €, × ce coefficient, arrondi au 0,50 = ligne SON-0100.</span>
+          </div>
+        </section>
+
         <section class="sx-section" aria-labelledby="ot-t-journal">
-          <h2 class="sx-h2" id="ot-t-journal">Journal des changements</h2>
+          <h2 class="sx-h2" id="ot-t-journal">5. Journal des changements</h2>
           <div class="sx-carte" id="ot-journal">${this._otHtmlJournal()}</div>
-        </section>`}
+        </section>
+        <span class="sx-aide">Mode essai : ${Number(p.essai) === 1 ? 'oui (numéros ESSAI-…, pas de sortie de stock)' : 'non'}.
+          Un changement s'applique aux fiches non validées ; les fiches validées gardent leurs prix figés.</span>
       </main></div>`;
-    if (t) this._otRendreRefsTarifs();
+    this._otRendreRefsTarifs();
+    if (S.ot.tarifsVue.apercu) this._otRendreApercu();
   },
 
-  // Une cellule modifiable : valeur d'origine gardée dans data-orig, bouton Enregistrer actif dès qu'une case change.
-  _otCaseTarif(id, valeur, largeur = 84) {
-    return `<input id="${id}" class="sx-case sx-case-mo" style="width:${largeur}px;" type="text" inputmode="decimal"
-      value="${_otQte(valeur)}" data-orig="${_otQte(valeur)}" oninput="App._otTarifModifie(this)">`;
+  /* ─ Aperçu d'un nouveau taux ─ */
+
+  async otApercuTaux() {
+    const v = this._otLireMontant('ot-taux');
+    if (!v.ok || !(v.val > 0)) { this.toast('Taux invalide'); return; }
+    if (v.val === Number(S.ot.tarifs.parametres.taux_horaire)) { this.toast('C\'est déjà le taux en vigueur'); return; }
+    const z = document.getElementById('ot-apercu');
+    if (z) z.innerHTML = '<div class="sx-chargement">Calcul de l\'effet…</div>';
+    try {
+      const d = await this._otGet({ action: 'ot_apercu', taux: String(v.val) });
+      S.ot.tarifsVue.apercu = d.apercu;
+      this._otRendreApercu();
+    } catch (e) {
+      if (z) z.innerHTML = '';
+      this.toast('Aperçu impossible : ' + e.message, 4000);
+    }
   },
 
-  _otTarifModifie(champ) {
-    const tr = champ.closest('tr');
-    if (!tr) return;
-    const change = [...tr.querySelectorAll('input[data-orig]')].some(c => c.value.trim() !== c.dataset.orig);
-    const b = tr.querySelector('.ot-enreg');
-    if (b) b.disabled = !change;
-    champ.classList.toggle('sx-manuel', champ.value.trim() !== champ.dataset.orig);
+  _otRendreApercu() {
+    const z = document.getElementById('ot-apercu');
+    const a = S.ot.tarifsVue.apercu;
+    if (!z || !a) return;
+    const ch = a.changements || [];
+    const ligne = c => `<tr><td>${c.type === 'forfait' ? 'Forfait ' : ''}<span class="sx-ref">${_otEsc(c.cle)}</span></td>
+      <td>${_otEsc(c.description || '')}</td><td class="sx-num">${_otEuros(c.avant)}</td><td class="sx-num"><strong>${_otEuros(c.apres)}</strong></td></tr>`;
+    z.innerHTML = `<div class="sx-bandeau sx-bandeau-attention" style="display:flex;flex-direction:column;gap:10px;">
+      <strong>Passer de ${_otQte(a.taux_actuel)} à ${_otQte(a.taux_nouveau)} €/h : ${a.nb} tarif${a.nb > 1 ? 's' : ''} change${a.nb > 1 ? 'nt' : ''}.</strong>
+      ${a.imposes && a.imposes.length ? `<div><strong>${a.imposes.length} prix en dur ne bougeront pas — à revoir :</strong>
+        <span>${a.imposes.map(i => `<span class="sx-ref">${_otEsc(i.ref)}</span> ${_otEuros(i.mo)}`).join(' · ')}</span></div>` : ''}
+      <details><summary style="cursor:pointer;font-weight:700;">Voir les ${ch.length} changements</summary>
+        <div class="sx-table-boite" style="max-height:320px;overflow-y:auto;margin-top:8px;background:#FFFFFF;border-radius:8px;">
+          <table class="sx-table" style="min-width:520px;"><thead><tr><th>Réf.</th><th>Désignation</th><th class="sx-num">Avant</th><th class="sx-num">Après</th></tr></thead>
+          <tbody>${ch.map(ligne).join('')}</tbody></table></div></details>
+      <div class="sx-ligne-champs">
+        <button type="button" class="sx-btn sx-btn-discret" onclick="S.ot.tarifsVue.apercu=null;document.getElementById('ot-apercu').innerHTML='';document.getElementById('ot-taux').value='${_otQte(a.taux_actuel)}'">Annuler</button>
+        <button type="button" class="sx-btn sx-btn-principal" onclick="App._otAppliquerTaux(${Number(a.taux_nouveau)})">Appliquer ${_otQte(a.taux_nouveau)} €/h</button>
+      </div></div>`;
   },
+
+  async _otAppliquerTaux(taux) {
+    const ok = await this._otConfirmer({ titre: `Appliquer ${_otQte(taux)} €/h ?`, ok: 'Appliquer',
+      texte: 'Les tarifs au temps, en montant de base et les forfaits sont recalculés. Les fiches déjà validées gardent leurs prix. Pensez à revoir les prix en dur.' });
+    if (!ok) return;
+    try {
+      const d = await this._otPost({ action: 'ot_tarif', type: 'parametre', cle: 'taux_horaire', valeurs: { valeur: taux } });
+      this.toast(`✓ ${_otQte(taux)} €/h appliqué · ${d.apres?.tarifs_recalcules ?? '?'} tarifs recalculés`, 4000);
+      S.ot.tarifsVue.apercu = null;
+      S.ot.tarifsVue.filtre = 'impose';
+      await this.otTarifsInit();
+    } catch (e) {
+      this.toast('Changement impossible : ' + e.message, 4000);
+    }
+  },
+
+  /* ─ Références ─ */
 
   _otRendreRefsTarifs() {
     const z = document.getElementById('ot-refs-tarifs');
     if (!z || !S.ot.tarifs) return;
     const q = S.ot.tarifsVue.recherche.trim().toLowerCase();
+    const f = S.ot.tarifsVue.filtre;
     const toutes = S.ot.tarifs.references || [];
-    const res = !q ? [] : toutes
-      .filter(r => r.ref.toLowerCase().startsWith(q) || (r.description || '').toLowerCase().includes(q) || (r.categorie || '').toLowerCase().includes(q))
+    const res = toutes
+      .filter(r => f === 'tout' || (f === 'aucun' ? !r.mode : r.mode === f))
+      .filter(r => !q || r.ref.toLowerCase().startsWith(q) || (r.description || '').toLowerCase().includes(q) || (r.categorie || '').toLowerCase().includes(q))
       .sort((a, b) => (b.ref.toLowerCase() === q) - (a.ref.toLowerCase() === q) || a.ref.localeCompare(b.ref, 'fr', { numeric: true }))
-      .slice(0, 60);
+      .slice(0, 80);
     const saisie = S.ot.tarifsVue.recherche.trim();
     // Création proposée seulement pour ce qui ressemble à une réf. (au moins un chiffre).
     const creable = saisie && /^[A-Za-z0-9-]{1,20}$/.test(saisie) && /\d/.test(saisie) && !toutes.some(r => r.ref.toLowerCase() === q);
-    if (!q) { z.innerHTML = '<div class="sx-vide">Tapez une réf., une désignation ou une famille (ex. « 258 », « panneau », « Électricité »).</div>'; return; }
-    const ligne = (r, k) => `<tr>
-        <td><span class="sx-ref">${_otEsc(r.ref)}</span></td>
-        <td>${_otEsc(r.description)}${r.categorie && r.categorie !== '-' ? `<span class="sx-etiquette sx-e-bloc">${_otEsc(r.categorie)}</span>` : ''}</td>
-        <td class="sx-aide">${_otEsc(r.unite || '')}</td>
-        <td class="sx-num">${this._otCaseTarif('ot-tr-mo-' + k, r.mo)}</td>
-        <td class="sx-num">${this._otCaseTarif('ot-tr-pp-' + k, r.prix_piece)}</td>
-        <td class="sx-num">${this._otCaseTarif('ot-tr-pl-' + k, r.mo_plafond, 72)}</td>
-        <td><button type="button" class="sx-btn sx-btn-second ot-enreg" style="height:36px;padding:0 12px;" disabled
-          onclick="App._otEnregistrerRef(${k})">Enregistrer</button></td>
-      </tr>`;
     S.ot.tarifsVue.affichees = res.map(r => r.ref);
-    z.innerHTML = `<table class="sx-table" style="min-width:760px;">
-      <thead><tr><th scope="col">Réf.</th><th scope="col">Désignation</th><th scope="col">Unité</th>
-        <th scope="col" class="sx-num">MO €</th><th scope="col" class="sx-num">Prix pièce €</th><th scope="col" class="sx-num">Plafond €</th>
-        <th scope="col"><span class="sx-sr">Enregistrer</span></th></tr></thead>
-      <tbody>${res.map(ligne).join('')}
-        ${creable ? `<tr class="sx-calculee"><td><span class="sx-ref">${_otEsc(saisie.toUpperCase())}</span></td>
-          <td><label for="ot-tr-new-desc" class="sx-sr">Désignation</label>
-            <input id="ot-tr-new-desc" class="sx-champ" style="width:100%;height:36px;" placeholder="Désignation (vide = celle du Stock)"></td>
-          <td><label for="ot-tr-new-unite" class="sx-sr">Unité</label>
-            <input id="ot-tr-new-unite" class="sx-champ" style="width:70px;height:36px;" value="unité"></td>
-          <td class="sx-num"><label for="ot-tr-new-mo" class="sx-sr">MO</label>
-            <input id="ot-tr-new-mo" class="sx-case sx-case-mo" type="text" inputmode="decimal"></td>
-          <td></td><td></td>
-          <td><button type="button" class="sx-btn sx-btn-principal" style="height:36px;padding:0 12px;" onclick="App._otCreerRef()">Créer</button></td>
-        </tr>` : ''}
-        ${!res.length && !creable ? '<tr><td colspan="7" class="sx-centre sx-aide">Aucune réf. trouvée.</td></tr>' : ''}
+    const lignes = res.map((r, k) => this._otHtmlLigneTarif(r, k)).join('');
+    const nouvelle = creable ? this._otHtmlLigneTarif({ ref: saisie.toUpperCase(), description: '', mode: 'temps', nouvelle: true }, 'n') : '';
+    z.innerHTML = `<table class="sx-table" style="min-width:900px;">
+      <thead><tr><th scope="col">Réf.</th><th scope="col">Désignation</th><th scope="col">Calcul</th>
+        <th scope="col" class="sx-num">Temps min</th><th scope="col" class="sx-num">Base €</th><th scope="col" class="sx-num">MO facturée</th>
+        <th scope="col" class="sx-num">Prix pièce €</th><th scope="col" class="sx-num">Plafond €</th><th scope="col"><span class="sx-sr">Enregistrer</span></th></tr></thead>
+      <tbody>${lignes}${nouvelle}
+        ${!res.length && !creable ? '<tr><td colspan="9" class="sx-centre sx-aide">Aucune réf. ici. Tapez une réf. pour la créer.</td></tr>' : ''}
+        ${res.length === 80 ? '<tr><td colspan="9" class="sx-centre sx-aide">80 premières seulement : affinez la recherche.</td></tr>' : ''}
       </tbody></table>`;
   },
 
+  _otHtmlLigneTarif(r, k) {
+    const modes = [['temps', 'Au temps'], ['base', 'Montant de base'], ['impose', 'Prix en dur'], ['', 'Sans MO']];
+    const special = r.mode === 'heure' || r.mode === 'minute';
+    const impose = r.mode === 'impose';
+    const caseNum = (id, val, actif, largeur = 76) => `<input id="${id}" class="sx-case sx-case-mo" style="width:${largeur}px;${actif ? '' : 'visibility:hidden;'}"
+      type="text" inputmode="decimal" value="${_otQte(val)}" oninput="App._otTarifSaisi('${k}')">`;
+    return `<tr id="ot-tr-${k}" style="${impose ? 'background:var(--sx-orange-fond);' : ''}">
+      <td><span class="sx-ref">${_otEsc(r.ref)}</span></td>
+      <td>${r.nouvelle ? `<label for="ot-tr-desc-${k}" class="sx-sr">Désignation</label><input id="ot-tr-desc-${k}" class="sx-champ" style="width:100%;height:34px;" placeholder="Nouvelle réf. — désignation (vide = celle du Stock)">`
+        : _otEsc(r.description) + (r.categorie && r.categorie !== '-' ? `<span class="sx-etiquette sx-e-bloc">${_otEsc(r.categorie)}</span>` : '')}</td>
+      <td>${special ? `<span class="sx-aide">${r.mode === 'heure' ? '= taux horaire' : '= taux ÷ 60'}</span>`
+        : `<label for="ot-tr-mode-${k}" class="sx-sr">Calcul</label><select id="ot-tr-mode-${k}" class="sx-select" style="height:34px;font-size:14px;padding:0 6px;"
+            onchange="App._otTarifSaisi('${k}')">${modes.map(([v, l]) => `<option value="${v}"${(r.mode || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>`}</td>
+      <td class="sx-num">${special ? '' : caseNum('ot-tr-tps-' + k, r.temps_min, r.mode === 'temps', 64)}</td>
+      <td class="sx-num">${special ? '' : caseNum('ot-tr-base-' + k, r.mode === 'base' ? r.mo_base : null, r.mode === 'base')}
+        ${r.mode === 'temps' ? `<span class="sx-aide" id="ot-tr-bcalc-${k}">${_otQte(r.mo_base)}</span>` : `<span class="sx-aide" id="ot-tr-bcalc-${k}"></span>`}</td>
+      <td class="sx-num">${special ? `<strong>${_otQte(r.mo)}</strong>` : `<strong id="ot-tr-mo-${k}" style="${impose ? 'display:none;' : ''}">${r.mo !== null && r.mo !== undefined ? _otQte(r.mo) : '—'}</strong>
+        ${caseNum('ot-tr-prix-' + k, impose ? r.mo : null, impose)}`}</td>
+      <td class="sx-num">${caseNum('ot-tr-pp-' + k, r.prix_piece, true, 70)}</td>
+      <td class="sx-num">${caseNum('ot-tr-pl-' + k, r.mo_plafond, true, 64)}</td>
+      <td><button type="button" class="sx-btn ${r.nouvelle ? 'sx-btn-principal' : 'sx-btn-second'} ot-enreg" style="height:34px;padding:0 12px;"
+        ${r.nouvelle ? '' : 'disabled'} onclick="App._otEnregistrerRef('${k}')">${r.nouvelle ? 'Créer' : 'Enregistrer'}</button></td>
+    </tr>`;
+  },
+
+  // Saisie dans une ligne : cases utiles selon le calcul choisi, MO recalculée à l'écran, bouton actif.
+  _otTarifSaisi(k) {
+    const mode = document.getElementById('ot-tr-mode-' + k)?.value ?? null;
+    const vis = (id, on) => { const e = document.getElementById(id); if (e) e.style.visibility = on ? '' : 'hidden'; };
+    vis('ot-tr-tps-' + k, mode === 'temps');
+    vis('ot-tr-base-' + k, mode === 'base');
+    const prix = document.getElementById('ot-tr-prix-' + k);
+    const mo = document.getElementById('ot-tr-mo-' + k);
+    if (prix) prix.style.visibility = mode === 'impose' ? '' : 'hidden';
+    if (mo) mo.style.display = mode === 'impose' ? 'none' : '';
+    const tr = document.getElementById('ot-tr-' + k);
+    if (tr) tr.style.background = mode === 'impose' ? 'var(--sx-orange-fond)' : '';
+    const temps = this._otLireMontant('ot-tr-tps-' + k).val, base = this._otLireMontant('ot-tr-base-' + k).val;
+    const tb = Number(S.ot.tarifs.parametres.taux_base);
+    const bcalc = document.getElementById('ot-tr-bcalc-' + k);
+    if (bcalc) bcalc.textContent = mode === 'temps' && temps > 0 ? _otQte(Math.ceil(temps * tb / 60 - 0.000001)) : '';
+    if (mo) { const v = this._otMoCalculee(mode || null, temps, base); mo.textContent = mode ? (v === null ? '?' : _otQte(v)) : '—'; }
+    const b = tr?.querySelector('.ot-enreg');
+    if (b) b.disabled = false;
+  },
+
+  async _otEnregistrerRef(k) {
+    const nouvelle = k === 'n';
+    const ref = nouvelle ? S.ot.tarifsVue.recherche.trim().toUpperCase() : S.ot.tarifsVue.affichees[Number(k)];
+    if (!ref) return;
+    const sel = document.getElementById('ot-tr-mode-' + k);
+    const valeurs = {};
+    const lire = (cle, id) => { const v = this._otLireMontant(id); if (!v.ok) throw new Error('Montant invalide'); valeurs[cle] = v.val; };
+    try {
+      if (sel) {
+        const mode = sel.value || null;
+        valeurs.mode = mode;
+        if (mode === 'temps')  lire('temps_min', 'ot-tr-tps-' + k);
+        if (mode === 'base')   lire('mo_base', 'ot-tr-base-' + k);
+        if (mode === 'impose') lire('mo', 'ot-tr-prix-' + k);
+      }
+      lire('prix_piece', 'ot-tr-pp-' + k);
+      lire('mo_plafond', 'ot-tr-pl-' + k);
+    } catch (e) { this.toast(e.message); return; }
+    if (nouvelle) {
+      const desc = document.getElementById('ot-tr-desc-n')?.value.trim();
+      if (desc) valeurs.description = desc;   // vide : le serveur reprend la désignation du Stock
+    }
+    await this._otEnvoyerTarif('reference', ref, valeurs, 'Réf. ' + ref);
+  },
+
+  /* ─ Forfaits ─ */
+
   _otHtmlForfaitsTarifs() {
     const fs = [...((S.ot.tarifs && S.ot.tarifs.forfaits) || [])].sort((a, b) => a.lettre.localeCompare(b.lettre));
-    return `<table class="sx-table" style="min-width:620px;">
-      <thead><tr><th scope="col">Forfait</th><th scope="col">Intitulé</th><th scope="col" class="sx-num">MO €</th>
-        <th scope="col" class="sx-num">Prix pièce €</th><th scope="col">Pièces comprises</th><th scope="col"><span class="sx-sr">Enregistrer</span></th></tr></thead>
-      <tbody>${fs.map(f => `<tr>
+    return `<table class="sx-table" style="min-width:720px;">
+      <thead><tr><th scope="col">Forfait</th><th scope="col">Intitulé</th><th scope="col" class="sx-num">MO facturée</th>
+        <th scope="col" class="sx-num">Base à ${_otQte(S.ot.tarifs.parametres.taux_base)} €/h</th><th scope="col" class="sx-num">Prix pièce €</th><th scope="col">Pièces comprises</th>
+        <th scope="col"><span class="sx-sr">Enregistrer</span></th></tr></thead>
+      <tbody>${fs.map(f => `<tr id="ot-tf-${_otEsc(f.lettre)}">
         <td><span class="sx-ref">${_otEsc(f.lettre)}</span></td>
         <td>${_otEsc(f.intitule)}</td>
-        <td class="sx-num">${this._otCaseTarif('ot-tf-mo-' + f.lettre, f.mo)}</td>
-        <td class="sx-num">${this._otCaseTarif('ot-tf-pp-' + f.lettre, f.prix_piece)}</td>
+        <td class="sx-num"><input id="ot-tf-mo-${_otEsc(f.lettre)}" class="sx-case sx-case-mo" type="text" inputmode="decimal"
+          value="${_otQte(f.mo)}" oninput="App._otForfaitSaisi('${_otEsc(f.lettre)}')"></td>
+        <td class="sx-num sx-aide" id="ot-tf-base-${_otEsc(f.lettre)}">${f.mo_base === null || f.mo_base === undefined ? '—' : _otQte(Math.round(f.mo_base * 100) / 100)}</td>
+        <td class="sx-num"><input id="ot-tf-pp-${_otEsc(f.lettre)}" class="sx-case sx-case-mo" type="text" inputmode="decimal"
+          value="${_otQte(f.prix_piece)}" oninput="App._otForfaitSaisi('${_otEsc(f.lettre)}')"></td>
         <td class="sx-aide">${(f.pieces || []).map(x => _otEsc(x.ref) + ' ×' + _otQte(x.qte)).join(', ') || '—'}</td>
-        <td><button type="button" class="sx-btn sx-btn-second ot-enreg" style="height:36px;padding:0 12px;" disabled
+        <td><button type="button" class="sx-btn sx-btn-second ot-enreg" style="height:34px;padding:0 12px;" disabled
           onclick="App._otEnregistrerForfait('${_otEsc(f.lettre)}')">Enregistrer</button></td>
       </tr>`).join('')}</tbody></table>`;
   },
+
+  // Forfait : on saisit le prix au taux actuel ; la base (à l'ancien taux) en est déduite, pour suivre les hausses.
+  _otForfaitSaisi(lettre) {
+    const mo = this._otLireMontant('ot-tf-mo-' + lettre).val;
+    const p = S.ot.tarifs.parametres;
+    const base = document.getElementById('ot-tf-base-' + lettre);
+    if (base) base.textContent = mo === null ? '—' : _otQte(Math.round(mo * p.taux_base / p.taux_horaire * 100) / 100);
+    const b = document.getElementById('ot-tf-' + lettre)?.querySelector('.ot-enreg');
+    if (b) b.disabled = false;
+  },
+
+  async _otEnregistrerForfait(lettre) {
+    const mo = this._otLireMontant('ot-tf-mo-' + lettre), pp = this._otLireMontant('ot-tf-pp-' + lettre);
+    if (!mo.ok || !pp.ok || mo.val === null) { this.toast('Montant invalide'); return; }
+    await this._otEnvoyerTarif('forfait', lettre, { mo: mo.val, prix_piece: pp.val ?? 0 }, 'Forfait ' + lettre);
+  },
+
+  /* ─ Journal ─ */
 
   _otHtmlJournal() {
     const j = S.ot.tarifsVue && S.ot.tarifsVue.journal;
     if (!j) return '<div class="sx-chargement">Chargement du journal…</div>';
     if (!j.length) return '<div class="sx-vide">Aucun changement de tarif pour l\'instant.</div>';
-    const champs = { mo: 'MO', prix_piece: 'prix pièce', mo_plafond: 'plafond', valeur: 'valeur', description: 'désignation', unite: 'unité', categorie: 'famille', intitule: 'intitulé' };
+    const champs = { mode: 'calcul', temps_min: 'temps', mo_base: 'base', mo: 'MO', prix_piece: 'prix pièce', mo_plafond: 'plafond',
+                     valeur: 'valeur', description: 'désignation', intitule: 'intitulé' };
+    const modes = { temps: 'au temps', base: 'montant de base', impose: 'prix en dur', heure: 'à l\'heure', minute: 'à la minute' };
     const types = { reference: 'Réf.', forfait: 'Forfait', parametre: 'Paramètre' };
     const nomsParams = { majoration_pieces: 'coefficient pièces', taux_horaire: 'taux horaire', taux_base: 'ancien taux', essai: 'mode essai' };
-    const fmt = v => v === null || v === undefined || v === '' ? 'vide' : typeof v === 'number' ? _otQte(v) : String(v);
+    const fmt = (c, v) => v === null || v === undefined || v === '' ? 'vide' : c === 'mode' ? (modes[v] || v)
+      : typeof v === 'number' ? _otQte(Math.round(v * 100) / 100) : String(v);
     return j.slice(0, 100).map(e => {
       const av = e.avant || {}, ap = e.apres || {};
       const diffs = Object.keys(champs).filter(c => c in ap && JSON.stringify(av[c] ?? null) !== JSON.stringify(ap[c] ?? null))
-        .filter(c => e.avant || (ap[c] !== null && ap[c] !== '' && !['unite', 'categorie'].includes(c)))
-        .map(c => `${champs[c]} ${e.avant ? _otEsc(fmt(av[c])) + ' → ' : ''}<strong>${_otEsc(fmt(ap[c]))}</strong>`);
+        .filter(c => e.avant || (ap[c] !== null && ap[c] !== ''))
+        .map(c => `${champs[c]} ${e.avant ? _otEsc(fmt(c, av[c])) + ' → ' : ''}<strong>${_otEsc(fmt(c, ap[c]))}</strong>`);
+      if (ap.tarifs_recalcules !== undefined) diffs.push(`${ap.tarifs_recalcules} tarifs recalculés`);
       const quand = new Date(e.le).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
       return `<div class="sx-ligne" style="align-items:flex-start;">
         <div class="sx-ligne-texte">
@@ -1080,6 +1261,8 @@ Object.assign(App, {
         </div></div>`;
     }).join('');
   },
+
+  /* ─ Envoi ─ */
 
   // Montant lu dans une case : vide = null ; illisible ou négatif = erreur.
   _otLireMontant(id) {
@@ -1099,10 +1282,11 @@ Object.assign(App, {
         const r = { ...(i >= 0 ? t.references[i] : {}), ...d.apres };
         if (i >= 0) t.references[i] = r; else t.references.push(r);
         S.ot.refs.set(cle, r);
-        this._otRendreRefsTarifs();
+        if (i < 0) S.ot.tarifsVue.recherche = cle;
+        this._otRendreTarifs();
       } else if (type === 'forfait') {
         const f = t.forfaits.find(x => x.lettre === cle);
-        Object.assign(f, { mo: d.apres.mo, prix_piece: d.apres.prix_piece });
+        Object.assign(f, { mo: d.apres.mo, mo_base: d.apres.mo_base, prix_piece: d.apres.prix_piece });
         S.ot.forfaits.set(cle, f);
         this._otRendreTarifs();
       } else {
@@ -1116,38 +1300,13 @@ Object.assign(App, {
     }
   },
 
-  async _otEnregistrerRef(k) {
-    const ref = S.ot.tarifsVue.affichees[k];
-    if (!ref) return;
-    const mo = this._otLireMontant('ot-tr-mo-' + k), pp = this._otLireMontant('ot-tr-pp-' + k), pl = this._otLireMontant('ot-tr-pl-' + k);
-    if (!mo.ok || !pp.ok || !pl.ok) { this.toast('Montant invalide'); return; }
-    await this._otEnvoyerTarif('reference', ref, { mo: mo.val, prix_piece: pp.val, mo_plafond: pl.val }, 'Réf. ' + ref);
-  },
-
-  async _otCreerRef() {
-    const ref = S.ot.tarifsVue.recherche.trim().toUpperCase();
-    const mo = this._otLireMontant('ot-tr-new-mo');
-    if (!mo.ok) { this.toast('Montant invalide'); return; }
-    const desc = document.getElementById('ot-tr-new-desc')?.value.trim();
-    const unite = document.getElementById('ot-tr-new-unite')?.value.trim() || 'unité';
-    const valeurs = { mo: mo.val, unite };
-    if (desc) valeurs.description = desc;      // vide : le serveur reprend la désignation du Stock
-    await this._otEnvoyerTarif('reference', ref, valeurs, 'Réf. ' + ref);
-  },
-
-  async _otEnregistrerForfait(lettre) {
-    const mo = this._otLireMontant('ot-tf-mo-' + lettre), pp = this._otLireMontant('ot-tf-pp-' + lettre);
-    if (!mo.ok || !pp.ok) { this.toast('Montant invalide'); return; }
-    await this._otEnvoyerTarif('forfait', lettre, { mo: mo.val ?? 0, prix_piece: pp.val ?? 0 }, 'Forfait ' + lettre);
-  },
-
   async _otEnregistrerParam(cle) {
     const v = this._otLireMontant('ot-p-' + cle);
-    if (!v.ok || v.val === null) { this.toast('Valeur invalide'); return; }
+    if (!v.ok || !(v.val > 0)) { this.toast('Valeur invalide'); return; }
     const avant = S.ot.tarifs.parametres[cle];
     if (Number(avant) === v.val) { this.toast('Valeur inchangée'); return; }
-    const ok = await this._otConfirmer({ titre: 'Changer ce paramètre ?', ok: 'Enregistrer',
+    const ok = await this._otConfirmer({ titre: 'Changer le coefficient ?', ok: 'Enregistrer',
       texte: `${_otQte(avant)} → ${_otQte(v.val)}. S'applique aux fiches non validées.` });
-    if (ok) await this._otEnvoyerTarif('parametre', cle, { valeur: v.val }, 'Paramètre');
+    if (ok) await this._otEnvoyerTarif('parametre', cle, { valeur: v.val }, 'Coefficient');
   },
 });
