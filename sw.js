@@ -4,7 +4,7 @@
 //             Network-first pour les appels API AppScript
 // ═══════════════════════════════════════════════════════════════════════════
 
-const CACHE_NAME  = 'sonotrad-v21';
+const CACHE_NAME  = 'sonotrad-v22';
 const ASSETS = [
   './',
   './index.html',
@@ -35,7 +35,8 @@ self.addEventListener('install', evt => {
 self.addEventListener('activate', evt => {
   evt.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+      // Seulement nos anciens caches : celui de nouveau/ (sonotrad-nouveau-…) a son propre Service Worker.
+      Promise.all(keys.filter(k => /^sonotrad-v\d+$/.test(k) && k !== CACHE_NAME).map(k => caches.delete(k)))
     )
   );
   self.clients.claim();
@@ -45,6 +46,9 @@ self.addEventListener('activate', evt => {
 self.addEventListener('fetch', evt => {
   const { request } = evt;
   const url = new URL(request.url);
+
+  // Version en évolution (nouveau/) : gérée par son propre Service Worker, jamais par celui-ci.
+  if (url.origin === self.location.origin && url.pathname.startsWith('/nouveau/')) return;
 
   // Appels API → réseau uniquement (jamais mis en cache).
   // La PWA passe par /api/proxy (même domaine) : sans ce test, ses GET tombaient dans

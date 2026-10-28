@@ -1,0 +1,2054 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#1A5276">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Sonotrad">
+  <link rel="manifest" href="../manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.svg">
+  <title>Sonotrad — nouvelle version</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="lv-layout-constants.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="supabase.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     OVERLAY CONNEXION — affiché avant toute vue, masqué après auth
+     ════════════════════════════════════════════════════════════════════════ -->
+<div id="login-overlay">
+
+  <!-- Logo -->
+  <div style="text-align:center;margin-bottom:32px;">
+    <div style="font-size:52px;line-height:1;margin-bottom:14px;">🏢</div>
+    <h1 style="color:white;font-size:24px;font-weight:800;margin:0 0 8px;letter-spacing:-.3px;">SONOTRAD</h1>
+    <p id="pin-prompt" style="color:rgba(255,255,255,0.65);font-size:14px;margin:0;">Entrez votre code PIN</p>
+    <button id="login-qui" onclick="App._loginChoisirAutre()"></button>
+  </div>
+
+  <!-- Choix du nom (mémorisé sur l'appareil) -->
+  <div id="login-noms"></div>
+
+  <div id="login-pin-zone" style="display:flex;flex-direction:column;align-items:center;width:100%;">
+  <!-- Indicateurs de saisie (4 points) -->
+  <div class="pin-dots-row" id="pin-dots-row" style="display:flex;gap:18px;margin-bottom:14px;">
+    <div class="pin-dot" id="pdot-0"></div>
+    <div class="pin-dot" id="pdot-1"></div>
+    <div class="pin-dot" id="pdot-2"></div>
+    <div class="pin-dot" id="pdot-3"></div>
+  </div>
+
+  <!-- Message d'erreur -->
+  <div id="pin-error-msg" style="color:#FCA5A5;font-size:13px;min-height:22px;margin-bottom:18px;text-align:center;font-weight:500;"></div>
+
+  <!-- Clavier numérique -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;max-width:300px;">
+    <button class="pin-key" onclick="App._pinPress('1')">1</button>
+    <button class="pin-key" onclick="App._pinPress('2')">2</button>
+    <button class="pin-key" onclick="App._pinPress('3')">3</button>
+    <button class="pin-key" onclick="App._pinPress('4')">4</button>
+    <button class="pin-key" onclick="App._pinPress('5')">5</button>
+    <button class="pin-key" onclick="App._pinPress('6')">6</button>
+    <button class="pin-key" onclick="App._pinPress('7')">7</button>
+    <button class="pin-key" onclick="App._pinPress('8')">8</button>
+    <button class="pin-key" onclick="App._pinPress('9')">9</button>
+    <button class="pin-key pin-key-empty" disabled aria-hidden="true"></button>
+    <button class="pin-key" onclick="App._pinPress('0')">0</button>
+    <button class="pin-key pin-key-del" onclick="App._pinDel()">⌫</button>
+  </div>
+  </div>
+
+  <!-- Config URL (première utilisation) -->
+  <button onclick="App._toggleLoginSetup()" style="margin-top:22px;background:none;border:none;color:rgba(255,255,255,0.4);font-size:12px;cursor:pointer;padding:4px 8px;">
+    ⚙ Configurer l'URL API
+  </button>
+  <div id="login-setup-panel">
+    <p style="color:rgba(255,255,255,0.7);font-size:12px;font-weight:600;margin:0 0 8px;">URL du proxy Vercel ou AppScript</p>
+    <input type="url" id="login-url-input" class="input-field"
+      placeholder="https://…vercel.app/api/proxy"
+      style="font-size:12px;margin-bottom:8px;background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.2);color:white;"
+      onfocus="this.style.borderColor='rgba(255,255,255,0.6)'"
+      onblur="this.style.borderColor='rgba(255,255,255,0.2)'">
+    <button onclick="App._saveLoginUrl()"
+      style="width:100%;background:rgba(255,255,255,0.2);border:none;color:white;padding:10px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;">
+      Enregistrer
+    </button>
+  </div>
+
+</div>
+
+<div class="app" id="app">
+  <!-- ══════════════════════════════════════════════════════════════════════
+       SIDEBAR / BOTTOM NAV
+       (avant main-wrapper dans le DOM pour flex-row desktop)
+       ══════════════════════════════════════════════════════════════════════ -->
+  <nav class="bottom-nav" id="main-nav">
+    <!-- Logo sidebar (desktop uniquement) — cliquer revient à l'accueil -->
+    <div class="sidebar-brand" onclick="App.goHome()" style="cursor:pointer;" title="Retour à l'accueil">
+      <strong>SONOTRAD</strong>
+      <span id="sidebar-activity-label">Arrivées &amp; Départs</span>
+      <span style="font-size:10px;color:#94A3B8;margin-top:2px;">← Changer d'activité</span>
+    </div>
+    <!-- ── Tabs LOXAM (masqués sur loxam-menu et hors activité LOXAM) ──── -->
+    <button class="nav-tab" data-tab="departures" onclick="App.go('departures')" style="display:none">
+      <span class="icon">🏭</span><span>Production</span>
+    </button>
+    <button class="nav-tab" data-tab="arrivals" onclick="App.go('arrivals')" style="display:none">
+      <span class="icon">📥</span><span>Arrivées</span>
+    </button>
+    <button class="nav-tab" data-tab="history" onclick="App.go('history')" style="display:none">
+      <span class="icon">🕐</span><span>Historique</span>
+    </button>
+    <!-- ── Tabs Stockage (masqués hors activité stockage) ─────────────── -->
+    <button class="nav-tab" data-stab="stock-dashboard" onclick="App.go('stock-dashboard')" style="display:none">
+      <span class="icon">📊</span><span>Tableau</span>
+    </button>
+    <button class="nav-tab" data-stab="stock" onclick="App.go('stock')" style="display:none">
+      <span class="icon">📦</span><span>Catalogue</span>
+    </button>
+    <button class="nav-tab" data-stab="stock-history" onclick="App.go('stock-history')" style="display:none">
+      <span class="icon">📋</span><span>Historique</span>
+    </button>
+    <button class="nav-tab" data-stab="stock-sync" onclick="App.go('stock-sync')" style="display:none">
+      <span class="icon">🔄</span><span>Synchro</span>
+    </button>
+    <!-- ── Tabs BCB (masqués sur bcb-menu et hors activité BCB) ────────── -->
+    <button class="nav-tab" data-bcbtab="bcb-lots" onclick="App.go('bcb-lots')" style="display:none">
+      <span class="icon">📦</span><span>Lots</span>
+    </button>
+    <button class="nav-tab" data-bcbtab="bcb-consignes" onclick="App.go('bcb-consignes')" style="display:none">
+      <span class="icon">📋</span><span>Consignes</span>
+    </button>
+    <button class="nav-tab" data-bcbtab="bcb-depart" onclick="App.go('bcb-depart')" style="display:none">
+      <span class="icon">🚚</span><span>Chargement</span>
+    </button>
+    <button class="nav-tab" data-bcbtab="bcb-enlevements" onclick="App.go('bcb-enlevements')" style="display:none">
+      <span class="icon">📁</span><span>Enl.</span>
+    </button>
+    <!-- ── Tabs LVU (masqués hors activité LVU) ──────────────────────────── -->
+    <button class="nav-tab" data-lvutab="lvu-form" onclick="App.go('lvu-form')" style="display:none">
+      <span class="icon">📝</span><span>Formulaire</span>
+    </button>
+    <button class="nav-tab" data-lvutab="lvu-history" onclick="App.go('lvu-history')" style="display:none">
+      <span class="icon">📋</span><span>Historique</span>
+    </button>
+    <!-- Bouton retour accueil (mobile uniquement) -->
+    <button class="nav-tab" id="nav-home-btn" onclick="App.goHome()" style="color:#94A3B8;">
+      <span class="icon">⊞</span><span>Activités</span>
+    </button>
+  </nav>
+  <!-- ══════════════════════════════════════════════════════════════════════
+       MAIN WRAPPER (header + contenu)
+       ══════════════════════════════════════════════════════════════════════ -->
+  <div class="main-wrapper">
+  <!-- ══════════════════════════════════════════════════════════════════════
+       HEADER
+       ══════════════════════════════════════════════════════════════════════ -->
+  <header class="header">
+    <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
+      <button class="back-btn hidden" id="btn-back" onclick="App.goBack()">
+        <span style="font-size:20px;">‹</span>
+        <span id="back-label">Retour</span>
+      </button>
+      <div id="header-logo" style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="App.goHome()" title="Accueil">
+        <div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div id="header-title" style="font-size:17px;font-weight:700;line-height:1.1;">SONOTRAD</div>
+          </div>
+          <div id="header-subtitle" style="font-size:10px;opacity:0.6;font-weight:400;line-height:1;"></div>
+        </div>
+      </div>
+      <!-- Breadcrumb (visible hors accueil et hors formulaires) -->
+      <div id="header-breadcrumb" style="display:none;align-items:center;gap:2px;">
+        <span onclick="App.goHome()"
+          style="font-size:13px;font-weight:600;color:rgba(255,255,255,0.65);cursor:pointer;padding:3px 5px;border-radius:5px;transition:color .12s;"
+          onmouseenter="this.style.color='white'" onmouseleave="this.style.color='rgba(255,255,255,0.65)'">SONOTRAD</span>
+        <span style="color:rgba(255,255,255,0.35);font-size:14px;">›</span>
+        <span id="breadcrumb-activity" onclick="App.breadcrumbGoActivity()"
+          style="font-size:13px;font-weight:700;color:white;cursor:pointer;padding:3px 5px;border-radius:5px;transition:background .12s;"
+          onmouseenter="this.style.background='rgba(255,255,255,0.15)'" onmouseleave="this.style.background=''"></span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+      <span id="offline-queue-badge" style="font-size:10px;background:rgba(251,191,36,0.15);border-radius:10px;padding:2px 7px;color:rgba(251,191,36,0.95);letter-spacing:.3px;display:none;cursor:default;" title="Arrivées en attente de synchronisation"></span>
+      <span id="code-stock-badge" style="font-size:10px;background:rgba(255,255,255,0.12);border-radius:10px;padding:2px 7px;color:rgba(255,255,255,0.55);letter-spacing:.3px;display:none;" title="Codes pré-chargés disponibles hors ligne"></span>
+      <div style="display:flex;align-items:center;gap:5px;font-size:12px;opacity:0.9;">
+        <span class="status-dot online" id="status-dot"></span>
+        <span id="status-text">En ligne</span>
+      </div>
+      <div style="display:flex;gap:5px;">
+        <button onclick="App.goHome()" style="background:rgba(255,255,255,0.15);border:none;color:white;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" title="Menu principal">⌂</button>
+        <button onclick="App.go('settings')" style="background:rgba(255,255,255,0.15);border:none;color:white;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;" title="Réglages">⚙</button>
+        <button onclick="App.logout()" style="background:rgba(255,255,255,0.15);border:none;color:white;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" title="Se déconnecter">⏻</button>
+      </div>
+    </div>
+  </header>
+  <!-- ══════════════════════════════════════════════════════════════════════
+       MAIN CONTENT
+       ══════════════════════════════════════════════════════════════════════ -->
+  <main class="main-content">
+    <!-- ── VIEW : HOME ───────────────────────────────────────────────────── -->
+    <div class="view active" id="view-home">
+      <div class="home-hero" style="text-align:center;padding:24px 0 28px;">
+        <div style="font-size:52px;line-height:1;margin-bottom:12px;">🏢</div>
+        <h1 id="home-greeting" style="font-size:21px;font-weight:800;color:#1E293B;margin:0 0 4px;">Bonjour !</h1>
+        <p style="font-size:13px;color:#64748B;margin:0;">Sélectionnez une activité</p>
+        <span style="display:inline-block;margin-top:8px;background:#FECA14;color:#0F4DA2;font-size:11px;font-weight:800;border-radius:999px;padding:3px 10px;letter-spacing:.3px;">NOUVELLE VERSION · en évolution</span>
+      </div>
+
+      <div id="activity-grid">
+
+        <!-- LOXAM — actif -->
+        <div class="activity-card" data-ready="true" onclick="App.selectActivity('loxam')">
+          <div class="activity-icon"><img src="Logo%20Loxam.png" alt="LOXAM" style="width:64px;height:64px;object-fit:contain;"></div>
+          <div class="activity-name">LOXAM</div>
+          <div class="activity-desc">Arrivées &amp; Départs de modules</div>
+          <span id="badge-loxam" class="activity-badge badge-active">● Actif</span>
+        </div>
+
+        <!-- BCB — actif -->
+        <div class="activity-card" data-ready="true" onclick="App.selectActivity('bcb')">
+          <div class="activity-icon"><img src="Logo%20BCB.png" alt="BCB" style="width:64px;height:64px;object-fit:contain;"></div>
+          <div class="activity-name">BCB</div>
+          <div class="activity-desc">Vente &amp; Logistique</div>
+          <span class="activity-badge badge-active">● Actif</span>
+        </div>
+
+        <!-- Réception de marchandise — raccourci direct vers le formulaire d'arrivée -->
+        <div class="activity-card" data-ready="true" onclick="App.receptionDirecte()">
+          <div class="activity-icon">📦</div>
+          <div class="activity-name">Réception</div>
+          <div class="activity-desc">Enregistrer une arrivée de matériel</div>
+          <span class="activity-badge badge-active">● Actif</span>
+        </div>
+
+        <!-- Agorastore — bientôt -->
+        <div class="activity-card" data-ready="false">
+          <div class="activity-icon">🏷️</div>
+          <div class="activity-name">Agorastore</div>
+          <div class="activity-desc">Ventes en ligne</div>
+          <span class="activity-badge badge-soon">Bientôt</span>
+        </div>
+
+        <!-- LV / CMR — actif -->
+        <div class="activity-card" data-ready="true" onclick="App.selectActivity('lvu')">
+          <div class="activity-icon">📄</div>
+          <div class="activity-name">LV / CMR</div>
+          <div class="activity-desc">Lettres de voiture</div>
+          <span class="activity-badge badge-active">● Actif</span>
+        </div>
+
+        <!-- RH — ouvre rh-metal (pointage, congés, contrats) : visible uniquement pour role=admin -->
+        <div class="activity-card" id="rh-home-card" data-ready="true"
+          onclick="window.open('https://rh-metal.vercel.app', '_blank', 'noopener')"
+          style="display:none;">
+          <div class="activity-icon">👥</div>
+          <div class="activity-name">RH</div>
+          <div class="activity-desc">Pointage, congés, contrats — rh-metal</div>
+          <span class="activity-badge" style="background:#FEF3C7;color:#92400E;">Admin</span>
+        </div>
+
+<!-- Annuaire — visible uniquement pour role=admin -->
+        <div class="activity-card" id="annuaire-home-card" data-ready="true"
+          onclick="App.selectActivity('annuaire')"
+          style="display:none;">
+          <div class="activity-icon">📋</div>
+          <div class="activity-name">Annuaire</div>
+          <div class="activity-desc">Destinations & agences</div>
+          <span class="activity-badge" style="background:#FEF3C7;color:#92400E;">Admin</span>
+        </div>
+
+        <!-- Admin — visible uniquement pour role=admin -->
+        <div class="activity-card" id="admin-home-card" data-ready="true"
+          onclick="App.goAdmin()"
+          style="display:none;border:2px dashed #CBD5E1;grid-column:1/-1;">
+          <div style="display:flex;align-items:center;gap:14px;">
+            <div class="activity-icon" style="margin-bottom:0;">👥</div>
+            <div>
+              <div class="activity-name">Administration</div>
+              <div class="activity-desc" style="margin-bottom:0;">Gérer les utilisateurs, PINs, accès</div>
+            </div>
+            <span class="activity-badge" style="background:#FEF3C7;color:#92400E;margin-left:auto;flex-shrink:0;">Admin</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div style="text-align:center;margin-top:24px;">
+        <button onclick="try{localStorage.setItem('snt_version','base')}catch(e){};location.href='../'"
+          style="background:none;border:1.5px dashed #64748B;color:#475569;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">
+          ↩ Revenir à la version de base</button>
+      </div>
+
+      <p style="text-align:center;font-size:11px;color:#CBD5E1;margin-top:28px;">
+        SONOTRAD · Gestion multi-activités
+      </p>
+    </div>
+
+    <!-- ── VIEW : ANNUAIRE ──────────────────────────────────────────────── -->
+    <div class="view" id="view-annuaire">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <h2 style="font-size:18px;font-weight:700;color:#1E293B;flex:1;margin:0;">📋 Annuaire destinations</h2>
+        <button onclick="App.annuaireOpenModal(null)"
+          style="background:#1D4ED8;color:white;border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;">+ Ajouter</button>
+      </div>
+      <input id="ann-search" type="text" placeholder="Rechercher par code, nom, ville…"
+        oninput="App.annuaireRender()"
+        style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:10px;padding:9px 12px;font-size:13px;outline:none;margin-bottom:12px;">
+      <div id="ann-loading" style="display:none;text-align:center;padding:24px;color:#94A3B8;font-size:13px;">Chargement…</div>
+      <div id="ann-list"></div>
+    </div>
+
+    <!-- Modal ajout/édition agence -->
+    <div id="ann-modal" class="ann-modal-overlay" style="display:none;" onclick="if(event.target===this)App.annuaireCloseModal()">
+      <div class="ann-modal-sheet">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <span id="ann-modal-title" style="font-size:16px;font-weight:700;color:#1E293B;">Nouvelle agence</span>
+          <button onclick="App.annuaireCloseModal()" style="background:none;border:none;font-size:20px;color:#64748B;cursor:pointer;">✕</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Code agence *</label>
+            <input id="ann-f-code" type="text" placeholder="ex : 0072"
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Nom / Société *</label>
+            <input id="ann-f-nom" type="text" autocapitalize="words"
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+          </div>
+        </div>
+        <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Adresse</label>
+        <input id="ann-f-adresse" type="text" autocapitalize="words"
+          style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;margin-bottom:8px;">
+        <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-bottom:8px;">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">CP</label>
+            <input id="ann-f-cp" type="text" maxlength="10" inputmode="numeric"
+              oninput="App.annGeoCp(this.value)"
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+            <div id="ann-cp-sugg" class="ann-geo-sugg"></div>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Ville</label>
+            <input id="ann-f-ville" type="text" autocapitalize="words"
+              oninput="App.annGeoVille(this.value)"
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+            <div id="ann-ville-sugg" class="ann-geo-sugg"></div>
+          </div>
+        </div>
+        <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Pays</label>
+        <input id="ann-f-pays" type="text" autocapitalize="words" placeholder="ex : FR - France" list="ann-pays-list"
+          oninput="App.annGeoHideSugg()" onblur="App.annPaysNormalize()"
+          style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;margin-bottom:8px;">
+        <datalist id="ann-pays-list">
+          <option value="FR - France"><option value="BE - Belgique"><option value="LU - Luxembourg">
+          <option value="CH - Suisse"><option value="DE - Allemagne"><option value="AT - Autriche">
+          <option value="IT - Italie"><option value="ES - Espagne"><option value="PT - Portugal">
+          <option value="NL - Pays-Bas"><option value="GB - Royaume-Uni"><option value="IE - Irlande">
+          <option value="DK - Danemark"><option value="SE - Suède"><option value="NO - Norvège">
+          <option value="FI - Finlande"><option value="IS - Islande"><option value="PL - Pologne">
+          <option value="CZ - Tchéquie"><option value="SK - Slovaquie"><option value="HU - Hongrie">
+          <option value="RO - Roumanie"><option value="BG - Bulgarie"><option value="HR - Croatie">
+          <option value="SI - Slovénie"><option value="GR - Grèce"><option value="CY - Chypre">
+          <option value="MT - Malte"><option value="EE - Estonie"><option value="LV - Lettonie">
+          <option value="LT - Lituanie"><option value="RS - Serbie"><option value="BA - Bosnie-Herzégovine">
+          <option value="ME - Monténégro"><option value="MK - Macédoine du Nord"><option value="AL - Albanie">
+          <option value="XK - Kosovo"><option value="MD - Moldavie"><option value="UA - Ukraine">
+          <option value="BY - Biélorussie"><option value="RU - Russie"><option value="TR - Turquie">
+          <option value="MA - Maroc"><option value="DZ - Algérie"><option value="TN - Tunisie">
+          <option value="LY - Libye"><option value="EG - Égypte"><option value="SN - Sénégal">
+          <option value="CI - Côte d'Ivoire"><option value="CM - Cameroun"><option value="NG - Nigéria">
+          <option value="ZA - Afrique du Sud"><option value="US - États-Unis"><option value="CA - Canada">
+          <option value="MX - Mexique"><option value="BR - Brésil"><option value="AR - Argentine">
+          <option value="CN - Chine"><option value="JP - Japon"><option value="KR - Corée du Sud">
+          <option value="IN - Inde"><option value="SG - Singapour"><option value="AU - Australie">
+          <option value="AE - Émirats Arabes Unis"><option value="SA - Arabie Saoudite">
+          <option value="QA - Qatar"><option value="IL - Israël">
+        </datalist>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Email</label>
+            <input id="ann-f-email" type="email"
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Téléphone</label>
+            <input id="ann-f-tel" type="tel"
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+          </div>
+        </div>
+        <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:3px;">Note / Info</label>
+        <textarea id="ann-f-note" rows="2" placeholder="Accès, horaires, contact…"
+          style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;resize:none;margin-bottom:14px;"></textarea>
+        <input type="hidden" id="ann-f-orig-code">
+        <button onclick="App.annuaireSave()"
+          style="width:100%;padding:12px;background:#1D4ED8;color:white;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;">
+          💾 Enregistrer
+        </button>
+      </div>
+    </div>
+
+    <!-- ── VIEW : ADMIN ─────────────────────────────────────────────────── -->
+    <div class="view" id="view-admin">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h2 style="font-size:20px;font-weight:700;color:#1E293B;">👥 Utilisateurs</h2>
+        <!-- Pas de création libre : toute personne naît dans rh-metal (salarié ou personne externe),
+             puis « Activer l'accès » dans la liste ci-dessous. -->
+      </div>
+
+      <!-- Formulaire création (masqué par défaut) -->
+      <div id="admin-create-form" class="card" style="display:none;margin-bottom:12px;border:2px solid var(--brand);">
+        <p style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:4px;">Nouvel utilisateur</p>
+        <p id="nu-linked-badge" style="display:none;font-size:11px;color:#1D4ED8;background:#EFF6FF;padding:3px 8px;border-radius:8px;font-weight:600;margin-bottom:8px;">🔗 lié au salarié RH — nom/prénom verrouillés</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <input type="text" id="nu-prenom" class="input-field" placeholder="Prénom" style="margin:0;">
+          <input type="text" id="nu-nom" class="input-field" placeholder="Nom" style="margin:0;">
+        </div>
+        <select id="nu-role" class="input-field" style="margin-bottom:8px;">
+          <option value="utilisateur">👤 Utilisateur</option>
+          <option value="admin">⚙️ Administrateur</option>
+        </select>
+        <div style="margin-bottom:8px;">
+          <label class="label-sm" style="display:block;margin-bottom:6px;">Activités</label>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-loxam"      value="loxam"      checked> LOXAM</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-bcb"        value="bcb"              > BCB</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-agorastore" value="agorastore"       > Agorastore</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-stockage"   value="stockage"         > Stockage</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-lvu"        value="lvu"              > LV/CMR</label>
+          </div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label class="label-sm">PIN initial (4 chiffres) — à communiquer verbalement</label>
+          <input type="number" id="nu-pin" class="input-field" placeholder="ex : 4821" min="1000" max="9999" style="margin:0;letter-spacing:4px;font-size:18px;font-weight:600;">
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="App._createUser()" class="btn btn-primary" style="flex:1;">Créer le compte</button>
+          <button onclick="App._hideCreateUserForm()"
+            style="background:#F1F5F9;color:#64748B;border:none;padding:10px 16px;border-radius:10px;font-size:14px;cursor:pointer;">
+            Annuler
+          </button>
+        </div>
+      </div>
+
+      <!-- Salariés RH (rh-metal) sans compte sonotrad-pwa -->
+      <div id="admin-rh-unlinked" style="display:none;margin-bottom:16px;">
+        <p style="font-size:11px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;">Sans compte PWA (salariés et personnes externes)</p>
+        <div id="admin-rh-unlinked-list"></div>
+      </div>
+
+      <!-- Chargement -->
+      <div id="admin-loading" style="text-align:center;padding:40px;display:none;">
+        <div class="spinner"></div>
+        <p style="color:#64748B;margin-top:10px;">Chargement...</p>
+      </div>
+
+      <!-- Liste des utilisateurs -->
+      <div id="admin-user-list"></div>
+    </div>
+
+    <!-- ── VIEW : LOXAM MENU ───────────────────────────────────────────── -->
+    <div class="view" id="view-loxam-menu">
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#1D4ED8,#1E40AF);color:white;padding:20px 16px 24px;">
+        <div style="font-size:11px;font-weight:700;opacity:.65;letter-spacing:.8px;text-transform:uppercase;margin-bottom:4px;">Activité</div>
+        <div style="font-size:22px;font-weight:800;">LOXAM · PIDEM</div>
+        <div id="lxmenu-status" style="font-size:12px;opacity:.75;margin-top:4px;">Chargement…</div>
+      </div>
+      <!-- Loader -->
+      <div id="lxmenu-loader" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:64px 16px;gap:14px;">
+        <div class="spinner"></div>
+        <div style="font-size:13px;color:#64748B;font-weight:500;">Chargement des données…</div>
+      </div>
+      <!-- Grid (masqué pendant le chargement) -->
+      <div id="lxmenu-grid" style="display:none;padding:20px;">
+        <div id="activity-grid" style="grid-template-columns:1fr 1fr;">
+          <!-- Production -->
+          <div class="activity-card" data-ready="true" onclick="App.go('departures')">
+            <div class="activity-icon">🏭</div>
+            <div class="activity-name">Production</div>
+            <div class="activity-desc">En cours · Arrivées · Historique LV</div>
+            <span id="lxmenu-badge-prod" class="activity-badge badge-loading">⟳ Chargement…</span>
+          </div>
+          <!-- Stock PIDEM -->
+          <div class="activity-card" data-ready="true" onclick="App.loxamMenuGoStock('stock-dashboard')">
+            <div class="activity-icon">📦</div>
+            <div class="activity-name">Stock PIDEM</div>
+            <div class="activity-desc">Tableau · Catalogue · Historique</div>
+            <span id="lxmenu-badge-stock" class="activity-badge badge-active">● Actif</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW : ARRIVALS ──────────────────────────────────────────────── -->
+    <div class="view" id="view-arrivals">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h2 style="font-size:20px;font-weight:700;color:#1E293B;">Arrivées</h2>
+        <button onclick="App.loadArrivalsData(true)" style="background:#EBF5FB;color:var(--brand);border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻ Actualiser</button>
+      </div>
+      <div id="api-warning" class="warn-box" style="display:none;">
+        <p><strong>⚠️ API non configurée</strong><br>
+        L'app fonctionne en mode local uniquement. <a onclick="App.go('settings')" style="color:#2E86C1;cursor:pointer;text-decoration:underline;">Configurer l'URL →</a></p>
+      </div>
+      <!-- Résumé inventaire (lecture seule) -->
+      <div id="arr-summary" style="display:none;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:11px 14px;margin-bottom:12px;">
+        <div style="font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Inventaire total</div>
+        <div id="arr-summary-total" style="font-size:16px;font-weight:700;color:#1E293B;margin-bottom:6px;"></div>
+        <div id="arr-summary-inner" style="display:flex;flex-wrap:wrap;gap:4px 0;"></div>
+      </div>
+      <!-- Filtres -->
+      <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:10px 14px;margin-bottom:10px;display:flex;flex-direction:column;gap:10px;">
+        <!-- Filtre statut : segmented control -->
+        <div>
+          <div style="font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Statut</div>
+          <div id="arr-parti-filters" style="display:flex;background:#E2E8F0;border-radius:10px;padding:3px;gap:2px;">
+            <button class="arr-seg-btn"        data-parti="all"     onclick="App.setArrPartiFilter('all')">Tous</button>
+            <button class="arr-seg-btn active" data-parti="present" onclick="App.setArrPartiFilter('present')">🅿️ Sur parc</button>
+            <button class="arr-seg-btn"        data-parti="parti"   onclick="App.setArrPartiFilter('parti')">📦 Partis</button>
+          </div>
+        </div>
+        <!-- Filtre type module (dynamique) -->
+        <div>
+          <div style="font-size:10px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">Type de module</div>
+          <div id="arr-type-filters" style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;"></div>
+        </div>
+        <!-- Barre de recherche -->
+        <input type="search" id="arr-search" class="input-field"
+          placeholder="🔍 Code, type, chauffeur, agence…"
+          oninput="App._filterAndRenderArrivals()"
+          style="font-size:14px;margin:0;">
+      </div>
+      <!-- Compteur résultats -->
+      <div id="arr-result-count" style="display:none;font-size:12px;color:#94A3B8;text-align:right;margin:-4px 0 8px;padding-right:2px;"></div>
+      <div id="arr-loading" style="text-align:center;padding:40px;display:none;">
+        <div class="spinner"></div>
+        <p style="color:#64748B;">Chargement des arrivées...</p>
+      </div>
+      <div id="arr-list"></div>
+      <div id="no-arrivals" style="text-align:center;padding:48px 0 32px;color:#94A3B8;display:none;">
+        <div style="font-size:52px;margin-bottom:12px;">📥</div>
+        <p style="font-size:16px;font-weight:600;">Aucune arrivée</p>
+        <p style="font-size:13px;margin-top:4px;">Appuyez sur + pour enregistrer une arrivée</p>
+      </div>
+    </div>
+    <!-- ── VIEW : ARRIVAL DETAIL ─────────────────────────────────────────── -->
+    <div class="view" id="view-arr-detail">
+      <div id="arr-detail-body"></div>
+    </div>
+    <!-- ── VIEW : NEW ARRIVAL ────────────────────────────────────────────── -->
+    <div class="view" id="view-new-arrival">
+      <div class="steps">
+        <div class="step-dot active" id="dot-1"></div>
+        <div class="step-dot" id="dot-2"></div>
+        <div class="step-dot" id="dot-3"></div>
+      </div>
+      <!-- Step 1 : Module selection -->
+      <div id="step-1">
+        <p style="font-size:17px;font-weight:700;color:#1E293B;margin-bottom:4px;">Quel type d'arrivée ?</p>
+        <p style="font-size:13px;color:#64748B;margin-bottom:18px;">Sélectionne la provenance du lot</p>
+        <button class="module-btn loxam" onclick="App.selectModule('loxam')">
+          <span style="font-size:30px;line-height:1;">🏗️</span>
+          <div><div>LOXAM / PIDEO</div><div style="font-size:12px;font-weight:400;opacity:0.7;margin-top:2px;">Matériel de levage & manutention</div></div>
+        </button>
+        <button class="module-btn bcb" disabled style="opacity:0.38;pointer-events:none;cursor:default;">
+          <span style="font-size:30px;line-height:1;">🚛</span>
+          <div><div>BCB</div><div style="font-size:12px;font-weight:400;opacity:0.7;margin-top:2px;">Bientôt disponible</div></div>
+        </button>
+        <button class="module-btn agora" disabled style="opacity:0.38;pointer-events:none;cursor:default;">
+          <span style="font-size:30px;line-height:1;">🏷️</span>
+          <div><div>Agorastore</div><div style="font-size:12px;font-weight:400;opacity:0.7;margin-top:2px;">Bientôt disponible</div></div>
+        </button>
+        <button class="module-btn rapido" disabled style="opacity:0.38;pointer-events:none;cursor:default;">
+          <span style="font-size:30px;line-height:1;">⚡</span>
+          <div><div>Rapido</div><div style="font-size:12px;font-weight:400;opacity:0.7;margin-top:2px;">Bientôt disponible</div></div>
+        </button>
+      </div>
+      <!-- Step 2 : Code + Photos -->
+      <div id="step-2" style="display:none;">
+        <p style="font-size:17px;font-weight:700;color:#1E293B;margin-bottom:4px;" id="step2-title">Code article</p>
+        <p style="font-size:13px;color:#64748B;margin-bottom:14px;">Code unique généré automatiquement · Photos de réception</p>
+        <!-- Code -->
+        <div style="position:relative;margin-bottom:16px;">
+          <div class="code-badge" id="code-display">· · · · · ·</div>
+          <button onclick="App.regenerateCode()" title="Générer un autre code"
+            style="position:absolute;top:50%;right:10px;transform:translateY(-50%);background:var(--accent);color:white;border:none;border-radius:8px;padding:8px 11px;cursor:pointer;font-size:18px;line-height:1;">↻</button>
+        </div>
+        <div id="code-status" style="text-align:center;font-size:12px;color:#94A3B8;margin-bottom:14px;min-height:16px;"></div>
+        <!-- Photos -->
+        <div style="margin-bottom:16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <span style="font-size:14px;font-weight:600;color:#1E293B;">Photos <span style="font-weight:400;color:#64748B;">(facultatif)</span></span>
+            <span id="photo-count-2" style="font-size:12px;color:#64748B;">0 photo</span>
+          </div>
+          <div class="photo-grid" id="photo-grid-2">
+            <div class="photo-add-btn" onclick="App.triggerInput('photo-input-2')">
+              <span style="font-size:28px;">📷</span><span>Ajouter</span>
+            </div>
+          </div>
+          <input type="file" id="photo-input-2" accept="image/*" multiple style="display:none;" onchange="App.handlePhotos(event, 'arrival')">
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-secondary" onclick="App.showStep(1)" style="flex-shrink:0;">‹ Retour</button>
+          <button class="btn btn-primary" id="btn-next-2" onclick="App.goToStep3()" style="flex:1;">Continuer →</button>
+        </div>
+      </div>
+      <!-- Step 3 : Optional info + Submit -->
+      <div id="step-3" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+          <p style="font-size:17px;font-weight:700;color:#1E293B;margin:0;">Informations</p>
+          <button id="btn-fill-test" onclick="App._fillTestArrival()" style="display:none;background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;">🧪 Remplir test</button>
+        </div>
+        <p style="font-size:13px;color:#64748B;margin-bottom:16px;">Tous les champs sont facultatifs</p>
+        <!-- Recap pill -->
+        <div id="s3-recap" style="display:flex;align-items:center;gap:10px;padding:10px 13px;background:#F8FAFC;border-radius:8px;border:1px solid #E2E8F0;margin-bottom:18px;">
+          <span id="s3-icon" style="font-size:22px;"></span>
+          <div style="flex:1;min-width:0;">
+            <span id="s3-module" style="font-size:13px;font-weight:600;color:#1E293B;"></span>
+            <span style="color:#CBD5E1;margin:0 6px;">·</span>
+            <span id="s3-code"   style="font-size:14px;font-weight:800;color:var(--brand);font-family:monospace;letter-spacing:2px;"></span>
+            <span style="color:#CBD5E1;margin:0 6px;">·</span>
+            <span id="s3-photos" style="font-size:13px;color:#64748B;"></span>
+          </div>
+        </div>
+        <!-- Champs spécifiques LOXAM (masqués pour les autres modules) -->
+        <div id="loxam-fields" style="display:none;">
+          <div style="margin-bottom:12px;">
+            <label class="label-sm" for="inp-module-type">Type <span style="color:#EF4444;">*</span></label>
+            <select id="inp-module-type" class="input-field">
+              <option value="">— Sélectionner —</option>
+              <option>BATIX</option>
+              <option>GRAND BATIX</option>
+              <option>ISOLOX</option>
+              <option>MODULOX</option>
+              <option>6020</option>
+              <option>6020 GB</option>
+              <option>6021</option>
+              <option>SOLFAB PH</option>
+              <option>SOLFAB GH40</option>
+              <option>SOLFAB GH60</option>
+              <option>ECOLOX</option>
+              <option>LC20</option>
+              <option>LC20M</option>
+              <option>LC10</option>
+              <option>LC8</option>
+              <option>AUTRE</option>
+            </select>
+          </div>
+          <div style="margin-bottom:12px;">
+            <label class="label-sm" for="inp-num-module">Num module <span style="color:#EF4444;">*</span></label>
+            <input type="text" id="inp-num-module" class="input-field" placeholder="ex: 60154532">
+          </div>
+          <div style="margin-bottom:12px;">
+            <label class="label-sm" for="inp-num-serie">N° de série</label>
+            <input type="text" id="inp-num-serie" class="input-field" placeholder="ex: SN-2024-001234">
+          </div>
+          <div style="display:flex;gap:10px;margin-bottom:12px;">
+            <div style="flex:1;">
+              <label class="label-sm" for="inp-lv">LV <span style="color:#EF4444;">*</span></label>
+              <input type="text" id="inp-lv" class="input-field" placeholder="ex: 101901">
+            </div>
+            <div style="flex:1;">
+              <label class="label-sm" for="inp-agence">Agence <span style="color:#EF4444;">*</span></label>
+              <input type="text" id="inp-agence" class="input-field" placeholder="ex: ST QUENTIN...">
+            </div>
+          </div>
+          <div style="margin-bottom:12px;">
+            <label class="label-sm" for="inp-longueur">Longueur (ml) <span style="color:#EF4444;">*</span></label>
+            <input type="number" id="inp-longueur" class="input-field" placeholder="ex: 12.5" step="0.1" min="0">
+          </div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label class="label-sm" for="inp-chauffeur">Chauffeur</label>
+          <input type="text" id="inp-chauffeur" class="input-field" placeholder="Nom du chauffeur...">
+        </div>
+        <div style="margin-bottom:12px;">
+          <label class="label-sm" for="inp-date">Date d'arrivée</label>
+          <input type="date" id="inp-date" class="input-field">
+        </div>
+        <div style="margin-bottom:18px;">
+          <label class="label-sm" for="inp-etat">État / Remarques</label>
+          <textarea id="inp-etat" class="input-field" rows="3" placeholder="État du matériel, dommages constatés, manques..." style="resize:none;"></textarea>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-secondary" onclick="App.showStep(2)" style="flex-shrink:0;">‹ Retour</button>
+          <button class="btn btn-primary" id="btn-submit" onclick="App.submitArrival()" style="flex:1;">✓ Enregistrer l'arrivée</button>
+        </div>
+      </div>
+      <!-- Step 4 : Sending -->
+      <div id="step-4" style="display:none;text-align:center;padding:40px 0;">
+        <div class="spinner" id="send-spinner"></div>
+        <p style="font-size:17px;font-weight:700;color:#1E293B;" id="send-msg">Envoi en cours...</p>
+        <p style="font-size:13px;color:#64748B;margin-top:4px;" id="send-detail"></p>
+      </div>
+    </div>
+    <!-- ── VIEW : DEPARTURES ─────────────────────────────────────────────── -->
+    <div class="view" id="view-departures">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h2 style="font-size:20px;font-weight:700;color:#1E293B;">Production</h2>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button id="dep-sort-btn" onclick="App.toggleDepSort()"
+            style="background:none;border:1px solid #E2E8F0;border-radius:16px;padding:4px 10px;font-size:11px;color:#64748B;cursor:pointer;display:flex;align-items:center;gap:3px;">
+            <span id="dep-sort-icon">↑</span><span id="dep-sort-label">En cours → Terminé</span>
+          </button>
+          <button onclick="App.loadDepartures(true)" style="background:#EBF5FB;color:var(--brand);border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻</button>
+        </div>
+      </div>
+      <!-- Recherche texte (visible en permanence) -->
+      <input type="search" id="dep-search" class="input-field"
+        placeholder="🔍 Code, chantier, module…"
+        oninput="App._onDepSearch(event)"
+        style="font-size:13px;margin-bottom:8px;">
+      <!-- Filtres par statut (actifs seulement) -->
+      <div id="dep-filters" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
+        <button class="dep-filter-btn active" data-filter="all"        onclick="App.setDepFilter('all')">Tous</button>
+        <button class="dep-filter-btn"        data-filter="enCours"    onclick="App.setDepFilter('enCours')">En cours</button>
+        <button class="dep-filter-btn"        data-filter="aControler" onclick="App.setDepFilter('aControler')">À contrôler</button>
+        <button class="dep-filter-btn"        data-filter="termine"    onclick="App.setDepFilter('termine')">Terminé</button>
+        <button class="dep-filter-btn"        data-filter="deCote"     onclick="App.setDepFilter('deCote')">De côté</button>
+      </div>
+      <!-- Toggle filtres détaillés -->
+      <button id="dep-filter-toggle" onclick="App.toggleDepFilters()" style="display:flex;align-items:center;gap:6px;background:none;border:1.5px solid #CBD5E1;border-radius:10px;padding:5px 12px;font-size:12px;font-weight:600;color:#64748B;cursor:pointer;margin-bottom:6px;width:100%;">
+        <span style="flex:1;text-align:left;">⚙ Filtres détaillés</span>
+        <span id="dep-filter-badge" style="display:none;background:var(--brand);color:white;border-radius:20px;padding:1px 7px;font-size:11px;font-weight:700;"></span>
+        <span id="dep-filter-chevron" style="font-size:10px;transition:transform 0.2s;">▾</span>
+      </button>
+      <!-- Panneau filtres détaillés (collapsible) -->
+      <div id="dep-filters-panel" style="display:none;background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:10px;padding:12px;margin-bottom:8px;">
+        <!-- Portée : Actifs / Avec partis -->
+        <div style="margin-bottom:12px;">
+          <div style="font-size:11px;font-weight:700;color:#94A3B8;letter-spacing:.04em;margin-bottom:6px;">PORTÉE</div>
+          <div class="scope-seg">
+            <button class="scope-btn active" data-scope="actifs"     onclick="App.setDepScope('actifs')">Actifs</button>
+            <button class="scope-btn"        data-scope="avecPartis" onclick="App.setDepScope('avecPartis')">Avec partis</button>
+          </div>
+        </div>
+        <!-- Plage de dates -->
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;font-weight:700;color:#94A3B8;letter-spacing:.04em;margin-bottom:6px;">PÉRIODE (date de début)</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <button id="dep-date-all-btn" onclick="App.resetDepDates()" style="padding:4px 12px;border-radius:16px;border:1.5px solid var(--brand);background:var(--brand);color:white;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">Tout</button>
+            <div style="display:flex;align-items:center;gap:4px;font-size:12px;color:#475569;">
+              <span style="font-weight:600;">Du</span>
+              <input type="date" id="dep-date-from" class="input-field" onchange="App.onDepDateChange()" style="font-size:12px;padding:4px 8px;width:130px;">
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;font-size:12px;color:#475569;">
+              <span style="font-weight:600;">Au</span>
+              <input type="date" id="dep-date-to" class="input-field" onchange="App.onDepDateChange()" style="font-size:12px;padding:4px 8px;width:130px;">
+            </div>
+          </div>
+        </div>
+        <!-- Filtre par type de module (généré dynamiquement) -->
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#94A3B8;letter-spacing:.04em;margin-bottom:6px;">TYPE DE MODULE</div>
+          <div id="dep-module-filters" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+        </div>
+      </div>
+      <div id="dep-loading" style="text-align:center;padding:40px;display:none;">
+        <div class="spinner"></div>
+        <p style="color:#64748B;">Chargement de la liste...</p>
+      </div>
+      <div id="dep-list"></div>
+      <div id="no-departures" style="text-align:center;padding:48px 0 32px;color:#94A3B8;display:none;">
+        <div style="font-size:52px;margin-bottom:12px;">🚛</div>
+        <p style="font-size:16px;font-weight:600;">Aucun article en production</p>
+        <p style="font-size:13px;margin-top:4px;">Les articles actifs du Planning apparaîtront ici</p>
+      </div>
+      <!-- Barre flottante sélection -->
+      <div id="dep-lv-bar" style="display:none;position:sticky;bottom:0;background:#1E293B;border-radius:12px;margin:8px -4px 0;padding:10px 14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span id="dep-lv-count" style="color:#94A3B8;font-weight:600;font-size:12px;flex-shrink:0;"></span>
+          <div style="display:flex;gap:8px;flex-shrink:0;">
+            <button id="dep-mark-parti-btn" onclick="App.depMarkParti()"
+              style="background:#10B981;color:white;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">
+              ✅ Parti →
+            </button>
+            <button onclick="App.depCreateLv()"
+              style="background:#3B82F6;color:white;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">
+              📄 LV →
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- ── VIEW : DEPARTURE DETAIL ──────────────────────────────────────── -->
+    <div class="view" id="view-dep-detail">
+      <div id="dep-detail-body"></div>
+    </div>
+    <!-- ── VIEW : ARCHIVE (Partis) ─────────────────────────────────────── -->
+    <div class="view" id="view-archive">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <h2 style="font-size:20px;font-weight:700;color:#1E293B;">Partis</h2>
+        <button onclick="App.loadArchive(true)" style="background:#EBF5FB;color:var(--brand);border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻ Actualiser</button>
+      </div>
+      <p style="font-size:12px;color:#94A3B8;margin-bottom:12px;">Articles marqués comme partis dans le Planning</p>
+      <div id="archive-loading" style="text-align:center;padding:40px;display:none;">
+        <div class="spinner"></div>
+        <p style="color:#64748B;">Chargement des archives...</p>
+      </div>
+      <div id="archive-search" style="margin-bottom:12px;display:none;">
+        <input type="search" id="archive-query" class="input-field" placeholder="🔍 Rechercher un code ou chantier…" oninput="App._filterArchive()" style="font-size:14px;">
+      </div>
+      <div id="archive-list"></div>
+      <div id="no-archive" style="text-align:center;padding:48px 0 32px;color:#94A3B8;display:none;">
+        <div style="font-size:52px;margin-bottom:12px;">📦</div>
+        <p style="font-size:16px;font-weight:600;">Aucun article parti</p>
+        <p style="font-size:13px;margin-top:4px;">Les articles partis du Planning apparaîtront ici</p>
+      </div>
+    </div>
+    <!-- ── VIEW : HISTORY ───────────────────────────────────────────────── -->
+    <div class="view" id="view-history">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <h2 style="font-size:20px;font-weight:700;color:#1E293B;">Historique</h2>
+        <button onclick="App.clearHistory()" style="background:#FEF2F2;color:#991B1B;border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">Effacer</button>
+      </div>
+      <div id="hist-list"></div>
+      <div id="no-history" style="text-align:center;padding:48px 0 32px;color:#94A3B8;">
+        <div style="font-size:52px;margin-bottom:12px;">🕐</div>
+        <p style="font-size:16px;font-weight:600;">Aucun historique</p>
+      </div>
+    </div>
+    <!-- ── VIEW : STOCK DASHBOARD ──────────────────────────────────────── -->
+    <div class="view" id="view-stock-dashboard">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <h2 style="font-size:20px;font-weight:700;color:#1E293B;">Tableau de bord</h2>
+        <button onclick="App.loadStockDashboard(true)"
+          style="background:#EFF6FF;color:#1D4ED8;border:none;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
+          🔄 Actualiser
+        </button>
+      </div>
+      <!-- KPIs -->
+      <div class="dash-kpi-grid" id="dash-kpi-grid">
+        <div style="text-align:center;padding:24px;color:#94A3B8;grid-column:1/-1;font-size:13px;">Chargement…</div>
+      </div>
+      <!-- Saisie rapide -->
+      <button onclick="App.openSaisieModal()"
+        style="width:100%;padding:14px;border-radius:12px;border:none;background:var(--brand);color:white;
+               font-size:15px;font-weight:700;cursor:pointer;margin-bottom:14px;letter-spacing:.3px;
+               display:flex;align-items:center;justify-content:center;gap:8px;">
+        ⚡ Saisie rapide
+      </button>
+      <!-- Alertes -->
+      <div class="dash-section" id="dash-alerts-section" style="display:none">
+        <div class="dash-section-title">⚠️ Alertes stock</div>
+        <div id="dash-alerts-list"></div>
+        <button onclick="App.go('stock')" style="width:100%;margin-top:4px;background:transparent;border:1.5px solid #E2E8F0;color:#475569;padding:7px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
+          Voir tout le catalogue →
+        </button>
+      </div>
+      <!-- Mouvements récents -->
+      <div class="dash-section">
+        <div class="dash-section-title">📋 Mouvements récents</div>
+        <div id="dash-mvt-list">
+          <div style="text-align:center;padding:16px;color:#94A3B8;font-size:13px;">Chargement…</div>
+        </div>
+        <div id="dash-mvt-more"></div>
+      </div>
+    </div>
+    <!-- ── VIEW : STOCK ─────────────────────────────────────────────────── -->
+    <div class="view" id="view-stock">
+
+      <!-- Barre de filtres sticky -->
+      <div style="position:sticky;top:0;z-index:10;background:#F0F4F8;padding:10px 0 8px;margin:-16px -16px 12px;padding-left:16px;padding-right:16px;">
+        <input id="stock-search" type="search" class="input-field" placeholder="🔍 Rechercher une référence ou description…"
+          oninput="App.setStockSearch(this.value)"
+          style="margin-bottom:8px;font-size:14px;">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+          <!-- Toggle Mes refs -->
+          <button id="stock-myrefs-btn" onclick="App.toggleStockMyRefs()"
+            style="background:var(--accent);border:1.5px solid var(--accent);color:white;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+            ★ Mes références
+          </button>
+          <!-- Toggle alertes seuil -->
+          <button id="stock-alerts-btn" onclick="App.toggleStockAlerts()"
+            style="background:#F1F5F9;border:1.5px solid #CBD5E1;color:#64748B;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+            ⚠️ Alertes
+          </button>
+          <!-- Toggle miniatures -->
+          <button id="stock-thumbs-btn" onclick="App.toggleStockThumbs()"
+            style="background:#F1F5F9;border:1.5px solid #CBD5E1;color:#64748B;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+            🖼 Photos
+          </button>
+          <!-- Actualiser quantités -->
+          <button id="stock-refresh-btn" onclick="App.refreshStockQty()"
+            style="background:#F1F5F9;border:1.5px solid #CBD5E1;color:#475569;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;margin-left:auto;">
+            🔄 Actualiser
+          </button>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <!-- Filtres famille -->
+          <button id="stock-famille-all" onclick="App.setStockFamille('')"
+            class="stock-famille-btn active"
+            style="white-space:nowrap;">Toutes</button>
+          <div id="stock-famille-filters" style="display:flex;gap:5px;flex-wrap:wrap;"></div>
+        </div>
+        <div style="margin-top:6px;font-size:11px;color:#94A3B8;" id="stock-count-label"></div>
+
+        <!-- Barre saisie groupée -->
+        <div style="display:flex;gap:5px;align-items:center;margin-top:8px;flex-wrap:wrap;">
+          <button id="batch-btn-entrée" onclick="App.setBatchType('entrée')"
+            style="padding:6px 10px;border-radius:8px;border:1.5px solid #E2E8F0;background:#F8FAFC;font-size:11px;font-weight:700;cursor:pointer;color:#64748B;">
+            ➕ Entrée
+          </button>
+          <button id="batch-btn-sortie" onclick="App.setBatchType('sortie')"
+            style="padding:6px 10px;border-radius:8px;border:1.5px solid #E2E8F0;background:#F8FAFC;font-size:11px;font-weight:700;cursor:pointer;color:#64748B;">
+            ➖ Sortie
+          </button>
+          <button id="batch-btn-inventaire" onclick="App.setBatchType('inventaire')"
+            style="padding:6px 10px;border-radius:8px;border:1.5px solid #E2E8F0;background:#F8FAFC;font-size:11px;font-weight:700;cursor:pointer;color:#64748B;">
+            📋 Inventaire
+          </button>
+          <input type="text" id="batch-note-input" placeholder="Note…"
+            style="flex:1;min-width:80px;padding:6px 9px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:12px;background:white;">
+          <span id="batch-count-label" style="font-size:11px;color:#94A3B8;white-space:nowrap;"></span>
+          <button id="batch-submit-btn" onclick="App.submitBatchMv()"
+            style="display:none;background:var(--brand);color:white;border:none;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;align-items:center;gap:4px;">
+            ✓ Valider <span id="batch-count-chip">0</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Loading -->
+      <div id="stock-loading" style="text-align:center;padding:40px 0;display:none;">
+        <div class="spinner"></div>
+        <p style="color:#94A3B8;font-size:13px;margin-top:10px;">Chargement du catalogue…</p>
+      </div>
+
+      <!-- Liste des pièces -->
+      <div id="stock-list"></div>
+
+    </div>
+    <!-- ── VIEW : STOCK DETAIL ──────────────────────────────────────────── -->
+    <div class="view" id="view-stock-detail">
+      <div id="stock-detail-body"></div>
+    </div>
+    <!-- ── VIEW : STOCK HISTORY ─────────────────────────────────────────── -->
+    <div class="view" id="view-stock-history">
+      <!-- KPIs -->
+      <div class="hist-kpi-row" id="hist-kpi-row" style="margin-bottom:12px;">
+        <div class="hist-kpi"><div class="hist-kpi-val" id="hist-kpi-ops">—</div><div class="hist-kpi-lbl">Opérations</div></div>
+        <div class="hist-kpi"><div class="hist-kpi-val" id="hist-kpi-lines">—</div><div class="hist-kpi-lbl">Lignes</div></div>
+        <div class="hist-kpi"><div class="hist-kpi-val" id="hist-kpi-lastliv">—</div><div class="hist-kpi-lbl">Dernière livraison</div></div>
+      </div>
+      <!-- Loading -->
+      <div id="hist-loading" style="text-align:center;padding:40px 0;display:none;">
+        <div class="spinner"></div>
+        <p style="color:#94A3B8;font-size:13px;margin-top:10px;">Chargement de l'historique…</p>
+      </div>
+      <!-- Sticky: sous-onglets + filtres opérations -->
+      <div style="position:sticky;top:0;z-index:10;background:#F0F4F8;margin:0 -16px 12px;padding:0 16px 6px;">
+        <div class="shist-tabs">
+          <button class="shist-tab-btn active" id="shtab-ops"   onclick="App.switchHistTab('ops')">Opérations</button>
+          <button class="shist-tab-btn"        id="shtab-prod"  onclick="App.switchHistTab('prod')">Par produit</button>
+          <button class="shist-tab-btn"        id="shtab-bilan" onclick="App.switchHistTab('bilan')">Bilan</button>
+        </div>
+        <!-- Filtres opérations (masqués sur les autres onglets) -->
+        <div id="shist-ops-filters" style="margin-top:8px;">
+          <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px;">
+            <button class="hist-type-btn active" data-htype="" onclick="App.setHistFilter('')"
+              style="padding:5px 10px;border-radius:16px;border:1.5px solid var(--brand);background:var(--brand);color:white;font-size:11px;font-weight:600;cursor:pointer;">Tous</button>
+            <button class="hist-type-btn" data-htype="entrée" onclick="App.setHistFilter('entrée')"
+              style="padding:5px 10px;border-radius:16px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:11px;font-weight:600;cursor:pointer;">➕ Entrées</button>
+            <button class="hist-type-btn" data-htype="sortie" onclick="App.setHistFilter('sortie')"
+              style="padding:5px 10px;border-radius:16px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:11px;font-weight:600;cursor:pointer;">➖ Sorties</button>
+            <button class="hist-type-btn" data-htype="pose" onclick="App.setHistFilter('pose')"
+              style="padding:5px 10px;border-radius:16px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:11px;font-weight:600;cursor:pointer;">🔧 Poses</button>
+            <button class="hist-type-btn" data-htype="inventaire" onclick="App.setHistFilter('inventaire')"
+              style="padding:5px 10px;border-radius:16px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#64748B;font-size:11px;font-weight:600;cursor:pointer;">📋 Inventaires</button>
+          </div>
+          <input id="hist-search" type="search" class="input-field" placeholder="🔍 N° BL, module, référence produit…"
+            oninput="App.setHistSearch(this.value)" style="font-size:13px;">
+          <div id="hist-count-label" style="margin-top:5px;font-size:11px;color:#94A3B8;"></div>
+        </div>
+      </div>
+      <!-- Pane : Opérations -->
+      <div id="shist-pane-ops">
+        <div id="shist-list"></div>
+      </div>
+      <!-- Pane : Par produit -->
+      <div id="shist-pane-prod" style="display:none;">
+        <p class="shist-section-lbl">Références les plus consommées</p>
+        <div id="shist-top-list" style="background:white;border:1px solid #E2E8F0;border-radius:10px;padding:4px 10px;margin-bottom:16px;"></div>
+        <p class="shist-section-lbl">Toutes les références</p>
+        <input id="shist-prod-search" type="search" class="input-field" placeholder="Filtrer par référence…"
+          oninput="App._renderProdChips(this.value)" style="font-size:13px;margin-bottom:8px;">
+        <div id="shist-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px;"></div>
+        <!-- Détail produit -->
+        <div id="shist-prod-detail" class="shist-prod-detail" style="display:none;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">
+            <div style="min-width:0;flex:1;margin-right:10px;">
+              <p style="font-size:10px;font-family:'Courier New',monospace;color:#94A3B8;margin:0 0 2px;" id="spd-ref"></p>
+              <p style="font-size:15px;font-weight:600;margin:0;color:#1E293B;line-height:1.3;" id="spd-des"></p>
+            </div>
+            <div style="text-align:right;flex-shrink:0;">
+              <p style="font-size:10px;color:#94A3B8;margin:0 0 1px;">Stock actuel</p>
+              <p style="font-size:22px;font-weight:800;margin:0;color:#1E293B;line-height:1;" id="spd-stock"></p>
+              <p style="font-size:10px;color:#94A3B8;margin:3px 0 0;" id="spd-conso"></p>
+            </div>
+          </div>
+          <div id="spd-spark" style="margin:4px 0 10px;"></div>
+          <div style="border-top:1px solid #F1F5F9;padding-top:10px;">
+            <table style="width:100%;font-size:12px;border-collapse:collapse;">
+              <thead><tr style="color:#94A3B8;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;">
+                <th style="text-align:left;padding:3px 0;">Date</th>
+                <th style="text-align:left;padding:3px 6px;">Opération</th>
+                <th style="text-align:right;padding:3px 0;">Mvt</th>
+                <th style="text-align:right;padding:3px 0;">Solde</th>
+              </tr></thead>
+              <tbody id="spd-rows"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <!-- Pane : Bilan mensuel -->
+      <div id="shist-pane-bilan" style="display:none;">
+        <div id="shist-bilan-cnt"></div>
+      </div>
+    </div>
+
+    <!-- ── VIEW : STOCK SYNC ────────────────────────────────────────────── -->
+    <div class="view" id="view-stock-sync">
+      <h2 style="font-size:20px;font-weight:700;color:#1E293B;margin-bottom:14px;">Synchro catalogue</h2>
+
+      <!-- ── Section import fichier client ── -->
+      <div class="card" style="margin-bottom:12px;">
+        <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">
+          📥 Importer fichier client (.xls / .xlsx)
+        </div>
+
+        <!-- Étape 0 : dropzone fichier -->
+        <div id="xls-step-file">
+          <label id="xls-dropzone"
+            style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+                   border:2px dashed #CBD5E1;border-radius:10px;padding:22px 16px;cursor:pointer;
+                   background:#F8FAFC;transition:border-color .15s,background .15s;">
+            <span style="font-size:32px;">📂</span>
+            <span style="font-size:13px;font-weight:600;color:#475569;">Choisir le fichier catalogue client</span>
+            <span style="font-size:11px;color:#94A3B8;">.xls, .xlsx acceptés</span>
+            <input type="file" id="xls-input" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              onchange="App.onXlsSelected(this)" style="display:none;">
+          </label>
+        </div>
+
+        <!-- Étape 1+ : assistant de configuration -->
+        <div id="xls-step-config" style="display:none;">
+
+          <!-- Barre fichier + reset -->
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+            <span style="font-size:18px;">📄</span>
+            <span id="xls-file-name" style="flex:1;font-size:12px;font-weight:600;color:#1E293B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+            <button onclick="App.cancelXlsImport()"
+              style="background:#F1F5F9;border:none;padding:4px 10px;border-radius:6px;font-size:11px;color:#64748B;cursor:pointer;white-space:nowrap;">
+              ✕ Changer
+            </button>
+          </div>
+
+          <!-- Sélection de l'onglet -->
+          <div style="margin-bottom:10px;">
+            <div style="font-size:10px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;">Onglet :</div>
+            <div id="xls-tab-btns" style="display:flex;gap:5px;flex-wrap:wrap;"></div>
+          </div>
+
+          <!-- Table de données brutes (scrollable) -->
+          <div style="margin-bottom:10px;">
+            <div style="font-size:10px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">
+              Aperçu brut &nbsp;<span style="font-weight:400;font-size:9px;color:#CBD5E1;">— clique sur un № pour définir la ligne d'en-têtes</span>
+            </div>
+            <div id="xls-raw-table" style="overflow-x:auto;border:1px solid #E2E8F0;border-radius:8px;max-height:200px;overflow-y:auto;font-size:10px;"></div>
+          </div>
+
+          <!-- Correspondance des colonnes -->
+          <div style="margin-bottom:10px;">
+            <div style="font-size:10px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">Correspondance des colonnes :</div>
+            <div id="xls-col-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;"></div>
+          </div>
+
+          <!-- Aperçu parsé + diff -->
+          <div id="xls-preview-section" style="margin-bottom:10px;display:none;">
+            <div style="font-size:10px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;">Aperçu import :</div>
+            <div id="xls-diff-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px;"></div>
+            <div id="xls-preview-sample" style="max-height:160px;overflow-y:auto;border:1px solid #E2E8F0;border-radius:8px;font-size:11px;"></div>
+          </div>
+
+          <!-- Bouton import -->
+          <button id="xls-submit-btn" onclick="App.submitXlsImport()" disabled
+            style="width:100%;padding:11px;border:none;background:#94A3B8;color:white;border-radius:9px;font-size:13px;font-weight:700;cursor:not-allowed;">
+            ✅ Importer dans le catalogue
+          </button>
+        </div>
+      </div>
+
+      <!-- ── Section diff snapshot ── -->
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-size:11px;color:#94A3B8;font-weight:600;text-transform:uppercase;letter-spacing:.5px;">
+            🔄 État du snapshot
+          </div>
+          <button onclick="App.loadStockSync(true)"
+            style="background:#EFF6FF;color:#1D4ED8;border:none;padding:5px 9px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;">
+            Vérifier
+          </button>
+        </div>
+        <div id="sync-body">
+          <div style="text-align:center;padding:20px;color:#94A3B8;font-size:12px;">
+            Appuie sur "Vérifier" pour comparer le catalogue avec le snapshot enregistré.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW : BCB MENU ─────────────────────────────────────────────── -->
+    <div class="view" id="view-bcb-menu">
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#1D4ED8,#1E40AF);color:white;padding:20px 16px 24px;">
+        <div style="font-size:11px;font-weight:700;opacity:.65;letter-spacing:.8px;text-transform:uppercase;margin-bottom:4px;">Activité</div>
+        <div style="font-size:22px;font-weight:800;">BCB Off Market</div>
+        <div id="bcb-menu-status" style="font-size:12px;opacity:.75;margin-top:4px;">Chargement…</div>
+      </div>
+      <!-- Loader -->
+      <div id="bcb-menu-loader" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:64px 16px;gap:14px;">
+        <div class="spinner"></div>
+        <div style="font-size:13px;color:#64748B;font-weight:500;">Chargement des données…</div>
+      </div>
+      <!-- Grid (masqué pendant le chargement) -->
+      <div id="bcb-menu-grid" style="display:none;padding:20px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <!-- Lots -->
+          <div class="activity-card" data-ready="true" onclick="App.go('bcb-lots')">
+            <div class="activity-icon">📦</div>
+            <div class="activity-name">Lots</div>
+            <div class="activity-desc">Stock BCB · Acheteurs</div>
+            <span id="bcb-menu-badge-lots" class="activity-badge badge-loading">⟳ Chargement…</span>
+          </div>
+          <!-- Départ hub -->
+          <div class="activity-card" data-ready="true" onclick="App.go('bcb-depart')">
+            <div class="activity-icon">🚛</div>
+            <div class="activity-name">Départ</div>
+            <div class="activity-desc">Consignes · Chargement · Enlèvements</div>
+            <span id="bcb-menu-badge-depart" class="activity-badge badge-soon">—</span>
+          </div>
+          <!-- Import acheteurs (pleine largeur) -->
+          <div class="activity-card" data-ready="true" onclick="App.go('bcb-import')" style="grid-column:1/-1;">
+            <div class="activity-icon">📋</div>
+            <div class="activity-name">Import acheteurs</div>
+            <div class="activity-desc">Importer une liste depuis un fichier XLS / CSV</div>
+            <span class="activity-badge badge-soon">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW : BCB IMPORT ACHETEURS ──────────────────────────────────── -->
+    <div class="view" id="view-bcb-import">
+      <!-- Sticky header -->
+      <div style="background:#1D4ED8;color:white;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;">
+        <div>
+          <div style="font-size:15px;font-weight:700;">Import acheteurs</div>
+          <div style="font-size:11px;opacity:.75;" id="bcb-imp-step-label">Étape 1 — Chargement du fichier</div>
+        </div>
+        <button onclick="App.go('bcb-menu')" style="background:rgba(255,255,255,.15);border:none;color:white;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;">✕ Fermer</button>
+      </div>
+
+      <!-- Étape 1 : drop zone -->
+      <div id="bcb-imp-step1" style="padding:24px 16px;">
+        <div id="bcb-imp-drop"
+          onclick="document.getElementById('bcb-imp-file').click()"
+          ondragover="event.preventDefault();this.style.borderColor='#1D4ED8';this.style.background='#EFF6FF'"
+          ondragleave="this.style.borderColor='#CBD5E1';this.style.background='#F8FAFC'"
+          ondrop="event.preventDefault();this.style.borderColor='#CBD5E1';this.style.background='#F8FAFC';App.bcbImportHandleFile(event.dataTransfer.files[0])"
+          style="border:2px dashed #CBD5E1;border-radius:14px;padding:48px 20px;text-align:center;cursor:pointer;background:#F8FAFC;transition:all .2s;">
+          <div style="font-size:44px;margin-bottom:12px;">📂</div>
+          <div style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:6px;">Déposer un fichier ici</div>
+          <div style="font-size:12px;color:#64748B;margin-bottom:16px;">ou cliquer pour parcourir</div>
+          <div style="font-size:11px;color:#94A3B8;background:#E2E8F0;border-radius:6px;padding:4px 12px;display:inline-block;">CSV · XLS · XLSX</div>
+        </div>
+        <input type="file" id="bcb-imp-file" accept=".csv,.xls,.xlsx,.ods" style="display:none" onchange="App.bcbImportHandleFile(this.files[0])">
+        <div id="bcb-imp-s1-loading" style="display:none;text-align:center;padding:20px;color:#64748B;font-size:13px;margin-top:14px;">⏳ Lecture du fichier…</div>
+        <div id="bcb-imp-s1-error" style="display:none;margin-top:14px;background:#FEF2F2;border:1px solid #FCA5A5;border-radius:10px;padding:12px 14px;font-size:12px;color:#DC2626;"></div>
+      </div>
+
+      <!-- Étape 2 : mapping colonnes -->
+      <div id="bcb-imp-step2" style="display:none;padding:16px;">
+        <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:8px;">Aperçu du fichier</div>
+        <div id="bcb-imp-preview" style="overflow-x:auto;border:1px solid #E2E8F0;border-radius:10px;margin-bottom:14px;max-height:160px;overflow-y:auto;"></div>
+        <div style="display:grid;gap:11px;margin-bottom:14px;">
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#475569;cursor:pointer;">
+            <input type="checkbox" id="bcb-imp-has-header" checked onchange="App.bcbImportUpdateSelects()" style="accent-color:#1D4ED8;width:15px;height:15px;">
+            La première ligne est un en-tête
+          </label>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:#1E293B;display:block;margin-bottom:4px;">Colonne N° BCB <span style="color:#EF4444;">*</span></label>
+            <select id="bcb-imp-sel-bcb" style="width:100%;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;background:white;"></select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:#1E293B;display:block;margin-bottom:4px;">Colonne Acheteur <span style="color:#EF4444;">*</span></label>
+            <select id="bcb-imp-sel-acheteur" style="width:100%;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;background:white;"></select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:#1E293B;display:block;margin-bottom:4px;">Colonne N° vente <span style="color:#94A3B8;font-weight:400;">(optionnel)</span></label>
+            <select id="bcb-imp-sel-vente" style="width:100%;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;background:white;"></select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:#1E293B;display:block;margin-bottom:4px;">Date de vente <span style="color:#EF4444;">*</span></label>
+            <input type="date" id="bcb-imp-date" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+          </div>
+        </div>
+        <button onclick="App.bcbImportAnalyze()" style="width:100%;background:#1D4ED8;color:white;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px;">Analyser →</button>
+        <button onclick="App.bcbImportReset()" style="width:100%;background:white;border:1.5px solid #E2E8F0;color:#64748B;border-radius:10px;padding:10px;font-size:12px;font-weight:600;cursor:pointer;">← Changer de fichier</button>
+      </div>
+
+      <!-- Étape 3 : prévisualisation et confirmation -->
+      <div id="bcb-imp-step3" style="display:none;padding:16px;">
+        <div id="bcb-imp-stats" style="margin-bottom:12px;"></div>
+        <div id="bcb-imp-match-table" style="margin-bottom:12px;"></div>
+        <div id="bcb-imp-unsold" style="margin-bottom:14px;"></div>
+        <div style="display:flex;gap:8px;">
+          <button id="bcb-imp-confirm-btn" onclick="App.bcbImportConfirm()" style="flex:1;background:#059669;color:white;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;"></button>
+          <button onclick="App.bcbImportBack2()" style="background:white;border:1.5px solid #E2E8F0;color:#64748B;border-radius:10px;padding:13px 14px;font-size:12px;font-weight:600;cursor:pointer;">← Retour</button>
+        </div>
+      </div>
+
+      <!-- Étape 4 : résultat -->
+      <div id="bcb-imp-step4" style="display:none;padding:32px 16px;text-align:center;">
+        <div id="bcb-imp-result" style="margin-bottom:24px;"></div>
+        <button onclick="App.go('bcb-lots')" style="width:100%;background:#1D4ED8;color:white;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:10px;">📦 Voir les lots</button>
+        <button onclick="App.bcbImportReset()" style="width:100%;background:white;border:1.5px solid #E2E8F0;color:#64748B;border-radius:10px;padding:10px;font-size:12px;font-weight:600;cursor:pointer;">↩ Nouvel import</button>
+      </div>
+    </div>
+
+    <!-- ── VIEW : BCB LOTS ──────────────────────────────────────────────── -->
+    <div class="view" id="view-bcb-lots">
+      <!-- Barre de contrôle -->
+      <div style="padding:10px 12px 8px;background:#F8FAFC;border-bottom:1px solid #E2E8F0;position:sticky;top:0;z-index:2;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">
+          <div>
+            <div style="font-size:15px;font-weight:700;color:#1E293B;">Lots en attente</div>
+            <div style="font-size:11px;color:#64748B;" id="bcb-lots-subtitle">Chargement…</div>
+          </div>
+          <button onclick="App.bcbPrintMenu()" style="background:white;border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 10px;font-size:14px;cursor:pointer;flex-shrink:0;" title="Imprimer les listes par acheteur">🖨</button>
+          <button onclick="App.bcbLotsLoad(true)" style="background:white;border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 11px;font-size:12px;font-weight:600;color:#1D4ED8;cursor:pointer;flex-shrink:0;">↺</button>
+        </div>
+<input id="bcb-lots-search" type="search" placeholder="Rechercher (code, vendeur, marque, n° série…)" autocomplete="off"
+          oninput="S.bcbLotsSearch=this.value;App.bcbLotsRender()"
+          style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:7px 10px;font-size:12px;outline:none;margin-bottom:7px;">
+        <!-- Filtres colonne (style Excel) -->
+        <div style="display:flex;gap:4px;margin-bottom:7px;">
+          <button id="bcb-flt-acheteur" onclick="App.bcbOpenFilter(event,'acheteur')" style="flex:1;padding:4px 4px;font-size:11px;font-weight:600;border-radius:7px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Acheteur ▾</button>
+          <button id="bcb-flt-vendeur"  onclick="App.bcbOpenFilter(event,'vendeur')"  style="flex:1;padding:4px 4px;font-size:11px;font-weight:600;border-radius:7px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Vendeur ▾</button>
+          <button id="bcb-flt-vente"    onclick="App.bcbOpenFilter(event,'vente')"    style="flex:1;padding:4px 4px;font-size:11px;font-weight:600;border-radius:7px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Vente ▾</button>
+        </div>
+        <!-- Sous-filtres : statuts + tri + sélection -->
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+          <div style="display:flex;gap:4px;">
+            <button id="bcb-sf-arrive"   onclick="App.bcbToggleStatus('arrive')"   style="padding:3px 9px;font-size:11px;font-weight:600;border-radius:6px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Arrivé</button>
+            <button id="bcb-sf-inspecte" onclick="App.bcbToggleStatus('inspecte')" style="padding:3px 9px;font-size:11px;font-weight:600;border-radius:6px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Inspecté</button>
+            <button id="bcb-sf-vendu"    onclick="App.bcbToggleStatus('vendu')"    style="padding:3px 9px;font-size:11px;font-weight:600;border-radius:6px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Vendu</button>
+          </div>
+          <div style="display:flex;gap:4px;">
+            <button id="bcb-sort-btn"    onclick="App.bcbCycleSort()"              style="padding:3px 9px;font-size:11px;font-weight:600;border-radius:6px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;white-space:nowrap;">↑ ID</button>
+            <button id="bcb-select-btn"  onclick="App.bcbToggleSelect()"           style="padding:3px 10px;font-size:13px;border-radius:6px;border:1.5px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;" title="Mode sélection">⊡</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- État chargement -->
+      <div id="bcb-lots-loading" style="display:none;padding:48px 20px;text-align:center;color:#94A3B8;">
+        <div style="font-size:40px;margin-bottom:12px;">⏳</div>
+        <div style="font-size:14px;font-weight:600;color:#475569;">Chargement des lots…</div>
+      </div>
+
+      <!-- État vide -->
+      <div id="bcb-lots-empty" style="display:none;padding:40px 20px;text-align:center;color:#94A3B8;">
+        <div style="font-size:36px;margin-bottom:10px;">✅</div>
+        <div style="font-size:14px;font-weight:600;color:#475569;">Aucun lot en attente</div>
+      </div>
+
+      <!-- Contenu -->
+      <div id="bcb-lots-content" style="padding:8px 10px 24px;display:flex;flex-direction:column;gap:10px;"></div>
+
+      <!-- Dropdown filtre colonne (position:fixed, survole tout) -->
+      <div id="bcb-filter-dropdown" style="display:none;position:fixed;background:white;border:1.5px solid #CBD5E1;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.14);z-index:200;max-height:320px;flex-direction:column;min-width:210px;max-width:270px;">
+        <div style="padding:8px 10px 7px;border-bottom:1px solid #F1F5F9;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+          <span style="font-size:11px;font-weight:700;color:#1E293B;" id="bcb-flt-title"></span>
+          <div style="display:flex;gap:4px;">
+            <button onclick="App.bcbFilterAll()" style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:5px;border:1px solid #E2E8F0;background:white;color:#1D4ED8;cursor:pointer;">Tout</button>
+            <button onclick="App.bcbFilterNone()" style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:5px;border:1px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">Aucun</button>
+            <button onclick="App.bcbCloseFilter()" style="font-size:12px;padding:2px 7px;border-radius:5px;border:1px solid #E2E8F0;background:white;color:#64748B;cursor:pointer;">✕</button>
+          </div>
+        </div>
+        <div id="bcb-flt-items" style="overflow-y:auto;flex:1;padding:4px 0;"></div>
+      </div>
+
+      <!-- Barre de sélection (sticky bas) -->
+      <div id="bcb-select-bar" style="display:none;position:sticky;bottom:0;background:white;border-top:2px solid #1D4ED8;padding:10px 14px;display:none;align-items:center;justify-content:space-between;gap:10px;z-index:3;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button id="bcb-select-all-btn" onclick="App.bcbSelectAll()" style="font-size:11px;font-weight:600;padding:5px 10px;border-radius:7px;border:1.5px solid #E2E8F0;background:white;color:#475569;cursor:pointer;">Tout</button>
+          <span id="bcb-select-count" style="font-size:12px;font-weight:600;color:#1D4ED8;">0 sélectionné</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button disabled style="font-size:11px;font-weight:600;padding:5px 12px;border-radius:7px;border:1.5px solid #E2E8F0;background:#F8FAFC;color:#94A3B8;cursor:default;">Modifier statut →</button>
+          <button onclick="App.bcbClearSelect()" style="font-size:13px;padding:5px 9px;border-radius:7px;border:1.5px solid #E2E8F0;background:white;color:#475569;cursor:pointer;">✕</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW : BCB LOT DÉTAIL ─────────────────────────────────────────── -->
+    <div class="view" id="view-bcb-lot-detail">
+      <div id="bcb-lot-detail-body" style="padding:14px 14px 32px;"></div>
+    </div>
+
+    <!-- ── VIEW : BCB CONSIGNES ──────────────────────────────────────────── -->
+    <div class="view" id="view-bcb-consignes">
+
+      <!-- Hub tabs Départ -->
+      <div style="display:flex;background:white;border-bottom:2px solid #E2E8F0;position:sticky;top:0;z-index:15;">
+        <button onclick="App.go('bcb-consignes')" style="flex:1;padding:10px 4px;font-size:12px;font-weight:700;border:none;border-bottom:2.5px solid #1D4ED8;background:none;cursor:pointer;color:#1D4ED8;margin-bottom:-2px;">📋 Consignes</button>
+        <button onclick="App.go('bcb-depart')"    style="flex:1;padding:10px 4px;font-size:12px;font-weight:600;border:none;border-bottom:2.5px solid transparent;background:none;cursor:pointer;color:#64748B;margin-bottom:-2px;">🚛 Chargement</button>
+        <button onclick="App.go('bcb-enlevements')" style="flex:1;padding:10px 4px;font-size:12px;font-weight:600;border:none;border-bottom:2.5px solid transparent;background:none;cursor:pointer;color:#64748B;margin-bottom:-2px;">📁 Enlèvements</button>
+      </div>
+
+      <!-- Étape 1 : sélection langue -->
+      <div id="bcb-step-lang" style="padding:16px 16px 24px;">
+        <h2 style="font-size:16px;font-weight:700;color:#1E293B;margin-bottom:4px;">Sélectionnez la langue</h2>
+        <p style="font-size:12px;color:#64748B;margin-bottom:16px;">Choisissez la langue du chauffeur / Select driver's language</p>
+        <div id="bcb-lang-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"></div>
+      </div>
+
+      <!-- Étape 2 : consignes + formulaire -->
+      <div id="bcb-step-consignes" style="display:none;">
+        <div style="background:#1D4ED8;color:white;padding:12px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:40px;z-index:10;">
+          <button onclick="App.bcbBackToLang()" style="background:rgba(255,255,255,0.18);border:none;color:white;border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;flex-shrink:0;">← Langue</button>
+          <div>
+            <div style="font-weight:700;font-size:14px;" id="bcb-lang-title"></div>
+            <div style="font-size:11px;opacity:0.75;">Consignes de sécurité</div>
+          </div>
+        </div>
+        <div style="padding:14px 16px 10px;background:#FFF7ED;border-bottom:2px solid #FED7AA;">
+          <div style="font-size:11px;font-weight:700;color:#92400E;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">⚠️ <span id="bcb-rules-title"></span></div>
+          <ol id="bcb-rules-list" style="margin:0;padding-left:20px;font-size:13px;color:#1E293B;line-height:1.75;"></ol>
+        </div>
+        <div style="padding:14px 16px 24px;" id="bcb-form-wrapper">
+          <div style="font-size:11px;font-weight:700;color:#1D4ED8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:14px;" id="bcb-form-title"></div>
+          <div style="display:grid;gap:11px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-nom"></label>
+                <input id="bcb-f-nom" type="text" autocapitalize="words" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-prenom"></label>
+                <input id="bcb-f-prenom" type="text" autocapitalize="words" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-tracteur"></label>
+                <input id="bcb-f-tracteur" type="text" placeholder="AB-123-CD" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;text-transform:uppercase;">
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-remorque"></label>
+                <input id="bcb-f-remorque" type="text" placeholder="XY-456-EF" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;text-transform:uppercase;">
+              </div>
+            </div>
+            <!-- Transporteur -->
+            <div style="border:1px solid #DBEAFE;border-radius:8px;padding:10px;background:#F0F7FF;">
+              <div style="font-size:10px;font-weight:700;color:#1D4ED8;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;" id="bcb-lbl-transport-section"></div>
+              <div style="display:grid;gap:8px;">
+                <div style="position:relative;">
+                  <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-transport-nom"></label>
+                  <input id="bcb-f-transport-nom" type="text" autocapitalize="words" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;"
+                    oninput="App.bcbSuggestAgency('transport',this.value)" onblur="setTimeout(()=>App.bcbHideSuggest('transport'),200)"
+                    onkeydown="App._suggestKeyDown(event,'bcb-suggest-transport',(i)=>App.bcbApplyAgency('transport',i))">
+                  <div id="bcb-suggest-transport" style="display:none;border:1px solid #DBEAFE;border-radius:8px;overflow:hidden;margin-top:2px;background:white;box-shadow:0 4px 12px rgba(0,0,0,.08);"></div>
+                </div>
+                <div>
+                  <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-transport-adresse"></label>
+                  <input id="bcb-f-transport-adresse" type="text" autocapitalize="words" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;">
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                  <div>
+                    <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-transport-ville"></label>
+                    <input id="bcb-f-transport-ville" type="text" autocapitalize="words" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;">
+                  </div>
+                  <div>
+                    <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-transport-pays"></label>
+                    <input id="bcb-f-transport-pays" type="text" list="ann-pays-list" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;" onblur="App.annPaysNormalize(this.id)">
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Clients de destination -->
+            <div style="border:1px solid #CCFBF1;border-radius:8px;padding:10px;background:#F0FDFA;">
+              <div style="font-size:10px;font-weight:700;color:#0F766E;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;">Client 1</div>
+              <div style="display:grid;gap:8px;">
+                <div style="position:relative;">
+                  <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-client"></label>
+                  <input id="bcb-f-client" type="text" autocapitalize="words" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;"
+                    oninput="App.bcbSuggestAgency('client',this.value)" onblur="setTimeout(()=>App.bcbHideSuggest('client'),200)"
+                    onkeydown="App._suggestKeyDown(event,'bcb-suggest-client',(i)=>App.bcbApplyAgency('client',i))">
+                  <div id="bcb-suggest-client" style="display:none;border:1px solid #CCFBF1;border-radius:8px;overflow:hidden;margin-top:2px;background:white;box-shadow:0 4px 12px rgba(0,0,0,.08);"></div>
+                </div>
+                <div>
+                  <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-client-adresse"></label>
+                  <input id="bcb-f-client-adresse" type="text" autocapitalize="words" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;">
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                  <div>
+                    <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-client-ville"></label>
+                    <input id="bcb-f-client-ville" type="text" autocapitalize="words" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;">
+                  </div>
+                  <div>
+                    <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;" id="bcb-lbl-client-pays"></label>
+                    <input id="bcb-f-client-pays" type="text" list="ann-pays-list" autocomplete="nope" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;background:white;" onblur="App.annPaysNormalize(this.id)">
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Clients supplémentaires (ajoutés dynamiquement) -->
+            <div id="bcb-extra-clients"></div>
+            <button type="button" onclick="App.bcbAddClientGroup()"
+              style="background:none;border:1.5px dashed #99F6E4;border-radius:8px;padding:9px;font-size:12px;color:#0F766E;cursor:pointer;width:100%;text-align:center;">
+              + Ajouter un autre client
+            </button>
+          </div>
+          <button onclick="App.bcbSubmitConsigne()" style="margin-top:18px;width:100%;background:#1D4ED8;color:white;border:none;border-radius:10px;padding:13px;font-size:14px;font-weight:600;cursor:pointer;">✅ <span id="bcb-btn-valider"></span></button>
+        </div>
+      </div>
+
+      <!-- Étape 3 : confirmation -->
+      <div id="bcb-step-confirm" style="display:none;padding:32px 20px;text-align:center;">
+        <div style="font-size:56px;margin-bottom:14px;">✅</div>
+        <div style="font-size:17px;font-weight:700;color:#065F46;margin-bottom:8px;" id="bcb-confirm-title"></div>
+        <div id="bcb-confirm-summary" style="background:#F0FDF4;border-radius:12px;padding:14px 16px;margin:14px 0 20px;font-size:13px;color:#1E293B;text-align:left;line-height:1.9;"></div>
+        <button onclick="App.bcbNewConsigne()" style="background:#E2E8F0;color:#1E293B;border:none;border-radius:10px;padding:12px 24px;font-size:13px;font-weight:600;cursor:pointer;" id="bcb-btn-nouveau"></button>
+      </div>
+    </div>
+
+    <!-- ── VIEW : BCB CHARGEMENT ────────────────────────────────────────── -->
+    <div class="view" id="view-bcb-depart">
+      <!-- Hub tabs Départ -->
+      <div style="display:flex;background:white;border-bottom:2px solid #E2E8F0;position:sticky;top:0;z-index:15;">
+        <button onclick="App.go('bcb-consignes')" style="flex:1;padding:10px 4px;font-size:12px;font-weight:600;border:none;border-bottom:2.5px solid transparent;background:none;cursor:pointer;color:#64748B;margin-bottom:-2px;">📋 Consignes</button>
+        <button onclick="App.go('bcb-depart')"    style="flex:1;padding:10px 4px;font-size:12px;font-weight:700;border:none;border-bottom:2.5px solid #1D4ED8;background:none;cursor:pointer;color:#1D4ED8;margin-bottom:-2px;">🚛 Chargement</button>
+        <button onclick="App.go('bcb-enlevements')" style="flex:1;padding:10px 4px;font-size:12px;font-weight:600;border:none;border-bottom:2.5px solid transparent;background:none;cursor:pointer;color:#64748B;margin-bottom:-2px;">📁 Enlèvements</button>
+      </div>
+      <div style="padding:10px 12px 8px;background:#F8FAFC;border-bottom:1px solid #E2E8F0;position:sticky;top:40px;z-index:10;display:flex;align-items:center;gap:8px;">
+        <div style="flex:1;">
+          <div style="font-size:15px;font-weight:700;color:#1E293B;">Chargement BCB</div>
+          <div style="font-size:11px;color:#64748B;">Sélectionner le chauffeur et les lots à enlever</div>
+        </div>
+        <button id="bcb-dep-clear-btn" onclick="App.bcbDepartClear()" style="display:none;background:#F1F5F9;border:1px solid #E2E8F0;border-radius:8px;padding:6px 10px;font-size:11px;color:#64748B;cursor:pointer;white-space:nowrap;">
+          Vider la page
+        </button>
+      </div>
+      <div id="bcb-dep-consigne-section" style="padding:12px 12px 0;">
+        <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Chauffeur</div>
+        <div id="bcb-dep-consigne-picker"></div>
+        <button onclick="App.go('bcb-consignes')"
+          style="margin-top:6px;background:none;border:1px dashed #CBD5E1;border-radius:8px;padding:9px 12px;font-size:12px;color:#64748B;cursor:pointer;width:100%;text-align:left;">
+          + Nouvelle consigne
+        </button>
+        <div style="display:flex;align-items:center;gap:8px;margin:10px 0 4px;">
+          <div style="flex:1;height:1px;background:#E2E8F0;"></div>
+          <span style="font-size:11px;color:#CBD5E1;white-space:nowrap;">ou</span>
+          <div style="flex:1;height:1px;background:#E2E8F0;"></div>
+        </div>
+        <button id="bcb-prep-btn" onclick="App.bcbStartPrepMode()"
+          style="width:100%;background:white;border:1.5px solid #E2E8F0;border-radius:10px;padding:11px 14px;font-size:13px;font-weight:600;color:#475569;cursor:pointer;text-align:left;display:flex;align-items:center;gap:10px;">
+          <span style="font-size:20px;line-height:1;">📦</span>
+          <div>
+            <div>Préparer un chargement</div>
+            <div style="font-size:11px;font-weight:400;color:#94A3B8;margin-top:1px;">Sans chauffeur pré-enregistré</div>
+          </div>
+        </button>
+      </div>
+      <div id="bcb-dep-prepared-section" style="padding:0 12px 8px;display:none;">
+        <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Chargements préparés</div>
+        <div id="bcb-dep-prepared-list"></div>
+      </div>
+      <div id="bcb-dep-lots-section" style="padding:12px;display:none;">
+        <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Acheteur</div>
+        <input id="bcb-dep-buyer-search" type="text" autocomplete="nope" placeholder="Nom de l'acheteur…"
+          oninput="App.bcbDepBuyerSearch(this.value)" onkeydown="App._bcbBuyerKeyDown(event)"
+          style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:4px;">
+        <div id="bcb-dep-buyer-results" class="dest-search-results"></div>
+        <div id="bcb-dep-buyer-active" style="display:none;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:7px 10px;margin-bottom:8px;display:none;align-items:center;gap:6px;">
+          <span id="bcb-dep-buyer-name" style="flex:1;font-size:13px;font-weight:700;color:#1D4ED8;"></span>
+          <button onclick="App.bcbDepBuyerClear()" style="background:none;border:none;font-size:13px;color:#94A3B8;cursor:pointer;padding:2px 4px;">✕ Tout afficher</button>
+        </div>
+        <div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;margin-top:4px;">Lots à enlever</div>
+        <div id="bcb-dep-lots-list"></div>
+      </div>
+      <div id="bcb-dep-bar" style="display:none;position:sticky;bottom:0;background:white;border-top:1px solid #E2E8F0;padding:10px 12px;align-items:center;gap:8px;">
+        <span id="bcb-dep-count" style="flex:1;font-size:13px;color:#64748B;">0 lot sélectionné</span>
+        <button onclick="App.bcbCreateEnlevement()"
+          style="background:#1D4ED8;color:white;border:none;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;">
+          Bon d'enlèvement →
+        </button>
+      </div>
+    </div>
+
+    <!-- ── VIEW : BCB ENLÈVEMENT (pick-list détail) ─────────────────────── -->
+    <div class="view" id="view-bcb-enlevement">
+      <div style="padding:10px 12px 8px;background:#F8FAFC;border-bottom:1px solid #E2E8F0;position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:10px;">
+        <div style="flex:1;">
+          <div style="font-size:15px;font-weight:700;color:#1E293B;" id="bcb-enlev-title">Bon d'enlèvement</div>
+          <div style="font-size:11px;color:#64748B;" id="bcb-enlev-subtitle"></div>
+        </div>
+        <button onclick="App.bcbPrintEnlevement()" style="background:#1E293B;color:white;border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;">🖨 PDF</button>
+        <button onclick="App.bcbEnlevementCreateCmr()" style="background:#1D4ED8;color:white;border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;">CMR →</button>
+        <button onclick="App.bcbDeleteCurEnlevement()" style="background:#FEE2E2;color:#B91C1C;border:none;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:600;cursor:pointer;">🗑</button>
+      </div>
+      <div id="bcb-enlev-body" style="padding:14px 14px 32px;"></div>
+    </div>
+
+    <!-- ── VIEW : BCB ENLÈVEMENTS (historique) ───────────────────────────── -->
+    <div class="view" id="view-bcb-enlevements">
+      <!-- Hub tabs Départ -->
+      <div style="display:flex;background:white;border-bottom:2px solid #E2E8F0;position:sticky;top:0;z-index:15;">
+        <button onclick="App.go('bcb-consignes')" style="flex:1;padding:10px 4px;font-size:12px;font-weight:600;border:none;border-bottom:2.5px solid transparent;background:none;cursor:pointer;color:#64748B;margin-bottom:-2px;">📋 Consignes</button>
+        <button onclick="App.go('bcb-depart')"    style="flex:1;padding:10px 4px;font-size:12px;font-weight:600;border:none;border-bottom:2.5px solid transparent;background:none;cursor:pointer;color:#64748B;margin-bottom:-2px;">🚛 Chargement</button>
+        <button onclick="App.go('bcb-enlevements')" style="flex:1;padding:10px 4px;font-size:12px;font-weight:700;border:none;border-bottom:2.5px solid #1D4ED8;background:none;cursor:pointer;color:#1D4ED8;margin-bottom:-2px;">📁 Enlèvements</button>
+      </div>
+      <div style="padding:10px 12px 8px;background:#F8FAFC;border-bottom:1px solid #E2E8F0;position:sticky;top:40px;z-index:10;">
+        <div style="font-size:15px;font-weight:700;color:#1E293B;">Bons d'enlèvement</div>
+        <div style="font-size:11px;color:#64748B;" id="bcb-enlevs-subtitle">Chargement…</div>
+      </div>
+      <div id="bcb-enlevs-loading" style="display:none;padding:32px;text-align:center;color:#94A3B8;font-size:13px;">Chargement…</div>
+      <div id="bcb-enlevs-empty" style="display:none;padding:32px;text-align:center;color:#94A3B8;font-size:13px;">Aucun bon d'enlèvement</div>
+      <div id="bcb-enlevs-list" style="padding:8px 10px 24px;"></div>
+    </div>
+
+    <!-- ── VIEW : LVU — FORMULAIRE ──────────────────────────────────────── -->
+    <div class="view" id="view-lvu-form">
+      <div style="padding:16px;">
+
+        <!-- Type LV / CMR -->
+        <div class="card" style="margin-bottom:12px;">
+          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Type de document</p>
+          <div style="display:flex;gap:10px;">
+            <button id="lvu-btn-lv" onclick="App.lvuSetType('LV')"
+              style="flex:1;padding:10px;border-radius:10px;border:2px solid #1D4ED8;background:#1D4ED8;color:white;font-size:14px;font-weight:700;cursor:pointer;">
+              LV Nationale
+            </button>
+            <button id="lvu-btn-cmr" onclick="App.lvuSetType('CMR')"
+              style="flex:1;padding:10px;border-radius:10px;border:2px solid #E2E8F0;background:white;color:#64748B;font-size:14px;font-weight:700;cursor:pointer;">
+              CMR Internationale
+            </button>
+          </div>
+        </div>
+
+        <!-- Source -->
+        <div class="card" style="margin-bottom:12px;">
+          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Source de données</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button id="lvu-src-manual" onclick="App.lvuSetSource('manual')"
+              style="flex:1;min-width:80px;padding:8px;border-radius:8px;border:2px solid #1D4ED8;background:#EFF6FF;color:#1D4ED8;font-size:13px;font-weight:600;cursor:pointer;">
+              Manuel
+            </button>
+            <button id="lvu-src-loxam" onclick="App.lvuSetSource('loxam')"
+              style="flex:1;min-width:80px;padding:8px;border-radius:8px;border:2px solid #E2E8F0;background:white;color:#64748B;font-size:13px;font-weight:600;cursor:pointer;">
+              LOXAM
+            </button>
+            <button id="lvu-src-bcb" onclick="App.lvuSetSource('bcb')"
+              style="flex:1;min-width:80px;padding:8px;border-radius:8px;border:2px solid #E2E8F0;background:white;color:#64748B;font-size:13px;font-weight:600;cursor:pointer;">
+              BCB
+            </button>
+            <button id="lvu-src-stock" onclick="App.lvuSetSource('stock')"
+              style="flex:1;min-width:80px;padding:8px;border-radius:8px;border:2px solid #E2E8F0;background:white;color:#64748B;font-size:13px;font-weight:600;cursor:pointer;">
+              Fournitures
+            </button>
+          </div>
+
+          <!-- Sélecteur LOXAM -->
+          <div id="lvu-loxam-picker" style="display:none;margin-top:12px;">
+            <div style="display:flex;gap:8px;margin-bottom:8px;">
+              <input id="lvu-loxam-search" type="text" placeholder="Rechercher..." autocapitalize="none"
+                oninput="App._lvuRenderLoxamList()"
+                style="flex:1;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+              <button onclick="App.lvuApplyLoxam()"
+                style="background:#1D4ED8;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">
+                ✓ Appliquer
+              </button>
+            </div>
+            <div id="lvu-loxam-list" style="max-height:180px;overflow-y:auto;border:1px solid #E2E8F0;border-radius:8px;"></div>
+          </div>
+
+          <!-- Sélecteur BCB -->
+          <div id="lvu-bcb-picker" style="display:none;margin-top:12px;">
+            <div id="lvu-bcb-list" style="max-height:180px;overflow-y:auto;border:1px solid #E2E8F0;border-radius:8px;"></div>
+            <button onclick="App.lvuApplyBcb()"
+              style="margin-top:8px;background:#1D4ED8;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">
+              ✓ Appliquer
+            </button>
+          </div>
+
+          <!-- Sélecteur Stock / Fournitures -->
+          <div id="lvu-stock-picker" style="display:none;margin-top:12px;">
+            <div style="display:flex;gap:8px;margin-bottom:8px;">
+              <input id="lvu-stock-search" type="text" placeholder="Réf., désignation…" autocapitalize="none"
+                oninput="App._lvuRenderStockList()"
+                style="flex:1;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
+              <button onclick="App.lvuApplyStock()"
+                style="background:#1D4ED8;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">
+                ✓ Appliquer
+              </button>
+            </div>
+            <div id="lvu-stock-list" style="max-height:180px;overflow-y:auto;border:1px solid #E2E8F0;border-radius:8px;"></div>
+          </div>
+        </div>
+
+        <!-- Transporteur -->
+        <div class="card" style="margin-bottom:12px;">
+          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Transporteur</p>
+          <div id="lvu-transporteur-btns"></div>
+        </div>
+
+        <!-- Conducteur / Véhicule -->
+        <div class="card" style="margin-bottom:12px;">
+          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Conducteur &amp; Véhicule</p>
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Conducteur(s)</label>
+          <input id="lvu-f-conducteur" type="text" autocapitalize="words" autocomplete="nope" placeholder="Nom Prénom"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:10px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Immat. moteur</label>
+              <input id="lvu-f-immat-moteur" type="text" placeholder="AB-123-CD" autocapitalize="characters" autocomplete="nope"
+                style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;text-transform:uppercase;">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Immat. semi</label>
+              <input id="lvu-f-immat-semi" type="text" placeholder="XY-456-EF" autocapitalize="characters" autocomplete="nope"
+                style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;text-transform:uppercase;">
+            </div>
+          </div>
+        </div>
+
+        <!-- Donneur d'ordre -->
+        <div class="card" style="margin-bottom:12px;">
+          <label style="font-size:13px;font-weight:700;color:#1E293B;display:block;margin-bottom:8px;">Donneur d'ordre</label>
+          <input id="lvu-f-donneur" type="text" autocapitalize="words" autocomplete="nope" placeholder="Société / Nom"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
+        </div>
+
+        <!-- Expéditeur -->
+        <div class="card" style="margin-bottom:12px;">
+          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Expéditeur (chargement)</p>
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Nom / Société</label>
+          <input id="lvu-f-exp-nom" type="text" autocapitalize="words" autocomplete="nope"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Adresse</label>
+          <input id="lvu-f-exp-adresse" type="text" autocapitalize="words" autocomplete="nope"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Ville / CP</label>
+          <input id="lvu-f-exp-ville" type="text" autocapitalize="words" autocomplete="nope"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Pays</label>
+          <input id="lvu-f-exp-pays" type="text" placeholder="ex : FR - France" list="ann-pays-list" autocomplete="nope"
+            onblur="App.annPaysNormalize(this.id)"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
+        </div>
+
+        <!-- Destinataire -->
+        <div class="card" style="margin-bottom:12px;">
+          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Destinataire (livraison)</p>
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Rechercher une agence (code, ville, nom…)</label>
+          <input id="lvu-dest-search" type="text" autocomplete="nope" placeholder="ex : 72 · ARNAGE · LOXAM…"
+            oninput="App.lvuDestSearch(this.value)" onkeydown="App._lvuDestKeyDown(event)"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #BFDBFE;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:4px;background:#F8FBFF;">
+          <div id="lvu-dest-results" class="dest-search-results"></div>
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Nom / Société</label>
+          <input id="lvu-f-dest-nom" type="text" autocapitalize="words" autocomplete="nope"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Adresse</label>
+          <input id="lvu-f-dest-adresse" type="text" autocapitalize="words" autocomplete="nope"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Ville / CP</label>
+          <input id="lvu-f-dest-ville" type="text" autocapitalize="words" autocomplete="nope"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Pays</label>
+          <input id="lvu-f-dest-pays" type="text" placeholder="ex : FR - France" list="ann-pays-list" autocomplete="nope"
+            onblur="App.annPaysNormalize(this.id)"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
+        </div>
+
+        <!-- Marchandises -->
+        <div class="card" style="margin-bottom:12px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <p style="font-size:13px;font-weight:700;color:#1E293B;margin:0;">Marchandises</p>
+            <button onclick="App.lvuAddRow()"
+              style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;">
+              + Ligne
+            </button>
+          </div>
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead>
+                <tr style="background:#F8FAFC;">
+                  <th style="padding:6px 4px;text-align:left;color:#64748B;font-weight:600;width:12%;">Qté</th>
+                  <th style="padding:6px 4px;text-align:left;color:#64748B;font-weight:600;">Description</th>
+                  <th style="padding:6px 4px;text-align:left;color:#64748B;font-weight:600;width:15%;">Poids (t)</th>
+                  <th style="padding:6px 4px;width:8%;"></th>
+                </tr>
+              </thead>
+              <tbody id="lvu-marchandises-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Informations complémentaires -->
+        <div class="card" style="margin-bottom:12px;">
+          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Informations complémentaires</p>
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Documents annexes</label>
+          <input id="lvu-f-doc" type="text"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:10px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">N° de commande</label>
+          <input id="lvu-f-commande" type="text"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:10px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Remplace la LV annulée (facultatif)</label>
+          <select id="lvu-f-remplace" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:10px;background:white;">
+            <option value="">— Aucune —</option>
+          </select>
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Note de livraison</label>
+          <textarea id="lvu-f-note" rows="3"
+            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;resize:vertical;font-family:inherit;margin-bottom:10px;"></textarea>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin-bottom:8px;">
+            <input type="checkbox" id="lvu-f-livraison-check" onchange="App.lvuToggleLivraisonPrevue()"> Livraison prévue
+          </label>
+          <input id="lvu-f-livraison-date" type="date" style="display:none;width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:10px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:8px;">Convoi exceptionnel</label>
+          <div style="display:flex;gap:10px;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+              <input type="radio" name="lvu-convoi" id="lvu-convoi-non" value="non" checked> Non
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+              <input type="radio" name="lvu-convoi" id="lvu-convoi-oui" value="oui"> Oui
+            </label>
+          </div>
+        </div>
+
+        <!-- Bouton générer -->
+        <button onclick="App.lvuGenerate()"
+          style="width:100%;background:#1D4ED8;color:white;border:none;border-radius:12px;padding:15px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:16px;">
+          <span id="lvu-btn-generate-text">📄 Générer la lettre de voiture</span>
+        </button>
+
+        <!-- Zone résultat -->
+        <div id="lvu-result" style="display:none;">
+          <div class="card" style="margin-bottom:12px;background:#F0FDF4;border:1.5px solid #86EFAC;">
+            <div style="font-size:16px;font-weight:700;color:#065F46;margin-bottom:6px;" id="lvu-result-title">✅ LV N° 01446 générée</div>
+            <div style="font-size:13px;color:#1E293B;margin-bottom:14px;" id="lvu-result-info"></div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <button onclick="App.lvuPrint()"
+                style="flex:1;min-width:120px;background:#1D4ED8;color:white;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;">
+                🖨️ Imprimer / PDF
+              </button>
+              <button onclick="App.lvuSaveToDrive()"
+                style="flex:1;min-width:120px;background:white;color:#1D4ED8;border:2px solid #1D4ED8;border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;">
+                ☁️ Enregistrer Drive
+              </button>
+            </div>
+            <div id="lvu-save-status" style="margin-top:10px;font-size:12px;color:#64748B;"></div>
+          </div>
+          <button onclick="App.lvuNew()"
+            style="width:100%;background:#E2E8F0;color:#1E293B;border:none;border-radius:10px;padding:12px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px;">
+            + Nouvelle lettre de voiture
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── VIEW : LVU — HISTORIQUE ────────────────────────────────────────── -->
+    <div class="view" id="view-lvu-history">
+      <div style="padding:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+          <h2 style="font-size:18px;font-weight:700;color:#1E293B;margin:0;">Historique LV / CMR</h2>
+          <button onclick="App.lvuLoadHistory(true)"
+            style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;">
+            ↻ Actualiser
+          </button>
+        </div>
+        <div id="lvu-history-filters" style="display:flex;gap:6px;margin-bottom:12px;">
+          <button onclick="App.lvuSetHistoryFilter('tous')" data-filter="tous"
+            style="border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#475569;">Tous</button>
+          <button onclick="App.lvuSetHistoryFilter('disponibles')" data-filter="disponibles"
+            style="border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;background:#1E293B;color:white;">Disponibles</button>
+          <button onclick="App.lvuSetHistoryFilter('partis')" data-filter="partis"
+            style="border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#475569;">Partis</button>
+          <button onclick="App.lvuSetHistoryFilter('annulees')" data-filter="annulees"
+            style="border:1.5px solid #E2E8F0;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;background:white;color:#475569;">Annulées</button>
+        </div>
+        <div id="lvu-history-list" style="background:white;border:1px solid #E2E8F0;border-radius:10px;overflow:hidden;">
+          <div style="text-align:center;padding:40px;color:#94A3B8;font-size:14px;">Chargement…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VIEW : SETTINGS ──────────────────────────────────────────────── -->
+    <div class="view" id="view-settings">
+      <h2 style="font-size:20px;font-weight:700;color:#1E293B;margin-bottom:18px;">Réglages</h2>
+      <div class="settings-grid">
+
+      <!-- Carte utilisateur connecté -->
+      <div class="card" style="margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+          <div style="width:44px;height:44px;border-radius:50%;background:var(--brand);display:flex;align-items:center;justify-content:center;font-size:20px;color:white;flex-shrink:0;">👤</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:15px;font-weight:700;color:#1E293B;" id="settings-user-name">—</div>
+            <div style="font-size:12px;color:#64748B;margin-top:2px;" id="settings-user-role">—</div>
+          </div>
+        </div>
+        <button onclick="App._showChangePin()"
+          style="width:100%;background:#F8FAFC;border:1.5px solid #E2E8F0;color:#475569;padding:10px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:8px;">
+          🔑 Changer mon code PIN
+        </button>
+        <button onclick="App.logout()"
+          style="width:100%;background:#FEF2F2;border:1.5px solid #FECACA;color:#991B1B;padding:10px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;">
+          ↪ Se déconnecter
+        </button>
+      </div>
+
+      <div class="card" style="margin-bottom:12px;">
+        <p style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:14px;">🔗 URL de l'API</p>
+        <div style="margin-bottom:10px;">
+          <label class="label-sm" for="set-url">URL du proxy Vercel (recommandé) ou AppScript direct</label>
+          <input type="url" id="set-url" class="input-field" placeholder="https://sonotrad.vercel.app/api/proxy" style="font-size:12px;">
+          <div style="margin-top:8px;background:#F0F9FF;border:1px solid #BAE6FD;border-radius:8px;padding:8px 10px;">
+            <p style="font-size:11px;color:#0369A1;font-weight:600;margin-bottom:4px;">Via proxy Vercel (recommandé sur WiFi atelier)</p>
+            <p style="font-size:11px;color:#0369A1;margin:0;">→ <code style="font-size:10px;background:#E0F2FE;padding:1px 4px;border-radius:3px;">https://votre-app.vercel.app/api/proxy</code></p>
+            <p style="font-size:11px;color:#64748B;margin-top:6px;font-weight:600;">URL AppScript directe (sur mobile/4G)</p>
+            <p style="font-size:11px;color:#64748B;margin:0;">→ AppScript → Déployer → Gérer les déploiements → URL /exec</p>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="App.saveSettings()">Enregistrer</button>
+      </div>
+      <div class="card" style="margin-bottom:12px;">
+        <p style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:10px;">ℹ️ Informations</p>
+        <p style="font-size:13px;color:#64748B;">Version 1.0.0 · Sonotrad</p>
+        <p style="font-size:13px;color:#64748B;margin-top:3px;" id="info-codes">Codes en cache : –</p>
+        <p style="font-size:13px;color:#64748B;margin-top:3px;" id="info-hist">Entrées historique : –</p>
+        <button onclick="App.reloadCodes()" style="margin-top:10px;background:#EBF5FB;color:var(--brand);border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻ Recharger les codes existants</button>
+      </div>
+      <div class="card" style="margin-bottom:12px;">
+        <p style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:10px;">🔧 Diagnostic API</p>
+        <button onclick="App.runDiag()" style="background:#F0FDF4;color:#14532D;border:1px solid #86EFAC;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;width:100%;margin-bottom:8px;">▶ Tester les endpoints</button>
+        <div id="diag-result" style="font-size:12px;font-family:monospace;background:#F8FAFC;border-radius:6px;padding:8px;display:none;white-space:pre-wrap;word-break:break-all;color:#334155;"></div>
+      </div>
+      <div class="card" style="border:1px solid #FECACA;">
+        <p style="font-size:14px;font-weight:700;color:#991B1B;margin-bottom:10px;">⚠️ Données locales</p>
+        <button onclick="App.clearHistory()" style="background:#FEF2F2;color:#991B1B;border:1px solid #FECACA;padding:10px 16px;border-radius:8px;font-size:14px;cursor:pointer;width:100%;">Effacer l'historique local</button>
+      </div>
+      </div><!-- /settings-grid -->
+    </div>
+  </main><!-- /main-content -->
+  </div><!-- /main-wrapper -->
+  <!-- FAB -->
+  <button class="fab" id="fab" onclick="App.startNewArrival()">+</button>
+  <button class="fab" id="fab-dep" onclick="App.toggleDepSelectMode()" style="display:none;">
+    <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="2" width="14" height="14" rx="2.5" stroke="currentColor" stroke-width="2.2"/>
+      <polyline points="5.5 9 8.5 12 13 6.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M15 15 L15 24 L18 21 L21 24.5 L23 22.5 L20 19 L23.5 17 Z" fill="currentColor"/>
+    </svg>
+  </button>
+  <!-- Toast -->
+  <div id="toast"></div>
+</div><!-- /app -->
+<!-- ════════════════════════════════════════════════════════════════════════
+     APP JAVASCRIPT
+     ════════════════════════════════════════════════════════════════════════ -->
+<script src="app.js"></script>
+<script src="admin.js"></script>
+<script src="stock.js"></script>
+<script src="loxam.js"></script>
+<script src="bcb.js"></script>
+<script src="lv.js"></script>
+<script src="annuaire.js"></script>
+
+<!-- ── MODAL : SAISIE RAPIDE ──────────────────────────────────────────── -->
+<div id="saisie-modal" class="pose-overlay" style="display:none;" onclick="if(event.target===this)App.closeSaisieModal()">
+  <div class="pose-sheet">
+    <!-- Header -->
+    <div class="pose-header">
+      <button onclick="App.closeSaisieModal()" style="background:none;border:none;font-size:20px;cursor:pointer;padding:2px;line-height:1;color:#475569;">✕</button>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;color:#1E293B;">⚡ Saisie rapide</div>
+      </div>
+      <button id="saisie-submit-btn" onclick="App.submitSaisie()"
+        style="background:var(--brand);color:white;border:none;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:none;white-space:nowrap;">
+        ✓ Valider
+      </button>
+    </div>
+    <!-- Type -->
+    <div class="saisie-type-bar">
+      <button class="saisie-type-btn active entree" id="saisie-btn-entrée"   onclick="App.setSaisieType('entrée')">➕ Entrée</button>
+      <button class="saisie-type-btn sortie"        id="saisie-btn-sortie"   onclick="App.setSaisieType('sortie')">➖ Sortie</button>
+      <button class="saisie-type-btn inventaire"    id="saisie-btn-inventaire" onclick="App.setSaisieType('inventaire')">📋 Inventaire</button>
+    </div>
+    <!-- Note BL / fournisseur -->
+    <input id="saisie-note-input" type="text" class="input-field" placeholder="N° BL / Fournisseur (optionnel)"
+      oninput="S.saisieNote=this.value.trim()" style="font-size:13px;margin-bottom:8px;flex-shrink:0;">
+    <!-- Recherche référence -->
+    <input id="saisie-search-input" type="search" class="input-field" placeholder="🔍 Rechercher une référence…"
+      oninput="App.saisieSearch(this.value)" onkeydown="App._saisieSearchKey(event)"
+      style="font-size:13px;margin-bottom:6px;flex-shrink:0;">
+    <!-- Résultats de recherche -->
+    <div id="saisie-search-results" class="pose-search-results"></div>
+    <!-- Items sélectionnés -->
+    <div id="saisie-items-list" class="pose-items-list">
+      <div id="saisie-empty-msg" style="text-align:center;padding:24px 0;color:#94A3B8;font-size:13px;">
+        Recherchez et ajoutez des références ci-dessus
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL : SAISIE POSE ─────────────────────────────────────────────── -->
+<div id="pose-modal" class="pose-overlay" style="display:none;" onclick="if(event.target===this)App.closePoseModal()">
+  <div class="pose-sheet">
+    <!-- Header -->
+    <div class="pose-header">
+      <button onclick="App.closePoseModal()" style="background:none;border:none;font-size:20px;cursor:pointer;padding:2px;line-height:1;color:#475569;">✕</button>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;color:#1E293B;">🔧 Pièces posées</div>
+        <div id="pose-module-label" style="font-size:11px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+      </div>
+      <button id="pose-submit-btn" onclick="App.submitPose()"
+        style="background:var(--brand);color:white;border:none;padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:none;white-space:nowrap;">
+        ✓ Valider
+      </button>
+    </div>
+    <!-- Poses existantes -->
+    <div id="pose-existing-section" class="pose-existing-section" style="display:none;"></div>
+    <!-- Recherche référence -->
+    <input id="pose-search-input" type="search" class="input-field" placeholder="🔍 Rechercher une référence…"
+      oninput="App.poseSearch(this.value)" onkeydown="App._poseSearchKey(event)"
+      style="font-size:13px;margin-bottom:6px;flex-shrink:0;">
+    <!-- Résultats de recherche -->
+    <div id="pose-search-results" class="pose-search-results"></div>
+    <!-- Items sélectionnés -->
+    <div id="pose-items-list" class="pose-items-list">
+      <div id="pose-empty-msg" style="text-align:center;padding:24px 0;color:#94A3B8;font-size:13px;">
+        Recherchez et ajoutez des références ci-dessus
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL : SEUIL D'ALERTE ──────────────────────────────────────────── -->
+<div id="seuil-modal" class="pose-overlay" style="display:none;" onclick="if(event.target===this)App.closeSeuilModal()">
+  <div style="background:white;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;margin:0 auto;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <span style="font-size:20px;">🎯</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:700;color:#1E293B;">Seuil d'alerte</div>
+        <div id="seuil-modal-ref" style="font-size:11px;color:#64748B;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+      </div>
+      <button onclick="App.closeSeuilModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#475569;padding:2px;line-height:1;">✕</button>
+    </div>
+    <label style="font-size:12px;color:#64748B;font-weight:600;display:block;margin-bottom:6px;">
+      Quantité minimum avant alerte (laisser vide = pas d'alerte)
+    </label>
+    <input type="number" id="seuil-modal-input" min="0" step="1" inputmode="numeric"
+      style="width:100%;padding:12px;border:1.5px solid #CBD5E1;border-radius:10px;font-size:18px;text-align:center;box-sizing:border-box;margin-bottom:14px;"
+      onkeydown="if(event.key==='Enter')App.saveSeuilModal()">
+    <button onclick="App.saveSeuilModal()" id="seuil-modal-btn"
+      style="width:100%;padding:13px;border:none;background:var(--brand);color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
+      ✓ Enregistrer
+    </button>
+  </div>
+</div>
+
+<!-- ── MODAL : NOTE DE LIVRAISON / GRUTAGE (Historique LV/CMR) ─────────────── -->
+<div id="lvnote-modal" class="pose-overlay" style="display:none;" onclick="if(event.target===this)App.closeLvNoteModal()">
+  <div style="background:white;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;margin:0 auto;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <span style="font-size:20px;">📝</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:700;color:#1E293B;">Note de livraison</div>
+        <div id="lvnote-modal-ref" style="font-size:11px;color:#64748B;margin-top:1px;"></div>
+      </div>
+      <button onclick="App.closeLvNoteModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#475569;padding:2px;line-height:1;">✕</button>
+    </div>
+    <p style="font-size:11px;color:#94A3B8;margin:0 0 10px;">Ne modifie pas le PDF déjà généré (figé à la création) — seulement le suivi (tableur Archive + portail transporteur).</p>
+    <label style="font-size:12px;color:#64748B;font-weight:600;display:block;margin-bottom:6px;">Note (contrainte de livraison, date, etc.)</label>
+    <textarea id="lvnote-modal-textarea" rows="3"
+      style="width:100%;box-sizing:border-box;border:1.5px solid #CBD5E1;border-radius:10px;padding:10px;font-size:14px;outline:none;resize:vertical;font-family:inherit;margin-bottom:12px;"></textarea>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:16px;">
+      <input type="checkbox" id="lvnote-modal-grutage" style="width:18px;height:18px;">
+      Grutage à la livraison
+    </label>
+    <label style="font-size:12px;color:#64748B;font-weight:600;display:block;margin-bottom:6px;">Livraison prévue</label>
+    <input id="lvnote-modal-livraison" type="date"
+      style="width:100%;box-sizing:border-box;border:1.5px solid #CBD5E1;border-radius:10px;padding:10px;font-size:14px;outline:none;margin-bottom:16px;">
+    <button onclick="App.saveLvNoteModal()" id="lvnote-modal-btn"
+      style="width:100%;padding:13px;border:none;background:var(--brand);color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
+      ✓ Enregistrer
+    </button>
+  </div>
+</div>
+
+<div id="lvcancel-modal" class="pose-overlay" style="display:none;" onclick="if(event.target===this)App.closeLvCancelModal()">
+  <div style="background:white;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;margin:0 auto;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <span style="font-size:20px;">⊘</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:700;color:#1E293B;">Annuler la lettre de voiture</div>
+        <div id="lvcancel-modal-ref" style="font-size:11px;color:#64748B;margin-top:1px;"></div>
+      </div>
+      <button onclick="App.closeLvCancelModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#475569;padding:2px;line-height:1;">✕</button>
+    </div>
+    <p style="font-size:11px;color:#94A3B8;margin:0 0 10px;">Elle reste dans l'historique et l'Archive, marquée annulée, son PDF reste sur Drive (renommé « ANNULÉE »). Son numéro n'est jamais repris. Elle disparaît du portail transporteur et ses modules non partis sont libérés pour une nouvelle LV.</p>
+    <label style="font-size:12px;color:#64748B;font-weight:600;display:block;margin-bottom:6px;">Motif (obligatoire)</label>
+    <input id="lvcancel-modal-motif" placeholder="ex : changement de module de dernière minute"
+      style="width:100%;box-sizing:border-box;border:1.5px solid #CBD5E1;border-radius:10px;padding:10px;font-size:14px;outline:none;margin-bottom:8px;">
+    <p style="font-size:11px;color:#64748B;margin:0 0 16px;">La LV qui la remplace s'y relie à sa création (champ « Remplace la LV annulée »), ou après coup avec 🔗 dans l'historique.</p>
+    <button onclick="App.saveLvCancelModal()" id="lvcancel-modal-btn"
+      style="width:100%;padding:13px;border:none;background:#B91C1C;color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
+      ⊘ Annuler cette LV
+    </button>
+  </div>
+</div>
+
+<div id="lvlink-modal" class="pose-overlay" style="display:none;" onclick="if(event.target===this)App.closeLvLinkModal()">
+  <div style="background:white;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;margin:0 auto;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <span style="font-size:20px;">🔗</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:700;color:#1E293B;">Lier à la LV qui la remplace</div>
+        <div id="lvlink-modal-ref" style="font-size:11px;color:#64748B;margin-top:1px;"></div>
+      </div>
+      <button onclick="App.closeLvLinkModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#475569;padding:2px;line-height:1;">✕</button>
+    </div>
+    <label style="font-size:12px;color:#64748B;font-weight:600;display:block;margin-bottom:6px;">Remplacée par (LV plus récentes, non annulées)</label>
+    <select id="lvlink-modal-select"
+      style="width:100%;box-sizing:border-box;border:1.5px solid #CBD5E1;border-radius:10px;padding:10px;font-size:14px;outline:none;margin-bottom:16px;background:white;"></select>
+    <button onclick="App.saveLvLinkModal()" id="lvlink-modal-btn"
+      style="width:100%;padding:13px;border:none;background:var(--brand);color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
+      🔗 Lier
+    </button>
+  </div>
+</div>
+
+<!-- Pull-to-refresh indicator -->
+<div id="ptr-indicator"
+  style="position:fixed;top:calc(56px + env(safe-area-inset-top,0px));left:50%;
+         transform:translateX(-50%) translateY(-54px);opacity:0;
+         background:white;border-radius:20px;padding:7px 16px 7px 12px;
+         box-shadow:0 2px 12px rgba(0,0,0,.18);font-size:13px;font-weight:600;
+         color:#475569;display:flex;align-items:center;gap:8px;
+         z-index:500;pointer-events:none;white-space:nowrap;">
+  <span id="ptr-icon" style="display:inline-block;font-size:16px;">↓</span>
+  Actualiser
+</div>
+</body>
+</html>

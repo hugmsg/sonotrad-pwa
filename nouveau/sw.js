@@ -1,0 +1,79 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// SONOTRAD — Service Worker de la version en évolution (nouveau/, portée /nouveau/)
+// Stratégie : Cache-first pour les assets statiques,
+//             Network-first pour les appels API AppScript
+// ═══════════════════════════════════════════════════════════════════════════
+
+const CACHE_NAME  = 'sonotrad-nouveau-v1';
+const ASSETS = [
+  './',
+  './index.html',
+  './app.js',
+  './admin.js',
+  './stock.js',
+  './loxam.js',
+  './bcb.js',
+  './lv.js',
+  './annuaire.js',
+  './style.css',
+  './icon-192.png',
+  './icon-512.png',
+  './supabase.js',
+  'https://cdn.tailwindcss.com',
+];
+
+// ── Install : mise en cache des assets statiques ────────────────────────────
+self.addEventListener('install', evt => {
+  evt.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
+  );
+  self.skipWaiting();
+});
+
+// ── Activate : nettoyage des anciens caches ─────────────────────────────────
+self.addEventListener('activate', evt => {
+  evt.waitUntil(
+    caches.keys().then(keys =>
+      // Seulement nos anciens caches : celui de la version de base (sonotrad-vNN) n'est pas à nous.
+      Promise.all(keys.filter(k => k.startsWith('sonotrad-nouveau-') && k !== CACHE_NAME).map(k => caches.delete(k)))
+    )
+  );
+  self.clients.claim();
+});
+
+// ── Fetch : stratégie hybride ───────────────────────────────────────────────
+self.addEventListener('fetch', evt => {
+  const { request } = evt;
+  const url = new URL(request.url);
+
+  // Appels API → réseau uniquement (jamais mis en cache).
+  // La PWA passe par /api/proxy (même domaine) : sans ce test, ses GET tombaient dans
+  // le cache-first ci-dessous et affichaient d'abord les données du chargement précédent.
+  if (url.hostname === 'script.google.com' ||
+      (url.origin === self.location.origin && url.pathname.startsWith('/api/'))) {
+    evt.respondWith(
+      fetch(request).catch(() =>
+        new Response(JSON.stringify({ status: 'error', error: 'Hors ligne' }), {
+          headers: { 'Content-Type': 'application/json' }
+        })
+      )
+    );
+    return;
+  }
+
+  // Assets statiques → Cache-first, fallback réseau
+  if (request.method === 'GET') {
+    evt.respondWith(
+      caches.match(request).then(cached => {
+        const networkFetch = fetch(request).then(response => {
+          if (response && response.status === 200 && response.type !== 'opaque') {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
+          }
+          return response;
+        });
+        return cached || networkFetch;
+      })
+    );
+  }
+});
