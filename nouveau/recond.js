@@ -923,8 +923,9 @@ Object.assign(App, {
   },
 
   async otTarifsInit() {
-    S.ot.tarifsVue = S.ot.tarifsVue || { recherche: '', filtre: 'impose', journal: null, apercu: null };
-    S.ot.tarifsVue.apercu = null;
+    S.ot.tarifsVue = S.ot.tarifsVue || { recherche: '', filtre: 'tout', journal: null, photos: null, rechPhoto: '', diffPhoto: true };
+    S.ot.tarifsVue.essai = null;   // taux essayé à l'écran, pas encore appliqué
+    S.ot.tarifsVue.photo = null;   // photo de la grille ouverte
     this._otRendreTarifs();
     try {
       S.ot.tarifs = null;                       // toujours les tarifs à jour en entrant
@@ -934,13 +935,14 @@ Object.assign(App, {
     }
     this._otRendreTarifs();
     this._otChargerJournal();
+    this._otChargerPhotos();
   },
 
   _otArrondiSup(x) { return Math.round(Math.ceil(x * 2 - 0.000001) / 2 * 100) / 100; },
 
   // MO calculée côté écran (aperçu pendant la saisie) ; le serveur refait le même calcul à l'enregistrement.
-  _otMoCalculee(mode, temps, base) {
-    const p = S.ot.tarifs.parametres, t = Number(p.taux_horaire), tb = Number(p.taux_base);
+  _otMoCalculee(mode, temps, base, taux = null) {
+    const p = S.ot.tarifs.parametres, t = Number(taux ?? p.taux_horaire), tb = Number(p.taux_base);
     if (mode === 'temps')  return temps > 0 ? this._otArrondiSup(Math.ceil(temps * tb / 60 - 0.000001) * t / tb) : null;
     if (mode === 'base')   return base !== null && base >= 0 ? this._otArrondiSup(base * t / tb) : null;
     if (mode === 'heure')  return t;
@@ -972,7 +974,10 @@ Object.assign(App, {
     // Exemple chiffré : une réf. au temps réelle
     const ex = refs.find(r => r.ref === '156' && r.mode === 'temps') || refs.find(r => r.mode === 'temps');
     const exBase = ex ? Math.ceil(ex.temps_min * p.taux_base / 60 - 0.000001) : 0;
+    const essai = S.ot.tarifsVue.essai;
+    if (!essai && S.ot.tarifsVue.filtre === 'change') S.ot.tarifsVue.filtre = 'tout';
     const filtres = [
+      ...(essai ? [{ cle: 'change', nom: `Changent · ${this._otEffetEssai().nb}` }] : []),
       { cle: 'impose', nom: `Prix en dur · ${n('impose')}` },
       { cle: 'temps',  nom: `Au temps · ${n('temps')}` },
       { cle: 'base',   nom: `Montant de base · ${n('base')}` },
@@ -989,11 +994,13 @@ Object.assign(App, {
               <div style="display:flex;flex-direction:column;gap:4px;">
                 <label for="ot-taux" style="font-size:13px;font-weight:700;">Taux horaire facturé à LOXAM</label>
                 <div style="display:flex;gap:6px;align-items:center;">
-                  <input id="ot-taux" class="sx-champ" style="width:120px;font-size:20px;font-weight:700;" type="number" min="1" step="0.5" value="${_otValeurCase(p.taux_horaire, true)}">
+                  <input id="ot-taux" class="sx-champ" style="width:120px;font-size:20px;font-weight:700;" type="number" min="1" step="0.5"
+                    value="${_otValeurCase(S.ot.tarifsVue.essai ?? p.taux_horaire, true)}" oninput="App._otTauxEnDirect(this.value)">
                   <span class="sx-aide">€/h</span>
                 </div>
               </div>
-              <button type="button" class="sx-btn sx-btn-second" onclick="App.otApercuTaux()">Voir l'effet d'un nouveau taux</button>
+              <span class="sx-aide" style="flex:1 1 260px;">Changez le taux (flèches ou clavier) : l'effet s'affiche aussitôt dans les tableaux.
+                Rien n'est enregistré avant « Appliquer ».</span>
             </div>
             <div style="font-size:14px;line-height:1.6;">
               <strong>Tout part de ce taux.</strong> Chaque réf. facturée au temps a un temps de pose en minutes :
@@ -1030,7 +1037,7 @@ Object.assign(App, {
 
         <section class="sx-section" aria-labelledby="ot-t-forf">
           <h2 class="sx-h2" id="ot-t-forf">3. Forfaits</h2>
-          <div class="sx-carte"><div class="sx-table-boite">${this._otHtmlForfaitsTarifs()}</div></div>
+          <div class="sx-carte"><div class="sx-table-boite" id="ot-forfaits-tarifs">${this._otHtmlForfaitsTarifs()}</div></div>
         </section>
 
         <section class="sx-section" aria-labelledby="ot-t-pieces">
@@ -1045,53 +1052,83 @@ Object.assign(App, {
           </div>
         </section>
 
-        <section class="sx-section" aria-labelledby="ot-t-journal">
-          <h2 class="sx-h2" id="ot-t-journal">5. Journal des changements</h2>
+        <section class="sx-section" aria-labelledby="ot-t-histo">
+          <h2 class="sx-h2" id="ot-t-histo">5. Historique</h2>
+          <h3 style="margin:4px 0 0;font-size:15px;">Photos de la grille</h3>
+          <span class="sx-aide">Toute la grille (réf. et forfaits, avec leur MO) est photographiée juste avant chaque changement de taux.</span>
+          <div class="sx-carte" id="ot-photos">${this._otHtmlPhotos()}</div>
+          <div id="ot-photo-vue"></div>
+          <h3 style="margin:12px 0 0;font-size:15px;">Journal des changements</h3>
           <div class="sx-carte" id="ot-journal">${this._otHtmlJournal()}</div>
         </section>
         <span class="sx-aide">Mode essai : ${Number(p.essai) === 1 ? 'oui (numéros ESSAI-…, pas de sortie de stock)' : 'non'}.
           Un changement s'applique aux fiches non validées ; les fiches validées gardent leurs prix figés.</span>
       </main></div>`;
     this._otRendreRefsTarifs();
-    if (S.ot.tarifsVue.apercu) this._otRendreApercu();
+    this._otRendreBandeau();
+    if (S.ot.tarifsVue.photo) this._otRendrePhoto();
   },
 
-  /* ─ Aperçu d'un nouveau taux ─ */
+  /* ─ Effet en direct d'un nouveau taux ─ */
 
-  async otApercuTaux() {
-    const v = this._otLireMontant('ot-taux');
-    if (!v.ok || !(v.val > 0)) { this.toast('Taux invalide'); return; }
-    if (v.val === Number(S.ot.tarifs.parametres.taux_horaire)) { this.toast('C\'est déjà le taux en vigueur'); return; }
-    const z = document.getElementById('ot-apercu');
-    if (z) z.innerHTML = '<div class="sx-chargement">Calcul de l\'effet…</div>';
-    try {
-      const d = await this._otGet({ action: 'ot_apercu', taux: String(v.val) });
-      S.ot.tarifsVue.apercu = d.apercu;
-      this._otRendreApercu();
-    } catch (e) {
-      if (z) z.innerHTML = '';
-      this.toast('Aperçu impossible : ' + e.message, 4000);
-    }
+  // Le tableau (400 lignes) est redessiné après une courte pause de frappe, pas à chaque touche.
+  _otTauxEnDirect(v) {
+    clearTimeout(S.ot.tarifsVue.minuterie);
+    S.ot.tarifsVue.minuterie = setTimeout(() => this._otAppliquerEssai(v), 250);
   },
 
-  _otRendreApercu() {
+  _otAppliquerEssai(v) {
+    const n = Number(String(v).replace(',', '.'));
+    const actuel = Number(S.ot.tarifs.parametres.taux_horaire);
+    const avant = S.ot.tarifsVue.essai;
+    S.ot.tarifsVue.essai = n > 0 && n !== actuel ? n : null;
+    // Les filtres changent (apparition de « Changent ») : on redessine l'en-tête des filtres seulement si besoin.
+    if (!!avant !== !!S.ot.tarifsVue.essai) { this._otRendreTarifs(); document.getElementById('ot-taux')?.focus(); return; }
+    this._otRendreRefsTarifs();
+    const zf = document.getElementById('ot-forfaits-tarifs');
+    if (zf) zf.innerHTML = this._otHtmlForfaitsTarifs();
+    this._otRendreBandeau();
+    const ch = document.querySelector('.sx-filtre[onclick*="\'change\'"]');
+    if (ch) ch.textContent = `Changent · ${this._otEffetEssai().nb}`;
+  },
+
+  // Nouveau prix d'une réf. au taux essayé (null : ne suit pas le taux).
+  _otPrixEssai(r) {
+    const e = S.ot.tarifsVue.essai;
+    if (!e || !['temps', 'base', 'heure', 'minute'].includes(r.mode)) return null;
+    return this._otMoCalculee(r.mode, r.temps_min, r.mo_base, e);
+  },
+  _otPrixEssaiForfait(f) {
+    const e = S.ot.tarifsVue.essai, p = S.ot.tarifs.parametres;
+    return e && f.mo_base !== null && f.mo_base !== undefined ? this._otArrondiSup(f.mo_base * e / p.taux_base) : null;
+  },
+
+  _otEffetEssai() {
+    const t = S.ot.tarifs;
+    const refs = (t.references || []).filter(r => { const v = this._otPrixEssai(r); return v !== null && v !== Number(r.mo); });
+    const forfaits = (t.forfaits || []).filter(f => { const v = this._otPrixEssaiForfait(f); return v !== null && v !== Number(f.mo); });
+    const hausse = refs.filter(r => this._otPrixEssai(r) > Number(r.mo)).length + forfaits.filter(f => this._otPrixEssaiForfait(f) > Number(f.mo)).length;
+    return { nb: refs.length + forfaits.length, refs: refs.length, forfaits: forfaits.length, hausse,
+             imposes: (t.references || []).filter(r => r.mode === 'impose').length };
+  },
+
+  _otRendreBandeau() {
     const z = document.getElementById('ot-apercu');
-    const a = S.ot.tarifsVue.apercu;
-    if (!z || !a) return;
-    const ch = a.changements || [];
-    const ligne = c => `<tr><td>${c.type === 'forfait' ? 'Forfait ' : ''}<span class="sx-ref">${_otEsc(c.cle)}</span></td>
-      <td>${_otEsc(c.description || '')}</td><td class="sx-num">${_otEuros(c.avant)}</td><td class="sx-num"><strong>${_otEuros(c.apres)}</strong></td></tr>`;
-    z.innerHTML = `<div class="sx-bandeau sx-bandeau-attention" style="display:flex;flex-direction:column;gap:10px;">
-      <strong>Passer de ${_otQte(a.taux_actuel)} à ${_otQte(a.taux_nouveau)} €/h : ${a.nb} tarif${a.nb > 1 ? 's' : ''} change${a.nb > 1 ? 'nt' : ''}.</strong>
-      ${a.imposes && a.imposes.length ? `<div><strong>${a.imposes.length} prix en dur ne bougeront pas — à revoir :</strong>
-        <span>${a.imposes.map(i => `<span class="sx-ref">${_otEsc(i.ref)}</span> ${_otEuros(i.mo)}`).join(' · ')}</span></div>` : ''}
-      <details><summary style="cursor:pointer;font-weight:700;">Voir les ${ch.length} changements</summary>
-        <div class="sx-table-boite" style="max-height:320px;overflow-y:auto;margin-top:8px;background:#FFFFFF;border-radius:8px;">
-          <table class="sx-table" style="min-width:520px;"><thead><tr><th>Réf.</th><th>Désignation</th><th class="sx-num">Avant</th><th class="sx-num">Après</th></tr></thead>
-          <tbody>${ch.map(ligne).join('')}</tbody></table></div></details>
-      <div class="sx-ligne-champs">
-        <button type="button" class="sx-btn sx-btn-discret" onclick="S.ot.tarifsVue.apercu=null;document.getElementById('ot-apercu').innerHTML='';document.getElementById('ot-taux').value='${_otQte(a.taux_actuel)}'">Annuler</button>
-        <button type="button" class="sx-btn sx-btn-principal" onclick="App._otAppliquerTaux(${Number(a.taux_nouveau)})">Appliquer ${_otQte(a.taux_nouveau)} €/h</button>
+    if (!z) return;
+    const e = S.ot.tarifsVue.essai;
+    if (!e) { z.innerHTML = ''; return; }
+    const actuel = S.ot.tarifs.parametres.taux_horaire;
+    const ef = this._otEffetEssai();
+    const sens = e > actuel ? 'augmentent' : 'baissent';
+    z.innerHTML = `<div class="sx-bandeau sx-bandeau-attention" style="display:flex;flex-direction:column;gap:6px;">
+      <strong style="font-size:16px;">Essai à ${_otQte(e)} €/h — rien n'est encore enregistré.</strong>
+      <span>• <strong>${ef.refs} réf. et ${ef.forfaits} forfaits ${sens}</strong> : en jaune dans les tableaux, ancien prix barré → nouveau prix.
+        Filtre « Changent » pour ne voir qu'eux.</span>
+      <span>• <strong>${ef.imposes} prix en dur ne bougent pas</strong> : en orange, à revoir après l'application.</span>
+      <span>• Les fiches déjà validées gardent leurs prix. La grille actuelle est photographiée avant le changement.</span>
+      <div class="sx-ligne-champs" style="margin-top:4px;">
+        <button type="button" class="sx-btn sx-btn-discret" onclick="document.getElementById('ot-taux').value='${_otValeurCase(actuel, true)}';App._otAppliquerEssai('${actuel}')">Revenir à ${_otQte(actuel)} €/h</button>
+        <button type="button" class="sx-btn sx-btn-principal" onclick="App._otAppliquerTaux(${Number(e)})">Appliquer ${_otQte(e)} €/h</button>
       </div></div>`;
   },
 
@@ -1101,9 +1138,8 @@ Object.assign(App, {
     if (!ok) return;
     try {
       const d = await this._otPost({ action: 'ot_tarif', type: 'parametre', cle: 'taux_horaire', valeurs: { valeur: taux } });
-      this.toast(`✓ ${_otQte(taux)} €/h appliqué · ${d.apres?.tarifs_recalcules ?? '?'} tarifs recalculés`, 4000);
-      S.ot.tarifsVue.apercu = null;
-      S.ot.tarifsVue.filtre = 'impose';
+      this.toast(`✓ ${_otQte(taux)} €/h appliqué · ${d.apres?.tarifs_recalcules ?? '?'} tarifs recalculés · photo n° ${d.apres?.photo ?? '?'} de l'ancienne grille`, 5000);
+      S.ot.tarifsVue.filtre = 'impose';   // ensuite : revoir les prix en dur
       await this.otTarifsInit();
     } catch (e) {
       this.toast('Changement impossible : ' + e.message, 4000);
@@ -1119,24 +1155,22 @@ Object.assign(App, {
     const f = S.ot.tarifsVue.filtre;
     const toutes = S.ot.tarifs.references || [];
     const res = toutes
-      .filter(r => f === 'tout' || (f === 'aucun' ? !r.mode : r.mode === f))
+      .filter(r => f === 'tout' || (f === 'aucun' ? !r.mode : f === 'change' ? (this._otPrixEssai(r) ?? Number(r.mo)) !== Number(r.mo) : r.mode === f))
       .filter(r => !q || r.ref.toLowerCase().startsWith(q) || (r.description || '').toLowerCase().includes(q) || (r.categorie || '').toLowerCase().includes(q))
-      .sort((a, b) => (b.ref.toLowerCase() === q) - (a.ref.toLowerCase() === q) || a.ref.localeCompare(b.ref, 'fr', { numeric: true }))
-      .slice(0, 80);
+      .sort((a, b) => (b.ref.toLowerCase() === q) - (a.ref.toLowerCase() === q) || a.ref.localeCompare(b.ref, 'fr', { numeric: true }));
     const saisie = S.ot.tarifsVue.recherche.trim();
     // Création proposée seulement pour ce qui ressemble à une réf. (au moins un chiffre).
     const creable = saisie && /^[A-Za-z0-9-]{1,20}$/.test(saisie) && /\d/.test(saisie) && !toutes.some(r => r.ref.toLowerCase() === q);
     S.ot.tarifsVue.affichees = res.map(r => r.ref);
     const lignes = res.map((r, k) => this._otHtmlLigneTarif(r, k)).join('');
     const nouvelle = creable ? this._otHtmlLigneTarif({ ref: saisie.toUpperCase(), description: '', mode: 'temps', nouvelle: true }, 'n') : '';
-    z.innerHTML = `<table class="sx-table sx-grille" style="min-width:1000px;">
+    z.innerHTML = `<table class="sx-table sx-grille sx-serre" style="min-width:1000px;">
       <thead><tr><th scope="col">Réf.</th><th scope="col">Désignation</th><th scope="col" class="sx-centre">Calcul</th>
         <th scope="col" class="sx-centre">Temps de pose<br>(min)</th><th scope="col" class="sx-centre">Base €<br>(à ${_otQte(S.ot.tarifs.parametres.taux_base)} €/h)</th>
         <th scope="col" class="sx-centre">MO facturée €</th><th scope="col" class="sx-centre">Prix pièce €</th><th scope="col" class="sx-centre">Plafond €</th>
         <th scope="col"><span class="sx-sr">Enregistrer</span></th></tr></thead>
       <tbody>${lignes}${nouvelle}
         ${!res.length && !creable ? '<tr><td colspan="9" class="sx-centre sx-aide">Aucune réf. ici. Tapez une réf. pour la créer.</td></tr>' : ''}
-        ${res.length === 80 ? '<tr><td colspan="9" class="sx-centre sx-aide">80 premières seulement : affinez la recherche.</td></tr>' : ''}
       </tbody></table>`;
   },
 
@@ -1147,21 +1181,25 @@ Object.assign(App, {
     // Cases numériques avec flèches : montants au centime (pas de 0,50 = l'arrondi des MO), temps en minutes entières.
     const caseNum = (id, val, actif, { pas = '0.5', prix = true } = {}) => `<input id="${id}" class="sx-case sx-case-num" style="${actif ? '' : 'display:none;'}"
       type="number" min="0" step="${pas}" value="${_otValeurCase(val, prix)}" oninput="App._otTarifSaisi('${k}')">`;
-    return `<tr id="ot-tr-${k}" style="${impose ? 'background:var(--sx-orange-fond);' : ''}">
+    const essai = this._otPrixEssai(r);
+    const change = essai !== null && essai !== Number(r.mo);
+    const avantApres = `<s class="sx-aide">${_otPrix(r.mo)}</s> → <strong>${_otPrix(essai)}</strong>`;
+    return `<tr id="ot-tr-${k}" class="${change ? 'sx-tr-change' : impose ? 'sx-tr-impose' : ''}">
       <td><span class="sx-ref">${_otEsc(r.ref)}</span></td>
       <td>${r.nouvelle ? `<label for="ot-tr-desc-${k}" class="sx-sr">Désignation</label><input id="ot-tr-desc-${k}" class="sx-champ" style="width:100%;height:34px;" placeholder="Nouvelle réf. — désignation (vide = celle du Stock)">`
         : _otDesig(r.description, r.categorie && r.categorie !== '-' ? `<span class="sx-etiquette sx-e-bloc">${_otEsc(r.categorie)}</span>` : '')}</td>
       <td class="sx-centre">${special ? `<span class="sx-aide">${r.mode === 'heure' ? '= taux horaire' : '= taux ÷ 60'}</span>`
-        : `<label for="ot-tr-mode-${k}" class="sx-sr">Calcul</label><select id="ot-tr-mode-${k}" class="sx-select" style="height:34px;font-size:14px;padding:0 6px;"
+        : `<label for="ot-tr-mode-${k}" class="sx-sr">Calcul</label><select id="ot-tr-mode-${k}" class="sx-select" style="height:28px;font-size:13px;padding:0 4px;border-radius:8px;"
             onchange="App._otTarifSaisi('${k}')">${modes.map(([v, l]) => `<option value="${v}"${(r.mode || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>`}</td>
       <td class="sx-centre">${special ? '' : caseNum('ot-tr-tps-' + k, r.temps_min, true, { pas: '1', prix: false })}</td>
       <td class="sx-centre">${special ? '' : `${caseNum('ot-tr-base-' + k, r.mode === 'base' ? r.mo_base : null, r.mode === 'base')}
         <span class="sx-aide" id="ot-tr-bcalc-${k}">${r.mode === 'temps' ? _otPrix(r.mo_base) : ''}</span>`}</td>
-      <td class="sx-centre">${special ? `<strong>${_otPrix(r.mo)}</strong>` : `<strong id="ot-tr-mo-${k}" style="${impose ? 'display:none;' : ''}">${r.mo !== null && r.mo !== undefined ? _otPrix(r.mo) : '—'}</strong>
-        ${caseNum('ot-tr-prix-' + k, impose ? r.mo : null, impose)}`}</td>
+      <td class="sx-centre" style="white-space:nowrap;">${special ? (change ? avantApres : `<strong>${_otPrix(r.mo)}</strong>`)
+        : `<strong id="ot-tr-mo-${k}" style="${impose ? 'display:none;' : ''}">${change ? avantApres : r.mo !== null && r.mo !== undefined ? _otPrix(r.mo) : '—'}</strong>
+        ${caseNum('ot-tr-prix-' + k, impose ? r.mo : null, impose)}${impose && S.ot.tarifsVue.essai ? ' <span class="sx-badge sx-badge-prevu">à revoir</span>' : ''}`}</td>
       <td class="sx-centre">${caseNum('ot-tr-pp-' + k, r.prix_piece, true, { pas: '0.01' })}</td>
       <td class="sx-centre">${caseNum('ot-tr-pl-' + k, r.mo_plafond, true, { pas: '1' })}</td>
-      <td><button type="button" class="sx-btn ${r.nouvelle ? 'sx-btn-principal' : 'sx-btn-second'} ot-enreg" style="height:34px;padding:0 12px;"
+      <td><button type="button" class="sx-btn ${r.nouvelle ? 'sx-btn-principal' : 'sx-btn-second'} ot-enreg" style="height:28px;padding:0 10px;font-size:13px;border-radius:8px;"
         ${r.nouvelle ? '' : 'disabled'} onclick="App._otEnregistrerRef('${k}')">${r.nouvelle ? 'Créer' : 'Enregistrer'}</button></td>
     </tr>`;
   },
@@ -1176,7 +1214,7 @@ Object.assign(App, {
     if (prix) prix.style.display = mode === 'impose' ? '' : 'none';
     if (mo) mo.style.display = mode === 'impose' ? 'none' : '';
     const tr = document.getElementById('ot-tr-' + k);
-    if (tr) tr.style.background = mode === 'impose' ? 'var(--sx-orange-fond)' : '';
+    if (tr && !tr.classList.contains('sx-tr-change')) tr.className = mode === 'impose' ? 'sx-tr-impose' : '';
     const temps = this._otLireMontant('ot-tr-tps-' + k).val, base = this._otLireMontant('ot-tr-base-' + k).val;
     const tb = Number(S.ot.tarifs.parametres.taux_base);
     const bcalc = document.getElementById('ot-tr-bcalc-' + k);
@@ -1215,22 +1253,22 @@ Object.assign(App, {
 
   _otHtmlForfaitsTarifs() {
     const fs = [...((S.ot.tarifs && S.ot.tarifs.forfaits) || [])].sort((a, b) => a.lettre.localeCompare(b.lettre));
-    return `<table class="sx-table sx-grille" style="min-width:760px;">
+    return `<table class="sx-table sx-grille sx-serre" style="min-width:760px;">
       <thead><tr><th scope="col">Forfait</th><th scope="col">Intitulé</th><th scope="col" class="sx-centre">MO facturée €</th>
         <th scope="col" class="sx-centre">Base €<br>(à ${_otQte(S.ot.tarifs.parametres.taux_base)} €/h)</th><th scope="col" class="sx-centre">Prix pièce €</th><th scope="col">Pièces comprises</th>
         <th scope="col"><span class="sx-sr">Enregistrer</span></th></tr></thead>
-      <tbody>${fs.map(f => `<tr id="ot-tf-${_otEsc(f.lettre)}">
+      <tbody>${fs.map(f => { const essai = this._otPrixEssaiForfait(f); const change = essai !== null && essai !== Number(f.mo); return `<tr id="ot-tf-${_otEsc(f.lettre)}" class="${change ? 'sx-tr-change' : ''}">
         <td><span class="sx-ref">${_otEsc(f.lettre)}</span></td>
         <td>${_otEsc(f.intitule)}</td>
         <td class="sx-centre"><input id="ot-tf-mo-${_otEsc(f.lettre)}" class="sx-case sx-case-num" type="number" min="0" step="0.5"
-          value="${_otValeurCase(f.mo, true)}" oninput="App._otForfaitSaisi('${_otEsc(f.lettre)}')"></td>
+          value="${_otValeurCase(f.mo, true)}" oninput="App._otForfaitSaisi('${_otEsc(f.lettre)}')">${change ? `<br><span class="sx-aide">→ <strong>${_otPrix(essai)}</strong></span>` : ''}</td>
         <td class="sx-centre sx-aide" id="ot-tf-base-${_otEsc(f.lettre)}">${f.mo_base === null || f.mo_base === undefined ? '—' : _otPrix(f.mo_base)}</td>
         <td class="sx-centre"><input id="ot-tf-pp-${_otEsc(f.lettre)}" class="sx-case sx-case-num" type="number" min="0" step="0.01"
           value="${_otValeurCase(f.prix_piece, true)}" oninput="App._otForfaitSaisi('${_otEsc(f.lettre)}')"></td>
         <td class="sx-aide">${(f.pieces || []).map(x => _otEsc(x.ref) + ' ×' + _otQte(x.qte)).join(', ') || '—'}</td>
-        <td><button type="button" class="sx-btn sx-btn-second ot-enreg" style="height:34px;padding:0 12px;" disabled
+        <td><button type="button" class="sx-btn sx-btn-second ot-enreg" style="height:28px;padding:0 10px;font-size:13px;border-radius:8px;" disabled
           onclick="App._otEnregistrerForfait('${_otEsc(f.lettre)}')">Enregistrer</button></td>
-      </tr>`).join('')}</tbody></table>`;
+      </tr>`; }).join('')}</tbody></table>`;
   },
 
   // Forfait : on saisit le prix au taux actuel ; la base (à l'ancien taux) en est déduite, pour suivre les hausses.
@@ -1247,6 +1285,94 @@ Object.assign(App, {
     const mo = this._otLireMontant('ot-tf-mo-' + lettre), pp = this._otLireMontant('ot-tf-pp-' + lettre);
     if (!mo.ok || !pp.ok || mo.val === null) { this.toast('Montant invalide'); return; }
     await this._otEnvoyerTarif('forfait', lettre, { mo: mo.val, prix_piece: pp.val ?? 0 }, 'Forfait ' + lettre);
+  },
+
+  /* ─ Photos de la grille ─ */
+
+  async _otChargerPhotos() {
+    try {
+      const d = await this._otGet({ action: 'ot_photos' });
+      S.ot.tarifsVue.photos = d.photos || [];
+    } catch (e) {
+      S.ot.tarifsVue.photos = [];
+    }
+    const z = document.getElementById('ot-photos');
+    if (z) z.innerHTML = this._otHtmlPhotos();
+  },
+
+  _otHtmlPhotos() {
+    const ph = S.ot.tarifsVue && S.ot.tarifsVue.photos;
+    if (!ph) return '<div class="sx-chargement">Chargement des photos…</div>';
+    if (!ph.length) return '<div class="sx-vide">Aucune photo pour l\'instant.</div>';
+    return ph.map(x => `<div class="sx-ligne">
+        <div class="sx-ligne-texte">
+          <span class="sx-ligne-nom" style="white-space:normal;">${_otEsc(x.motif || 'Photo')} — taux ${_otQte(x.taux_horaire)} €/h</span>
+          <span class="sx-aide">${_otEsc(new Date(x.le).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }))}
+            ${x.par ? '· ' + _otEsc(x.par) : ''} · ${x.nb_refs} réf., ${x.nb_forfaits} forfaits</span>
+        </div>
+        <button type="button" class="sx-btn sx-btn-second" style="height:34px;padding:0 12px;font-size:13px;" onclick="App.otVoirPhoto(${Number(x.id)})">Voir</button>
+      </div>`).join('');
+  },
+
+  async otVoirPhoto(id) {
+    const z = document.getElementById('ot-photo-vue');
+    if (z) z.innerHTML = '<div class="sx-chargement">Ouverture de la photo…</div>';
+    try {
+      const d = await this._otGet({ action: 'ot_photo', id });
+      S.ot.tarifsVue.photo = d.photo;
+      this._otRendrePhoto();
+      document.getElementById('ot-photo-vue')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e) {
+      if (z) z.innerHTML = '';
+      this.toast('Photo indisponible : ' + e.message, 4000);
+    }
+  },
+
+  // Photo comparée à la grille d'aujourd'hui : lignes différentes surlignées.
+  _otRendrePhoto() {
+    const z = document.getElementById('ot-photo-vue');
+    const ph = S.ot.tarifsVue.photo;
+    if (!z || !ph) return;
+    const auj = new Map((S.ot.tarifs.references || []).map(r => [r.ref, r]));
+    const ajF = new Map((S.ot.tarifs.forfaits || []).map(f => [f.lettre, f]));
+    const modes = { temps: 'au temps', base: 'montant de base', impose: 'prix en dur', heure: 'à l\'heure', minute: 'à la minute' };
+    const q = S.ot.tarifsVue.rechPhoto.trim().toLowerCase();
+    const lignes = [
+      ...(ph.forfaits || []).map(f => ({ cle: f.lettre, nom: 'Forfait ' + f.lettre, desc: f.intitule, mode: '', avant: f.mo, maint: ajF.get(f.lettre)?.mo })),
+      ...(ph.references || []).map(r => ({ cle: r.ref, nom: r.ref, desc: r.description, mode: modes[r.mode] || '—', avant: r.mo, maint: auj.get(r.ref)?.mo })),
+    ].map(l => ({ ...l, diff: Number(l.avant ?? 0) !== Number(l.maint ?? 0) }))
+     .filter(l => !S.ot.tarifsVue.diffPhoto || l.diff)
+     .filter(l => !q || l.cle.toLowerCase().startsWith(q) || (l.desc || '').toLowerCase().includes(q));
+    const nbDiff = [...(ph.forfaits || []), ...(ph.references || [])].length;
+    z.innerHTML = `<div class="sx-carte sx-carte-pad" style="display:flex;flex-direction:column;gap:8px;border:2px solid var(--sx-bleu);">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <strong style="flex:1 1 260px;">Photo du ${_otEsc(new Date(ph.le).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }))}
+          — taux ${_otQte(ph.taux_horaire)} €/h<br><span class="sx-aide">${_otEsc(ph.motif || '')}</span></strong>
+        <button type="button" class="sx-btn sx-btn-discret" style="height:34px;" onclick="S.ot.tarifsVue.photo=null;document.getElementById('ot-photo-vue').innerHTML=''">Fermer</button>
+      </div>
+      <div class="sx-ligne-champs" style="align-items:center;">
+        <div class="sx-recherche" style="flex:1 1 260px;height:40px;">${_OT_SVG_LOUPE}
+          <label for="ot-rech-photo" class="sx-sr">Chercher dans la photo</label>
+          <input id="ot-rech-photo" type="search" placeholder="Réf. ou désignation…" value="${_otEsc(S.ot.tarifsVue.rechPhoto)}"
+            oninput="S.ot.tarifsVue.rechPhoto=this.value;App._otRendrePhoto();document.getElementById('ot-rech-photo').focus()">
+        </div>
+        <label class="sx-case-a-cocher"><input type="checkbox" ${S.ot.tarifsVue.diffPhoto ? 'checked' : ''}
+          onchange="S.ot.tarifsVue.diffPhoto=this.checked;App._otRendrePhoto()">Seulement ce qui a changé depuis</label>
+      </div>
+      <div class="sx-table-boite" style="max-height:480px;overflow-y:auto;">
+        <table class="sx-table sx-grille sx-serre" style="min-width:640px;">
+          <thead><tr><th>Réf.</th><th>Désignation</th><th class="sx-centre">Calcul</th>
+            <th class="sx-centre">MO à cette date €</th><th class="sx-centre">MO aujourd'hui €</th></tr></thead>
+          <tbody>${lignes.map(l => `<tr class="${l.diff ? 'sx-tr-change' : ''}">
+              <td><span class="sx-ref">${_otEsc(l.nom)}</span></td><td>${_otDesig(l.desc || '')}</td>
+              <td class="sx-centre sx-aide">${_otEsc(l.mode)}</td>
+              <td class="sx-centre"><strong>${_otPrix(l.avant) || '—'}</strong></td>
+              <td class="sx-centre">${l.maint === undefined ? '<span class="sx-aide">supprimée</span>' : (_otPrix(l.maint) || '—')}</td></tr>`).join('')
+            || `<tr><td colspan="5" class="sx-centre sx-aide">${S.ot.tarifsVue.diffPhoto ? 'Aucune différence avec aujourd\'hui.' : 'Rien trouvé.'}</td></tr>`}</tbody>
+        </table></div>
+      <span class="sx-aide">${nbDiff} lignes photographiées. Pour revenir à ce taux : tapez ${_otQte(ph.taux_horaire)} €/h en haut puis « Appliquer » —
+        les prix calculés reviennent d'eux-mêmes ; les prix en dur modifiés depuis se remettent à la main (journal).</span>
+    </div>`;
   },
 
   /* ─ Journal ─ */
@@ -1268,6 +1394,7 @@ Object.assign(App, {
         .filter(c => e.avant || (ap[c] !== null && ap[c] !== ''))
         .map(c => `${champs[c]} ${e.avant ? _otEsc(fmt(c, av[c])) + ' → ' : ''}<strong>${_otEsc(fmt(c, ap[c]))}</strong>`);
       if (ap.tarifs_recalcules !== undefined) diffs.push(`${ap.tarifs_recalcules} tarifs recalculés`);
+      if (ap.photo) diffs.push(`<a href="#" onclick="App.otVoirPhoto(${Number(ap.photo)});return false;">photo de l'ancienne grille</a>`);
       const quand = new Date(e.le).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
       return `<div class="sx-ligne" style="align-items:flex-start;">
         <div class="sx-ligne-texte">

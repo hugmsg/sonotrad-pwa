@@ -307,3 +307,16 @@ body.socle { background: var(--sx-fond); }
 .sx-desig[aria-expanded="true"] { white-space: normal; overflow: visible; }
 .sx-desig:hover { color: var(--sx-bleu); }
 .sx-desig-boite .sx-etiquette { flex-shrink: 0; }
+
+/* Tableaux resserrés (catalogue entier à l'écran) */
+.sx-serre { font-size: 13px; }
+.sx-serre td { padding: 2px 6px; }
+.sx-serre th { padding: 6px 6px; }
+.sx-serre .sx-case { height: 28px; font-size: 13px; border-radius: 6px; }
+.sx-serre .sx-case-num { width: 88px; }
+.sx-serre .sx-case-num[step="1"] { width: 72px; }
+.sx-serre .sx-desig { padding: 0; }
+/* Effet d'un taux essayé : lignes qui changent en jaune ; prix en dur en orange */
+.sx-table tr.sx-tr-change td { background: #FFF3B0; }
+.sx-table tr.sx-tr-impose td { background: var(--sx-orange-fond); }
+.sx-serre .sx-desig-boite { flex-wrap: nowrap; max-width: 420px; }
