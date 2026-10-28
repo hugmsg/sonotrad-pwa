@@ -207,8 +207,8 @@ Object.assign(App, {
     if (s.deCote)       return { texte: 'De côté',     classe: 'envoyee' };
     if (s.termine)      return { texte: 'Terminé',     classe: 'validee' };
     if (s.aControler)   return { texte: 'À contrôler', classe: 'a_valider' };
-    if (s.enCours)      return { texte: 'En cours',    classe: 'encours', enCours: true };
-    return { texte: 'Pas commencé', classe: 'brouillon' };
+    if (s.enCours)      return { texte: 'En cours',    classe: 'encours', avertir: true };
+    return { texte: 'Pas commencé', classe: 'brouillon', avertir: true };
   },
 
   _otRendreModules() {
@@ -237,10 +237,11 @@ Object.assign(App, {
   async _otChoisirModule(code, parti) {
     const m = (S.ot.modules || []).find(x => x.code === code && !!x.parti === parti);
     if (!m) return;
-    if (this._otStatutModule(m).enCours) {
+    const st = this._otStatutModule(m);
+    if (st.avertir) {
       const ok = await this._otConfirmer({
-        titre: 'Module encore en cours',
-        texte: 'Ce module est marqué « En cours » dans le Planning : des travaux restent peut-être à faire. Ouvrir la fiche quand même ?',
+        titre: st.texte === 'En cours' ? 'Module encore en cours' : 'Module pas encore commencé',
+        texte: `Ce module est marqué « ${st.texte} » dans le Planning : des travaux restent peut-être à faire. Ouvrir la fiche quand même ?`,
         ok: 'Ouvrir la fiche',
       });
       if (!ok) return;
