@@ -45,6 +45,11 @@ function _otValeurCase(v, prix) {
   if (v === null || v === undefined || v === '') return '';
   return prix ? (Math.round(Number(v) * 100) / 100).toFixed(2) : String(Math.round(Number(v) * 100) / 100);
 }
+// Désignation sur une ligne (coupée par « … ») ; un clic la déplie en entier, un second la replie.
+function _otDesig(texte, apres = '') {
+  return `<div class="sx-desig-boite"><button type="button" class="sx-desig" aria-expanded="false" title="${_otEsc(texte)}"
+    onclick="this.setAttribute('aria-expanded', this.getAttribute('aria-expanded') !== 'true')">${_otEsc(texte)}</button>${apres}</div>`;
+}
 function _otQte(q) {
   return q === null || q === undefined || q === '' ? '' : String(q).replace('.', ',');
 }
@@ -797,7 +802,7 @@ Object.assign(App, {
                aria-label="Montant de la ligne en euros" value="${manuel ? _otQte(l.mo_saisi) : ''}" oninput="App._otSaisirMo(${i}, this)"></span>`;
       return `<tr class="${vide ? 'sx-vide-ligne' : ''}">
         <td><span class="sx-ref">${_otEsc(l.ref || '—')}</span></td>
-        <td>${_otEsc(l.libelle || (r && r.description) || '')}${etiquettes}</td>
+        <td>${_otDesig(l.libelle || (r && r.description) || '', etiquettes)}</td>
         <td class="sx-centre"><input id="ot-q-${i}" class="sx-case" type="text" inputmode="decimal" placeholder="—" ${dis}
           aria-label="Quantité" value="${_otQte(l.quantite)}" oninput="App._otSaisirQteCtrl(${i}, this.value)"></td>
         <td class="sx-aide">${_otEsc(l.unite === 'u' ? 'u.' : l.unite)}</td>
@@ -1145,7 +1150,7 @@ Object.assign(App, {
     return `<tr id="ot-tr-${k}" style="${impose ? 'background:var(--sx-orange-fond);' : ''}">
       <td><span class="sx-ref">${_otEsc(r.ref)}</span></td>
       <td>${r.nouvelle ? `<label for="ot-tr-desc-${k}" class="sx-sr">Désignation</label><input id="ot-tr-desc-${k}" class="sx-champ" style="width:100%;height:34px;" placeholder="Nouvelle réf. — désignation (vide = celle du Stock)">`
-        : _otEsc(r.description) + (r.categorie && r.categorie !== '-' ? `<span class="sx-etiquette sx-e-bloc">${_otEsc(r.categorie)}</span>` : '')}</td>
+        : _otDesig(r.description, r.categorie && r.categorie !== '-' ? `<span class="sx-etiquette sx-e-bloc">${_otEsc(r.categorie)}</span>` : '')}</td>
       <td class="sx-centre">${special ? `<span class="sx-aide">${r.mode === 'heure' ? '= taux horaire' : '= taux ÷ 60'}</span>`
         : `<label for="ot-tr-mode-${k}" class="sx-sr">Calcul</label><select id="ot-tr-mode-${k}" class="sx-select" style="height:34px;font-size:14px;padding:0 6px;"
             onchange="App._otTarifSaisi('${k}')">${modes.map(([v, l]) => `<option value="${v}"${(r.mode || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>`}</td>

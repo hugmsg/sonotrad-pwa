@@ -297,3 +297,13 @@ body.socle { background: var(--sx-fond); }
 .sx-case-num[step="1"] { width: 80px; }
 .sx-case-num::-webkit-inner-spin-button, .sx-case-num::-webkit-outer-spin-button { opacity: 1; }
 .sx-champ[type="number"]::-webkit-inner-spin-button { opacity: 1; }
+
+/* Désignation repliable : une ligne coupée par « … », un clic l'affiche en entier. */
+.sx-desig-boite { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; max-width: 360px; min-width: 160px; }
+.sx-desig {
+  flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  background: none; border: 0; padding: 2px 0; margin: 0; font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.sx-desig[aria-expanded="true"] { white-space: normal; overflow: visible; }
+.sx-desig:hover { color: var(--sx-bleu); }
+.sx-desig-boite .sx-etiquette { flex-shrink: 0; }
