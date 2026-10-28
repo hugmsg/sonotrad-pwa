@@ -246,3 +246,39 @@ body.socle { background: var(--sx-fond); }
   .sx-bloc[hidden] { display: flex; }
   .sx-titre { font-size: 21px; }
 }
+
+/* ── Tableau (écrans de bureau) ─────────────────────────────────────────── */
+.sx-large { max-width: 1280px; }
+.sx-colonnes { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+.sx-colonnes > .sx-principal { flex: 999 1 620px; min-width: 0; }
+.sx-colonnes > .sx-cote { flex: 1 1 300px; display: flex; flex-direction: column; gap: 14px; }
+.sx-table-boite { overflow-x: auto; }
+.sx-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 720px; }
+.sx-table th {
+  background: var(--sx-fond); color: var(--sx-gris); font-size: 12px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .3px; text-align: left; padding: 9px 8px;
+}
+.sx-table td { padding: 5px 8px; border-top: 1px solid var(--sx-separateur); vertical-align: middle; }
+.sx-table th:first-child, .sx-table td:first-child { padding-left: 14px; }
+.sx-table th:last-child, .sx-table td:last-child { padding-right: 14px; }
+.sx-table tr.sx-vide-ligne td { background: #FAFBFD; color: var(--sx-gris); }
+.sx-table tr.sx-calculee td { background: var(--sx-bleu-clair); font-weight: 700; }
+.sx-num { text-align: right; white-space: nowrap; }
+.sx-centre { text-align: center; }
+.sx-case {
+  width: 64px; height: 34px; box-sizing: border-box; border: 1px solid var(--sx-bord-champ); border-radius: 8px;
+  text-align: center; font-size: 14px; font-weight: 700; font-family: inherit; color: var(--sx-texte); background: #FFFFFF;
+}
+.sx-case-mo { width: 84px; text-align: right; padding-right: 8px; font-weight: 600; }
+.sx-case-mo.sx-manuel { border: 2px solid var(--sx-orange); background: var(--sx-orange-fond); }
+.sx-etiquette {
+  display: inline-block; margin-left: 4px; font-size: 11px; font-weight: 700; border-radius: 4px; padding: 1px 5px; white-space: nowrap;
+}
+.sx-e-occasion { color: var(--sx-attention); background: var(--sx-orange-fond); }
+.sx-e-bloc     { color: var(--sx-bleu); background: var(--sx-bleu-clair); }
+.sx-e-alerte   { color: var(--sx-rouge); background: var(--sx-rouge-fond); }
+.sx-oui { color: var(--sx-vert); font-weight: 600; font-size: 13px; }
+.sx-non { color: var(--sx-attention); font-weight: 600; font-size: 13px; }
+.sx-gros-montant { font-size: 30px; font-weight: 700; }
+.sx-case-a-cocher { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; min-height: 36px; }
+.sx-case-a-cocher input { width: 18px; height: 18px; accent-color: var(--sx-bleu); }

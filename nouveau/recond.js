@@ -12,7 +12,9 @@ S.ot = {
   modules: null, modulesChargement: false, choix: false, rechercheModule: '',
   fiche: null, lignes: [], notes: '', onglet: 'pieces',
   rev: 0, revEnvoyee: -1, enCours: null, minuterie: null, etat: '',
-  recherche: { pieces: '', sanitaire: '' }, sugg: { pieces: [], sanitaire: [] },
+  recherche: { pieces: '', sanitaire: '', bureau: '' }, sugg: { pieces: [], sanitaire: [], bureau: [] },
+  calc: [],        // lignes telles que calculées par le serveur (mo_ligne, piece_ligne…), même ordre
+  masquer: false,  // contrôle : masquer les lignes sans quantité
 };
 
 const OT_STATUTS = {
@@ -65,8 +67,8 @@ Object.assign(App, {
     return d;
   },
 
-  _otEntete({ retour, titre, sousTitre = '', etat = '', logo = true }) {
-    return `<header class="sx-entete"><div class="sx-entete-in">
+  _otEntete({ retour, titre, sousTitre = '', etat = '', logo = true, large = false }) {
+    return `<header class="sx-entete"><div class="sx-entete-in${large ? ' sx-large' : ''}">
       <button type="button" class="sx-retour" onclick="${retour.action}">${_OT_SVG_RETOUR}${_otEsc(retour.texte)}</button>
       <div class="sx-titre-ligne">
         ${logo ? `<img class="sx-logo" src="${OT_LOGO_LOXAM}" alt="LOXAM">` : ''}
@@ -286,9 +288,10 @@ Object.assign(App, {
       bloc: l.bloc, ref: l.ref, libelle: l.libelle, quantite: l.quantite, unite: l.unite,
       occasion: !!l.occasion, origine: l.origine, mo_saisi: l.mo_saisi ?? null, prix_piece_saisi: l.prix_piece_saisi ?? null,
     }));
+    S.ot.calc = fiche.lignes || [];
     S.ot.notes = fiche.notes || '';
     S.ot.rev = 0; S.ot.revEnvoyee = 0; S.ot.etat = 'Enregistré';
-    S.ot.recherche = { pieces: '', sanitaire: '' };
+    S.ot.recherche = { pieces: '', sanitaire: '', bureau: '' };
     if (S.view === 'ot-fiche') this._otRendreFiche(); else this.go('ot-fiche');
   },
 
@@ -304,6 +307,7 @@ Object.assign(App, {
     const el = document.getElementById('ot-fiche-root');
     const f = S.ot.fiche;
     if (!el || !f) return;
+    if (this._otVueControle()) { this._otRendreControle(); return; }
     const modif = this._otModifiable();
     const nb = b => S.ot.lignes.filter(l => b.includes(l.bloc) && Number(l.quantite) > 0).length;
     const onglets = [
@@ -461,7 +465,7 @@ Object.assign(App, {
   _otModifie(redessiner = true) {
     if (!this._otModifiable()) return;
     S.ot.rev++;
-    if (redessiner) this._otRafraichirBlocs();
+    if (redessiner) { if (this._otVueControle()) this._otRendreTableControle(); else this._otRafraichirBlocs(); }
     this._otAfficherEtat('Modifications non enregistrées');
     const pied = document.getElementById('ot-pied');
     if (pied) pied.innerHTML = this._otHtmlPied();
@@ -536,7 +540,8 @@ Object.assign(App, {
     if (!q) { el.innerHTML = ''; return; }
     const sanitaire = bloc === 'sanitaire';
     const res = [...S.ot.refs.values()]
-      .filter(r => this._otEstSanitaire(r) === sanitaire && r.ref !== 'SON-0100' && r.ref !== 'SON-0101' && r.ref !== 'SON-0102')
+      .filter(r => bloc === 'bureau' ? r.ref !== 'SON-0100'
+        : this._otEstSanitaire(r) === sanitaire && r.ref !== 'SON-0100' && r.ref !== 'SON-0101' && r.ref !== 'SON-0102')
       .filter(r => r.ref.toLowerCase().startsWith(q) || (r.description || '').toLowerCase().includes(q))
       .sort((a, b) => (b.ref.toLowerCase() === q) - (a.ref.toLowerCase() === q) || a.ref.localeCompare(b.ref, 'fr', { numeric: true }))
       .slice(0, 12);
@@ -558,7 +563,11 @@ Object.assign(App, {
     if (!ref) return;
     const r = S.ot.refs.get(ref);
     const unite = r && r.unite && r.unite !== 'unité' ? r.unite : 'u';
-    this._otAjouter({ bloc, ref, libelle: r ? r.description : (inconnue ? 'Réf. sans tarif' : ref), quantite: 1, unite });
+    // Ajout au contrôle : ligne « bureau », rangée en sanitaire ou en pièces selon la réf.
+    const bureau = bloc === 'bureau';
+    const blocLigne = bureau ? (r && this._otEstSanitaire(r) ? 'sanitaire' : 'pieces') : bloc;
+    this._otAjouter({ bloc: blocLigne, ref, libelle: r ? r.description : (inconnue ? 'Réf. sans tarif' : ref), quantite: 1, unite,
+      ...(bureau ? { origine: 'bureau' } : {}) });
     S.ot.recherche[bloc] = '';
     const champ = document.getElementById('ot-rech-' + bloc);
     if (champ) { champ.value = ''; champ.focus(); }
@@ -583,7 +592,11 @@ Object.assign(App, {
       const d = await envoi;
       S.ot.fiche = { ...d.fiche, lignes: undefined };
       S.ot.revEnvoyee = rev;
-      if (S.ot.rev === rev) this._otAfficherEtat('Enregistré');
+      if (S.ot.rev === rev) {
+        this._otAfficherEtat('Enregistré');
+        S.ot.calc = d.fiche.lignes || [];
+        if (this._otVueControle() && S.view === 'ot-fiche') this._otMajMontants();
+      }
       const pied = document.getElementById('ot-pied');
       if (pied && S.view === 'ot-fiche') pied.innerHTML = this._otHtmlPied();
       return true;
@@ -635,5 +648,177 @@ Object.assign(App, {
     } catch (e) {
       this.toast('Changement impossible : ' + e.message, 4000);
     }
+  },
+
+  /* ═════════════════════════ CONTRÔLE (administrateur) ═════════════════════════ */
+
+  // Un administrateur contrôle une fiche envoyée par l'atelier (ou la consulte une fois validée).
+  _otVueControle() {
+    return this._otAdmin() && !!S.ot.fiche && S.ot.fiche.statut !== 'brouillon';
+  },
+
+  _otRendreControle() {
+    const el = document.getElementById('ot-fiche-root');
+    const f = S.ot.fiche;
+    const modif = this._otModifiable();
+    const titreModule = [f.type_module, f.numero_module].filter(Boolean).join(' ');
+    const actions = {
+      a_valider: `<button type="button" class="sx-btn sx-btn-discret" style="flex:1 1 140px;" onclick="App.otChangerStatut('brouillon')">Renvoyer à l'atelier</button>
+                  <button type="button" class="sx-btn sx-btn-principal" style="flex:2 1 180px;" onclick="App.otChangerStatut('validee')">Valider</button>`,
+      validee:   `<button type="button" class="sx-btn sx-btn-discret sx-btn-plein" onclick="App.otChangerStatut('a_valider')">Rouvrir pour corriger</button>`,
+    }[f.statut] || '';
+
+    el.innerHTML = `<div class="sx-ecran">
+      ${this._otEntete({ retour: { texte: 'Fiches', action: 'App.otQuitterFiche()' },
+          titre: [f.numero_ot || 'Contrôle', titreModule].filter(Boolean).join(' · '),
+          sousTitre: [f.agence, 'code ' + f.code_planning, f.saisi_par ? 'saisi par ' + f.saisi_par : ''].filter(Boolean).join(' · '),
+          etat: S.ot.etat, large: true })}
+      <main class="sx-contenu sx-large">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span class="sx-pastille sx-p-${_otEsc(f.statut)}">${_otEsc(OT_STATUTS[f.statut] || f.statut)}</span>
+          ${f.commentaire ? `<span class="sx-aide">${_otEsc(f.commentaire)}</span>` : ''}
+        </div>
+        <div class="sx-colonnes">
+          <section class="sx-principal sx-carte" aria-labelledby="ot-t-ctrl">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;flex-wrap:wrap;">
+              <h2 class="sx-h2" id="ot-t-ctrl">Opérations</h2>
+              <label class="sx-case-a-cocher"><input type="checkbox" ${S.ot.masquer ? 'checked' : ''}
+                onchange="S.ot.masquer=this.checked;App._otRendreTableControle()">Masquer les lignes sans quantité</label>
+            </div>
+            <div class="sx-table-boite" id="ot-table-ctrl"></div>
+            ${modif ? `<div style="padding:12px 14px;border-top:1px solid var(--sx-separateur);display:flex;flex-direction:column;gap:8px;">
+              <div class="sx-recherche">${_OT_SVG_LOUPE}
+                <label for="ot-rech-bureau" class="sx-sr">Ajouter une ligne</label>
+                <input id="ot-rech-bureau" type="search" placeholder="+ Ajouter une ligne (réf. ou désignation)" autocomplete="off"
+                  value="${_otEsc(S.ot.recherche.bureau)}" oninput="App._otRechercher('bureau', this.value)">
+              </div>
+              <div id="ot-sugg-bureau"></div>
+              <span class="sx-aide">Quantités et montants modifiables. Un montant tapé remplace le tarif (case orange) ; vider la case revient au tarif.
+                Une ligne sans quantité n'apparaît pas dans les documents.</span>
+            </div>` : ''}
+          </section>
+          <aside class="sx-cote" aria-label="Total et validation">
+            <section class="sx-carte sx-carte-pad" style="display:flex;flex-direction:column;gap:4px;">
+              <span class="sx-aide" style="font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Montant de l'OT</span>
+              <span class="sx-gros-montant" id="ot-ctrl-total"></span>
+              <span class="sx-aide" id="ot-ctrl-detail"></span>
+            </section>
+            <section class="sx-carte sx-carte-pad" style="display:flex;flex-direction:column;gap:6px;">
+              <label for="ot-notes" class="sx-h2" style="font-size:16px;">Notes de l'atelier</label>
+              <textarea id="ot-notes" class="sx-textarea" rows="4" ${modif ? '' : 'disabled'}
+                oninput="S.ot.notes=this.value;App._otModifie(false)">${_otEsc(S.ot.notes)}</textarea>
+              <span class="sx-aide">Pour le bureau, jamais dans les documents LOXAM.</span>
+            </section>
+            ${f.statut === 'a_valider' ? `<section class="sx-bandeau sx-bandeau-info" style="display:flex;flex-direction:column;gap:4px;">
+              <strong>En validant (essai), la PWA va :</strong>
+              <span>1. attribuer un numéro ESSAI-… (la matrice garde les vrais) ;</span>
+              <span>2. figer les prix de chaque ligne.</span>
+              <span>Excel LOXAM / SONOTRAD, PDF et mail : prochaine étape. Aucune sortie de stock pendant l'essai.</span>
+            </section>` : ''}
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">${actions}</div>
+          </aside>
+        </div>
+      </main></div>`;
+    this._otRendreTableControle();
+  },
+
+  _otRendreTableControle() {
+    const z = document.getElementById('ot-table-ctrl');
+    if (!z) return;
+    const modif = this._otModifiable();
+    const dis = modif ? '' : 'disabled';
+    const nomsBlocs = { pieces: '', diverses: '', sanitaire: 'SANITAIRE', travaux: 'TRAVAUX' };
+    // Ordre d'affichage : pièces et diverses, travaux, puis sanitaire suivi de sa ligne calculée.
+    const rang = { diverses: 0, pieces: 0, travaux: 1, sanitaire: 2 };
+    const lignes = S.ot.lignes.map((l, i) => ({ l, i }))
+      .filter(x => !S.ot.masquer || Number(x.l.quantite) > 0)
+      .sort((a, b) => rang[a.l.bloc] - rang[b.l.bloc] || a.i - b.i);
+    const html = lignes.map(({ l, i }) => {
+      const vide = !(Number(l.quantite) > 0);
+      const r = S.ot.refs.get(l.ref);
+      const forfait = S.ot.forfaits.has(l.ref);
+      const sanitaire = l.bloc === 'sanitaire';
+      const interne = /^SON-/.test(l.ref || '') || !l.ref;
+      const sansTarif = l.ref && !forfait && !r;
+      const etiquettes = [
+        nomsBlocs[l.bloc] ? `<span class="sx-etiquette sx-e-bloc">${nomsBlocs[l.bloc]}</span>` : '',
+        l.occasion ? '<span class="sx-etiquette sx-e-occasion">OCCASION</span>' : '',
+        forfait ? '<span class="sx-etiquette sx-e-bloc">FORFAIT</span>' : '',
+        l.origine === 'bureau' ? '<span class="sx-etiquette sx-e-bloc">AJOUT BUREAU</span>' : '',
+        sansTarif && l.mo_saisi === null ? '<span class="sx-etiquette sx-e-alerte">SANS TARIF</span>' : '',
+      ].join('');
+      const montant = sanitaire
+        ? `<span class="sx-aide" id="ot-mo-${i}"></span>`
+        : `<input id="ot-mo-${i}" class="sx-case sx-case-mo${l.mo_saisi !== null ? ' sx-manuel' : ''}" type="text" inputmode="decimal" ${dis}
+             aria-label="Main-d'œuvre en euros" value="${l.mo_saisi !== null ? _otQte(l.mo_saisi) : ''}" oninput="App._otSaisirMo(${i}, this)">`;
+      return `<tr class="${vide ? 'sx-vide-ligne' : ''}">
+        <td><span class="sx-ref">${_otEsc(l.ref || '—')}</span></td>
+        <td>${_otEsc(l.libelle || (r && r.description) || '')}${etiquettes}</td>
+        <td class="sx-centre"><input id="ot-q-${i}" class="sx-case" type="text" inputmode="decimal" placeholder="—" ${dis}
+          aria-label="Quantité" value="${_otQte(l.quantite)}" oninput="App._otSaisirQteCtrl(${i}, this.value)"></td>
+        <td class="sx-aide">${_otEsc(l.unite === 'u' ? 'u.' : l.unite)}</td>
+        <td class="sx-aide">${_otEsc(forfait ? '—' : (r && r.op_code) || '—')}</td>
+        <td class="sx-num">${montant}</td>
+        <td>${vide ? '<span class="sx-aide">—</span>' : interne ? '<span class="sx-non">Non (code SON)</span>' : '<span class="sx-oui">Oui</span>'}</td>
+        <td>${modif ? `<button type="button" class="sx-retirer" aria-label="Supprimer la ligne" onclick="App._otRetirer(${i})">✕</button>` : ''}</td>
+      </tr>`;
+    }).join('');
+    z.innerHTML = `<table class="sx-table">
+      <thead><tr><th scope="col">Réf.</th><th scope="col">Description</th><th scope="col" class="sx-centre">Qté</th>
+        <th scope="col">Unité</th><th scope="col">OP</th><th scope="col" class="sx-num">MO €</th><th scope="col">Vu par LOXAM</th><th scope="col"><span class="sx-sr">Supprimer</span></th></tr></thead>
+      <tbody>${html || '<tr><td colspan="8" class="sx-centre sx-aide">Aucune ligne.</td></tr>'}
+        <tr class="sx-calculee" id="ot-ligne-mop"><td><span class="sx-ref">SON-0100</span></td><td>Main d'œuvre pièces (sanitaire, calculée)</td>
+          <td></td><td></td><td class="sx-aide">OP55A</td><td class="sx-num" id="ot-mop"></td><td><span class="sx-non">Non (code SON)</span></td><td></td></tr>
+      </tbody></table>`;
+    this._otMajMontants();
+  },
+
+  // Montants affichés = ceux du dernier calcul du serveur ; « … » tant qu'une modification n'est pas recalculée.
+  _otMajMontants() {
+    const aJour = S.ot.rev === S.ot.revEnvoyee;
+    const calc = aJour ? S.ot.calc : [];
+    S.ot.lignes.forEach((l, i) => {
+      const c = calc[i];
+      const champ = document.getElementById('ot-mo-' + i);
+      if (!champ) return;
+      if (l.bloc === 'sanitaire') {
+        champ.textContent = c && Number(c.piece_ligne) > 0 ? 'pièce ' + _otEuros(c.piece_ligne) : (aJour ? '—' : '…');
+      } else if (l.mo_saisi === null) {
+        champ.placeholder = c ? _otQte(Math.round(Number(c.mo_ligne) * 100) / 100) : (aJour ? '0' : '…');
+      }
+    });
+    const t = S.ot.fiche.totaux || {};
+    const mop = document.getElementById('ot-mop');
+    if (mop) mop.textContent = aJour ? _otEuros(t.mo_pieces) : '…';
+    const ligneMop = document.getElementById('ot-ligne-mop');
+    if (ligneMop) ligneMop.style.display = aJour && !(Number(t.mo_pieces) > 0) ? 'none' : '';
+    const tot = document.getElementById('ot-ctrl-total');
+    if (tot) tot.textContent = aJour ? _otEuros(S.ot.fiche.total_ht ?? t.total) + ' HT' : 'calcul…';
+    const det = document.getElementById('ot-ctrl-detail');
+    const maj = String(S.ot.tarifs?.parametres?.majoration_pieces ?? 1.1).replace('.', ',');
+    if (det) det.textContent = aJour
+      ? `MO des lignes ${_otEuros(t.mo_lignes)} + main-d'œuvre pièces ${_otEuros(t.mo_pieces)} (pièces sanitaire ${_otEuros(t.somme_pieces)} + 0,50, × ${maj}, arrondi au 0,50)`
+      : 'Recalcul par le serveur à l\'enregistrement…';
+  },
+
+  _otSaisirQteCtrl(i, v) {
+    const l = S.ot.lignes[i];
+    if (!l) return;
+    const n = parseFloat(String(v).replace(',', '.'));
+    l.quantite = String(v).trim() === '' || isNaN(n) ? null : Math.max(0, n);
+    document.getElementById('ot-q-' + i)?.closest('tr')?.classList.toggle('sx-vide-ligne', !(Number(l.quantite) > 0));
+    this._otModifie(false);
+    this._otMajMontants();
+  },
+
+  _otSaisirMo(i, champ) {
+    const l = S.ot.lignes[i];
+    if (!l) return;
+    const v = champ.value.trim();
+    const n = parseFloat(v.replace(',', '.'));
+    l.mo_saisi = v === '' || isNaN(n) ? null : Math.max(0, n);
+    champ.classList.toggle('sx-manuel', l.mo_saisi !== null);
+    this._otModifie(false);
+    this._otMajMontants();
   },
 });
