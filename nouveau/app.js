@@ -215,6 +215,7 @@ const App = {
     if (view === 'annuaire')      this.annuaireLoad();
     if (view === 'ot-liste')      this.otChargerListe();
     if (view === 'ot-fiche')      this._otRendreFiche();
+    if (view === 'ot-tarifs')     this.otTarifsInit();
   },
   breadcrumbGoActivity() {
     const map = { loxam:'loxam-menu', bcb:'bcb-menu', stockage:'loxam-menu' };

@@ -17,6 +17,7 @@ S.ot = {
   masquer: false,  // contrôle : masquer les lignes sans quantité
   familles: (() => { try { return localStorage.getItem('snt_ot_familles') !== '0'; } catch { return true; } })(),
   groupesAffiches: [],
+  tarifsVue: null,  // écran Tarifs : recherche, journal
 };
 
 const OT_STATUTS = {
@@ -161,7 +162,10 @@ Object.assign(App, {
         <div class="sx-bandeau sx-bandeau-info">Essai : la fiche ne sort rien du stock (la 🔧 reste la vraie sortie) et la matrice Excel garde les vrais numéros d'OT.</div>
         <button type="button" class="sx-btn sx-btn-principal sx-btn-plein" onclick="App.otNouvelle()">+ Nouvelle fiche</button>
         ${corps}
-        <button type="button" class="sx-btn sx-btn-discret" onclick="App.otChargerListe(true)">Actualiser</button>
+        <div class="sx-ligne-champs">
+          <button type="button" class="sx-btn sx-btn-discret" style="flex:1 1 140px;" onclick="App.otChargerListe(true)">Actualiser</button>
+          ${admin ? '<button type="button" class="sx-btn sx-btn-second" style="flex:1 1 140px;" onclick="App.otOuvrirTarifs()">Tarifs</button>' : ''}
+        </div>
       </main></div>`;
   },
 
@@ -890,5 +894,260 @@ Object.assign(App, {
     if (alerte) alerte.hidden = l.mo_saisi !== null;
     this._otModifie(false);
     this._otMajMontants();
+  },
+
+  /* ═════════════════════════════ TARIFS (administrateur) ═════════════════════════════ */
+
+  async otOuvrirTarifs() {
+    if (!this._otAdmin()) { this.toast('⛔ Réservé aux administrateurs'); return; }
+    this.go('ot-tarifs');
+  },
+
+  async otTarifsInit() {
+    S.ot.tarifsVue = S.ot.tarifsVue || { recherche: '', journal: null, modifs: {} };
+    this._otRendreTarifs();
+    try {
+      S.ot.tarifs = null;                       // toujours les tarifs à jour en entrant
+      await this._otChargerTarifs();
+    } catch (e) {
+      this.toast('Tarifs indisponibles : ' + e.message, 4000);
+    }
+    this._otRendreTarifs();
+    this._otChargerJournal();
+  },
+
+  async _otChargerJournal() {
+    try {
+      const d = await this._otGet({ action: 'ot_journal' });
+      S.ot.tarifsVue.journal = d.journal || [];
+    } catch (e) {
+      S.ot.tarifsVue.journal = [];
+    }
+    const z = document.getElementById('ot-journal');
+    if (z) z.innerHTML = this._otHtmlJournal();
+  },
+
+  _otRendreTarifs() {
+    const el = document.getElementById('ot-tarifs-root');
+    if (!el) return;
+    const t = S.ot.tarifs;
+    const p = (t && t.parametres) || {};
+    const champParam = (cle, libelle, unite, aide) => `
+      <div style="display:flex;flex-direction:column;gap:4px;flex:1 1 200px;">
+        <label for="ot-p-${cle}" style="font-size:13px;font-weight:700;">${libelle}</label>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input id="ot-p-${cle}" class="sx-champ" style="flex:1;" type="text" inputmode="decimal" value="${_otQte(p[cle])}">
+          <span class="sx-aide" style="min-width:34px;">${unite}</span>
+          <button type="button" class="sx-btn sx-btn-second" style="height:46px;" onclick="App._otEnregistrerParam('${cle}')">Enregistrer</button>
+        </div>
+        <span class="sx-aide">${aide}</span>
+      </div>`;
+    el.innerHTML = `<div class="sx-ecran">
+      ${this._otEntete({ retour: { texte: 'Fiches', action: "App.go('ot-liste')" }, titre: 'Tarifs',
+          sousTitre: 'Main-d\'œuvre facturée à LOXAM · chaque changement est noté au journal', large: true })}
+      <main class="sx-contenu sx-large">
+        ${!t ? '<div class="sx-chargement">Chargement des tarifs…</div>' : `
+        <div class="sx-bandeau sx-bandeau-info">Un changement de tarif s'applique aux fiches non validées. Les fiches validées gardent les prix figés à leur validation.</div>
+
+        <section class="sx-section" aria-labelledby="ot-t-param">
+          <h2 class="sx-h2" id="ot-t-param">Paramètres</h2>
+          <div class="sx-carte sx-carte-pad sx-ligne-champs" style="gap:16px;">
+            ${champParam('majoration_pieces', 'Coefficient « main-d\'œuvre pièces »', '×', 'Appliqué au total des pièces sanitaire (+ 0,50 €), arrondi au 0,50.')}
+            ${champParam('taux_horaire', 'Taux horaire négocié', '€/h', 'Repère seulement : la MO au temps vient des réf. SON-0102 (h) et SON-0101 (min) ; changer ce taux ne recalcule aucune réf.')}
+            ${champParam('taux_base', 'Ancien taux (repère)', '€/h', 'Historique, pour ajuster les prix devenus trop chers.')}
+          </div>
+          <span class="sx-aide">Mode essai : ${Number(p.essai) === 1 ? 'oui (numéros ESSAI-…, pas de sortie de stock)' : 'non'}.</span>
+        </section>
+
+        <section class="sx-section" aria-labelledby="ot-t-refs">
+          <div class="sx-section-tete"><h2 class="sx-h2" id="ot-t-refs">Références</h2>
+            <span class="sx-aide">${(t.references || []).length} réf.</span></div>
+          <div class="sx-recherche">${_OT_SVG_LOUPE}
+            <label for="ot-rech-tarif" class="sx-sr">Chercher une référence</label>
+            <input id="ot-rech-tarif" type="search" placeholder="Réf., désignation ou famille… (ou la réf. à créer)" autocomplete="off"
+              value="${_otEsc(S.ot.tarifsVue.recherche)}" oninput="S.ot.tarifsVue.recherche=this.value;App._otRendreRefsTarifs()">
+          </div>
+          <div class="sx-carte"><div class="sx-table-boite" id="ot-refs-tarifs"></div></div>
+          <span class="sx-aide">MO = montant facturé par unité. Prix pièce = prix d'achat d'une pièce sanitaire (refacturée en « main-d'œuvre pièces »).
+            Plafond = montant maximum par ligne (ex. laine de verre 200 €). Case vide = aucun.</span>
+        </section>
+
+        <section class="sx-section" aria-labelledby="ot-t-forf">
+          <h2 class="sx-h2" id="ot-t-forf">Forfaits</h2>
+          <div class="sx-carte"><div class="sx-table-boite">${this._otHtmlForfaitsTarifs()}</div></div>
+        </section>
+
+        <section class="sx-section" aria-labelledby="ot-t-journal">
+          <h2 class="sx-h2" id="ot-t-journal">Journal des changements</h2>
+          <div class="sx-carte" id="ot-journal">${this._otHtmlJournal()}</div>
+        </section>`}
+      </main></div>`;
+    if (t) this._otRendreRefsTarifs();
+  },
+
+  // Une cellule modifiable : valeur d'origine gardée dans data-orig, bouton Enregistrer actif dès qu'une case change.
+  _otCaseTarif(id, valeur, largeur = 84) {
+    return `<input id="${id}" class="sx-case sx-case-mo" style="width:${largeur}px;" type="text" inputmode="decimal"
+      value="${_otQte(valeur)}" data-orig="${_otQte(valeur)}" oninput="App._otTarifModifie(this)">`;
+  },
+
+  _otTarifModifie(champ) {
+    const tr = champ.closest('tr');
+    if (!tr) return;
+    const change = [...tr.querySelectorAll('input[data-orig]')].some(c => c.value.trim() !== c.dataset.orig);
+    const b = tr.querySelector('.ot-enreg');
+    if (b) b.disabled = !change;
+    champ.classList.toggle('sx-manuel', champ.value.trim() !== champ.dataset.orig);
+  },
+
+  _otRendreRefsTarifs() {
+    const z = document.getElementById('ot-refs-tarifs');
+    if (!z || !S.ot.tarifs) return;
+    const q = S.ot.tarifsVue.recherche.trim().toLowerCase();
+    const toutes = S.ot.tarifs.references || [];
+    const res = !q ? [] : toutes
+      .filter(r => r.ref.toLowerCase().startsWith(q) || (r.description || '').toLowerCase().includes(q) || (r.categorie || '').toLowerCase().includes(q))
+      .sort((a, b) => (b.ref.toLowerCase() === q) - (a.ref.toLowerCase() === q) || a.ref.localeCompare(b.ref, 'fr', { numeric: true }))
+      .slice(0, 60);
+    const saisie = S.ot.tarifsVue.recherche.trim();
+    // Création proposée seulement pour ce qui ressemble à une réf. (au moins un chiffre).
+    const creable = saisie && /^[A-Za-z0-9-]{1,20}$/.test(saisie) && /\d/.test(saisie) && !toutes.some(r => r.ref.toLowerCase() === q);
+    if (!q) { z.innerHTML = '<div class="sx-vide">Tapez une réf., une désignation ou une famille (ex. « 258 », « panneau », « Électricité »).</div>'; return; }
+    const ligne = (r, k) => `<tr>
+        <td><span class="sx-ref">${_otEsc(r.ref)}</span></td>
+        <td>${_otEsc(r.description)}${r.categorie && r.categorie !== '-' ? `<span class="sx-etiquette sx-e-bloc">${_otEsc(r.categorie)}</span>` : ''}</td>
+        <td class="sx-aide">${_otEsc(r.unite || '')}</td>
+        <td class="sx-num">${this._otCaseTarif('ot-tr-mo-' + k, r.mo)}</td>
+        <td class="sx-num">${this._otCaseTarif('ot-tr-pp-' + k, r.prix_piece)}</td>
+        <td class="sx-num">${this._otCaseTarif('ot-tr-pl-' + k, r.mo_plafond, 72)}</td>
+        <td><button type="button" class="sx-btn sx-btn-second ot-enreg" style="height:36px;padding:0 12px;" disabled
+          onclick="App._otEnregistrerRef(${k})">Enregistrer</button></td>
+      </tr>`;
+    S.ot.tarifsVue.affichees = res.map(r => r.ref);
+    z.innerHTML = `<table class="sx-table" style="min-width:760px;">
+      <thead><tr><th scope="col">Réf.</th><th scope="col">Désignation</th><th scope="col">Unité</th>
+        <th scope="col" class="sx-num">MO €</th><th scope="col" class="sx-num">Prix pièce €</th><th scope="col" class="sx-num">Plafond €</th>
+        <th scope="col"><span class="sx-sr">Enregistrer</span></th></tr></thead>
+      <tbody>${res.map(ligne).join('')}
+        ${creable ? `<tr class="sx-calculee"><td><span class="sx-ref">${_otEsc(saisie.toUpperCase())}</span></td>
+          <td><label for="ot-tr-new-desc" class="sx-sr">Désignation</label>
+            <input id="ot-tr-new-desc" class="sx-champ" style="width:100%;height:36px;" placeholder="Désignation (vide = celle du Stock)"></td>
+          <td><label for="ot-tr-new-unite" class="sx-sr">Unité</label>
+            <input id="ot-tr-new-unite" class="sx-champ" style="width:70px;height:36px;" value="unité"></td>
+          <td class="sx-num"><label for="ot-tr-new-mo" class="sx-sr">MO</label>
+            <input id="ot-tr-new-mo" class="sx-case sx-case-mo" type="text" inputmode="decimal"></td>
+          <td></td><td></td>
+          <td><button type="button" class="sx-btn sx-btn-principal" style="height:36px;padding:0 12px;" onclick="App._otCreerRef()">Créer</button></td>
+        </tr>` : ''}
+        ${!res.length && !creable ? '<tr><td colspan="7" class="sx-centre sx-aide">Aucune réf. trouvée.</td></tr>' : ''}
+      </tbody></table>`;
+  },
+
+  _otHtmlForfaitsTarifs() {
+    const fs = [...((S.ot.tarifs && S.ot.tarifs.forfaits) || [])].sort((a, b) => a.lettre.localeCompare(b.lettre));
+    return `<table class="sx-table" style="min-width:620px;">
+      <thead><tr><th scope="col">Forfait</th><th scope="col">Intitulé</th><th scope="col" class="sx-num">MO €</th>
+        <th scope="col" class="sx-num">Prix pièce €</th><th scope="col">Pièces comprises</th><th scope="col"><span class="sx-sr">Enregistrer</span></th></tr></thead>
+      <tbody>${fs.map(f => `<tr>
+        <td><span class="sx-ref">${_otEsc(f.lettre)}</span></td>
+        <td>${_otEsc(f.intitule)}</td>
+        <td class="sx-num">${this._otCaseTarif('ot-tf-mo-' + f.lettre, f.mo)}</td>
+        <td class="sx-num">${this._otCaseTarif('ot-tf-pp-' + f.lettre, f.prix_piece)}</td>
+        <td class="sx-aide">${(f.pieces || []).map(x => _otEsc(x.ref) + ' ×' + _otQte(x.qte)).join(', ') || '—'}</td>
+        <td><button type="button" class="sx-btn sx-btn-second ot-enreg" style="height:36px;padding:0 12px;" disabled
+          onclick="App._otEnregistrerForfait('${_otEsc(f.lettre)}')">Enregistrer</button></td>
+      </tr>`).join('')}</tbody></table>`;
+  },
+
+  _otHtmlJournal() {
+    const j = S.ot.tarifsVue && S.ot.tarifsVue.journal;
+    if (!j) return '<div class="sx-chargement">Chargement du journal…</div>';
+    if (!j.length) return '<div class="sx-vide">Aucun changement de tarif pour l\'instant.</div>';
+    const champs = { mo: 'MO', prix_piece: 'prix pièce', mo_plafond: 'plafond', valeur: 'valeur', description: 'désignation', unite: 'unité', categorie: 'famille', intitule: 'intitulé' };
+    const types = { reference: 'Réf.', forfait: 'Forfait', parametre: 'Paramètre' };
+    const nomsParams = { majoration_pieces: 'coefficient pièces', taux_horaire: 'taux horaire', taux_base: 'ancien taux', essai: 'mode essai' };
+    const fmt = v => v === null || v === undefined || v === '' ? 'vide' : typeof v === 'number' ? _otQte(v) : String(v);
+    return j.slice(0, 100).map(e => {
+      const av = e.avant || {}, ap = e.apres || {};
+      const diffs = Object.keys(champs).filter(c => c in ap && JSON.stringify(av[c] ?? null) !== JSON.stringify(ap[c] ?? null))
+        .filter(c => e.avant || (ap[c] !== null && ap[c] !== '' && !['unite', 'categorie'].includes(c)))
+        .map(c => `${champs[c]} ${e.avant ? _otEsc(fmt(av[c])) + ' → ' : ''}<strong>${_otEsc(fmt(ap[c]))}</strong>`);
+      const quand = new Date(e.le).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+      return `<div class="sx-ligne" style="align-items:flex-start;">
+        <div class="sx-ligne-texte">
+          <span class="sx-ligne-nom" style="white-space:normal;">${types[e.type] || e.type} <span class="sx-ref">${_otEsc(e.type === 'parametre' ? (nomsParams[e.cle] || e.cle) : e.cle)}</span>${e.avant ? '' : ' · création'} — ${diffs.join(' · ') || 'aucune différence'}</span>
+          <span class="sx-aide">${_otEsc(quand)} · ${_otEsc(e.par || '?')}</span>
+        </div></div>`;
+    }).join('');
+  },
+
+  // Montant lu dans une case : vide = null ; illisible ou négatif = erreur.
+  _otLireMontant(id) {
+    const v = (document.getElementById(id)?.value || '').trim();
+    if (v === '') return { ok: true, val: null };
+    const n = Number(v.replace(',', '.'));
+    return isNaN(n) || n < 0 ? { ok: false } : { ok: true, val: n };
+  },
+
+  async _otEnvoyerTarif(type, cle, valeurs, libelle) {
+    try {
+      const d = await this._otPost({ action: 'ot_tarif', type, cle, valeurs });
+      this.toast('✓ ' + libelle + ' enregistré');
+      const t = S.ot.tarifs;
+      if (type === 'reference') {
+        const i = t.references.findIndex(r => r.ref === cle);
+        const r = { ...(i >= 0 ? t.references[i] : {}), ...d.apres };
+        if (i >= 0) t.references[i] = r; else t.references.push(r);
+        S.ot.refs.set(cle, r);
+        this._otRendreRefsTarifs();
+      } else if (type === 'forfait') {
+        const f = t.forfaits.find(x => x.lettre === cle);
+        Object.assign(f, { mo: d.apres.mo, prix_piece: d.apres.prix_piece });
+        S.ot.forfaits.set(cle, f);
+        this._otRendreTarifs();
+      } else {
+        t.parametres[cle] = d.apres.valeur;
+      }
+      this._otChargerJournal();
+      return true;
+    } catch (e) {
+      this.toast('Enregistrement impossible : ' + e.message, 4000);
+      return false;
+    }
+  },
+
+  async _otEnregistrerRef(k) {
+    const ref = S.ot.tarifsVue.affichees[k];
+    if (!ref) return;
+    const mo = this._otLireMontant('ot-tr-mo-' + k), pp = this._otLireMontant('ot-tr-pp-' + k), pl = this._otLireMontant('ot-tr-pl-' + k);
+    if (!mo.ok || !pp.ok || !pl.ok) { this.toast('Montant invalide'); return; }
+    await this._otEnvoyerTarif('reference', ref, { mo: mo.val, prix_piece: pp.val, mo_plafond: pl.val }, 'Réf. ' + ref);
+  },
+
+  async _otCreerRef() {
+    const ref = S.ot.tarifsVue.recherche.trim().toUpperCase();
+    const mo = this._otLireMontant('ot-tr-new-mo');
+    if (!mo.ok) { this.toast('Montant invalide'); return; }
+    const desc = document.getElementById('ot-tr-new-desc')?.value.trim();
+    const unite = document.getElementById('ot-tr-new-unite')?.value.trim() || 'unité';
+    const valeurs = { mo: mo.val, unite };
+    if (desc) valeurs.description = desc;      // vide : le serveur reprend la désignation du Stock
+    await this._otEnvoyerTarif('reference', ref, valeurs, 'Réf. ' + ref);
+  },
+
+  async _otEnregistrerForfait(lettre) {
+    const mo = this._otLireMontant('ot-tf-mo-' + lettre), pp = this._otLireMontant('ot-tf-pp-' + lettre);
+    if (!mo.ok || !pp.ok) { this.toast('Montant invalide'); return; }
+    await this._otEnvoyerTarif('forfait', lettre, { mo: mo.val ?? 0, prix_piece: pp.val ?? 0 }, 'Forfait ' + lettre);
+  },
+
+  async _otEnregistrerParam(cle) {
+    const v = this._otLireMontant('ot-p-' + cle);
+    if (!v.ok || v.val === null) { this.toast('Valeur invalide'); return; }
+    const avant = S.ot.tarifs.parametres[cle];
+    if (Number(avant) === v.val) { this.toast('Valeur inchangée'); return; }
+    const ok = await this._otConfirmer({ titre: 'Changer ce paramètre ?', ok: 'Enregistrer',
+      texte: `${_otQte(avant)} → ${_otQte(v.val)}. S'applique aux fiches non validées.` });
+    if (ok) await this._otEnvoyerTarif('parametre', cle, { valeur: v.val }, 'Paramètre');
   },
 });
