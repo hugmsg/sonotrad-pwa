@@ -17,6 +17,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="supabase.js"></script>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="socle.css">
 </head>
 <body>
 
@@ -265,6 +266,14 @@
           <span class="activity-badge" style="background:#FEF3C7;color:#92400E;">Admin</span>
         </div>
 
+        <!-- Reconditionnement — fiches d'opérations (essai) : admins + activité « recond » -->
+        <div class="activity-card" id="recond-home-card" data-ready="true" onclick="App.otOuvrirActivite()" style="display:none;">
+          <div class="activity-icon">🔧</div>
+          <div class="activity-name">Reconditionnement</div>
+          <div class="activity-desc">Fiches d'opérations sur module</div>
+          <span class="activity-badge" style="background:#FFF6D6;color:#8A4B08;">Essai</span>
+        </div>
+
         <!-- Admin — visible uniquement pour role=admin -->
         <div class="activity-card" id="admin-home-card" data-ready="true"
           onclick="App.goAdmin()"
@@ -291,6 +300,10 @@
         SONOTRAD · Gestion multi-activités
       </p>
     </div>
+
+    <!-- ── VIEWS : RECONDITIONNEMENT (socle commun, voir recond.js / socle.css) ── -->
+    <div class="view" id="view-ot-liste"><div id="ot-liste-root"></div></div>
+    <div class="view" id="view-ot-fiche"><div id="ot-fiche-root"></div></div>
 
     <!-- ── VIEW : ANNUAIRE ──────────────────────────────────────────────── -->
     <div class="view" id="view-annuaire">
@@ -424,6 +437,7 @@
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-agorastore" value="agorastore"       > Agorastore</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-stockage"   value="stockage"         > Stockage</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-lvu"        value="lvu"              > LV/CMR</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="nu-act-recond"     value="recond"           > Reconditionnement</label>
           </div>
         </div>
         <div style="margin-bottom:12px;">
@@ -1873,6 +1887,7 @@
 <script src="bcb.js"></script>
 <script src="lv.js"></script>
 <script src="annuaire.js"></script>
+<script src="recond.js"></script>
 
 <!-- ── MODAL : SAISIE RAPIDE ──────────────────────────────────────────── -->
 <div id="saisie-modal" class="pose-overlay" style="display:none;" onclick="if(event.target===this)App.closeSaisieModal()">

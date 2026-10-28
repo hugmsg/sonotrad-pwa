@@ -188,6 +188,7 @@ const App = {
       S.depSelected.clear();
     }
     if (S.view === 'lvu-history' && view !== 'lvu-history') this._lvuUnsubscribeHistoryRealtime();
+    if (S.view === 'ot-fiche' && view !== 'ot-fiche' && S.ot.rev !== S.ot.revEnvoyee) this._otEnregistrer();
     S.prevView = S.view;
     S.view = view;
     if (view === 'loxam-menu') S.activity = 'loxam'; // reset avant _render pour les tabs nav
@@ -212,6 +213,8 @@ const App = {
     if (view === 'lvu-form')      { this._lvuRenderMarchandises(); this._lvuChargerAnnulees(); }
     if (view === 'lvu-history')   { this.lvuLoadHistory(); this._lvuSubscribeHistoryRealtime(); }
     if (view === 'annuaire')      this.annuaireLoad();
+    if (view === 'ot-liste')      this.otChargerListe();
+    if (view === 'ot-fiche')      this._otRendreFiche();
   },
   breadcrumbGoActivity() {
     const map = { loxam:'loxam-menu', bcb:'bcb-menu', stockage:'loxam-menu' };
@@ -265,6 +268,8 @@ const App = {
   _render() {
     const v      = S.view;
     const onHome = v === 'home';
+    // Écrans du socle commun (socle.css) : ils portent leur propre en-tête.
+    document.body.classList.toggle('socle', v.startsWith('ot-'));
 
     // ── Nav : cachée sur l'accueil, tabs selon activité ─────────────────
     const nav = document.getElementById('main-nav');
@@ -374,6 +379,8 @@ const App = {
     if (annCard) annCard.style.display = isAdmin ? '' : 'none';
     const rhCard = document.getElementById('rh-home-card');
     if (rhCard) rhCard.style.display = isAdmin ? '' : 'none';
+    const recondCard = document.getElementById('recond-home-card');
+    if (recondCard) recondCard.style.display = (isAdmin || (S.currentUser?.activites || []).includes('recond')) ? '' : 'none';
     const fillTestBtn = document.getElementById('btn-fill-test');
     if (fillTestBtn) fillTestBtn.style.display = isAdmin ? '' : 'none';
 

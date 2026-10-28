@@ -171,12 +171,12 @@ Object.assign(App, {
           <div style="margin-bottom:8px;padding:8px 10px;background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:8px;">
             <div style="font-size:11px;font-weight:600;color:#94A3B8;margin-bottom:6px;">ACTIVITÉS</div>
             <div style="display:flex;flex-wrap:wrap;gap:8px;">
-              ${['loxam','bcb','agorastore','stockage','lvu'].map(a => `
+              ${['loxam','bcb','agorastore','stockage','lvu','recond'].map(a => `
                 <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">
                   <input type="checkbox" id="uact-${u.id}-${a}" value="${a}"
                     ${u.activites.includes(a)?'checked':''}
                     onchange="App._updateUserActivites('${u.id}')">
-                  ${a.charAt(0).toUpperCase()+a.slice(1)}
+                  ${a === 'recond' ? 'Reconditionnement' : a.charAt(0).toUpperCase()+a.slice(1)}
                 </label>`).join('')}
             </div>
           </div>
@@ -221,7 +221,7 @@ Object.assign(App, {
     ['nu-prenom','nu-nom','nu-pin'].forEach(id => { const el = document.getElementById(id); if (el) { el.value = ''; el.readOnly = false; } });
     const badge = document.getElementById('nu-linked-badge');
     if (badge) badge.style.display = 'none';
-    ['loxam','bcb','agorastore','stockage','lvu'].forEach(a => {
+    ['loxam','bcb','agorastore','stockage','lvu','recond'].forEach(a => {
       const el = document.getElementById('nu-act-' + a);
       if (el) el.checked = (a === 'loxam'); // reset : loxam coché par défaut
     });
@@ -235,7 +235,7 @@ Object.assign(App, {
     const role   = document.getElementById('nu-role').value;
     const pin    = document.getElementById('nu-pin').value.trim();
     const employeId = S._pendingEmployeId || '';
-    const activites = ['loxam','bcb','agorastore','stockage','lvu'].filter(a => {
+    const activites = ['loxam','bcb','agorastore','stockage','lvu','recond'].filter(a => {
       const el = document.getElementById('nu-act-' + a); return el && el.checked;
     });
 
@@ -272,7 +272,7 @@ Object.assign(App, {
   },
 
   _updateUserActivites(id) {
-    const activites = ['loxam','bcb','agorastore','stockage','lvu'].filter(a => {
+    const activites = ['loxam','bcb','agorastore','stockage','lvu','recond'].filter(a => {
       const el = document.getElementById(`uact-${id}-${a}`);
       return el && el.checked;
     });
