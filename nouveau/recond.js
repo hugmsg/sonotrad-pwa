@@ -36,6 +36,15 @@ function _otDate(iso) {
   const d = new Date(iso);
   return isNaN(d) ? '' : d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
 }
+// Montant affiché au centime, sans symbole (tableaux) : 11 → « 11,00 ».
+function _otPrix(v) {
+  return v === null || v === undefined || v === '' ? '' : Number(v).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+// Valeur d'une case <input type="number"> (point décimal) : montants au centime, temps en entier.
+function _otValeurCase(v, prix) {
+  if (v === null || v === undefined || v === '') return '';
+  return prix ? (Math.round(Number(v) * 100) / 100).toFixed(2) : String(Math.round(Number(v) * 100) / 100);
+}
 function _otQte(q) {
   return q === null || q === undefined || q === '' ? '' : String(q).replace('.', ',');
 }
@@ -975,7 +984,7 @@ Object.assign(App, {
               <div style="display:flex;flex-direction:column;gap:4px;">
                 <label for="ot-taux" style="font-size:13px;font-weight:700;">Taux horaire facturé à LOXAM</label>
                 <div style="display:flex;gap:6px;align-items:center;">
-                  <input id="ot-taux" class="sx-champ" style="width:110px;font-size:20px;font-weight:700;" type="text" inputmode="decimal" value="${_otQte(p.taux_horaire)}">
+                  <input id="ot-taux" class="sx-champ" style="width:120px;font-size:20px;font-weight:700;" type="number" min="1" step="0.5" value="${_otValeurCase(p.taux_horaire, true)}">
                   <span class="sx-aide">€/h</span>
                 </div>
               </div>
@@ -1024,7 +1033,7 @@ Object.assign(App, {
           <div class="sx-carte sx-carte-pad sx-ligne-champs" style="align-items:flex-end;">
             <div style="display:flex;flex-direction:column;gap:4px;">
               <label for="ot-p-majoration_pieces" style="font-size:13px;font-weight:700;">Coefficient « main-d'œuvre pièces »</label>
-              <input id="ot-p-majoration_pieces" class="sx-champ" style="width:110px;" type="text" inputmode="decimal" value="${_otQte(p.majoration_pieces)}">
+              <input id="ot-p-majoration_pieces" class="sx-champ" style="width:120px;" type="number" min="1" step="0.01" value="${_otValeurCase(p.majoration_pieces, true)}">
             </div>
             <button type="button" class="sx-btn sx-btn-second" onclick="App._otEnregistrerParam('majoration_pieces')">Enregistrer</button>
             <span class="sx-aide" style="flex:1 1 260px;">Total des prix des pièces sanitaire de la fiche, + 0,50 €, × ce coefficient, arrondi au 0,50 = ligne SON-0100.</span>
@@ -1115,10 +1124,11 @@ Object.assign(App, {
     S.ot.tarifsVue.affichees = res.map(r => r.ref);
     const lignes = res.map((r, k) => this._otHtmlLigneTarif(r, k)).join('');
     const nouvelle = creable ? this._otHtmlLigneTarif({ ref: saisie.toUpperCase(), description: '', mode: 'temps', nouvelle: true }, 'n') : '';
-    z.innerHTML = `<table class="sx-table" style="min-width:900px;">
-      <thead><tr><th scope="col">Réf.</th><th scope="col">Désignation</th><th scope="col">Calcul</th>
-        <th scope="col" class="sx-num">Temps min</th><th scope="col" class="sx-num">Base €</th><th scope="col" class="sx-num">MO facturée</th>
-        <th scope="col" class="sx-num">Prix pièce €</th><th scope="col" class="sx-num">Plafond €</th><th scope="col"><span class="sx-sr">Enregistrer</span></th></tr></thead>
+    z.innerHTML = `<table class="sx-table sx-grille" style="min-width:1000px;">
+      <thead><tr><th scope="col">Réf.</th><th scope="col">Désignation</th><th scope="col" class="sx-centre">Calcul</th>
+        <th scope="col" class="sx-centre">Temps de pose<br>(min)</th><th scope="col" class="sx-centre">Base €<br>(à ${_otQte(S.ot.tarifs.parametres.taux_base)} €/h)</th>
+        <th scope="col" class="sx-centre">MO facturée €</th><th scope="col" class="sx-centre">Prix pièce €</th><th scope="col" class="sx-centre">Plafond €</th>
+        <th scope="col"><span class="sx-sr">Enregistrer</span></th></tr></thead>
       <tbody>${lignes}${nouvelle}
         ${!res.length && !creable ? '<tr><td colspan="9" class="sx-centre sx-aide">Aucune réf. ici. Tapez une réf. pour la créer.</td></tr>' : ''}
         ${res.length === 80 ? '<tr><td colspan="9" class="sx-centre sx-aide">80 premières seulement : affinez la recherche.</td></tr>' : ''}
@@ -1129,22 +1139,23 @@ Object.assign(App, {
     const modes = [['temps', 'Au temps'], ['base', 'Montant de base'], ['impose', 'Prix en dur'], ['', 'Sans MO']];
     const special = r.mode === 'heure' || r.mode === 'minute';
     const impose = r.mode === 'impose';
-    const caseNum = (id, val, actif, largeur = 76) => `<input id="${id}" class="sx-case sx-case-mo" style="width:${largeur}px;${actif ? '' : 'visibility:hidden;'}"
-      type="text" inputmode="decimal" value="${_otQte(val)}" oninput="App._otTarifSaisi('${k}')">`;
+    // Cases numériques avec flèches : montants au centime (pas de 0,50 = l'arrondi des MO), temps en minutes entières.
+    const caseNum = (id, val, actif, { pas = '0.5', prix = true } = {}) => `<input id="${id}" class="sx-case sx-case-num" style="${actif ? '' : 'display:none;'}"
+      type="number" min="0" step="${pas}" value="${_otValeurCase(val, prix)}" oninput="App._otTarifSaisi('${k}')">`;
     return `<tr id="ot-tr-${k}" style="${impose ? 'background:var(--sx-orange-fond);' : ''}">
       <td><span class="sx-ref">${_otEsc(r.ref)}</span></td>
       <td>${r.nouvelle ? `<label for="ot-tr-desc-${k}" class="sx-sr">Désignation</label><input id="ot-tr-desc-${k}" class="sx-champ" style="width:100%;height:34px;" placeholder="Nouvelle réf. — désignation (vide = celle du Stock)">`
         : _otEsc(r.description) + (r.categorie && r.categorie !== '-' ? `<span class="sx-etiquette sx-e-bloc">${_otEsc(r.categorie)}</span>` : '')}</td>
-      <td>${special ? `<span class="sx-aide">${r.mode === 'heure' ? '= taux horaire' : '= taux ÷ 60'}</span>`
+      <td class="sx-centre">${special ? `<span class="sx-aide">${r.mode === 'heure' ? '= taux horaire' : '= taux ÷ 60'}</span>`
         : `<label for="ot-tr-mode-${k}" class="sx-sr">Calcul</label><select id="ot-tr-mode-${k}" class="sx-select" style="height:34px;font-size:14px;padding:0 6px;"
             onchange="App._otTarifSaisi('${k}')">${modes.map(([v, l]) => `<option value="${v}"${(r.mode || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>`}</td>
-      <td class="sx-num">${special ? '' : caseNum('ot-tr-tps-' + k, r.temps_min, r.mode === 'temps', 64)}</td>
-      <td class="sx-num">${special ? '' : caseNum('ot-tr-base-' + k, r.mode === 'base' ? r.mo_base : null, r.mode === 'base')}
-        ${r.mode === 'temps' ? `<span class="sx-aide" id="ot-tr-bcalc-${k}">${_otQte(r.mo_base)}</span>` : `<span class="sx-aide" id="ot-tr-bcalc-${k}"></span>`}</td>
-      <td class="sx-num">${special ? `<strong>${_otQte(r.mo)}</strong>` : `<strong id="ot-tr-mo-${k}" style="${impose ? 'display:none;' : ''}">${r.mo !== null && r.mo !== undefined ? _otQte(r.mo) : '—'}</strong>
+      <td class="sx-centre">${special ? '' : caseNum('ot-tr-tps-' + k, r.temps_min, true, { pas: '1', prix: false })}</td>
+      <td class="sx-centre">${special ? '' : `${caseNum('ot-tr-base-' + k, r.mode === 'base' ? r.mo_base : null, r.mode === 'base')}
+        <span class="sx-aide" id="ot-tr-bcalc-${k}">${r.mode === 'temps' ? _otPrix(r.mo_base) : ''}</span>`}</td>
+      <td class="sx-centre">${special ? `<strong>${_otPrix(r.mo)}</strong>` : `<strong id="ot-tr-mo-${k}" style="${impose ? 'display:none;' : ''}">${r.mo !== null && r.mo !== undefined ? _otPrix(r.mo) : '—'}</strong>
         ${caseNum('ot-tr-prix-' + k, impose ? r.mo : null, impose)}`}</td>
-      <td class="sx-num">${caseNum('ot-tr-pp-' + k, r.prix_piece, true, 70)}</td>
-      <td class="sx-num">${caseNum('ot-tr-pl-' + k, r.mo_plafond, true, 64)}</td>
+      <td class="sx-centre">${caseNum('ot-tr-pp-' + k, r.prix_piece, true, { pas: '0.01' })}</td>
+      <td class="sx-centre">${caseNum('ot-tr-pl-' + k, r.mo_plafond, true, { pas: '1' })}</td>
       <td><button type="button" class="sx-btn ${r.nouvelle ? 'sx-btn-principal' : 'sx-btn-second'} ot-enreg" style="height:34px;padding:0 12px;"
         ${r.nouvelle ? '' : 'disabled'} onclick="App._otEnregistrerRef('${k}')">${r.nouvelle ? 'Créer' : 'Enregistrer'}</button></td>
     </tr>`;
@@ -1153,20 +1164,19 @@ Object.assign(App, {
   // Saisie dans une ligne : cases utiles selon le calcul choisi, MO recalculée à l'écran, bouton actif.
   _otTarifSaisi(k) {
     const mode = document.getElementById('ot-tr-mode-' + k)?.value ?? null;
-    const vis = (id, on) => { const e = document.getElementById(id); if (e) e.style.visibility = on ? '' : 'hidden'; };
-    vis('ot-tr-tps-' + k, mode === 'temps');
+    const vis = (id, on) => { const e = document.getElementById(id); if (e) e.style.display = on ? '' : 'none'; };
     vis('ot-tr-base-' + k, mode === 'base');
     const prix = document.getElementById('ot-tr-prix-' + k);
     const mo = document.getElementById('ot-tr-mo-' + k);
-    if (prix) prix.style.visibility = mode === 'impose' ? '' : 'hidden';
+    if (prix) prix.style.display = mode === 'impose' ? '' : 'none';
     if (mo) mo.style.display = mode === 'impose' ? 'none' : '';
     const tr = document.getElementById('ot-tr-' + k);
     if (tr) tr.style.background = mode === 'impose' ? 'var(--sx-orange-fond)' : '';
     const temps = this._otLireMontant('ot-tr-tps-' + k).val, base = this._otLireMontant('ot-tr-base-' + k).val;
     const tb = Number(S.ot.tarifs.parametres.taux_base);
     const bcalc = document.getElementById('ot-tr-bcalc-' + k);
-    if (bcalc) bcalc.textContent = mode === 'temps' && temps > 0 ? _otQte(Math.ceil(temps * tb / 60 - 0.000001)) : '';
-    if (mo) { const v = this._otMoCalculee(mode || null, temps, base); mo.textContent = mode ? (v === null ? '?' : _otQte(v)) : '—'; }
+    if (bcalc) bcalc.textContent = mode === 'temps' && temps > 0 ? _otPrix(Math.ceil(temps * tb / 60 - 0.000001)) : '';
+    if (mo) { const v = this._otMoCalculee(mode || null, temps, base); mo.textContent = mode ? (v === null ? '?' : _otPrix(v)) : '—'; }
     const b = tr?.querySelector('.ot-enreg');
     if (b) b.disabled = false;
   },
@@ -1182,7 +1192,7 @@ Object.assign(App, {
       if (sel) {
         const mode = sel.value || null;
         valeurs.mode = mode;
-        if (mode === 'temps')  lire('temps_min', 'ot-tr-tps-' + k);
+        lire('temps_min', 'ot-tr-tps-' + k);
         if (mode === 'base')   lire('mo_base', 'ot-tr-base-' + k);
         if (mode === 'impose') lire('mo', 'ot-tr-prix-' + k);
       }
@@ -1200,18 +1210,18 @@ Object.assign(App, {
 
   _otHtmlForfaitsTarifs() {
     const fs = [...((S.ot.tarifs && S.ot.tarifs.forfaits) || [])].sort((a, b) => a.lettre.localeCompare(b.lettre));
-    return `<table class="sx-table" style="min-width:720px;">
-      <thead><tr><th scope="col">Forfait</th><th scope="col">Intitulé</th><th scope="col" class="sx-num">MO facturée</th>
-        <th scope="col" class="sx-num">Base à ${_otQte(S.ot.tarifs.parametres.taux_base)} €/h</th><th scope="col" class="sx-num">Prix pièce €</th><th scope="col">Pièces comprises</th>
+    return `<table class="sx-table sx-grille" style="min-width:760px;">
+      <thead><tr><th scope="col">Forfait</th><th scope="col">Intitulé</th><th scope="col" class="sx-centre">MO facturée €</th>
+        <th scope="col" class="sx-centre">Base €<br>(à ${_otQte(S.ot.tarifs.parametres.taux_base)} €/h)</th><th scope="col" class="sx-centre">Prix pièce €</th><th scope="col">Pièces comprises</th>
         <th scope="col"><span class="sx-sr">Enregistrer</span></th></tr></thead>
       <tbody>${fs.map(f => `<tr id="ot-tf-${_otEsc(f.lettre)}">
         <td><span class="sx-ref">${_otEsc(f.lettre)}</span></td>
         <td>${_otEsc(f.intitule)}</td>
-        <td class="sx-num"><input id="ot-tf-mo-${_otEsc(f.lettre)}" class="sx-case sx-case-mo" type="text" inputmode="decimal"
-          value="${_otQte(f.mo)}" oninput="App._otForfaitSaisi('${_otEsc(f.lettre)}')"></td>
-        <td class="sx-num sx-aide" id="ot-tf-base-${_otEsc(f.lettre)}">${f.mo_base === null || f.mo_base === undefined ? '—' : _otQte(Math.round(f.mo_base * 100) / 100)}</td>
-        <td class="sx-num"><input id="ot-tf-pp-${_otEsc(f.lettre)}" class="sx-case sx-case-mo" type="text" inputmode="decimal"
-          value="${_otQte(f.prix_piece)}" oninput="App._otForfaitSaisi('${_otEsc(f.lettre)}')"></td>
+        <td class="sx-centre"><input id="ot-tf-mo-${_otEsc(f.lettre)}" class="sx-case sx-case-num" type="number" min="0" step="0.5"
+          value="${_otValeurCase(f.mo, true)}" oninput="App._otForfaitSaisi('${_otEsc(f.lettre)}')"></td>
+        <td class="sx-centre sx-aide" id="ot-tf-base-${_otEsc(f.lettre)}">${f.mo_base === null || f.mo_base === undefined ? '—' : _otPrix(f.mo_base)}</td>
+        <td class="sx-centre"><input id="ot-tf-pp-${_otEsc(f.lettre)}" class="sx-case sx-case-num" type="number" min="0" step="0.01"
+          value="${_otValeurCase(f.prix_piece, true)}" oninput="App._otForfaitSaisi('${_otEsc(f.lettre)}')"></td>
         <td class="sx-aide">${(f.pieces || []).map(x => _otEsc(x.ref) + ' ×' + _otQte(x.qte)).join(', ') || '—'}</td>
         <td><button type="button" class="sx-btn sx-btn-second ot-enreg" style="height:34px;padding:0 12px;" disabled
           onclick="App._otEnregistrerForfait('${_otEsc(f.lettre)}')">Enregistrer</button></td>
@@ -1223,7 +1233,7 @@ Object.assign(App, {
     const mo = this._otLireMontant('ot-tf-mo-' + lettre).val;
     const p = S.ot.tarifs.parametres;
     const base = document.getElementById('ot-tf-base-' + lettre);
-    if (base) base.textContent = mo === null ? '—' : _otQte(Math.round(mo * p.taux_base / p.taux_horaire * 100) / 100);
+    if (base) base.textContent = mo === null ? '—' : _otPrix(mo * p.taux_base / p.taux_horaire);
     const b = document.getElementById('ot-tf-' + lettre)?.querySelector('.ot-enreg');
     if (b) b.disabled = false;
   },

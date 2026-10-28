@@ -287,3 +287,13 @@ body.socle { background: var(--sx-fond); }
 
 /* Filtre (puce) : actif en bleu */
 .sx-filtre[aria-pressed="true"] { border: 2px solid var(--sx-bleu); background: var(--sx-bleu-clair); color: var(--sx-bleu-fonce); }
+
+/* Tableau quadrillé (écran Tarifs) : traits entre colonnes, titres et valeurs centrés ensemble. */
+.sx-grille th, .sx-grille td { border-left: 1px solid var(--sx-bord); }
+.sx-grille th:first-child, .sx-grille td:first-child { border-left: 0; }
+.sx-grille th { line-height: 1.25; vertical-align: bottom; }
+.sx-table th.sx-centre, .sx-table td.sx-centre { text-align: center; }
+.sx-case-num { width: 96px; text-align: center; font-weight: 600; padding: 0 4px 0 8px; }
+.sx-case-num[step="1"] { width: 80px; }
+.sx-case-num::-webkit-inner-spin-button, .sx-case-num::-webkit-outer-spin-button { opacity: 1; }
+.sx-champ[type="number"]::-webkit-inner-spin-button { opacity: 1; }
