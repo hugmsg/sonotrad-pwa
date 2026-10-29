@@ -21,7 +21,7 @@ S.ot = {
   // Saisie rapide au clavier (PC) : choix mémorisé par appareil ; rgIdx = lignes affichées par tableau
   rapide: (() => { try { return localStorage.getItem('snt_ot_rapide') !== '0'; } catch { return true; } })(),
   rgIdx: { p: [], s: [], t: [] }, rgSugg: [], rgSel: -1,
-  mail: null,       // brouillon du mail LOXAM préparé : { url, nom, ids, modules }
+  mail: null,       // brouillon du mail LOXAM préparé : { blob (URL locale du .eml), url (copie Drive), nom, ids, modules }
 };
 
 // Saisie rapide : tableaux (p = pièces et forfaits, s = sanitaire, t = temps passé) → blocs des lignes
@@ -1285,10 +1285,11 @@ Object.assign(App, {
     let h = `<section class="sx-carte sx-carte-pad" style="display:flex;flex-direction:column;gap:8px;">
       <span class="sx-h2" style="font-size:16px;">Mail à LOXAM</span>`;
     if (m) {
-      h += `<span class="sx-aide">Brouillon prêt pour ${m.ids.length} OT : ${_otEsc(m.modules.join(' ; '))}.
-          Ouvrez-le (il s'ouvre dans Outlook), relisez, envoyez, puis marquez les fiches envoyées.</span>
+      h += `<span class="sx-aide">Brouillon téléchargé pour ${m.ids.length} OT : ${_otEsc(m.modules.join(' ; '))}.
+          Ouvrez le fichier .eml (il s'ouvre dans Outlook), relisez, envoyez, puis marquez les fiches envoyées.
+          Une copie est gardée <a href="${_otEsc(m.url)}" target="_blank" rel="noopener">dans le Drive</a>.</span>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <a class="sx-btn sx-btn-principal" href="${_otEsc(m.url)}" target="_blank" rel="noopener">Ouvrir le brouillon (.eml)</a>
+          <button type="button" class="sx-btn sx-btn-principal" onclick="App._otTelechargerMail()">Télécharger à nouveau (.eml)</button>
           <button type="button" class="sx-btn sx-btn-second" onclick="App.otMarquerEnvoyees()">Mail envoyé : marquer ${m.ids.length} fiche${m.ids.length > 1 ? 's' : ''} envoyée${m.ids.length > 1 ? 's' : ''}</button>
           <button type="button" class="sx-btn sx-btn-discret" onclick="S.ot.mail=null;App._otRendreListe()">Fermer</button>
         </div>`;
@@ -1306,11 +1307,26 @@ Object.assign(App, {
     if (b) { b.disabled = true; b.textContent = 'Préparation…'; }
     try {
       const d = await this._otPost({ action: 'ot_mail' });
-      S.ot.mail = { url: d.url, nom: d.nom, ids: d.ids || [], modules: d.modules || [] };
+      // Téléchargement direct du .eml (le lien Drive affiche un avertissement « analyse antivirus impossible »).
+      const octets = Uint8Array.from(atob(d.eml || ''), c => c.charCodeAt(0));
+      if (S.ot.mail?.blob) URL.revokeObjectURL(S.ot.mail.blob);
+      const blob = URL.createObjectURL(new Blob([octets], { type: 'message/rfc822' }));
+      S.ot.mail = { blob, url: d.url, nom: d.nom, ids: d.ids || [], modules: d.modules || [] };
+      this._otRendreListe();
+      this._otTelechargerMail();
+      return;
     } catch (e) {
       this.toast('Mail impossible : ' + e.message, 5000);
     }
     this._otRendreListe();
+  },
+
+  _otTelechargerMail() {
+    const m = S.ot.mail;
+    if (!m?.blob) return;
+    const a = document.createElement('a');
+    a.href = m.blob; a.download = m.nom || 'OT sur modules.eml';
+    document.body.appendChild(a); a.click(); a.remove();
   },
 
   async otMarquerEnvoyees() {
