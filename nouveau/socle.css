@@ -376,3 +376,72 @@ body.socle { background: var(--sx-fond); }
 .sx-rg-touches dd { margin: 0; }
 .sx-rg-touches kbd { font-family: Consolas, 'SF Mono', monospace; font-size: 11px; background: var(--sx-fond); border: 1px solid var(--sx-bord-champ);
   border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; }
+
+/* ── Stock (refonte sur le socle, stock_socle.js) ─────────────────────────── */
+.sx-lien { background: none; border: 0; padding: 4px 0; font: inherit; font-size: 13px; font-weight: 600; color: var(--sx-bleu); cursor: pointer; text-align: left; }
+.sx-lien:hover { text-decoration: underline; }
+.sx-stk-tuiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.sx-stk-tuile { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; padding: 14px; min-height: 76px; border-radius: 14px;
+  border: 1px solid var(--sx-bord); background: var(--sx-carte); color: var(--sx-texte); font: inherit; cursor: pointer; text-align: left; }
+.sx-stk-tuile-principale { background: var(--sx-bleu); border-color: var(--sx-bleu); color: #FFFFFF; }
+.sx-stk-tuile-titre { font-size: 16px; font-weight: 700; }
+.sx-stk-tuile-aide { font-size: 12px; color: var(--sx-gris); }
+.sx-stk-tuile-principale .sx-stk-tuile-aide { color: var(--sx-bleu-texte); }
+.sx-stk-bloc { display: flex; flex-direction: column; gap: 6px; }
+.sx-stk-rupture { display: block; width: 100%; text-align: left; border: 0; border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 13px;
+  line-height: 1.35; background: var(--sx-orange-fond); color: var(--sx-attention); cursor: pointer; }
+.sx-stk-alerte { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 0; border: 0; border-top: 1px solid var(--sx-separateur);
+  background: none; font: inherit; color: var(--sx-texte); cursor: pointer; text-align: left; }
+.sx-stk-alerte .sx-ref { width: 60px; flex-shrink: 0; }
+.sx-stk-alerte-mil { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.sx-stk-alerte-q { font-size: 13px; font-weight: 700; color: var(--sx-orange); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sx-stk-barre { height: 5px; background: var(--sx-separateur); border-radius: 3px; overflow: hidden; }
+.sx-stk-barre span { display: block; height: 5px; background: var(--sx-orange); border-radius: 3px; }
+.sx-stk-nom { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sx-stk-badge { font-size: 11px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; border-radius: 6px; padding: 4px 7px; flex-shrink: 0;
+  color: var(--sx-gris); background: var(--sx-separateur); }
+.sx-stk-badge.sx-stk-entree { color: var(--sx-vert); background: var(--sx-vert-fond); }
+.sx-stk-badge.sx-stk-pose, .sx-stk-badge.sx-stk-sortie { color: var(--sx-bleu); background: var(--sx-bleu-clair); }
+.sx-stk-badge.sx-stk-inv { color: var(--sx-attention); background: var(--sx-attention-fond); }
+.sx-stk-ligne { display: flex; align-items: stretch; border-top: 1px solid var(--sx-separateur); }
+.sx-stk-ligne:first-child { border-top: 0; }
+.sx-stk-etoile { width: 44px; flex-shrink: 0; border: 0; background: none; font-size: 18px; color: var(--sx-gris); cursor: pointer; }
+.sx-stk-etoile[aria-pressed="true"] { color: #E0A800; }
+.sx-stk-ligne-corps { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 9px 12px 9px 0; border: 0; background: none;
+  font: inherit; color: var(--sx-texte); cursor: pointer; text-align: left; }
+.sx-stk-ligne-corps .sx-ref { width: 70px; flex-shrink: 0; }
+.sx-stk-ligne-texte { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sx-stk-qte { font-size: 15px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sx-stk-qte small { font-size: 12px; font-weight: 400; color: var(--sx-gris); }
+.sx-stk-qte.sx-stk-bas { color: var(--sx-orange); }
+.sx-stk-stock { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+.sx-stk-stock > div { display: flex; flex-direction: column; }
+.sx-stk-gros { font-size: 40px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.sx-stk-chip { font-size: 12px; font-weight: 700; border-radius: 6px; padding: 5px 8px; color: var(--sx-gris); background: var(--sx-separateur); }
+.sx-stk-chip-ok { color: var(--sx-vert); background: var(--sx-vert-fond); }
+.sx-stk-chip-bas { color: var(--sx-orange); background: var(--sx-orange-fond); }
+.sx-stk-jauge { position: relative; height: 8px; background: var(--sx-separateur); border-radius: 4px; margin: 6px 0; }
+.sx-stk-jauge span { display: block; height: 8px; background: var(--sx-bleu); border-radius: 4px; }
+.sx-stk-jauge i { position: absolute; top: -4px; width: 2px; height: 16px; background: var(--sx-orange); }
+.sx-stk-chiffres { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; font-size: 12px; color: var(--sx-gris); }
+.sx-stk-chiffres > div { display: flex; flex-direction: column; gap: 2px; }
+.sx-stk-chiffres b { font-size: 15px; color: var(--sx-texte); font-variant-numeric: tabular-nums; }
+.sx-stk-prix { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.sx-stk-prix b { font-size: 18px; }
+.sx-stk-mvt { display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-top: 1px solid var(--sx-separateur); }
+.sx-stk-mvt:first-child { border-top: 0; }
+.sx-stk-mvt-q { width: 56px; flex-shrink: 0; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--sx-bleu); }
+.sx-stk-mvt-q.sx-stk-entree { color: var(--sx-vert); }
+.sx-stk-mvt-q.sx-stk-inv { color: var(--sx-attention); }
+.sx-stk-hist { display: flex; flex-direction: column; gap: 8px; }
+.sx-stk-jour { margin: 8px 0 0; font-size: 13px; font-weight: 700; color: var(--sx-gris); }
+.sx-stk-op-ouverte { border: 2px solid #B9D0E2; }
+.sx-stk-op-tete { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; min-height: 56px; border: 0; background: none;
+  font: inherit; color: var(--sx-texte); cursor: pointer; text-align: left; }
+.sx-stk-op-corps { display: flex; flex-direction: column; gap: 2px; padding: 0 12px 10px; }
+.sx-stk-op-ligne { display: flex; align-items: center; gap: 10px; padding: 5px 0; border-top: 1px solid var(--sx-separateur); font-size: 13px; }
+.sx-stk-op-ligne .sx-ref { width: 70px; flex-shrink: 0; padding: 0; }
+.sx-stk-op-ligne .sx-stk-nom { flex: 1; min-width: 0; }
+.sx-stk-op-ligne b { font-variant-numeric: tabular-nums; }
+/* Onglets de navigation du Stock : visibles aussi sur grand écran (contrairement aux onglets de la fiche OT) */
+.sx-onglets.sx-onglets-toujours { display: grid; }

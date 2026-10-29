@@ -216,6 +216,7 @@ const App = {
     if (view === 'ot-liste')      this.otChargerListe();
     if (view === 'ot-fiche')      this._otRendreFiche();
     if (view === 'ot-tarifs')     this.otTarifsInit();
+    if (view.startsWith('stk-'))  this._stkAfficher(view);
   },
   breadcrumbGoActivity() {
     const map = { loxam:'loxam-menu', bcb:'bcb-menu', stockage:'loxam-menu' };
@@ -257,7 +258,7 @@ const App = {
     }
     S.activity = name;
     if (name === 'loxam')    this.go('loxam-menu');
-    if (name === 'stockage') this.go('stock-dashboard');
+    if (name === 'stockage') this.go('stk-accueil');      // refonte (stock_socle.js) ; l'écran actuel reste en lien
     if (name === 'bcb')      this.go('bcb-menu');
     if (name === 'lvu')      this.lvuInit();
     if (name === 'annuaire')  this.go('annuaire');
@@ -270,7 +271,7 @@ const App = {
     const v      = S.view;
     const onHome = v === 'home';
     // Écrans du socle commun (socle.css) : ils portent leur propre en-tête.
-    document.body.classList.toggle('socle', v.startsWith('ot-'));
+    document.body.classList.toggle('socle', v.startsWith('ot-') || v.startsWith('stk-'));
 
     // ── Nav : cachée sur l'accueil, tabs selon activité ─────────────────
     const nav = document.getElementById('main-nav');

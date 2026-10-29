@@ -321,6 +321,8 @@ Object.assign(App, {
     if (S.view === 'stock-history') { if (S.historyLoaded) this._renderHistoryList(); else this.loadStockHistory(true); }
     if (S.view === 'stock-dashboard') this._renderDashboard();
     if (S.view === 'stock') this._renderStockList();
+    // Écrans de la refonte (stock_socle.js) : la fiche relit ses mouvements
+    if (S.stk) { S.stk.mvtsRef = null; if (S.view === 'stk-fiche') this._stkChargerMvts(S.stk.ref); this._stkRendre(); }
   },
 
   // Bouton « Annuler cette opération » (les poses se gèrent dans la fenêtre 🔧 du départ).
@@ -1542,6 +1544,7 @@ Object.assign(App, {
       if (S.view === 'stock') this._renderStockList();
       if (S.view === 'stock-detail') this._renderStockDetail();
       if (S.view === 'stock-dashboard') this._renderDashboard();
+      this._stkRendre?.();                       // écrans de la refonte (stock_socle.js)
     } catch(e) {
       this.toast('Erreur : ' + e.message);
     } finally {
