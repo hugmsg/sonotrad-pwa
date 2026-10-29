@@ -320,3 +320,59 @@ body.socle { background: var(--sx-fond); }
 .sx-table tr.sx-tr-change td { background: #FFF3B0; }
 .sx-table tr.sx-tr-impose td { background: var(--sx-orange-fond); }
 .sx-serre .sx-desig-boite { flex-wrap: nowrap; max-width: 420px; }
+
+/* ── Saisie rapide au clavier (fiche d'opérations, PC) ─────────────────────── */
+.sx-rg-page { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 16px; align-items: start; }
+@media (max-width: 1150px) { .sx-rg-page { grid-template-columns: minmax(0, 1fr); } }
+.sx-rg-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.sx-rg-cote { position: sticky; top: 96px; }
+.sx-rg-defile { overflow-x: auto; border-radius: 8px; }
+.sx-rg { width: 100%; min-width: 760px; table-layout: fixed; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.sx-rg *, .sx-rg *::before, .sx-rg *::after { box-sizing: border-box; }
+.sx-rg th { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--sx-gris); font-weight: 600; text-align: left;
+  padding: 6px 8px; background: var(--sx-fond); border-bottom: 1px solid var(--sx-bord-champ); border-right: 1px solid var(--sx-bord); }
+.sx-rg td { height: 32px; padding: 0; border-bottom: 1px solid var(--sx-bord); border-right: 1px solid var(--sx-bord); vertical-align: middle; }
+.sx-rg th:last-child, .sx-rg td:last-child { border-right: 0; }
+.sx-rg tr:focus-within td { background: #F2F6FC; }
+.sx-rg .sx-rg-n { width: 36px; text-align: right; padding-right: 8px; color: var(--sx-gris); font-size: 12px; }
+.sx-rg .sx-rg-d { text-align: right; padding-right: 10px; width: 92px; }
+.sx-rg .sx-rg-pu { color: var(--sx-gris); font-size: 12.5px; width: 80px; }
+.sx-rg .sx-rg-ref { width: 112px; }
+.sx-rg .sx-rg-qte { width: 80px; }
+.sx-rg .sx-rg-unite { width: 60px; text-align: center; }
+.sx-rg .sx-rg-occ { width: 48px; text-align: center; }
+.sx-rg .sx-rg-desig { padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sx-rg .sx-rg-desig .sx-badge { margin-left: 8px; }
+.sx-rg-nom { white-space: nowrap; }
+.sx-rg input { width: 100%; height: 31px; border: 0; background: transparent; color: var(--sx-texte); font: inherit; padding: 0 8px; outline: none; }
+.sx-rg .sx-rg-ref input { font-family: Consolas, 'SF Mono', monospace; font-weight: 700; color: var(--sx-bleu); text-transform: uppercase; }
+.sx-rg .sx-rg-qte input { text-align: right; }
+.sx-rg .sx-rg-unite input { text-align: center; cursor: pointer; }
+.sx-rg td.sx-rg-saisie:focus-within { box-shadow: inset 0 0 0 2px var(--sx-bleu); background: var(--sx-carte); }
+.sx-rg tr.sx-rg-attente td.sx-rg-qte { background: var(--sx-jaune-clair); }
+.sx-rg-occ-btn { width: 100%; height: 31px; border: 0; background: transparent; font: inherit; font-weight: 700; color: var(--sx-orange); cursor: pointer; outline: none; }
+.sx-rg-occ-btn[aria-disabled="true"] { cursor: default; }
+.sx-rg-occ-btn:focus-visible { box-shadow: inset 0 0 0 2px var(--sx-bleu); }
+.sx-rg tr.sx-rg-calculee td { background: var(--sx-fond); }
+.sx-rg tr.sx-rg-calculee .sx-ref { padding: 0 8px; }
+.sx-rg-sugg { position: fixed; z-index: 60; background: var(--sx-carte); border: 1px solid var(--sx-bord-champ); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(10, 30, 60, .18); width: 470px; max-width: calc(100vw - 16px); padding: 4px; }
+.sx-rg-sugg div { display: flex; gap: 10px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.sx-rg-sugg div .sx-ref { min-width: 70px; }
+.sx-rg-sugg div span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sx-rg-sugg div.sel { background: var(--sx-bleu-clair); }
+.sx-rg-sugg small { display: block; color: var(--sx-gris); font-size: 11.5px; padding: 4px 8px 2px; }
+.sx-rg-recap, .sx-rg-touches { display: flex; flex-direction: column; gap: 9px; }
+.sx-rg-chiffre { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; color: var(--sx-gris); }
+.sx-rg-chiffre b { color: var(--sx-texte); font-size: 14px; font-variant-numeric: tabular-nums; }
+.sx-rg-total { border-top: 1px solid var(--sx-bord); padding-top: 9px; }
+.sx-rg-total b { font-size: 19px; }
+.sx-rg-total small { display: block; font-size: 11px; }
+.sx-rg-alerte { display: flex; justify-content: space-between; gap: 8px; border: 0; border-radius: 8px; padding: 7px 10px; font: inherit; font-size: 13px; cursor: pointer; text-align: left; }
+.sx-rg-alerte-qte { background: var(--sx-jaune-clair); color: var(--sx-attention); }
+.sx-rg-alerte-inc { background: var(--sx-rouge-fond); color: var(--sx-rouge); }
+.sx-rg-touches dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; font-size: 13px; }
+.sx-rg-touches dt { white-space: nowrap; }
+.sx-rg-touches dd { margin: 0; }
+.sx-rg-touches kbd { font-family: Consolas, 'SF Mono', monospace; font-size: 11px; background: var(--sx-fond); border: 1px solid var(--sx-bord-champ);
+  border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; }

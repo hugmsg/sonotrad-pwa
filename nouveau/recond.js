@@ -18,7 +18,15 @@ S.ot = {
   familles: (() => { try { return localStorage.getItem('snt_ot_familles') !== '0'; } catch { return true; } })(),
   groupesAffiches: [],
   tarifsVue: null,  // écran Tarifs : recherche, journal
+  // Saisie rapide au clavier (PC) : choix mémorisé par appareil ; rgIdx = lignes affichées par tableau
+  rapide: (() => { try { return localStorage.getItem('snt_ot_rapide') !== '0'; } catch { return true; } })(),
+  rgIdx: { p: [], s: [], t: [] }, rgSugg: [], rgSel: -1,
 };
+
+// Saisie rapide : tableaux (p = pièces et forfaits, s = sanitaire, t = temps passé) → blocs des lignes
+const OT_RG = { p: ['pieces', 'diverses'], s: ['sanitaire'], t: ['travaux'] };
+const OT_RG_MAXC = { p: 2, s: 1, t: 2 };
+const OT_RG_UNITES = ['h', 'min', 'm', 'm²', 'u'];
 
 const OT_STATUTS = {
   brouillon: 'Brouillon', a_valider: 'À valider', validee: 'Validée', envoyee: 'Envoyée', annulee: 'Annulée',
@@ -328,6 +336,7 @@ Object.assign(App, {
     const f = S.ot.fiche;
     if (!el || !f) return;
     if (this._otVueControle()) { this._otRendreControle(); return; }
+    if (S.ot.rapide && this._otRapideDispo()) { this._otRendreRapide(); return; }
     const modif = this._otModifiable();
     const nb = b => S.ot.lignes.filter(l => b.includes(l.bloc) && Number(l.quantite) > 0).length;
     const onglets = [
@@ -349,6 +358,7 @@ Object.assign(App, {
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span class="sx-pastille sx-p-${_otEsc(f.statut)}">${_otEsc(OT_STATUTS[f.statut] || f.statut)}</span>
           <span class="sx-aide">${_otEsc(f.numero_ot || 'n° d\'OT donné à la validation')}</span>
+          ${this._otRapideDispo() ? `<button type="button" class="sx-btn sx-btn-discret" style="margin-left:auto;" onclick="App.otBasculerSaisie()">Saisie rapide (clavier)</button>` : ''}
         </div>
         ${f.commentaire ? `<div class="sx-carte sx-carte-pad sx-aide" style="font-size:14px;">${_otEsc(f.commentaire)}</div>` : ''}
         ${modif ? '' : `<div class="sx-bandeau sx-bandeau-info">${f.statut === 'a_valider'
@@ -668,6 +678,486 @@ Object.assign(App, {
     } catch (e) {
       this.toast('Changement impossible : ' + e.message, 4000);
     }
+  },
+
+  /* ═══════════════════════ SAISIE RAPIDE (clavier, au bureau) ═══════════════════════ */
+  // Report de la fiche papier au PC (Anaïs, maquette validée le 2026-10-29) : un tableau façon tableur.
+  // Entrée = case du dessous ; Entrée sur la ligne vide des réf. = première quantité manquante.
+  // Les lignes restent dans l'ordre de saisie : c'est l'ordre envoyé au serveur, donc celui des documents.
+  // L'écran tactile (±, onglets) reste pour le téléphone et la tablette sans clavier.
+
+  _otRapideDispo() { return window.matchMedia('(min-width: 900px)').matches; },
+
+  otBasculerSaisie() {
+    S.ot.rapide = !S.ot.rapide;
+    try { localStorage.setItem('snt_ot_rapide', S.ot.rapide ? '1' : '0'); } catch {}
+    this._otRendreFiche();
+  },
+
+  _otRendreRapide() {
+    const el = document.getElementById('ot-fiche-root');
+    const f = S.ot.fiche;
+    const modif = this._otModifiable(), admin = this._otAdmin();
+    const titreModule = [f.type_module, f.numero_module].filter(Boolean).join(' ');
+    const colsPrix = (pu, m) => admin ? `<th class="sx-rg-d sx-rg-pu" title="${pu}">P.U.</th><th class="sx-rg-d">${m}</th>` : '';
+    const tableau = (g, titre, aide, tetes) => `
+      <section class="sx-section" aria-labelledby="ot-rg-t-${g}">
+        <div class="sx-section-tete"><h2 class="sx-h2" id="ot-rg-t-${g}">${titre}</h2><span class="sx-aide">${aide}</span></div>
+        <div class="sx-carte sx-rg-defile"><table class="sx-rg">
+          <thead><tr>${tetes}</tr></thead><tbody id="ot-rg-${g}"></tbody>
+        </table></div>
+      </section>`;
+
+    el.innerHTML = `<div class="sx-ecran">
+      ${this._otEntete({ retour: { texte: 'Fiches', action: 'App.otQuitterFiche()' }, titre: 'Fiche d\'opérations', large: true,
+          sousTitre: [titreModule, f.agence, f.code_planning].filter(Boolean).join(' · '), etat: S.ot.etat })}
+      <main class="sx-contenu sx-large sx-rg-page">
+        <div class="sx-rg-col">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span class="sx-pastille sx-p-${_otEsc(f.statut)}">${_otEsc(OT_STATUTS[f.statut] || f.statut)}</span>
+            <span class="sx-aide">${_otEsc(f.numero_ot || 'n° d\'OT donné à la validation')}</span>
+            ${f.commentaire ? `<span class="sx-aide" style="font-size:13px;">· ${_otEsc(f.commentaire)}</span>` : ''}
+            <button type="button" class="sx-btn sx-btn-discret" style="margin-left:auto;" onclick="App.otBasculerSaisie()">Saisie tactile</button>
+          </div>
+          ${modif ? '' : `<div class="sx-bandeau sx-bandeau-info">${f.statut === 'a_valider'
+              ? 'Fiche envoyée à valider : elle n\'est plus modifiable. « Reprendre en brouillon » pour la corriger.'
+              : 'Fiche ' + _otEsc((OT_STATUTS[f.statut] || '').toLowerCase()) + ' : consultation seulement.'}</div>`}
+          ${tableau('p', '1. Pièces, forfaits et opérations', 'tapez les réf. de la fiche à la suite, puis les quantités',
+              '<th class="sx-rg-n">#</th><th class="sx-rg-ref">Réf.</th><th class="sx-rg-qte sx-rg-d">Qté</th><th>Désignation</th><th class="sx-rg-unite">Unité</th><th class="sx-rg-occ" title="Pièce d\'occasion : MO facturée, pas de fourniture">Occ.</th>' + colsPrix('MO unitaire', 'MO'))}
+          ${tableau('s', '2. Sanitaire', 'pièces refacturées au prix pièce ; la main d\'œuvre pièces se calcule seule',
+              '<th class="sx-rg-n">#</th><th class="sx-rg-ref">Réf.</th><th class="sx-rg-qte sx-rg-d">Qté</th><th>Désignation</th><th class="sx-rg-unite">Unité</th>' + colsPrix('Prix pièce', 'Montant'))}
+          ${tableau('t', '3. Temps passé', 'travail hors tarif : description, durée, h ou m pour l\'unité',
+              '<th class="sx-rg-n">#</th><th>Travaux</th><th class="sx-rg-qte sx-rg-d">Durée</th><th class="sx-rg-unite">Unité</th>' + colsPrix('Taux', 'MO'))}
+          <div class="sx-section">
+            <label for="ot-notes" class="sx-h2">4. Notes</label>
+            <textarea id="ot-notes" class="sx-textarea" rows="3" ${modif ? '' : 'disabled'}
+              oninput="S.ot.notes=this.value;App._otModifie(false)">${_otEsc(S.ot.notes)}</textarea>
+            <span class="sx-aide">Pour le bureau, pas pour LOXAM.</span>
+          </div>
+        </div>
+        <aside class="sx-rg-col sx-rg-cote">
+          <div class="sx-carte sx-carte-pad sx-rg-recap" id="ot-rg-recap"></div>
+          <div class="sx-carte sx-carte-pad sx-rg-touches">
+            <span class="sx-h2" style="font-size:15px;">Au clavier</span>
+            <dl>
+              <dt><kbd>Entrée</kbd></dt><dd>case du dessous</dd>
+              <dt><kbd>Entrée</kbd> sur la ligne vide</dt><dd>fin des réf. : première quantité manquante</dd>
+              <dt><kbd>Tab</kbd> · flèches</dt><dd>se déplacer comme dans Excel</dd>
+              <dt><kbd>Espace</kbd> ou <kbd>O</kbd></dt><dd>case Occ. : pièce d'occasion</dd>
+              <dt><kbd>Échap</kbd></dt><dd>annule la case</dd>
+              <dt><kbd>Ctrl</kbd>+<kbd>Suppr</kbd></dt><dd>supprime la ligne</dd>
+              <dt><kbd>Ctrl</kbd>+<kbd>Entrée</kbd></dt><dd>insère une ligne au-dessus</dd>
+              <dt><kbd>Ctrl</kbd>+<kbd>V</kbd></dt><dd>colle un bloc copié d'Excel (réf. [tab] qté)</dd>
+            </dl>
+            <span class="sx-aide">Une lettre seule (E, N, L…) est un forfait ; du texte cherche par désignation.</span>
+          </div>
+        </aside>
+      </main>
+      <div class="sx-rg-sugg" id="ot-rg-sugg" hidden></div>
+      <footer class="sx-pied"><div class="sx-pied-in" id="ot-pied">${this._otHtmlPied()}</div></footer>
+    </div>`;
+    this._otRgDessiner();
+    this._otRgEcouter(el);
+    if (modif) setTimeout(() => this._otRgAller('p', S.ot.rgIdx.p.length - 1, 0), 30);
+  },
+
+  /* ─ Données des tableaux ─ */
+
+  _otRgTarif(ref) {
+    const k = String(ref || '').trim().toUpperCase();
+    return { k, f: S.ot.forfaits.get(k), r: S.ot.refs.get(k) };
+  },
+  _otRgNouvelle(g) {
+    return g === 't'
+      ? { bloc: 'travaux', ref: 'SON-0102', libelle: '', quantite: null, unite: 'h', occasion: false, origine: 'atelier', mo_saisi: null, prix_piece_saisi: null }
+      : { bloc: g === 's' ? 'sanitaire' : 'pieces', ref: '', libelle: '', quantite: null, unite: 'u', occasion: false, origine: 'atelier', mo_saisi: null, prix_piece_saisi: null };
+  },
+  _otRgVide(l) {
+    return l.origine !== 'office' && !(Number(l.quantite) > 0) && !String(l.bloc === 'travaux' ? l.libelle || '' : l.ref || '').trim();
+  },
+  // Lignes de chaque tableau (positions dans S.ot.lignes), + une ligne vide (null) en bas si la fiche est modifiable.
+  _otRgIndexer() {
+    const modif = this._otModifiable();
+    Object.keys(OT_RG).forEach(g => {
+      const idx = [];
+      S.ot.lignes.forEach((l, i) => { if (OT_RG[g].includes(l.bloc)) idx.push(i); });
+      if (modif) idx.push(null);
+      S.ot.rgIdx[g] = idx;
+    });
+  },
+  _otRgLigne(g, r) { const i = S.ot.rgIdx[g][r]; return i === null || i === undefined ? null : S.ot.lignes[i]; },
+
+  // Prix (administrateurs seulement : les autres ne reçoivent pas les tarifs). null = inconnu.
+  _otRgPu(g, l) {
+    const p = S.ot.tarifs?.parametres || {};
+    if (g === 't') return l.unite === 'h' ? Number(p.taux_horaire) || null : l.unite === 'min' ? (Number(p.taux_horaire) || 0) / 60 || null : null;
+    const { f, r } = this._otRgTarif(l.ref);
+    if (g === 's') return l.prix_piece_saisi != null ? Number(l.prix_piece_saisi) : r && r.prix_piece != null ? Number(r.prix_piece) : null;
+    if (f) return f.mo != null ? Number(f.mo) : null;
+    return r && r.mo != null ? Number(r.mo) : null;
+  },
+  _otRgMontant(g, l) {
+    const q = Number(l.quantite);
+    if (!(q > 0)) return null;
+    if (g !== 's' && l.mo_saisi != null) return Number(l.mo_saisi);
+    const pu = this._otRgPu(g, l);
+    if (pu === null) return null;
+    const r = g === 'p' ? this._otRgTarif(l.ref).r : null;
+    return r && r.mo_plafond != null ? Math.min(q * pu, Number(r.mo_plafond)) : q * pu;
+  },
+  _otRgMoPieces() {
+    const somme = S.ot.rgIdx.s.reduce((s, i) => s + (i === null ? 0 : this._otRgMontant('s', S.ot.lignes[i]) || 0), 0);
+    const maj = Number(S.ot.tarifs?.parametres?.majoration_pieces) || 1.1;
+    return { somme, mo: somme > 0 ? Math.round((somme + 0.5) * maj / 0.5) * 0.5 : 0 };
+  },
+
+  /* ─ Rendu ─ */
+
+  _otRgDessiner() {
+    this._otRgIndexer();
+    ['p', 's', 't'].forEach(g => { const tb = document.getElementById('ot-rg-' + g); if (tb) tb.innerHTML = this._otRgHtml(g); });
+    this._otRgRecap();
+  },
+
+  _otRgHtml(g) {
+    const modif = this._otModifiable(), admin = this._otAdmin(), idx = S.ot.rgIdx[g];
+    const ro = modif ? '' : ' readonly';
+    const prix = (pu, m, vide) => admin ? `<td class="sx-rg-d sx-rg-pu">${pu === null ? '' : _otPrix(pu)}</td>
+      <td class="sx-rg-d">${m === null ? `<span class="sx-aide">${vide}</span>` : _otPrix(m)}</td>` : '';
+
+    if (g === 't') return idx.map((i, r) => {
+      const l = i === null ? null : S.ot.lignes[i];
+      return `<tr data-r="${r}">
+        <td class="sx-rg-n">${r + 1}</td>
+        <td class="sx-rg-saisie"><input id="ot-rg-t-${r}-0" data-rg="t" data-r="${r}" data-c="0" value="${_otEsc(l ? l.libelle : '')}" autocomplete="off"${ro}
+          placeholder="${l ? '' : 'nouvelle ligne'}" aria-label="Travaux ligne ${r + 1}"></td>
+        <td class="sx-rg-saisie sx-rg-qte"><input id="ot-rg-t-${r}-1" data-rg="t" data-r="${r}" data-c="1" value="${_otEsc(_otQte(l ? l.quantite : ''))}" inputmode="decimal" autocomplete="off"${ro} aria-label="Durée ligne ${r + 1}"></td>
+        <td class="sx-rg-saisie sx-rg-unite"><input id="ot-rg-t-${r}-2" data-rg="t" data-r="${r}" data-c="2" value="${_otEsc(l ? l.unite : 'h')}" readonly aria-label="Unité ligne ${r + 1} (h, m ou Espace)"></td>
+        ${l ? prix(this._otRgPu('t', l), this._otRgMontant('t', l), Number(l.quantite) > 0 ? 'au contrôle' : '') : prix(null, null, '')}
+      </tr>`;
+    }).join('');
+
+    const vus = {};
+    idx.forEach((i, r) => { const k = i === null ? '' : String(S.ot.lignes[i].ref || '').toUpperCase(); if (k) (vus[k] = vus[k] || []).push(r + 1); });
+    let h = idx.map((i, r) => {
+      const l = i === null ? null : S.ot.lignes[i];
+      const { k, f, r: tr } = this._otRgTarif(l ? l.ref : '');
+      const attente = l && k && !(Number(l.quantite) > 0);
+      const puces = [];
+      if (l) {
+        if (l.origine === 'office') puces.push('<span class="sx-badge sx-badge-office">D\'OFFICE</span>');
+        if (l.origine === 'prevu') puces.push(attente ? '<span class="sx-badge sx-badge-prevu">PRÉVU 🔧 · À CONFIRMER</span>' : '<span class="sx-badge sx-badge-ok">POSÉ 🔧</span>');
+        if (f) puces.push('<span class="sx-badge sx-badge-office">FORFAIT</span>');
+        if (k && !f && !tr) puces.push('<span class="sx-badge sx-badge-prevu">RÉF. SANS TARIF · montant au contrôle</span>');
+        if (g === 'p' && tr && this._otEstSanitaire(tr)) puces.push('<span class="sx-badge sx-badge-prevu">SANITAIRE · à saisir en 2.</span>');
+        if (g === 's' && (f || (tr && !this._otEstSanitaire(tr)))) puces.push('<span class="sx-badge sx-badge-prevu">PIÈCE · à saisir en 1.</span>');
+        if (k && vus[k].length > 1) puces.push(`<span class="sx-badge sx-badge-prevu">aussi l. ${vus[k].filter(n => n !== r + 1).join(', ')}</span>`);
+      }
+      const nom = l ? (l.libelle || (f ? f.intitule : tr ? tr.description : '')) : '';
+      const occPossible = g === 'p' && l && k && !f && !/^SON-/.test(k);
+      return `<tr data-r="${r}" class="${attente ? 'sx-rg-attente' : ''}">
+        <td class="sx-rg-n">${r + 1}</td>
+        <td class="sx-rg-saisie sx-rg-ref"><input id="ot-rg-${g}-${r}-0" data-rg="${g}" data-r="${r}" data-c="0" value="${_otEsc(l ? l.ref || '' : '')}" autocomplete="off" spellcheck="false"
+          ${modif && !(l && l.origine === 'office') ? '' : 'readonly'} aria-label="Réf. ligne ${r + 1}"></td>
+        <td class="sx-rg-saisie sx-rg-qte"><input id="ot-rg-${g}-${r}-1" data-rg="${g}" data-r="${r}" data-c="1" value="${_otEsc(_otQte(l ? l.quantite : ''))}" inputmode="decimal" autocomplete="off"${ro} aria-label="Quantité ligne ${r + 1}"></td>
+        <td class="sx-rg-desig">${l ? `<span class="sx-rg-nom" title="${_otEsc(nom)}">${_otEsc(nom)}</span>${puces.join('')}` : `<span class="sx-aide">${modif ? 'nouvelle ligne' : ''}</span>`}</td>
+        <td class="sx-rg-unite sx-aide">${l && l.unite && l.unite !== 'u' && !f ? _otEsc(l.unite) : ''}</td>
+        ${g === 'p' ? `<td class="sx-rg-occ"><button type="button" id="ot-rg-p-${r}-2" data-rg="p" data-r="${r}" data-c="2" class="sx-rg-occ-btn"
+            aria-pressed="${!!(l && l.occasion)}" aria-disabled="${!(modif && occPossible)}" aria-label="Occasion ligne ${r + 1}">${l && l.occasion ? 'O' : ''}</button></td>` : ''}
+        ${l ? prix(this._otRgPu(g, l), this._otRgMontant(g, l), k && (f || tr) ? '—' : '') : prix(null, null, '')}
+      </tr>`;
+    }).join('');
+    if (g === 's' && admin) {
+      const mp = this._otRgMoPieces();
+      h += `<tr class="sx-rg-calculee"><td class="sx-rg-n"></td><td class="sx-rg-ref"><span class="sx-ref">SON-0100</span></td><td></td>
+        <td class="sx-rg-desig" colspan="3">Main d'œuvre pièces <span class="sx-aide">calculée : (${_otEuros(mp.somme)} + 0,50) × ${_otEsc(String(S.ot.tarifs?.parametres?.majoration_pieces ?? 1.1).replace('.', ','))}, arrondi au 0,50</span></td>
+        <td class="sx-rg-d"><b>${_otPrix(mp.mo)}</b></td></tr>`;
+    }
+    return h;
+  },
+
+  _otRgRecap() {
+    const el = document.getElementById('ot-rg-recap');
+    if (!el) return;
+    const admin = this._otAdmin();
+    const lignes = g => S.ot.rgIdx[g].map((i, r) => [i === null ? null : S.ot.lignes[i], r]).filter(([l]) => l);
+    const sansQte = g => lignes(g).filter(([l]) => String(l.ref || '').trim() && !(Number(l.quantite) > 0));
+    const inconnues = g => lignes(g).filter(([l]) => { const { k, f, r } = this._otRgTarif(l.ref); return k && !f && !r; });
+    const n = ['p', 's', 't'].reduce((s, g) => s + lignes(g).filter(([l]) => Number(l.quantite) > 0).length, 0);
+    let h = `<span class="sx-h2" style="font-size:15px;">Fiche</span>
+      <div class="sx-rg-chiffre"><span>Lignes avec quantité</span><b>${n}</b></div>`;
+    [['p', ''], ['s', ' (sanitaire)']].forEach(([g, nom]) => {
+      const mq = sansQte(g), inc = inconnues(g);
+      if (mq.length) h += `<button type="button" class="sx-rg-alerte sx-rg-alerte-qte" onclick="App._otRgAller('${g}', ${mq[0][1]}, 1)">
+        <span>${mq.length} réf. sans quantité${nom}</span><b>Saisir →</b></button>`;
+      if (inc.length) h += `<button type="button" class="sx-rg-alerte sx-rg-alerte-inc" onclick="App._otRgAller('${g}', ${inc[0][1]}, 0)">
+        <span>${inc.length} réf. sans tarif${nom}</span><b>Voir →</b></button>`;
+    });
+    if (admin) {
+      const somme = g => lignes(g).reduce((s, [l]) => s + (this._otRgMontant(g, l) || 0), 0);
+      const mp = this._otRgMoPieces().mo, tp = somme('p'), tt = somme('t');
+      h += `<div class="sx-rg-chiffre"><span>Pièces et forfaits</span><b>${_otEuros(tp)}</b></div>
+        <div class="sx-rg-chiffre"><span>Sanitaire (SON-0100)</span><b>${_otEuros(mp)}</b></div>
+        <div class="sx-rg-chiffre"><span>Temps passé</span><b>${_otEuros(tt)}</b></div>
+        <div class="sx-rg-chiffre sx-rg-total"><span>Total estimé HT<small>le pied de page donne le total du serveur</small></span><b>${_otEuros(tp + mp + tt)}</b></div>`;
+    }
+    el.innerHTML = h;
+  },
+
+  /* ─ Déplacements ─ */
+
+  // Va à une case. Avant de redessiner, retire les lignes restées vides (sauf celle où l'on va).
+  _otRgAller(g, r, c) {
+    const idx = S.ot.rgIdx[g];
+    // Au-delà de la dernière ligne (ex. Entrée après une réf. tapée dans la ligne vide) : la nouvelle ligne vide du bas.
+    const versBas = r >= idx.length;
+    r = Math.max(0, Math.min(idx.length - 1, r));
+    const cible = versBas ? null : this._otRgLigne(g, r);
+    const avant = S.ot.lignes.length;
+    S.ot.lignes = S.ot.lignes.filter(l => l === cible || !this._otRgVide(l));
+    if (S.ot.lignes.length !== avant) this._otModifie(false);
+    this._otRgDessiner();
+    const n = S.ot.rgIdx[g];
+    if (cible) { const pos = n.findIndex(i => i !== null && S.ot.lignes[i] === cible); r = pos >= 0 ? pos : Math.min(r, n.length - 1); }
+    else r = versBas ? n.length - 1 : Math.min(r, n.length - 1);
+    c = Math.max(0, Math.min(OT_RG_MAXC[g], c));
+    const el = document.getElementById(`ot-rg-${g}-${r}-${c}`) || document.getElementById(`ot-rg-${g}-${r}-0`);
+    if (!el) return;
+    el.focus();
+    if (el.select && !el.readOnly) el.select();
+  },
+  _otRgQteManquante(g) {
+    return S.ot.rgIdx[g].findIndex(i => i !== null && String(S.ot.lignes[i].ref || '').trim() && !(Number(S.ot.lignes[i].quantite) > 0));
+  },
+
+  /* ─ Saisie ─ */
+
+  // Recopie la case dans la ligne (crée la ligne si l'on tape dans la ligne vide du bas).
+  _otRgSaisie(el) {
+    if (!this._otModifiable()) return;
+    const g = el.dataset.rg, r = +el.dataset.r, c = +el.dataset.c;
+    let l = this._otRgLigne(g, r);
+    if (!l) {
+      if (!el.value.trim()) return;
+      l = this._otRgNouvelle(g);
+      S.ot.lignes.push(l);
+      S.ot.rgIdx[g][r] = S.ot.lignes.length - 1;
+    }
+    if (c === 1) {
+      const n = parseFloat(el.value.replace(/\s/g, '').replace(',', '.'));
+      l.quantite = el.value.trim() === '' || isNaN(n) ? null : Math.max(0, n);
+    } else if (g === 't') {
+      l.libelle = el.value;
+    } else {
+      this._otRgPoserRef(l, el.value);
+    }
+    this._otModifie(false);
+  },
+  _otRgPoserRef(l, valeur) {
+    const { k, f, r } = this._otRgTarif(valeur);
+    l.ref = k;
+    l.libelle = f ? f.intitule : r ? r.description : k ? 'Réf. sans tarif' : '';
+    l.unite = r && r.unite && r.unite !== 'unité' ? r.unite : 'u';
+    if (f || /^SON-/.test(k)) l.occasion = false;
+  },
+
+  /* ─ Suggestions (réf. ou désignation) ─ */
+
+  _otRgChercher(g, texte) {
+    const q = texte.trim().toLowerCase();
+    if (!q) return [];
+    const mots = q.split(/\s+/);
+    const texteLibre = /[a-zà-ü]{2,}/.test(q) && !S.ot.refs.has(q.toUpperCase());
+    const items = [];
+    if (g === 'p') S.ot.forfaits.forEach(f => items.push({ ref: f.lettre, nom: f.intitule }));
+    S.ot.refs.forEach(r => {
+      if (['SON-0100', 'SON-0101', 'SON-0102'].includes(r.ref) || this._otEstSanitaire(r) !== (g === 's')) return;
+      items.push({ ref: r.ref, nom: r.description || '' });
+    });
+    return items
+      .filter(x => (x.ref.toLowerCase().startsWith(q) && x.ref.toLowerCase() !== q)
+        || (texteLibre && mots.every(m => x.nom.toLowerCase().includes(m))))
+      .sort((a, b) => a.ref.localeCompare(b.ref, 'fr', { numeric: true }))
+      .slice(0, 8);
+  },
+  _otRgSuggerer(el) {
+    const boite = document.getElementById('ot-rg-sugg');
+    if (!boite) return;
+    const g = el.dataset.rg;
+    S.ot.rgSugg = this._otRgChercher(g, el.value);
+    S.ot.rgSel = /[a-zà-ü]{2,}/i.test(el.value) && !this._otRgTarif(el.value).r && !this._otRgTarif(el.value).f ? 0 : -1;
+    if (!S.ot.rgSugg.length) { boite.hidden = true; return; }
+    boite.innerHTML = S.ot.rgSugg.map((x, i) => `<div data-k="${i}" class="${i === S.ot.rgSel ? 'sel' : ''}"><span class="sx-ref">${_otEsc(x.ref)}</span><span>${_otEsc(x.nom)}</span></div>`).join('')
+      + '<small>↓ ↑ pour choisir · Entrée pour prendre</small>';
+    const b = el.getBoundingClientRect();
+    boite.style.left = Math.max(8, Math.min(b.left, window.innerWidth - 480)) + 'px';
+    boite.style.top = (b.bottom + 2) + 'px';
+    boite.hidden = false;
+  },
+  _otRgCacherSugg() {
+    const boite = document.getElementById('ot-rg-sugg');
+    if (boite) boite.hidden = true;
+    S.ot.rgSugg = []; S.ot.rgSel = -1;
+  },
+  _otRgPrendre(k, el) {
+    const x = S.ot.rgSugg[k];
+    if (!x || !el) return;
+    el.value = x.ref;
+    this._otRgSaisie(el);
+    this._otRgCacherSugg();
+    this._otRgAller(el.dataset.rg, +el.dataset.r + 1, 0);
+  },
+
+  /* ─ Clavier, souris, collage ─ */
+
+  _otRgEcouter(root) {
+    if (root.dataset.rgEcoute) return;
+    root.dataset.rgEcoute = '1';
+    const champ = e => (e.target && e.target.dataset && e.target.dataset.rg) ? e.target : null;
+
+    root.addEventListener('focusin', e => { const el = champ(e); if (el) el.dataset.avant = el.value ?? ''; });
+    root.addEventListener('input', e => {
+      const el = champ(e); if (!el) return;
+      this._otRgSaisie(el);
+      if (el.dataset.c === '0' && el.dataset.rg !== 't') this._otRgSuggerer(el);
+    });
+    root.addEventListener('focusout', e => {
+      if (!champ(e)) return;
+      setTimeout(() => {
+        const a = document.activeElement;
+        if (!a || !a.dataset || !a.dataset.rg) { this._otRgCacherSugg(); if (S.view === 'ot-fiche' && document.getElementById('ot-rg-p')) { this._otRgDessiner(); } }
+      }, 0);
+    });
+    root.addEventListener('mousedown', e => {
+      const d = e.target.closest('#ot-rg-sugg [data-k]');
+      if (!d) return;
+      e.preventDefault();
+      this._otRgPrendre(+d.dataset.k, document.activeElement);
+    });
+    root.addEventListener('click', e => {
+      const el = champ(e); if (!el || !this._otModifiable()) return;
+      const g = el.dataset.rg, r = +el.dataset.r, c = +el.dataset.c;
+      if (g === 'p' && c === 2) this._otRgOccasion(r);
+      if (g === 't' && c === 2) this._otRgUnite(r, ' ');
+    });
+    root.addEventListener('keydown', e => this._otRgTouche(e, champ(e)));
+    root.addEventListener('paste', e => {
+      const el = champ(e); if (!el || el.dataset.rg === 't' || !this._otModifiable()) return;
+      const txt = (e.clipboardData || window.clipboardData).getData('text');
+      if (!/[\t\n]/.test(txt.trim())) return;
+      e.preventDefault();
+      const g = el.dataset.rg, c = +el.dataset.c;
+      const rangs = txt.replace(/\r/g, '').replace(/\n$/, '').split('\n').map(x => x.split('\t'));
+      let r = +el.dataset.r;
+      rangs.forEach(cols => {
+        let l = this._otRgLigne(g, r);
+        if (!l) { l = this._otRgNouvelle(g); S.ot.lignes.push(l); }
+        if (c === 0) {
+          this._otRgPoserRef(l, cols[0] || '');
+          if (cols.length > 1) { const n = parseFloat(String(cols[1]).replace(/\s/g, '').replace(',', '.')); l.quantite = isNaN(n) ? null : n; }
+        } else if (c === 1) { const n = parseFloat(String(cols[0]).replace(/\s/g, '').replace(',', '.')); l.quantite = isNaN(n) ? null : n; }
+        this._otRgIndexer();
+        r++;
+      });
+      this._otModifie(false);
+      this._otRgAller(g, r, c);
+      this.toast(`✓ ${rangs.length} ligne${rangs.length > 1 ? 's' : ''} collée${rangs.length > 1 ? 's' : ''}`);
+    });
+  },
+
+  _otRgOccasion(r) {
+    const l = this._otRgLigne('p', r);
+    const { k, f } = this._otRgTarif(l ? l.ref : '');
+    if (!l || !k || f || /^SON-/.test(k)) return;
+    l.occasion = !l.occasion;
+    this._otModifie(false);
+    this._otRgAller('p', r, 2);
+  },
+  _otRgUnite(r, touche) {
+    const l = this._otRgLigne('t', r);
+    if (!l) return;
+    const t = touche.toLowerCase();
+    l.unite = t === 'h' ? 'h' : t === 'm' ? 'min' : OT_RG_UNITES[(OT_RG_UNITES.indexOf(l.unite) + 1) % OT_RG_UNITES.length];
+    l.ref = l.unite === 'h' ? 'SON-0102' : l.unite === 'min' ? 'SON-0101' : null;
+    this._otModifie(false);
+    this._otRgAller('t', r, 2);
+  },
+
+  _otRgTouche(e, el) {
+    if (!el) return;
+    const g = el.dataset.rg, r = +el.dataset.r, c = +el.dataset.c, modif = this._otModifiable();
+    const refs = g !== 't', boite = document.getElementById('ot-rg-sugg');
+    const curseur = el.selectionStart !== undefined && el.selectionStart !== null && el.tagName === 'INPUT' && !el.readOnly;
+    const fin = !curseur || (el.selectionStart === el.value.length && el.selectionEnd === el.value.length);
+    const debut = !curseur || (el.selectionStart === 0 && el.selectionEnd === 0);
+    const k = e.key;
+
+    if (boite && !boite.hidden && refs && c === 0) {
+      if (k === 'ArrowDown') { e.preventDefault(); S.ot.rgSel = Math.min(S.ot.rgSugg.length - 1, S.ot.rgSel + 1); }
+      else if (k === 'ArrowUp') { e.preventDefault(); S.ot.rgSel = Math.max(-1, S.ot.rgSel - 1); }
+      else if (k === 'Enter' && S.ot.rgSel >= 0) { e.preventDefault(); this._otRgPrendre(S.ot.rgSel, el); return; }
+      else if (k === 'Escape') { e.preventDefault(); this._otRgCacherSugg(); return; }
+      if (k === 'ArrowDown' || k === 'ArrowUp') {
+        boite.querySelectorAll('[data-k]').forEach(d => d.classList.toggle('sel', +d.dataset.k === S.ot.rgSel));
+        return;
+      }
+    }
+
+    if (modif && g === 'p' && c === 2 && (k === ' ' || k.toLowerCase() === 'o')) { e.preventDefault(); this._otRgOccasion(r); return; }
+    if (modif && g === 't' && c === 2 && /^[hm ]$/i.test(k)) { e.preventDefault(); this._otRgUnite(r, k); return; }
+
+    if (modif && k === 'Enter' && (e.ctrlKey || e.metaKey)) {                       // insérer au-dessus
+      e.preventDefault();
+      const i = S.ot.rgIdx[g][r];
+      S.ot.lignes.splice(i === null ? S.ot.lignes.length : i, 0, this._otRgNouvelle(g));
+      this._otRgIndexer();
+      this._otRgAller(g, r, 0);
+      return;
+    }
+    if (modif && (k === 'Delete' || k === 'Backspace') && (e.ctrlKey || e.metaKey)) {   // supprimer la ligne
+      e.preventDefault();
+      const l = this._otRgLigne(g, r);
+      if (!l) return;
+      if (l.origine === 'office') { this.toast('Ligne d\'office : mettez sa quantité à 0 si elle est sans objet'); return; }
+      S.ot.lignes.splice(S.ot.rgIdx[g][r], 1);
+      this._otModifie(false);
+      this._otRgIndexer();
+      this._otRgAller(g, r, c);
+      this.toast(`Ligne ${r + 1} supprimée`);
+      return;
+    }
+    if (k === 'Escape') {
+      e.preventDefault(); this._otRgCacherSugg();
+      if (modif && el.tagName === 'INPUT' && !el.readOnly) { el.value = el.dataset.avant || ''; this._otRgSaisie(el); }
+      this._otRgAller(g, r, c);
+      return;
+    }
+    if (k === 'Enter') {
+      e.preventDefault(); this._otRgCacherSugg();
+      const idx = S.ot.rgIdx[g];
+      if (refs && c === 0 && !this._otRgLigne(g, r) && r === idx.length - 1) {        // fin des réf. → quantités
+        this._otRgAller(g, r, 0);
+        const m = this._otRgQteManquante(g);
+        if (m >= 0) { this._otRgAller(g, m, 1); this.toast(`Quantités : ligne ${m + 1}`); }
+        else this.toast('Toutes les lignes ont une quantité');
+        return;
+      }
+      if (refs && c === 1 && !e.shiftKey && r >= idx.length - 2) { this._otRgAller(g, idx.length - 1, 0); return; }
+      this._otRgAller(g, e.shiftKey ? r - 1 : r + 1, c);
+      return;
+    }
+    if (k === 'Tab') {
+      e.preventDefault();
+      const max = OT_RG_MAXC[g];
+      if (e.shiftKey) { if (c > 0) this._otRgAller(g, r, c - 1); else if (r > 0) this._otRgAller(g, r - 1, max); }
+      else if (c < max) this._otRgAller(g, r, c + 1);
+      else this._otRgAller(g, r + 1, 0);
+      return;
+    }
+    if (k === 'ArrowDown') { e.preventDefault(); this._otRgAller(g, r + 1, c); return; }
+    if (k === 'ArrowUp') { e.preventDefault(); this._otRgAller(g, r - 1, c); return; }
+    if (k === 'ArrowRight' && fin && c < OT_RG_MAXC[g]) { e.preventDefault(); this._otRgAller(g, r, c + 1); return; }
+    if (k === 'ArrowLeft' && debut && c > 0) { e.preventDefault(); this._otRgAller(g, r, c - 1); }
   },
 
   /* ═════════════════════════ CONTRÔLE (administrateur) ═════════════════════════ */
