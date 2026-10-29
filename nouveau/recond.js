@@ -21,6 +21,7 @@ S.ot = {
   // Saisie rapide au clavier (PC) : choix mémorisé par appareil ; rgIdx = lignes affichées par tableau
   rapide: (() => { try { return localStorage.getItem('snt_ot_rapide') !== '0'; } catch { return true; } })(),
   rgIdx: { p: [], s: [], t: [] }, rgSugg: [], rgSel: -1,
+  mail: null,       // brouillon du mail LOXAM préparé : { url, nom, ids, modules }
 };
 
 // Saisie rapide : tableaux (p = pièces et forfaits, s = sanitaire, t = temps passé) → blocs des lignes
@@ -183,6 +184,7 @@ Object.assign(App, {
       <main class="sx-contenu">
         <div class="sx-bandeau sx-bandeau-info">Essai : la fiche ne sort rien du stock (la 🔧 reste la vraie sortie) et la matrice Excel garde les vrais numéros d'OT.</div>
         <button type="button" class="sx-btn sx-btn-principal sx-btn-plein" onclick="App.otNouvelle()">+ Nouvelle fiche</button>
+        ${admin && S.ot.listeChargee ? this._otHtmlMail() : ''}
         ${corps}
         <div class="sx-ligne-champs">
           <button type="button" class="sx-btn sx-btn-discret" style="flex:1 1 140px;" onclick="App.otChargerListe(true)">Actualiser</button>
@@ -666,13 +668,15 @@ Object.assign(App, {
         ? ['Rouvrir la fiche ?', 'Elle repasse « à valider » : le numéro est gardé, les prix ne sont plus figés.', 'Rouvrir']
         : ['Envoyer à valider ?', 'La fiche passe au bureau pour contrôle. Vous ne pourrez plus la modifier, sauf en la reprenant en brouillon.', 'Envoyer'],
       brouillon: ['Reprendre en brouillon ?', 'La fiche redevient modifiable à l\'atelier.', 'Reprendre'],
-      validee:   ['Valider la fiche ?', `Total ${_otEuros(S.ot.fiche.totaux?.total)} HT. Un numéro ESSAI-… est attribué et les prix sont figés.`, 'Valider'],
+      validee:   ['Valider la fiche ?', `Total ${_otEuros(S.ot.fiche.totaux?.total)} HT. Un numéro ESSAI-… est attribué, les prix sont figés et les documents (Excel LOXAM, Excel SONOTRAD, PDF) sont créés.`, 'Valider'],
     };
     const t = textes[statut];
     if (t && !(await this._otConfirmer({ titre: t[0], texte: t[1], ok: t[2] }))) return;
+    if (statut === 'validee') this.toast('⏳ Validation et création des documents…', 20000);
     try {
       const d = await this._otPost({ action: 'ot_statut', id: f.id, statut });
-      this.toast('✓ ' + (OT_STATUTS[d.fiche.statut] || d.fiche.statut) + (d.fiche.numero_ot ? ' · ' + d.fiche.numero_ot : ''));
+      if (d.fiche.documents_erreur) this.toast('Fiche validée, mais documents non créés : ' + d.fiche.documents_erreur + ' — « Créer les documents » pour réessayer', 7000);
+      else this.toast('✓ ' + (OT_STATUTS[d.fiche.statut] || d.fiche.statut) + (d.fiche.numero_ot ? ' · ' + d.fiche.numero_ot : '') + (d.fiche.documents ? ' · documents créés' : ''));
       S.ot.listeChargee = false;
       this._otAfficherFiche(d.fiche);
     } catch (e) {
@@ -1226,14 +1230,103 @@ Object.assign(App, {
             ${f.statut === 'a_valider' ? `<section class="sx-bandeau sx-bandeau-info" style="display:flex;flex-direction:column;gap:4px;">
               <strong>En validant (essai), la PWA va :</strong>
               <span>1. attribuer un numéro ESSAI-… (la matrice garde les vrais) ;</span>
-              <span>2. figer les prix de chaque ligne.</span>
-              <span>Excel LOXAM / SONOTRAD, PDF et mail : prochaine étape. Aucune sortie de stock pendant l'essai.</span>
+              <span>2. figer les prix de chaque ligne ;</span>
+              <span>3. créer les documents : Excel LOXAM, Excel SONOTRAD et PDF (quelques secondes).</span>
+              <span>Le mail à LOXAM se prépare ensuite depuis la liste des fiches. Aucune sortie de stock pendant l'essai.</span>
             </section>` : ''}
+            ${['validee', 'envoyee'].includes(f.statut) ? this._otHtmlDocuments(f) : ''}
             <div style="display:flex;gap:10px;flex-wrap:wrap;">${actions}</div>
           </aside>
         </div>
       </main></div>`;
     this._otRendreTableControle();
+  },
+
+  /* ─ Documents d'une fiche validée (créés par le serveur à la validation) ─ */
+
+  _otHtmlDocuments(f) {
+    const d = f.documents;
+    const noms = { loxam: 'Excel LOXAM', sonotrad: 'Excel SONOTRAD', pdf: 'PDF (version LOXAM)' };
+    const liens = d && d.fichiers ? d.fichiers.map(x => `<a class="sx-btn sx-btn-second" href="${_otEsc(x.url)}" target="_blank" rel="noopener"
+        title="${_otEsc(x.nom)}">${_otEsc(noms[x.type] || x.nom)}</a>`).join('') : '';
+    return `<section class="sx-carte sx-carte-pad" style="display:flex;flex-direction:column;gap:8px;">
+      <span class="sx-h2" style="font-size:16px;">Documents</span>
+      ${d ? `<span class="sx-aide">Créés le ${_otEsc(new Date(d.genere_le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}
+          · date de fin ${_otEsc(d.date_fin ? d.date_fin.split('-').reverse().join('/') : '—')}</span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">${liens}
+          <a class="sx-btn sx-btn-discret" href="${_otEsc(d.dossier)}" target="_blank" rel="noopener">Dossier</a></div>`
+        : '<div class="sx-bandeau sx-bandeau-info">Pas encore de documents pour cette fiche.</div>'}
+      <button type="button" class="sx-btn sx-btn-discret" id="ot-doc-refaire" onclick="App.otRefaireDocuments()">${d ? 'Refaire les documents' : 'Créer les documents'}</button>
+    </section>`;
+  },
+
+  async otRefaireDocuments() {
+    const f = S.ot.fiche;
+    if (!f) return;
+    const b = document.getElementById('ot-doc-refaire');
+    if (b) { b.disabled = true; b.textContent = 'Création en cours…'; }
+    try {
+      const d = await this._otPost({ action: 'ot_documents', id: f.id });
+      S.ot.fiche = { ...S.ot.fiche, documents: d.documents };
+      this.toast('✓ Documents créés');
+    } catch (e) {
+      this.toast('Documents impossibles : ' + e.message, 5000);
+    }
+    if (S.view === 'ot-fiche') this._otRendreFiche();
+  },
+
+  /* ─ Mail groupé à LOXAM (liste des fiches) ─ */
+
+  _otHtmlMail() {
+    const prets = S.ot.liste.filter(f => f.statut === 'validee' && f.documents);
+    const sans = S.ot.liste.filter(f => f.statut === 'validee' && !f.documents);
+    const m = S.ot.mail;
+    if (!prets.length && !sans.length && !m) return '';
+    let h = `<section class="sx-carte sx-carte-pad" style="display:flex;flex-direction:column;gap:8px;">
+      <span class="sx-h2" style="font-size:16px;">Mail à LOXAM</span>`;
+    if (m) {
+      h += `<span class="sx-aide">Brouillon prêt pour ${m.ids.length} OT : ${_otEsc(m.modules.join(' ; '))}.
+          Ouvrez-le (il s'ouvre dans Outlook), relisez, envoyez, puis marquez les fiches envoyées.</span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <a class="sx-btn sx-btn-principal" href="${_otEsc(m.url)}" target="_blank" rel="noopener">Ouvrir le brouillon (.eml)</a>
+          <button type="button" class="sx-btn sx-btn-second" onclick="App.otMarquerEnvoyees()">Mail envoyé : marquer ${m.ids.length} fiche${m.ids.length > 1 ? 's' : ''} envoyée${m.ids.length > 1 ? 's' : ''}</button>
+          <button type="button" class="sx-btn sx-btn-discret" onclick="S.ot.mail=null;App._otRendreListe()">Fermer</button>
+        </div>`;
+    } else {
+      h += `<span class="sx-aide">${prets.length} OT validé${prets.length > 1 ? 's' : ''} pas encore envoyé${prets.length > 1 ? 's' : ''} : un seul mail
+          (Nathalie Jadeau, copie Aurélien Lavello et Nicolas Siblas, copie cachée Hugo) avec les Excel LOXAM en pièces jointes.</span>
+        ${sans.length ? `<span class="sx-aide" style="color:var(--sx-attention);">${sans.length} fiche${sans.length > 1 ? 's' : ''} validée${sans.length > 1 ? 's' : ''} sans documents : ouvrez-la et « Créer les documents ».</span>` : ''}
+        ${prets.length ? `<button type="button" class="sx-btn sx-btn-principal" id="ot-mail-btn" onclick="App.otPreparerMail()">Préparer le mail (${prets.length} OT)</button>` : ''}`;
+    }
+    return h + '</section>';
+  },
+
+  async otPreparerMail() {
+    const b = document.getElementById('ot-mail-btn');
+    if (b) { b.disabled = true; b.textContent = 'Préparation…'; }
+    try {
+      const d = await this._otPost({ action: 'ot_mail' });
+      S.ot.mail = { url: d.url, nom: d.nom, ids: d.ids || [], modules: d.modules || [] };
+    } catch (e) {
+      this.toast('Mail impossible : ' + e.message, 5000);
+    }
+    this._otRendreListe();
+  },
+
+  async otMarquerEnvoyees() {
+    const m = S.ot.mail;
+    if (!m) return;
+    const ok = await this._otConfirmer({ titre: 'Mail envoyé à LOXAM ?', ok: 'Marquer envoyées',
+      texte: `Les ${m.ids.length} fiche(s) du brouillon passent « Envoyée ». À faire seulement une fois le mail réellement parti.` });
+    if (!ok) return;
+    try {
+      const d = await this._otPost({ action: 'ot_envoyees', ids: m.ids });
+      this.toast(`✓ ${d.faites} fiche${d.faites > 1 ? 's' : ''} envoyée${d.faites > 1 ? 's' : ''}` + (d.erreurs?.length ? ' — ' + d.erreurs.join(' ; ') : ''), 4000);
+      S.ot.mail = null;
+      this.otChargerListe(true);
+    } catch (e) {
+      this.toast('Changement impossible : ' + e.message, 5000);
+    }
   },
 
   // Groupes du tableau de contrôle. Regroupé : opérations d'office et forfaits, une famille de pièces
