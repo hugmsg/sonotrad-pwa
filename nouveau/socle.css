@@ -198,6 +198,23 @@ body.socle { background: var(--sx-fond); }
 .sx-p-annulee   { background: var(--sx-rouge-fond); color: var(--sx-rouge); }
 .sx-p-encours   { background: var(--sx-orange-fond); color: var(--sx-attention); }
 
+/* Fiche d'opérations : bandeau de statut + filet de couleur sur les titres de section (mêmes couleurs que
+   les pastilles, 2026-11-13). Saisie, contrôle et consultation ont ainsi le même découpage, la couleur dit l'étape. */
+.sx-ot-brouillon { --ot-c: var(--sx-jaune); --ot-f: var(--sx-jaune-clair); --ot-t: var(--sx-attention); }
+.sx-ot-a_valider { --ot-c: var(--sx-bleu);  --ot-f: var(--sx-bleu-clair);  --ot-t: var(--sx-bleu-fonce); }
+.sx-ot-validee   { --ot-c: var(--sx-vert);  --ot-f: var(--sx-vert-fond);   --ot-t: var(--sx-vert); }
+.sx-ot-envoyee   { --ot-c: var(--sx-gris);  --ot-f: #EEF2F5;               --ot-t: var(--sx-gris); }
+.sx-ot-annulee   { --ot-c: var(--sx-rouge); --ot-f: var(--sx-rouge-fond);  --ot-t: var(--sx-rouge); }
+.sx-statut {
+  display: flex; align-items: center; gap: 6px 14px; flex-wrap: wrap;
+  padding: 10px 14px; border-radius: 12px; border-left: 8px solid var(--ot-c, var(--sx-bord));
+  background: var(--ot-f, var(--sx-carte)); color: var(--ot-t, var(--sx-texte));
+}
+.sx-statut-nom { font-size: 18px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; }
+.sx-statut-num { font-size: 15px; font-weight: 700; font-family: ui-monospace, Consolas, monospace; }
+.sx-statut-texte { font-size: 13px; }
+.sx-ot .sx-section-tete .sx-h2 { border-left: 4px solid var(--ot-c, var(--sx-bleu)); padding-left: 8px; }
+
 /* ── Listes cliquables ──────────────────────────────────────────────────── */
 .sx-item {
   display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;

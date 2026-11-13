@@ -332,6 +332,25 @@ Object.assign(App, {
     return !!f && (f.statut === 'brouillon' || (f.statut === 'a_valider' && this._otAdmin()));
   },
 
+  // Bandeau de statut, en tête de la fiche, aux couleurs des pastilles de la liste (plus visible qu'une pastille ;
+  // demande de Hugo du 2026-11-13). `droite` = contenu aligné à droite (bouton de bascule…).
+  _otBandeauStatut(f, droite = '') {
+    const admin = this._otAdmin();
+    const t = {
+      brouillon: ['À compléter', 'saisie de l\'atelier en cours'],
+      a_valider: ['À valider', admin ? 'contrôle du bureau : vérifiez quantités et montants, puis validez' : 'envoyée au bureau pour contrôle'],
+      validee:   ['Validée', 'prix figés · documents créés à la validation'],
+      envoyee:   ['Envoyée', 'partie à LOXAM'],
+      annulee:   ['Annulée', ''],
+    }[f.statut] || [OT_STATUTS[f.statut] || f.statut, ''];
+    return `<div class="sx-statut sx-statut-${_otEsc(f.statut)}" role="status">
+      <span class="sx-statut-nom">${_otEsc(t[0])}</span>
+      ${f.numero_ot ? `<span class="sx-statut-num">${_otEsc(f.numero_ot)}</span>` : ''}
+      <span class="sx-statut-texte">${_otEsc(t[1])}</span>
+      ${droite ? `<span style="margin-left:auto;">${droite}</span>` : ''}
+    </div>`;
+  },
+
   // Sanitaire = pièces refacturées en « main-d'œuvre pièces » (réf. SON- avec un prix pièce).
   _otEstSanitaire(r) { return /^SON-/.test(r.ref) && Number(r.prix_piece) > 0; },
 
@@ -351,7 +370,7 @@ Object.assign(App, {
     const titreModule = [f.type_module, f.numero_module].filter(Boolean).join(' ');
     const forfaits = [...S.ot.forfaits.values()];
 
-    el.innerHTML = `<div class="sx-ecran">
+    el.innerHTML = `<div class="sx-ecran sx-ot sx-ot-${_otEsc(f.statut)}">
       ${this._otEntete({ retour: { texte: 'Fiches', action: 'App.otQuitterFiche()' }, titre: 'Fiche d\'opérations',
           sousTitre: [titreModule, f.agence, f.code_planning].filter(Boolean).join(' · '), etat: S.ot.etat })}
       <div class="sx-onglets" role="tablist" aria-label="Blocs de la fiche">
@@ -359,18 +378,14 @@ Object.assign(App, {
             onclick="App.otOnglet('${o.cle}')">${o.nom} · <span id="ot-n-${o.cle}">${o.n}</span></button>`).join('')}
       </div>
       <main class="sx-contenu">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span class="sx-pastille sx-p-${_otEsc(f.statut)}">${_otEsc(OT_STATUTS[f.statut] || f.statut)}</span>
-          <span class="sx-aide">${_otEsc(f.numero_ot || 'n° d\'OT donné à la validation')}</span>
-          ${this._otRapideDispo() ? `<button type="button" class="sx-btn sx-btn-discret" style="margin-left:auto;" onclick="App.otBasculerSaisie()">Saisie rapide (clavier)</button>` : ''}
-        </div>
+        ${this._otBandeauStatut(f, this._otRapideDispo() ? '<button type="button" class="sx-btn sx-btn-discret" onclick="App.otBasculerSaisie()">Saisie rapide (clavier)</button>' : '')}
         ${f.commentaire ? `<div class="sx-carte sx-carte-pad sx-aide" style="font-size:14px;">${_otEsc(f.commentaire)}</div>` : ''}
         ${modif ? '' : `<div class="sx-bandeau sx-bandeau-info">${f.statut === 'a_valider'
             ? 'Fiche envoyée à valider : elle n\'est plus modifiable. « Reprendre en brouillon » pour la corriger.'
             : 'Fiche ' + _otEsc((OT_STATUTS[f.statut] || '').toLowerCase()) + ' : consultation seulement.'}</div>`}
 
         <section class="sx-section sx-bloc" ${S.ot.onglet === 'pieces' ? '' : 'hidden'} aria-labelledby="ot-t-pieces">
-          <div class="sx-section-tete"><h2 class="sx-h2" id="ot-t-pieces">1. Opérations et pièces posées</h2>
+          <div class="sx-section-tete"><h2 class="sx-h2" id="ot-t-pieces">1. Pièces, forfaits et opérations</h2>
             <span class="sx-aide">une ligne sans quantité n'apparaît pas dans les documents</span></div>
           <div class="sx-carte" id="ot-lignes-pieces">${this._otHtmlLignes(['pieces', 'diverses'], modif)}</div>
           ${modif ? `<div class="sx-ligne-champs">
@@ -400,7 +415,7 @@ Object.assign(App, {
         </section>
 
         <section class="sx-section sx-bloc" ${S.ot.onglet === 'travaux' ? '' : 'hidden'} aria-labelledby="ot-t-trav">
-          <div class="sx-section-tete"><h2 class="sx-h2" id="ot-t-trav">3. Travaux en plus</h2></div>
+          <div class="sx-section-tete"><h2 class="sx-h2" id="ot-t-trav">3. Temps passé</h2></div>
           <span class="sx-aide">Une tâche qui n'est pas dans la liste : temps passé, longueur, surface…</span>
           <div class="sx-carte" id="ot-lignes-travaux">${this._otHtmlLignes(['travaux'], modif)}</div>
           ${modif ? `<div class="sx-ligne-champs">
@@ -714,17 +729,13 @@ Object.assign(App, {
         </table></div>
       </section>`;
 
-    el.innerHTML = `<div class="sx-ecran">
+    el.innerHTML = `<div class="sx-ecran sx-ot sx-ot-${_otEsc(f.statut)}">
       ${this._otEntete({ retour: { texte: 'Fiches', action: 'App.otQuitterFiche()' }, titre: 'Fiche d\'opérations', large: true,
           sousTitre: [titreModule, f.agence, f.code_planning].filter(Boolean).join(' · '), etat: S.ot.etat })}
       <main class="sx-contenu sx-large sx-rg-page">
         <div class="sx-rg-col">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <span class="sx-pastille sx-p-${_otEsc(f.statut)}">${_otEsc(OT_STATUTS[f.statut] || f.statut)}</span>
-            <span class="sx-aide">${_otEsc(f.numero_ot || 'n° d\'OT donné à la validation')}</span>
-            ${f.commentaire ? `<span class="sx-aide" style="font-size:13px;">· ${_otEsc(f.commentaire)}</span>` : ''}
-            <button type="button" class="sx-btn sx-btn-discret" style="margin-left:auto;" onclick="App.otBasculerSaisie()">Saisie tactile</button>
-          </div>
+          ${this._otBandeauStatut(f, '<button type="button" class="sx-btn sx-btn-discret" onclick="App.otBasculerSaisie()">Saisie tactile</button>')}
+          ${f.commentaire ? `<span class="sx-aide" style="font-size:13px;">${_otEsc(f.commentaire)}</span>` : ''}
           ${modif ? '' : `<div class="sx-bandeau sx-bandeau-info">${f.statut === 'a_valider'
               ? 'Fiche envoyée à valider : elle n\'est plus modifiable. « Reprendre en brouillon » pour la corriger.'
               : 'Fiche ' + _otEsc((OT_STATUTS[f.statut] || '').toLowerCase()) + ' : consultation seulement.'}</div>`}
@@ -1184,29 +1195,25 @@ Object.assign(App, {
       validee:   `<button type="button" class="sx-btn sx-btn-discret sx-btn-plein" onclick="App.otChangerStatut('a_valider')">Rouvrir pour corriger</button>`,
     }[f.statut] || '';
 
-    el.innerHTML = `<div class="sx-ecran">
+    // Même découpage que la saisie (1. Pièces… 2. Sanitaire 3. Temps passé), demande de Hugo du 2026-11-13.
+    el.innerHTML = `<div class="sx-ecran sx-ot sx-ot-${_otEsc(f.statut)}">
       ${this._otEntete({ retour: { texte: 'Fiches', action: 'App.otQuitterFiche()' },
           titre: [f.numero_ot || 'Contrôle', titreModule].filter(Boolean).join(' · '),
           sousTitre: [f.agence, 'code ' + f.code_planning, f.saisi_par ? 'saisi par ' + f.saisi_par : ''].filter(Boolean).join(' · '),
           etat: S.ot.etat, large: true })}
       <main class="sx-contenu sx-large">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span class="sx-pastille sx-p-${_otEsc(f.statut)}">${_otEsc(OT_STATUTS[f.statut] || f.statut)}</span>
-          ${f.commentaire ? `<span class="sx-aide">${_otEsc(f.commentaire)}</span>` : ''}
-        </div>
+        ${this._otBandeauStatut(f)}
+        ${f.commentaire ? `<span class="sx-aide" style="font-size:13px;">${_otEsc(f.commentaire)}</span>` : ''}
         <div class="sx-colonnes">
-          <section class="sx-principal sx-carte" aria-labelledby="ot-t-ctrl">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;flex-wrap:wrap;">
-              <h2 class="sx-h2" id="ot-t-ctrl">Opérations</h2>
-              <div style="display:flex;gap:16px;flex-wrap:wrap;">
-                <label class="sx-case-a-cocher"><input type="checkbox" ${S.ot.familles ? 'checked' : ''}
-                  onchange="App.otBasculerFamilles(this.checked)">Regrouper par famille</label>
-                <label class="sx-case-a-cocher"><input type="checkbox" ${S.ot.masquer ? 'checked' : ''}
-                  onchange="S.ot.masquer=this.checked;App._otRendreTableControle()">Masquer les lignes sans quantité</label>
-              </div>
+          <div class="sx-principal" style="display:flex;flex-direction:column;gap:16px;">
+            <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:flex-end;">
+              <label class="sx-case-a-cocher"><input type="checkbox" ${S.ot.familles ? 'checked' : ''}
+                onchange="App.otBasculerFamilles(this.checked)">Regrouper les pièces par famille</label>
+              <label class="sx-case-a-cocher"><input type="checkbox" ${S.ot.masquer ? 'checked' : ''}
+                onchange="S.ot.masquer=this.checked;App._otRendreTableControle()">Masquer les lignes sans quantité</label>
             </div>
-            <div class="sx-table-boite" id="ot-table-ctrl"></div>
-            ${modif ? `<div style="padding:12px 14px;border-top:1px solid var(--sx-separateur);display:flex;flex-direction:column;gap:8px;">
+            <div id="ot-table-ctrl" style="display:flex;flex-direction:column;gap:16px;"></div>
+            ${modif ? `<div class="sx-carte" style="padding:12px 14px;display:flex;flex-direction:column;gap:8px;">
               <div class="sx-recherche">${_OT_SVG_LOUPE}
                 <label for="ot-rech-bureau" class="sx-sr">Ajouter une ligne</label>
                 <input id="ot-rech-bureau" type="search" placeholder="+ Ajouter une ligne (réf. ou désignation)" autocomplete="off"
@@ -1216,7 +1223,7 @@ Object.assign(App, {
               <span class="sx-aide">Quantités et montants modifiables. Un montant tapé remplace le tarif (case orange) ; ↺ ou case vidée = retour au tarif.
                 Une ligne sans quantité n'apparaît pas dans les documents.</span>
             </div>` : ''}
-          </section>
+          </div>
           <aside class="sx-cote" aria-label="Total et validation">
             <section class="sx-carte sx-carte-pad" style="display:flex;flex-direction:column;gap:4px;">
               <span class="sx-aide" style="font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Montant de l'OT</span>
@@ -1347,24 +1354,28 @@ Object.assign(App, {
     }
   },
 
-  // Groupes du tableau de contrôle. Regroupé : opérations d'office et forfaits, une famille de pièces
-  // (catégorie de la réf.) par groupe, travaux, sanitaire. Sinon : un seul groupe, dans l'ordre de saisie.
-  _otGroupesControle() {
-    const rang = { diverses: 0, pieces: 0, travaux: 1, sanitaire: 2 };
-    const lignes = S.ot.lignes.map((l, i) => ({ l, i }))
-      .filter(x => !S.ot.masquer || Number(x.l.quantite) > 0)
-      .sort((a, b) => rang[a.l.bloc] - rang[b.l.bloc] || a.i - b.i);
-    if (!S.ot.familles) return [{ cle: 'tout', titre: '', items: lignes }];
+  // Sections du contrôle = celles de la saisie (1. Pièces… 2. Sanitaire 3. Temps passé), lignes dans l'ordre de saisie.
+  _otSectionsControle() {
+    return [
+      { cle: 'p', titre: '1. Pièces, forfaits et opérations', aide: 'MO au tarif ; « Vu par LOXAM » = ligne des documents LOXAM', blocs: ['pieces', 'diverses'] },
+      { cle: 's', titre: '2. Sanitaire', aide: 'pièces refacturées au prix pièce ; la main-d\'œuvre pièces se calcule seule', blocs: ['sanitaire'] },
+      { cle: 't', titre: '3. Temps passé', aide: 'travail hors tarif, au temps', blocs: ['travaux'] },
+    ].map(s => ({ ...s, items: S.ot.lignes.map((l, i) => ({ l, i }))
+      .filter(x => s.blocs.includes(x.l.bloc) && (!S.ot.masquer || Number(x.l.quantite) > 0)) }));
+  },
+
+  // Section 1 regroupée par famille (case cochée) : opérations d'office et forfaits, puis une famille de pièces
+  // (catégorie de la réf.) par groupe. Sinon : un seul groupe sans titre.
+  _otGroupesControle(items) {
+    if (!S.ot.familles) return [{ cle: 'tout', titre: '', items }];
     const groupes = new Map();
     const ajouter = (cle, titre, ordre, x) => {
       if (!groupes.has(cle)) groupes.set(cle, { cle, titre, ordre, items: [] });
       groupes.get(cle).items.push(x);
     };
-    lignes.forEach(x => {
+    items.forEach(x => {
       const l = x.l;
       const r = S.ot.refs.get(l.ref);
-      if (l.bloc === 'sanitaire') return ajouter('sanitaire', 'Sanitaire', 9, x);
-      if (l.bloc === 'travaux')   return ajouter('travaux', 'Travaux en plus', 8, x);
       if (l.bloc === 'diverses' || S.ot.forfaits.has(l.ref) || /^SON-/.test(l.ref || ''))
         return ajouter('operations', 'Opérations et forfaits', 0, x);
       const fam = r && r.categorie && r.categorie !== '-' ? r.categorie : 'Autres pièces';
@@ -1378,7 +1389,6 @@ Object.assign(App, {
     if (!z) return;
     const modif = this._otModifiable();
     const dis = modif ? '' : 'disabled';
-    const nomsBlocs = { pieces: '', diverses: '', sanitaire: 'SANITAIRE', travaux: 'TRAVAUX' };
     const ligneHtml = ({ l, i }) => {
       const vide = !(Number(l.quantite) > 0);
       const r = S.ot.refs.get(l.ref);
@@ -1388,7 +1398,6 @@ Object.assign(App, {
       const sansTarif = l.ref && !forfait && !r;
       const manuel = l.mo_saisi !== null;
       const etiquettes = [
-        !S.ot.familles && nomsBlocs[l.bloc] ? `<span class="sx-etiquette sx-e-bloc">${nomsBlocs[l.bloc]}</span>` : '',
         l.occasion ? '<span class="sx-etiquette sx-e-occasion">OCCASION</span>' : '',
         forfait ? '<span class="sx-etiquette sx-e-bloc">FORFAIT</span>' : '',
         l.origine === 'bureau' ? '<span class="sx-etiquette sx-e-bloc">AJOUT BUREAU</span>' : '',
@@ -1413,20 +1422,31 @@ Object.assign(App, {
         <td>${modif ? `<button type="button" class="sx-retirer" aria-label="Supprimer la ligne" onclick="App._otRetirer(${i})">✕</button>` : ''}</td>
       </tr>`;
     };
-    const groupes = this._otGroupesControle();
-    S.ot.groupesAffiches = groupes.map(g => ({ cle: g.cle, indices: g.items.map(x => x.i) }));
-    const corps = groupes.map(g => (g.titre
-      ? `<tr class="sx-groupe"><td colspan="5">${_otEsc(g.titre)} <span class="sx-aide">· ${g.items.length}</span></td>
-           <td class="sx-num" id="ot-st-${_otEsc(g.cle)}"></td><td colspan="2"></td></tr>` : '')
-      + g.items.map(ligneHtml).join('')).join('');
-    z.innerHTML = `<table class="sx-table">
-      <thead><tr><th scope="col">Réf.</th><th scope="col">Description</th><th scope="col" class="sx-centre">Qté</th>
+    const tete = `<thead><tr><th scope="col">Réf.</th><th scope="col">Description</th><th scope="col" class="sx-centre">Qté</th>
         <th scope="col">Unité</th><th scope="col" class="sx-num">PU €</th><th scope="col" class="sx-num">Montant €</th>
-        <th scope="col">Vu par LOXAM</th><th scope="col"><span class="sx-sr">Supprimer</span></th></tr></thead>
-      <tbody>${corps || '<tr><td colspan="8" class="sx-centre sx-aide">Aucune ligne.</td></tr>'}
-        <tr class="sx-calculee" id="ot-ligne-mop"><td><span class="sx-ref">SON-0100</span></td><td>Main d'œuvre pièces (sanitaire, calculée)</td>
-          <td></td><td></td><td></td><td class="sx-num" id="ot-mop"></td><td><span class="sx-non">Non (code SON)</span></td><td></td></tr>
-      </tbody></table>`;
+        <th scope="col">Vu par LOXAM</th><th scope="col"><span class="sx-sr">Supprimer</span></th></tr></thead>`;
+    S.ot.groupesAffiches = [];
+    z.innerHTML = this._otSectionsControle().map(sec => {
+      const sanitaire = sec.cle === 's';
+      S.ot.groupesAffiches.push({ cle: 'sec-' + sec.cle, indices: sec.items.map(x => x.i), piece: sanitaire });
+      const groupes = sec.cle === 'p' ? this._otGroupesControle(sec.items) : [{ cle: 'tout', titre: '', items: sec.items }];
+      groupes.forEach(g => { if (g.titre) S.ot.groupesAffiches.push({ cle: g.cle, indices: g.items.map(x => x.i) }); });
+      const corps = groupes.map(g => (g.titre
+        ? `<tr class="sx-groupe"><td colspan="5">${_otEsc(g.titre)} <span class="sx-aide">· ${g.items.length}</span></td>
+             <td class="sx-num" id="ot-st-${_otEsc(g.cle)}"></td><td colspan="2"></td></tr>` : '')
+        + g.items.map(ligneHtml).join('')).join('');
+      const mop = sanitaire ? `<tr class="sx-calculee" id="ot-ligne-mop"><td><span class="sx-ref">SON-0100</span></td><td>Main d'œuvre pièces (calculée)</td>
+          <td></td><td></td><td></td><td class="sx-num" id="ot-mop"></td><td><span class="sx-non">Non (code SON)</span></td><td></td></tr>` : '';
+      return `<section class="sx-section" aria-labelledby="ot-ctrl-t-${sec.cle}">
+        <div class="sx-section-tete">
+          <h2 class="sx-h2" id="ot-ctrl-t-${sec.cle}">${sec.titre}</h2>
+          <span class="sx-aide" style="flex:1;">${sec.aide}</span>
+          <b class="sx-num" id="ot-st-sec-${sec.cle}"></b>
+        </div>
+        <div class="sx-carte sx-table-boite"><table class="sx-table">${tete}
+          <tbody>${corps || '<tr><td colspan="8" class="sx-centre sx-aide">Aucune ligne.</td></tr>'}${mop}</tbody></table></div>
+      </section>`;
+    }).join('');
     this._otMajMontants();
   },
 
@@ -1455,9 +1475,9 @@ Object.assign(App, {
       const el = document.getElementById('ot-st-' + g.cle);
       if (!el) return;
       if (!aJour) { el.textContent = '…'; return; }
-      const champ = g.cle === 'sanitaire' ? 'piece_ligne' : 'mo_ligne';
+      const champ = g.piece ? 'piece_ligne' : 'mo_ligne';
       const s = g.indices.reduce((t, i) => t + (Number(calc[i]?.[champ]) || 0), 0);
-      el.textContent = (g.cle === 'sanitaire' ? 'pièces ' : '') + _otEuros(s);
+      el.textContent = (g.piece ? 'pièces ' : '') + _otEuros(s);
     });
     const t = S.ot.fiche.totaux || {};
     const mop = document.getElementById('ot-mop');
