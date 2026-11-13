@@ -214,6 +214,19 @@ body.socle { background: var(--sx-fond); }
 .sx-statut-num { font-size: 15px; font-weight: 700; font-family: ui-monospace, Consolas, monospace; }
 .sx-statut-texte { font-size: 13px; }
 .sx-ot .sx-section-tete .sx-h2 { border-left: 4px solid var(--ot-c, var(--sx-bleu)); padding-left: 8px; }
+/* Bandeau dans l'en-tête bleu (reste visible au défilement) */
+.sx-entete .sx-statut { margin-top: 4px; padding: 6px 12px; border-radius: 10px; }
+.sx-entete .sx-statut-nom { font-size: 16px; }
+.sx-entete .sx-statut .sx-btn { min-height: 32px; padding: 0 12px; font-size: 13px; }
+/* Liste des fiches : titre de groupe en bandeau, filet de couleur sur chaque fiche */
+.sx-statut-groupe { padding: 8px 12px; }
+.sx-statut-groupe .sx-statut-nom { font-size: 16px; }
+.sx-ot-liste .sx-item { border-left: 5px solid var(--ot-c); }
+/* Tableur : en-tête plus haut avec le bandeau ; côté non collant au contrôle (plusieurs cartes) */
+.sx-ot .sx-rg-cote { top: 190px; }
+.sx-ot .sx-rg-cote.sx-rg-libre { position: static; }
+.sx-rg-saisie input.sx-rg-mo { text-align: right; }
+.sx-rg-saisie input.sx-rg-mo.sx-manuel { background: var(--sx-orange-fond); color: var(--sx-orange); font-weight: 700; }
 
 /* ── Listes cliquables ──────────────────────────────────────────────────── */
 .sx-item {

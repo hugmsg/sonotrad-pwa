@@ -95,7 +95,8 @@ Object.assign(App, {
     return d;
   },
 
-  _otEntete({ retour, titre, sousTitre = '', etat = '', logo = true, large = false }) {
+  // `bandeau` : bandeau de statut placé DANS l'en-tête (qui reste en haut au défilement).
+  _otEntete({ retour, titre, sousTitre = '', etat = '', logo = true, large = false, bandeau = '' }) {
     return `<header class="sx-entete"><div class="sx-entete-in${large ? ' sx-large' : ''}">
       <button type="button" class="sx-retour" onclick="${retour.action}">${_OT_SVG_RETOUR}${_otEsc(retour.texte)}</button>
       <div class="sx-titre-ligne">
@@ -106,6 +107,7 @@ Object.assign(App, {
         </div>
         ${etat ? `<span class="sx-etat" id="ot-etat">${_otEsc(etat)}</span>` : ''}
       </div>
+      ${bandeau}
     </div></header>`;
   },
 
@@ -176,8 +178,9 @@ Object.assign(App, {
     else corps = groupes.map(g => {
       const fiches = S.ot.liste.filter(f => g.statuts.includes(f.statut)).slice(0, g.max || 1e9);
       if (!fiches.length) return '';
-      return `<section class="sx-section">
-        <div class="sx-section-tete"><h2 class="sx-h2">${g.titre}</h2><span class="sx-aide">${fiches.length}</span></div>
+      // Couleur de l'étape (la même que le bandeau en tête de fiche) : titre en bandeau, filet sur chaque fiche.
+      return `<section class="sx-section sx-ot sx-ot-liste sx-ot-${g.statuts[0]}">
+        <div class="sx-statut sx-statut-groupe"><span class="sx-statut-nom">${g.titre}</span><span class="sx-statut-texte">${fiches.length} fiche${fiches.length > 1 ? 's' : ''}</span></div>
         <div class="sx-carte">${fiches.map(item).join('')}</div></section>`;
     }).join('');
 
@@ -358,8 +361,8 @@ Object.assign(App, {
     const el = document.getElementById('ot-fiche-root');
     const f = S.ot.fiche;
     if (!el || !f) return;
-    if (this._otVueControle()) { this._otRendreControle(); return; }
     if (S.ot.rapide && this._otRapideDispo()) { this._otRendreRapide(); return; }
+    if (this._otVueControle()) { this._otRendreControle(); return; }
     const modif = this._otModifiable();
     const nb = b => S.ot.lignes.filter(l => b.includes(l.bloc) && Number(l.quantite) > 0).length;
     const onglets = [
@@ -372,13 +375,13 @@ Object.assign(App, {
 
     el.innerHTML = `<div class="sx-ecran sx-ot sx-ot-${_otEsc(f.statut)}">
       ${this._otEntete({ retour: { texte: 'Fiches', action: 'App.otQuitterFiche()' }, titre: 'Fiche d\'opérations',
-          sousTitre: [titreModule, f.agence, f.code_planning].filter(Boolean).join(' · '), etat: S.ot.etat })}
+          sousTitre: [titreModule, f.agence, f.code_planning].filter(Boolean).join(' · '), etat: S.ot.etat,
+          bandeau: this._otBandeauStatut(f, this._otRapideDispo() ? '<button type="button" class="sx-btn sx-btn-discret" onclick="App.otBasculerSaisie()">Saisie rapide (clavier)</button>' : '') })}
       <div class="sx-onglets" role="tablist" aria-label="Blocs de la fiche">
         ${onglets.map(o => `<button type="button" class="sx-onglet" role="tab" aria-selected="${S.ot.onglet === o.cle}"
             onclick="App.otOnglet('${o.cle}')">${o.nom} · <span id="ot-n-${o.cle}">${o.n}</span></button>`).join('')}
       </div>
       <main class="sx-contenu">
-        ${this._otBandeauStatut(f, this._otRapideDispo() ? '<button type="button" class="sx-btn sx-btn-discret" onclick="App.otBasculerSaisie()">Saisie rapide (clavier)</button>' : '')}
         ${f.commentaire ? `<div class="sx-carte sx-carte-pad sx-aide" style="font-size:14px;">${_otEsc(f.commentaire)}</div>` : ''}
         ${modif ? '' : `<div class="sx-bandeau sx-bandeau-info">${f.statut === 'a_valider'
             ? 'Fiche envoyée à valider : elle n\'est plus modifiable. « Reprendre en brouillon » pour la corriger.'
@@ -514,7 +517,11 @@ Object.assign(App, {
   _otModifie(redessiner = true) {
     if (!this._otModifiable()) return;
     S.ot.rev++;
-    if (redessiner) { if (this._otVueControle()) this._otRendreTableControle(); else this._otRafraichirBlocs(); }
+    if (redessiner) {
+      if (document.getElementById('ot-rg-p')) this._otRgDessiner();
+      else if (this._otVueControle()) this._otRendreTableControle();
+      else this._otRafraichirBlocs();
+    }
     this._otAfficherEtat('Modifications non enregistrées');
     const pied = document.getElementById('ot-pied');
     if (pied) pied.innerHTML = this._otHtmlPied();
@@ -729,12 +736,15 @@ Object.assign(App, {
         </table></div>
       </section>`;
 
+    // Contrôle (administrateur, fiche à valider / validée) : même tableur que la saisie (demande de Hugo du 2026-11-13),
+    // avec le montant modifiable, le total du serveur, les documents. L'ancien tableau reste en « Vue tableau ».
+    const ctrl = this._otVueControle();
     el.innerHTML = `<div class="sx-ecran sx-ot sx-ot-${_otEsc(f.statut)}">
       ${this._otEntete({ retour: { texte: 'Fiches', action: 'App.otQuitterFiche()' }, titre: 'Fiche d\'opérations', large: true,
-          sousTitre: [titreModule, f.agence, f.code_planning].filter(Boolean).join(' · '), etat: S.ot.etat })}
+          sousTitre: [titreModule, f.agence, f.code_planning, ctrl && f.saisi_par ? 'saisi par ' + f.saisi_par : ''].filter(Boolean).join(' · '), etat: S.ot.etat,
+          bandeau: this._otBandeauStatut(f, `<button type="button" class="sx-btn sx-btn-discret" onclick="App.otBasculerSaisie()">${ctrl ? 'Vue tableau' : 'Saisie tactile'}</button>`) })}
       <main class="sx-contenu sx-large sx-rg-page">
         <div class="sx-rg-col">
-          ${this._otBandeauStatut(f, '<button type="button" class="sx-btn sx-btn-discret" onclick="App.otBasculerSaisie()">Saisie tactile</button>')}
           ${f.commentaire ? `<span class="sx-aide" style="font-size:13px;">${_otEsc(f.commentaire)}</span>` : ''}
           ${modif ? '' : `<div class="sx-bandeau sx-bandeau-info">${f.statut === 'a_valider'
               ? 'Fiche envoyée à valider : elle n\'est plus modifiable. « Reprendre en brouillon » pour la corriger.'
@@ -752,9 +762,21 @@ Object.assign(App, {
             <span class="sx-aide">Pour le bureau, pas pour LOXAM.</span>
           </div>
         </div>
-        <aside class="sx-rg-col sx-rg-cote">
+        <aside class="sx-rg-col sx-rg-cote${ctrl ? ' sx-rg-libre' : ''}">
+          ${ctrl ? `<section class="sx-carte sx-carte-pad" style="display:flex;flex-direction:column;gap:4px;">
+              <span class="sx-aide" style="font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Montant de l'OT</span>
+              <span class="sx-gros-montant" id="ot-ctrl-total"></span>
+              <span class="sx-aide" id="ot-ctrl-detail"></span>
+            </section>` : ''}
+          ${f.statut === 'a_valider' && ctrl ? `<section class="sx-bandeau sx-bandeau-info" style="display:flex;flex-direction:column;gap:4px;">
+              <strong>En validant (essai), la PWA va :</strong>
+              <span>1. attribuer un numéro ESSAI-… (la matrice garde les vrais) ;</span>
+              <span>2. figer les prix de chaque ligne ;</span>
+              <span>3. créer les documents : Excel LOXAM, Excel SONOTRAD et PDF.</span>
+            </section>` : ''}
+          ${ctrl && ['validee', 'envoyee'].includes(f.statut) ? this._otHtmlDocuments(f) : ''}
           <div class="sx-carte sx-carte-pad sx-rg-recap" id="ot-rg-recap"></div>
-          <div class="sx-carte sx-carte-pad sx-rg-touches">
+          ${modif ? `<div class="sx-carte sx-carte-pad sx-rg-touches">
             <span class="sx-h2" style="font-size:15px;">Au clavier</span>
             <dl>
               <dt><kbd>Entrée</kbd></dt><dd>case du dessous</dd>
@@ -767,7 +789,8 @@ Object.assign(App, {
               <dt><kbd>Ctrl</kbd>+<kbd>V</kbd></dt><dd>colle un bloc copié d'Excel (réf. [tab] qté)</dd>
             </dl>
             <span class="sx-aide">Une lettre seule (E, N, L…) est un forfait ; du texte cherche par désignation.</span>
-          </div>
+            ${this._otRgMoEdit() ? '<span class="sx-aide">Colonne MO : un montant tapé remplace le tarif (case orange) ; case vidée = retour au tarif.</span>' : ''}
+          </div>` : ''}
         </aside>
       </main>
       <div class="sx-rg-sugg" id="ot-rg-sugg" hidden></div>
@@ -775,6 +798,7 @@ Object.assign(App, {
     </div>`;
     this._otRgDessiner();
     this._otRgEcouter(el);
+    if (ctrl) this._otMajMontants();
     if (modif) setTimeout(() => this._otRgAller('p', S.ot.rgIdx.p.length - 1, 0), 30);
   },
 
@@ -789,6 +813,9 @@ Object.assign(App, {
       ? { bloc: 'travaux', ref: 'SON-0102', libelle: '', quantite: null, unite: 'h', occasion: false, origine: 'atelier', mo_saisi: null, prix_piece_saisi: null }
       : { bloc: g === 's' ? 'sanitaire' : 'pieces', ref: '', libelle: '', quantite: null, unite: 'u', occasion: false, origine: 'atelier', mo_saisi: null, prix_piece_saisi: null };
   },
+  // Montant de MO tapé au clavier (remplace le tarif) : administrateur, fiche modifiable ; pas en sanitaire.
+  _otRgMoEdit() { return this._otAdmin() && this._otModifiable(); },
+  _otRgMaxC(g) { return OT_RG_MAXC[g] + (g !== 's' && this._otRgMoEdit() ? 1 : 0); },
   _otRgVide(l) {
     return l.origine !== 'office' && !(Number(l.quantite) > 0) && !String(l.bloc === 'travaux' ? l.libelle || '' : l.ref || '').trim();
   },
@@ -839,8 +866,13 @@ Object.assign(App, {
   _otRgHtml(g) {
     const modif = this._otModifiable(), admin = this._otAdmin(), idx = S.ot.rgIdx[g];
     const ro = modif ? '' : ' readonly';
-    const prix = (pu, m, vide) => admin ? `<td class="sx-rg-d sx-rg-pu">${pu === null ? '' : _otPrix(pu)}</td>
-      <td class="sx-rg-d">${m === null ? `<span class="sx-aide">${vide}</span>` : _otPrix(m)}</td>` : '';
+    const moEdit = g !== 's' && this._otRgMoEdit();
+    const prix = (pu, m, vide, l, r) => !admin ? '' : `<td class="sx-rg-d sx-rg-pu">${pu === null ? '' : _otPrix(pu)}</td>`
+      + (moEdit && l
+        ? `<td class="sx-rg-saisie sx-rg-d"><input id="ot-rg-${g}-${r}-3" data-rg="${g}" data-r="${r}" data-c="3" class="sx-rg-mo${l.mo_saisi != null ? ' sx-manuel' : ''}"
+             value="${l.mo_saisi != null ? _otEsc(_otQte(l.mo_saisi)) : ''}" placeholder="${l.mo_saisi == null && m !== null ? _otPrix(m) : ''}" inputmode="decimal" autocomplete="off"
+             title="Montant tapé = remplace le tarif ; case vidée = retour au tarif" aria-label="MO ligne ${r + 1}"></td>`
+        : `<td class="sx-rg-d">${m === null ? `<span class="sx-aide">${vide}</span>` : _otPrix(m)}</td>`);
 
     if (g === 't') return idx.map((i, r) => {
       const l = i === null ? null : S.ot.lignes[i];
@@ -850,7 +882,7 @@ Object.assign(App, {
           placeholder="${l ? '' : 'nouvelle ligne'}" aria-label="Travaux ligne ${r + 1}"></td>
         <td class="sx-rg-saisie sx-rg-qte"><input id="ot-rg-t-${r}-1" data-rg="t" data-r="${r}" data-c="1" value="${_otEsc(_otQte(l ? l.quantite : ''))}" inputmode="decimal" autocomplete="off"${ro} aria-label="Durée ligne ${r + 1}"></td>
         <td class="sx-rg-saisie sx-rg-unite"><input id="ot-rg-t-${r}-2" data-rg="t" data-r="${r}" data-c="2" value="${_otEsc(l ? l.unite : 'h')}" readonly aria-label="Unité ligne ${r + 1} (h, m ou Espace)"></td>
-        ${l ? prix(this._otRgPu('t', l), this._otRgMontant('t', l), Number(l.quantite) > 0 ? 'au contrôle' : '') : prix(null, null, '')}
+        ${l ? prix(this._otRgPu('t', l), this._otRgMontant('t', l), Number(l.quantite) > 0 ? 'au contrôle' : '', l, r) : prix(null, null, '')}
       </tr>`;
     }).join('');
 
@@ -881,7 +913,7 @@ Object.assign(App, {
         <td class="sx-rg-unite sx-aide">${l && l.unite && l.unite !== 'u' && !f ? _otEsc(l.unite) : ''}</td>
         ${g === 'p' ? `<td class="sx-rg-occ"><button type="button" id="ot-rg-p-${r}-2" data-rg="p" data-r="${r}" data-c="2" class="sx-rg-occ-btn"
             aria-pressed="${!!(l && l.occasion)}" aria-disabled="${!(modif && occPossible)}" aria-label="Occasion ligne ${r + 1}">${l && l.occasion ? 'O' : ''}</button></td>` : ''}
-        ${l ? prix(this._otRgPu(g, l), this._otRgMontant(g, l), k && (f || tr) ? '—' : '') : prix(null, null, '')}
+        ${l ? prix(this._otRgPu(g, l), this._otRgMontant(g, l), k && (f || tr) ? '—' : '', l, r) : prix(null, null, '')}
       </tr>`;
     }).join('');
     if (g === 's' && admin) {
@@ -937,7 +969,7 @@ Object.assign(App, {
     const n = S.ot.rgIdx[g];
     if (cible) { const pos = n.findIndex(i => i !== null && S.ot.lignes[i] === cible); r = pos >= 0 ? pos : Math.min(r, n.length - 1); }
     else r = versBas ? n.length - 1 : Math.min(r, n.length - 1);
-    c = Math.max(0, Math.min(OT_RG_MAXC[g], c));
+    c = Math.max(0, Math.min(this._otRgMaxC(g), c));
     const el = document.getElementById(`ot-rg-${g}-${r}-${c}`) || document.getElementById(`ot-rg-${g}-${r}-0`);
     if (!el) return;
     el.focus();
@@ -954,6 +986,14 @@ Object.assign(App, {
     if (!this._otModifiable()) return;
     const g = el.dataset.rg, r = +el.dataset.r, c = +el.dataset.c;
     let l = this._otRgLigne(g, r);
+    if (c === 3) {                                   // MO tapée : remplace le tarif ; vide = retour au tarif
+      if (!l) return;
+      const n = parseFloat(el.value.replace(/\s/g, '').replace(',', '.'));
+      l.mo_saisi = el.value.trim() === '' || isNaN(n) ? null : Math.max(0, n);
+      el.classList.toggle('sx-manuel', l.mo_saisi !== null);
+      this._otModifie(false);
+      return;
+    }
     if (!l) {
       if (!el.value.trim()) return;
       l = this._otRgNouvelle(g);
@@ -1165,7 +1205,7 @@ Object.assign(App, {
     }
     if (k === 'Tab') {
       e.preventDefault();
-      const max = OT_RG_MAXC[g];
+      const max = this._otRgMaxC(g);
       if (e.shiftKey) { if (c > 0) this._otRgAller(g, r, c - 1); else if (r > 0) this._otRgAller(g, r - 1, max); }
       else if (c < max) this._otRgAller(g, r, c + 1);
       else this._otRgAller(g, r + 1, 0);
@@ -1173,7 +1213,7 @@ Object.assign(App, {
     }
     if (k === 'ArrowDown') { e.preventDefault(); this._otRgAller(g, r + 1, c); return; }
     if (k === 'ArrowUp') { e.preventDefault(); this._otRgAller(g, r - 1, c); return; }
-    if (k === 'ArrowRight' && fin && c < OT_RG_MAXC[g]) { e.preventDefault(); this._otRgAller(g, r, c + 1); return; }
+    if (k === 'ArrowRight' && fin && c < this._otRgMaxC(g)) { e.preventDefault(); this._otRgAller(g, r, c + 1); return; }
     if (k === 'ArrowLeft' && debut && c > 0) { e.preventDefault(); this._otRgAller(g, r, c - 1); }
   },
 
@@ -1200,9 +1240,9 @@ Object.assign(App, {
       ${this._otEntete({ retour: { texte: 'Fiches', action: 'App.otQuitterFiche()' },
           titre: [f.numero_ot || 'Contrôle', titreModule].filter(Boolean).join(' · '),
           sousTitre: [f.agence, 'code ' + f.code_planning, f.saisi_par ? 'saisi par ' + f.saisi_par : ''].filter(Boolean).join(' · '),
-          etat: S.ot.etat, large: true })}
+          etat: S.ot.etat, large: true,
+          bandeau: this._otBandeauStatut(f, this._otRapideDispo() ? '<button type="button" class="sx-btn sx-btn-discret" onclick="App.otBasculerSaisie()">Vue tableur</button>' : '') })}
       <main class="sx-contenu sx-large">
-        ${this._otBandeauStatut(f)}
         ${f.commentaire ? `<span class="sx-aide" style="font-size:13px;">${_otEsc(f.commentaire)}</span>` : ''}
         <div class="sx-colonnes">
           <div class="sx-principal" style="display:flex;flex-direction:column;gap:16px;">
