@@ -908,12 +908,12 @@ function _fetchWithTimeout(resource, options = {}, timeoutMs = 45000) {
     })
     .finally(() => clearTimeout(tid));
 }
-async function _post(url, payload) {
+async function _post(url, payload, timeoutMs = 60000) {
   // FormData évite le CORS preflight (multipart/form-data est une "simple request")
   // AppScript reçoit les données via e.parameter.payload
   const form = new FormData();
   form.append('payload', JSON.stringify(payload));
-  const r = await _fetchWithTimeout(url, { method: 'POST', body: form }, 60000);
+  const r = await _fetchWithTimeout(url, { method: 'POST', body: form }, timeoutMs);
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   const text = await r.text();
   try { return JSON.parse(text); } catch { return { status: 'ok', raw: text }; }

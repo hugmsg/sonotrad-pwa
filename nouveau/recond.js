@@ -33,6 +33,8 @@ const OT_STATUTS = {
   brouillon: 'Brouillon', a_valider: 'À valider', validee: 'Validée', envoyee: 'Envoyée', annulee: 'Annulée',
 };
 const OT_LOGO_LOXAM = 'Logo%20Loxam.png';
+// Validation / « Refaire les documents » : Apps Script crée 3 fichiers (Excel LOXAM, PDF, Excel SONOTRAD) → délai long
+const OT_DELAI_DOCUMENTS = 150000;
 
 function _otEsc(v) {
   return String(v ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
@@ -87,8 +89,8 @@ Object.assign(App, {
     if (d.status !== 'ok') throw new Error(d.error || 'Erreur serveur');
     return d;
   },
-  async _otPost(payload) {
-    const d = await _post(S.apiUrl, payload);
+  async _otPost(payload, timeoutMs) {
+    const d = await _post(S.apiUrl, payload, timeoutMs);
     if (d.status !== 'ok') { const e = new Error(d.error || 'Erreur serveur'); e.conflit = !!d.conflit; throw e; }
     return d;
   },
@@ -674,7 +676,7 @@ Object.assign(App, {
     if (t && !(await this._otConfirmer({ titre: t[0], texte: t[1], ok: t[2] }))) return;
     if (statut === 'validee') this.toast('⏳ Validation et création des documents…', 20000);
     try {
-      const d = await this._otPost({ action: 'ot_statut', id: f.id, statut });
+      const d = await this._otPost({ action: 'ot_statut', id: f.id, statut }, statut === 'validee' ? OT_DELAI_DOCUMENTS : undefined);
       if (d.fiche.documents_erreur) this.toast('Fiche validée, mais documents non créés : ' + d.fiche.documents_erreur + ' — « Créer les documents » pour réessayer', 7000);
       else this.toast('✓ ' + (OT_STATUTS[d.fiche.statut] || d.fiche.statut) + (d.fiche.numero_ot ? ' · ' + d.fiche.numero_ot : '') + (d.fiche.documents ? ' · documents créés' : ''));
       S.ot.listeChargee = false;
@@ -1266,7 +1268,7 @@ Object.assign(App, {
     const b = document.getElementById('ot-doc-refaire');
     if (b) { b.disabled = true; b.textContent = 'Création en cours…'; }
     try {
-      const d = await this._otPost({ action: 'ot_documents', id: f.id });
+      const d = await this._otPost({ action: 'ot_documents', id: f.id }, OT_DELAI_DOCUMENTS);
       S.ot.fiche = { ...S.ot.fiche, documents: d.documents };
       this.toast('✓ Documents créés');
     } catch (e) {
