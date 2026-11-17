@@ -588,3 +588,17 @@ body.pb-plein #view-prod-bureau.active { flex: 1; min-height: 0; display: flex; 
   .pb-aj-saisie { grid-template-columns: 1fr auto; } .pb-aj-saisie label { grid-column: 1 / -1; }
   .pb-aj-ligne { grid-template-columns: 80px 1fr 36px; } .pb-aj-ligne input { grid-column: 1 / -1; grid-row: 2; }
 }
+/* Ajouter au Planning : demandes à traiter */
+.pb-aj-actif { outline: 2px solid var(--sx-bleu); }
+.pb-aj-info { grid-column: 1 / -1; font-size: 12px; color: var(--sx-gris); }
+.pb-dem { border: 1px solid var(--sx-bord); border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.pb-dem summary { font-size: 14px; font-weight: 700; cursor: pointer; }
+.pb-dem[open] > * + * { margin-top: 6px; }
+.pb-dem-liste { max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.pb-dem-groupe { border-top: 1px solid var(--sx-separateur); padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.pb-dem-tete { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; font-size: 12.5px; }
+.pb-dem-desc { flex-basis: 100%; color: var(--sx-gris); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pb-dem-boutons { display: flex; flex-wrap: wrap; gap: 4px; }
+.pb-dem-btn { min-height: 32px; padding: 0 9px; border-radius: 8px; border: 1px solid var(--sx-bord-champ); background: #FFFFFF; color: var(--sx-texte); font-family: inherit; font-size: 12px; cursor: pointer; }
+.pb-dem-btn b { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.pb-dem-btn[aria-pressed="true"] { background: var(--sx-bleu); border-color: var(--sx-bleu); color: #FFFFFF; }

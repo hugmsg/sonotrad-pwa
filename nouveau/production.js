@@ -581,7 +581,7 @@ Object.assign(App, {
   },
 
   async prodFenetreAjout() {
-    const F = { modules: [], arrivees: null };
+    const F = { modules: [], arrivees: null, demandes: null, actif: null, q: '' };
     const voile = document.createElement('div');
     voile.className = 'sx-voile';
     voile.innerHTML = `<div class="sx-fenetre pb-fenetre" role="dialog" aria-modal="true" aria-labelledby="pb-aj-titre">
@@ -593,6 +593,12 @@ Object.assign(App, {
       </form>
       <div id="pb-aj-msg" class="sx-aide" role="status">Chargement des arrivées sur parc…</div>
       <div class="pb-aj-liste" id="pb-aj-liste"></div>
+      <details class="pb-dem" open>
+        <summary>Demandes LOXAM à traiter <span id="pb-dem-n" class="sx-aide"></span></summary>
+        <p class="sx-aide">Sans module ni code planning, pas parties. Un clic met le code dans le module surligné.</p>
+        <input id="pb-dem-q" class="sx-champ" type="search" placeholder="Filtrer : agence, chantier, module, mail, code…" aria-label="Filtrer les demandes">
+        <div id="pb-dem-liste" class="pb-dem-liste"><div class="sx-aide">Chargement des demandes…</div></div>
+      </details>
       <div class="pb-champs">
         <label>Code agence<input id="pb-aj-agence" class="sx-champ" inputmode="numeric" placeholder="ex. 7430 (vide = sans agence)"></label>
         <label>Livraison prévue<input id="pb-aj-liv" class="sx-champ" type="date"></label>
@@ -606,17 +612,59 @@ Object.assign(App, {
     const $ = sel => voile.querySelector(sel);
     const message = (texte, erreur) => { const m = $('#pb-aj-msg'); m.textContent = texte; m.classList.toggle('pb-erreur', !!erreur); };
     const dessiner = () => {
-      // garder les codes demande déjà tapés
-      voile.querySelectorAll('.pb-aj-dem').forEach(i => { const m = F.modules.find(x => x.code === i.dataset.code); if (m) m.codeDemande = i.value; });
-      $('#pb-aj-liste').innerHTML = F.modules.map(m => `<div class="pb-aj-ligne">
+      // (les codes demande tapés sont déjà dans F.modules : événement « input » plus bas)
+      if (!F.modules.some(m => m.code === F.actif)) F.actif = (F.modules.find(m => !m.codeDemande) || F.modules[0] || {}).code || null;
+      $('#pb-aj-liste').innerHTML = F.modules.map(m => {
+        const dm = (F.demandes || []).find(x => x.code === norm(m.codeDemande));
+        return `<div class="pb-aj-ligne${m.code === F.actif ? ' pb-aj-actif' : ''}">
         <span class="pb-code">${_otEsc(m.code)}</span><span>${_otEsc([m.type, m.numModule].filter(Boolean).join(' · '))}</span>
         <input class="sx-champ pb-aj-dem" data-code="${_otEsc(m.code)}" value="${_otEsc(m.codeDemande || '')}" placeholder="Code demande (option)" aria-label="Code demande pour ${_otEsc(m.code)}">
         <button type="button" class="pb-aj-retirer" data-retirer="${_otEsc(m.code)}" aria-label="Retirer ${_otEsc(m.code)}">✕</button>
-      </div>`).join('');
+        ${dm ? `<span class="pb-aj-info">${_otEsc([dm.chantier, dm.module, dm.livraison ? 'livr. ' + _fmtDateShort(dm.livraison) : '', dm.grutage ? 'grutage' : ''].filter(Boolean).join(' · '))}</span>` : ''}
+      </div>`;
+      }).join('');
+      dessinerDemandes();
       $('[data-r="1"]').disabled = !F.modules.length;
       $('[data-r="1"]').textContent = F.modules.length > 1 ? `Ajouter les ${F.modules.length}` : 'Ajouter';
     };
     const norm = v => String(v || '').trim().toUpperCase().replace(/\s+/g, '');
+    // Demandes à traiter, groupées par mail (même chantier, même mail = une commande LOXAM)
+    const dessinerDemandes = () => {
+      const el = $('#pb-dem-liste');
+      if (!F.demandes) return;
+      const prises = {};
+      F.modules.forEach(m => { if (m.codeDemande) prises[norm(m.codeDemande)] = m.code; });
+      const q = F.q.trim().toLowerCase();
+      const liste = F.demandes.filter(d => !q || [d.code, d.chantier, d.ag, d.module, d.description, d.mail].some(v => String(v || '').toLowerCase().includes(q)));
+      $('#pb-dem-n').textContent = '(' + F.demandes.length + ')';
+      if (!liste.length) { el.innerHTML = '<div class="sx-aide">' + (F.demandes.length ? 'Aucune demande ne correspond.' : 'Aucune demande à traiter.') + '</div>'; return; }
+      const groupes = [], parCle = {};
+      liste.forEach(d => {
+        const cle = d.chantier + '|' + d.mail;
+        if (!parCle[cle]) { parCle[cle] = { d, ls: [] }; groupes.push(parCle[cle]); }
+        parCle[cle].ls.push(d);
+      });
+      el.innerHTML = groupes.map(g => `<div class="pb-dem-groupe">
+        <div class="pb-dem-tete"><b>${_otEsc(g.d.chantier || 'Sans agence')}</b>
+          ${g.d.mail ? (g.d.mailUrl ? `<a href="${_otEsc(g.d.mailUrl)}" target="_blank" rel="noopener">${_otEsc(g.d.mail)}</a>` : `<span>${_otEsc(g.d.mail)}</span>`) : ''}
+          <span class="pb-dem-desc" title="${_otEsc(g.d.description)}">${_otEsc(g.d.description)}</span></div>
+        <div class="pb-dem-boutons">${g.ls.map(d => {
+          const prise = prises[d.code];
+          return `<button type="button" class="pb-dem-btn" data-dem="${_otEsc(d.code)}" ${prise ? 'aria-pressed="true"' : ''}
+            title="${_otEsc([d.code, d.module, d.livraison ? 'livraison ' + _fmtDateShort(d.livraison) : '', d.grutage ? 'grutage' : '', d.enCours ? 'déjà en cours' : ''].filter(Boolean).join(' · '))}">
+            <b>${_otEsc(d.code)}</b> ${_otEsc(d.module || '')}${d.livraison ? ' · ' + _otEsc(_fmtDateShort(d.livraison)) : ''}${d.grutage ? ' · grut.' : ''}${d.enCours ? ' · en cours' : ''}${prise ? ' → ' + _otEsc(prise) : ''}</button>`;
+        }).join('')}</div></div>`).join('');
+    };
+    const choisirDemande = codeDem => {
+      if (!F.modules.length) { message('Ajoutez d\'abord un module (code planning ou n° de module), puis choisissez sa demande.', true); $('#pb-aj-code').focus(); return; }
+      const deja = F.modules.find(m => norm(m.codeDemande) === codeDem);
+      if (deja) { deja.codeDemande = ''; F.actif = deja.code; dessiner(); return; }   // second clic = on la retire
+      const m = F.modules.find(x => x.code === F.actif) || F.modules[0];
+      m.codeDemande = codeDem;
+      F.actif = (F.modules.find(x => !x.codeDemande) || m).code;
+      dessiner();
+      message(codeDem + ' → ' + m.code + '.', false);
+    };
     const verifier = () => {
       const saisie = norm($('#pb-aj-code').value);
       if (!saisie) return;
@@ -641,14 +689,29 @@ Object.assign(App, {
       $('#pb-aj-code').focus();
     };
     $('#pb-aj-form').addEventListener('submit', e => { e.preventDefault(); verifier(); });
+    $('#pb-dem-q').addEventListener('input', e => { F.q = e.target.value; dessinerDemandes(); });
+    voile.addEventListener('focusin', e => {
+      const i = e.target.closest('.pb-aj-dem');
+      if (i && F.actif !== i.dataset.code) {
+        F.actif = i.dataset.code;
+        voile.querySelectorAll('.pb-aj-ligne').forEach(l => l.classList.toggle('pb-aj-actif', l.querySelector('.pb-aj-dem') === i));
+      }
+    });
+    voile.addEventListener('input', e => {
+      const i = e.target.closest('.pb-aj-dem');
+      if (!i) return;
+      const m = F.modules.find(x => x.code === i.dataset.code);
+      if (m) { m.codeDemande = i.value; dessinerDemandes(); }
+    });
     voile.addEventListener('click', async e => {
       if (e.target === voile) return voile.remove();
+      const dem = e.target.closest('[data-dem]');
+      if (dem) { choisirDemande(dem.dataset.dem); return; }
       const ret = e.target.closest('[data-retirer]');
       if (ret) { F.modules = F.modules.filter(m => m.code !== ret.dataset.retirer); dessiner(); return; }
       const b = e.target.closest('[data-r]');
       if (!b) return;
       if (b.dataset.r === '0') return voile.remove();
-      dessiner();
       const val = id => ($('#' + id).value || '').trim();
       const lignes = F.modules.map(m => ({ code: m.code, agence: val('pb-aj-agence'), description: val('pb-aj-desc'),
         livraison: val('pb-aj-liv'), codeDemande: (m.codeDemande || '').trim() }));
@@ -658,6 +721,9 @@ Object.assign(App, {
     });
     document.body.appendChild(voile);
     $('#pb-aj-code').focus();
+    this._otGet({ action: 'demandes_a_traiter' }, 40000)
+      .then(d => { F.demandes = d.demandes || []; dessiner(); })
+      .catch(e => { $('#pb-dem-liste').innerHTML = '<div class="sx-aide pb-erreur">Demandes indisponibles : ' + _otEsc(e.message) + '</div>'; });
     try {
       if (!S.depsLoaded) await this._pbChargerProduction();
       F.arrivees = (await this._pbArriveesSurParc()).filter(a => !a.isParti);
