@@ -605,3 +605,8 @@ body.pb-plein #view-prod-bureau.active { flex: 1; min-height: 0; display: flex; 
 .pb-dem-item:hover, .pb-dem-item:focus-visible { background: var(--sx-bleu-clair); }
 .pb-dem-l1 { font-size: 13px; } .pb-dem-l1 b { font-family: 'JetBrains Mono', ui-monospace, monospace; }
 .pb-dem-l2 { font-size: 12px; color: var(--sx-gris); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Arrivées : totaux sur parc par type (comme les lignes 4-5 du Sheet) */
+.pb-total { height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--sx-bord); background: #FFFFFF; color: var(--sx-texte); font-family: inherit; font-size: 12.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.pb-total b { font-variant-numeric: tabular-nums; color: var(--sx-bleu); }
+.pb-total[aria-pressed="true"] { background: var(--sx-bleu); border-color: var(--sx-bleu); color: #FFFFFF; } .pb-total[aria-pressed="true"] b { color: #FFFFFF; }
+.pb-total-somme { cursor: default; background: var(--sx-bleu-clair); font-weight: 700; }

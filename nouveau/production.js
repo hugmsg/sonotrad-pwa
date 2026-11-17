@@ -365,7 +365,7 @@ Object.assign(App, {
   },
 
   async _pbArrCharger(force = false) {
-    const A = S.pb.arr = S.pb.arr || { donnees: null, chargement: false, statut: 'tous', annee: '', agence: '', type: '', q: '', mois: PB_MOIS_PAR_PAGE };
+    const A = S.pb.arr = S.pb.arr || { donnees: null, chargement: false, statuts: [], annee: '', agence: '', type: '', q: '', mois: PB_MOIS_PAR_PAGE };
     const attentes = [];
     if ((force || !A.donnees) && !A.chargement) {
       A.chargement = true;
@@ -374,6 +374,7 @@ Object.assign(App, {
           const r = await _fetchWithTimeout(S.apiUrl + '?action=arrivals', {}, 90000);
           const d = await r.json();
           A.donnees = Array.isArray(d) ? d : (d.data || []);
+          A.resume = (d && d.summary && Object.keys(d.summary).length) ? d.summary : null;   // totaux par type du Sheet (lignes 4-5)
         } catch (e) { this.toast('Arrivées indisponibles : ' + e.message, 4000); A.donnees = A.donnees || []; }
         finally { A.chargement = false; }
       })());
@@ -394,6 +395,15 @@ Object.assign(App, {
     if (champ === 'q') { clearTimeout(this._pbMinuterie); this._pbMinuterie = setTimeout(() => this._pbArrRendreCorps(), 120); return; }
     this._pbRendre();
   },
+  // Statuts cumulables (« Toutes » = aucun choisi)
+  prodArrStatut(cle) {
+    const A = S.pb.arr, E = A.statuts = A.statuts || [];
+    if (cle === 'tous') E.length = 0;
+    else { const i = E.indexOf(cle); if (i >= 0) E.splice(i, 1); else E.push(cle); }
+    A.mois = PB_MOIS_PAR_PAGE;
+    this._pbRendre();
+  },
+  prodArrType(t) { const A = S.pb.arr; A.type = A.type === t ? '' : t; A.mois = PB_MOIS_PAR_PAGE; this._pbRendre(); },
   prodArrPlus() { S.pb.arr.mois += PB_MOIS_PAR_PAGE; this._pbArrRendreCorps(); },
 
   // Une ligne par arrivée, avec ce que le Planning et les fiches en disent
@@ -430,19 +440,19 @@ Object.assign(App, {
       if (A.type && (l.a.type || '') !== A.type) return false;
       if (q && ![l.a.code, l.a.numModule, l.a.agence, l.a.destination, l.a.lv, l.pl?.d.chantier, l.pl?.d.lv, l.fiche?.numero_ot, l.a.numSerie]
         .some(v => String(v || '').toLowerCase().includes(q))) return false;
-      if (sansStatut) return true;
-      if (A.statut === 'parc') return !l.parti && !l.horsPlanning;
-      if (A.statut === 'partis') return l.parti;
-      if (A.statut === 'horsplanning') return l.horsPlanning;
-      if (A.statut === 'sansot') return l.otAFaire;
-      return true;
+      const st = A.statuts || [];
+      if (sansStatut || !st.length) return true;
+      return (st.includes('parc') && !l.parti && !l.horsPlanning)
+        || (st.includes('partis') && l.parti)
+        || (st.includes('horsplanning') && l.horsPlanning)
+        || (st.includes('sansot') && l.otAFaire);
     });
   },
 
   _pbArrRendre() {
     const el = document.getElementById('prod-bureau-root');
     if (!el) return;
-    if (!S.pb.arr) S.pb.arr = { donnees: null, chargement: false, statut: 'tous', annee: '', agence: '', type: '', q: '', mois: PB_MOIS_PAR_PAGE };
+    if (!S.pb.arr) S.pb.arr = { donnees: null, chargement: false, statuts: [], annee: '', agence: '', type: '', q: '', mois: PB_MOIS_PAR_PAGE };
     const A = S.pb.arr;
     const pret = !!A.donnees && S.depsLoaded;
     const toutes = pret ? this._pbArrLignes() : [];
@@ -457,7 +467,17 @@ Object.assign(App, {
       horsplanning: base.filter(l => l.horsPlanning).length,
       sansot: base.filter(l => l.otAFaire).length,
     };
-    const onglet = (cle, nom) => `<button type="button" class="pb-onglet" aria-pressed="${A.statut === cle}" onclick="App.prodArr('statut','${cle}')">${nom} <b>${pret ? n[cle] : '…'}</b></button>`;
+    const st = A.statuts || [];
+    const onglet = (cle, nom) => `<button type="button" class="pb-onglet" aria-pressed="${cle === 'tous' ? !st.length : st.includes(cle)}" onclick="App.prodArrStatut('${cle}')">${nom} <b>${pret ? n[cle] : '…'}</b></button>`;
+    // Totaux sur parc par type : ceux du Sheet (lignes 4-5 d'Arrivées), sinon recomptés (arrivées non parties)
+    let totaux = A.resume ? Object.entries(A.resume) : null;
+    if (!totaux && pret) {
+      const c = {};
+      toutes.filter(l => !l.parti).forEach(l => { const t = l.a.type || '?'; c[t] = (c[t] || 0) + 1; });
+      totaux = Object.entries(c);
+    }
+    totaux = (totaux || []).filter(([, v]) => Number(v) > 0);   // ordre des colonnes du Sheet
+    const totalParc = totaux.reduce((t, [, v]) => t + Number(v), 0);
     const select = (champ, id, libelle, options, tous) => `<label for="${id}" class="pb-etiquette">${libelle}</label>
       <select id="${id}" class="pb-select" onchange="App.prodArr('${champ}', this.value)">
         <option value="">${tous}</option>${options.map(o => `<option${String(A[champ]) === String(o) ? ' selected' : ''}>${_otEsc(o)}</option>`).join('')}
@@ -481,6 +501,11 @@ Object.assign(App, {
           ${n.horsplanning || !pret ? onglet('horsplanning', 'Pas au Planning') : ''}
           ${Array.isArray(S.pb.fiches) && n.sansot ? onglet('sansot', 'Partis sans OT') : ''}
         </div>
+        ${totaux.length ? `<div class="pb-ligne pb-defile pb-totaux" role="group" aria-label="Sur parc par type">
+          <span class="pb-etiquette">Sur parc par type :</span>
+          ${totaux.map(([t, v]) => `<button type="button" class="pb-total" aria-pressed="${A.type === t}" onclick="App.prodArrType('${_otEsc(t).replace(/'/g, '&#39;')}')" title="Filtrer sur ${_otEsc(t)}">${_otEsc(t)} <b>${Number(v)}</b></button>`).join('')}
+          <span class="pb-total pb-total-somme">Total <b>${totalParc}</b></span>
+        </div>` : ''}
       </div></div>
       <main class="pb-contenu" id="pb-corps"></main>
     </div>`;
