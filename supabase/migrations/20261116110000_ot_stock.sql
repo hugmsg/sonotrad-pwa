@@ -122,7 +122,6 @@ BEGIN
     END IF;
     UPDATE ot_lignes l SET mo_unitaire = c.mo_unitaire, prix_piece_unitaire = c.prix_piece_unitaire
       FROM _ot_lignes_calcul(p_id) c WHERE c.id = l.id;
-    -- Une fiche numérotée en essai reçoit un vrai numéro si elle est revalidée hors essai.
     IF v_f.numero_ot IS NULL OR (v_f.numero_ot LIKE 'ESSAI-%' AND _ot_parametre('essai') <> 1) THEN
       PERFORM pg_advisory_xact_lock(hashtext('ot_numero'));
       v_jour := to_char(now() AT TIME ZONE 'Europe/Paris', 'YYMMDD');
