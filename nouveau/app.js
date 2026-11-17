@@ -383,7 +383,12 @@ const App = {
     const rhCard = document.getElementById('rh-home-card');
     if (rhCard) rhCard.style.display = isAdmin ? '' : 'none';
     const recondCard = document.getElementById('recond-home-card');
-    if (recondCard) recondCard.style.display = (isAdmin || (S.currentUser?.activites || []).includes('recond')) ? '' : 'none';
+    // Reconditionnement : carte dans l'activité LOXAM ; sur l'accueil seulement pour qui n'a pas LOXAM.
+    const acts = S.currentUser?.activites || [];
+    const recondOk = isAdmin || acts.includes('recond');
+    if (recondCard) recondCard.style.display = recondOk && !isAdmin && !acts.includes('loxam') ? '' : 'none';
+    const lxRecondCard = document.getElementById('lxmenu-recond-card');
+    if (lxRecondCard) lxRecondCard.style.display = recondOk ? '' : 'none';
     const fillTestBtn = document.getElementById('btn-fill-test');
     if (fillTestBtn) fillTestBtn.style.display = isAdmin ? '' : 'none';
 

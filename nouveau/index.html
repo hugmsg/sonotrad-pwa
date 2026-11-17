@@ -266,12 +266,12 @@
           <span class="activity-badge" style="background:#FEF3C7;color:#92400E;">Admin</span>
         </div>
 
-        <!-- Reconditionnement — fiches d'opérations (essai) : admins + activité « recond » -->
+        <!-- Reconditionnement — fiches d'opérations : dans l'activité LOXAM depuis le 2026-11-17 ; cette carte d'accueil
+             ne sert qu'à qui a « recond » sans « loxam » (voir app.js) -->
         <div class="activity-card" id="recond-home-card" data-ready="true" onclick="App.otOuvrirActivite()" style="display:none;">
           <div class="activity-icon">🔧</div>
           <div class="activity-name">Reconditionnement</div>
           <div class="activity-desc">Fiches d'opérations sur module</div>
-          <span class="activity-badge" style="background:#FFF6D6;color:#8A4B08;">Essai</span>
         </div>
 
         <!-- Admin — visible uniquement pour role=admin -->
@@ -505,6 +505,12 @@
             <div class="activity-name">Stock PIDEM</div>
             <div class="activity-desc">Tableau · Catalogue · Historique</div>
             <span id="lxmenu-badge-stock" class="activity-badge badge-active">● Actif</span>
+          </div>
+          <!-- Reconditionnement (fiches d'opérations) : admins + activité « recond » -->
+          <div class="activity-card" id="lxmenu-recond-card" data-ready="true" onclick="App.otOuvrirActivite('loxam')" style="display:none;grid-column:1/-1;">
+            <div class="activity-icon">🔧</div>
+            <div class="activity-name">Reconditionnement</div>
+            <div class="activity-desc">Fiches d'opérations · Tableau de bord</div>
           </div>
         </div>
       </div>

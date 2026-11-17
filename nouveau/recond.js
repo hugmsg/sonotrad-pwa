@@ -72,8 +72,10 @@ const _OT_SVG_LOUPE  = '<svg width="18" height="18" viewBox="0 0 24 24" fill="no
 Object.assign(App, {
 
   /* ─ Entrée depuis l'accueil ─ */
-  otOuvrirActivite() {
+  // depuis = 'loxam' (carte de l'activité LOXAM) : le retour de la liste ramène au menu LOXAM.
+  otOuvrirActivite(depuis) {
     if (!this._otAutorise()) { this.toast('⛔ Vous n\'avez pas accès au reconditionnement'); return; }
+    S.ot.retour = depuis === 'loxam' ? 'loxam' : 'accueil';
     S.activity = 'recond';
     S.ot.choix = false;
     this.go('ot-liste');
@@ -188,7 +190,7 @@ Object.assign(App, {
     }).join('');
 
     el.innerHTML = `<div class="sx-ecran">
-      ${this._otEntete({ retour: { texte: 'Accueil', action: 'App.goHome()' }, titre: 'Fiches d\'opérations', sousTitre: 'Reconditionnement' + (this._otEssai() ? ' · essai' : '') })}
+      ${this._otEntete({ retour: S.ot.retour === 'loxam' ? { texte: 'LOXAM', action: 'App.go(\'loxam-menu\')' } : { texte: 'Accueil', action: 'App.goHome()' }, titre: 'Fiches d\'opérations', sousTitre: 'Reconditionnement' + (this._otEssai() ? ' · essai' : '') })}
       <main class="sx-contenu">
         ${this._otEssai() ? '<div class="sx-bandeau sx-bandeau-info">Essai : la fiche ne sort rien du stock (la 🔧 reste la vraie sortie) et la matrice Excel garde les vrais numéros d\'OT.</div>' : ''}
         <button type="button" class="sx-btn sx-btn-principal sx-btn-plein" onclick="App.otNouvelle()">+ Nouvelle fiche</button>
