@@ -561,3 +561,13 @@ body.pb-plein #view-prod-bureau.active { flex: 1; min-height: 0; display: flex; 
   .pb-barre-in { padding: 8px 12px; gap: 6px; }
   .pb-contenu { padding: 8px 8px 8px; }
 }
+/* Production : bascule Production / Arrivées (dans l'en-tête) et onglet Arrivées */
+.pb-nav { display: flex; gap: 4px; margin-top: 4px; }
+.pb-nav-btn { height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,.35); background: transparent; color: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.pb-nav-btn[aria-pressed="true"] { background: #FFFFFF; color: var(--sx-bleu); border-color: #FFFFFF; font-weight: 700; }
+.pb-grille-arr { display: grid; grid-template-columns: 112px 100px 84px 76px minmax(150px, .8fr) 170px 74px minmax(160px, 1fr) 128px 136px 74px; align-items: center; column-gap: 10px; padding: 0 12px; }
+.pb-statut { font-size: 12px; font-weight: 700; border-radius: 5px; padding: 2px 7px; white-space: nowrap; }
+.pb-statut-parc { background: #DCE8FA; color: #0B3A7A; }
+.pb-statut-parti { background: #EEF1F5; color: #3D4B5C; font-weight: 600; }
+.pb-statut-horsplanning { background: #FFF4D1; color: #7A4E00; }
+.pb-plus { display: block; width: 100%; padding: 14px; border: 0; border-top: 1px solid var(--sx-separateur); background: #FFFFFF; color: var(--sx-bleu); font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }

@@ -200,6 +200,7 @@ Object.assign(App, {
   _pbRendre() {
     const el = document.getElementById('prod-bureau-root');
     if (!el) return;
+    if (S.pb.vue === 'arr') return this._pbArrRendre();
     const P = S.pb;
     const pret = S.depsLoaded;
     const lignes = pret ? this._pbLignes() : [];
@@ -221,7 +222,7 @@ Object.assign(App, {
 
     el.innerHTML = `<div class="sx-ecran pb-ecran">
       ${this._otEntete({ retour: { texte: 'LOXAM', action: 'App.go(\'loxam-menu\')' }, titre: 'Production',
-        sousTitre: (pret ? surParc + ' modules sur parc · ' : '') + maj, large: true })}
+        sousTitre: (pret ? surParc + ' modules sur parc · ' : '') + maj, large: true, bandeau: this._pbNav('prod') })}
       <div class="pb-barre"><div class="pb-barre-in">
         <div class="pb-ligne">
           <div class="sx-recherche pb-recherche">${_OT_SVG_LOUPE}
@@ -299,7 +300,7 @@ Object.assign(App, {
     const rang = (PB_ETAPES.find(e => e.cle === l.etape) || {}).rang || 0;
     const barre = [1, 2, 3, 4, 5, 6].map(i => `<span class="pb-seg${i <= rang ? ' pb-seg-' + rang : ''}"></span>`).join('');
     const nomEtape = l.etape === 'decote' ? 'De côté' : (PB_ETAPES.find(e => e.cle === l.etape) || {}).nom;
-    const duree = l.parti ? 'parti le ' + _fmtDateShort(d.fin) : _duration(d.debut, null);
+    const duree = l.parti ? 'fini le ' + _fmtDateShort(d.fin) : _duration(d.debut, null);
     const liv = d.livraisonPrevue ? _fmtDateShort(d.livraisonPrevue) : '—';
     let ot = '<span class="pb-gris">—</span>';
     if (Array.isArray(S.pb.fiches)) {
@@ -328,5 +329,239 @@ Object.assign(App, {
       <span class="pb-docs">${docs}</span>
       <button type="button" class="pb-poses" onclick="App.prodPoses(${l.parti}, ${l.idx})" title="Fiche d'opérations : saisir les poses">${_PB_SVG_CLE}Poses</button>
     </div>`;
+  },
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Arrivées (historique) — onglet « Arrivées » du Planning : tout le parc, sur place et parti,
+   croisé avec le Planning (étape, LV de départ, chantier) et les fiches d'opérations.
+   Source : `arrivals` sans scope (toutes les lignes), déjà servie par masterfile.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const PB_MOIS_PAR_PAGE = 3;
+
+Object.assign(App, {
+
+  _pbNav(actif) {
+    const b = (cle, texte) => `<button type="button" class="pb-nav-btn" aria-pressed="${actif === cle}" onclick="App.prodVue('${cle}')">${texte}</button>`;
+    return `<nav class="pb-nav" aria-label="Vues">${b('prod', 'Production')}${b('arr', 'Arrivées (historique)')}</nav>`;
+  },
+
+  prodVue(v) {
+    S.pb.vue = v;
+    this._pbRendre();
+    if (v === 'arr') this._pbArrCharger();
+    else this.prodBureauInit();
+  },
+
+  async _pbArrCharger(force = false) {
+    const A = S.pb.arr = S.pb.arr || { donnees: null, chargement: false, statut: 'tous', annee: '', agence: '', type: '', q: '', mois: PB_MOIS_PAR_PAGE };
+    const attentes = [];
+    if ((force || !A.donnees) && !A.chargement) {
+      A.chargement = true;
+      attentes.push((async () => {
+        try {
+          const r = await _fetchWithTimeout(S.apiUrl + '?action=arrivals', {}, 90000);
+          const d = await r.json();
+          A.donnees = Array.isArray(d) ? d : (d.data || []);
+        } catch (e) { this.toast('Arrivées indisponibles : ' + e.message, 4000); A.donnees = A.donnees || []; }
+        finally { A.chargement = false; }
+      })());
+    }
+    if (force || (!S.depsLoaded && !S.depsLoading)) attentes.push(this._pbChargerProduction());
+    if (force || !S.archiveLoaded) attentes.push(this._pbChargerArchive());
+    if ((force || S.pb.fiches === null) && !S.pb.fichesChargement && this._otAutorise()) attentes.push(this._pbChargerFiches());
+    if (!attentes.length) return;
+    this._pbRendre();
+    await Promise.allSettled(attentes);
+    this._pbRendre();
+  },
+
+  prodArr(champ, v) {
+    const A = S.pb.arr;
+    A[champ] = v;
+    A.mois = PB_MOIS_PAR_PAGE;
+    if (champ === 'q') { clearTimeout(this._pbMinuterie); this._pbMinuterie = setTimeout(() => this._pbArrRendreCorps(), 120); return; }
+    this._pbRendre();
+  },
+  prodArrPlus() { S.pb.arr.mois += PB_MOIS_PAR_PAGE; this._pbArrRendreCorps(); },
+
+  // Une ligne par arrivée, avec ce que le Planning et les fiches en disent
+  _pbArrLignes() {
+    const A = S.pb.arr;
+    const actifs = new Map((S.deps || []).map((d, i) => [String(d.code || '').toUpperCase(), { d, i }]));
+    const partis = new Map((S.archive || []).map((d, i) => [String(d.code || '').toUpperCase(), { d, i }]));
+    const fiches = this._pbFichesParCode();
+    const debutOt = new Date(PB_DEBUT_OT);
+    return (A.donnees || []).map(a => {
+      const code = String(a.code || '').toUpperCase();
+      const act = actifs.get(code), par = partis.get(code);
+      const pl = act || par || null;
+      const parti = !!par || (!act && !!a.isParti);
+      const date = a.dateArrivee ? new Date(a.dateArrivee) : null;
+      const f = fiches[code] || null;
+      const fin = par && par.d.fin ? new Date(par.d.fin) : null;
+      const otAFaire = !!par && fin && !isNaN(fin) && fin >= debutOt && (!f || f.statut === 'brouillon' || f.statut === 'a_valider');
+      let statut;
+      if (act) statut = { texte: 'Sur parc · ' + ((PB_ETAPES.find(e => e.cle === this._pbEtape(act.d, false)) || {}).nom || ''), classe: 'parc' };
+      else if (parti) statut = { texte: 'Parti', classe: 'parti' };
+      else statut = { texte: 'Pas au Planning', classe: 'horsplanning' };
+      return { a, code, date: date && !isNaN(date) ? date : null, pl, parti, statut, fiche: f, otAFaire,
+        horsPlanning: !pl && !a.isParti };
+    });
+  },
+
+  _pbArrFiltrees(lignes, sansStatut = false) {
+    const A = S.pb.arr;
+    const q = A.q.trim().toLowerCase();
+    return lignes.filter(l => {
+      if (A.annee && (!l.date || String(l.date.getFullYear()) !== A.annee)) return false;
+      if (A.agence && (l.a.agence || '') !== A.agence) return false;
+      if (A.type && (l.a.type || '') !== A.type) return false;
+      if (q && ![l.a.code, l.a.numModule, l.a.agence, l.a.destination, l.a.lv, l.pl?.d.chantier, l.pl?.d.lv, l.fiche?.numero_ot, l.a.numSerie]
+        .some(v => String(v || '').toLowerCase().includes(q))) return false;
+      if (sansStatut) return true;
+      if (A.statut === 'parc') return !l.parti && !l.horsPlanning;
+      if (A.statut === 'partis') return l.parti;
+      if (A.statut === 'horsplanning') return l.horsPlanning;
+      if (A.statut === 'sansot') return l.otAFaire;
+      return true;
+    });
+  },
+
+  _pbArrRendre() {
+    const el = document.getElementById('prod-bureau-root');
+    if (!el) return;
+    if (!S.pb.arr) S.pb.arr = { donnees: null, chargement: false, statut: 'tous', annee: '', agence: '', type: '', q: '', mois: PB_MOIS_PAR_PAGE };
+    const A = S.pb.arr;
+    const pret = !!A.donnees && S.depsLoaded;
+    const toutes = pret ? this._pbArrLignes() : [];
+    const base = this._pbArrFiltrees(toutes, true);
+    const annees = [...new Set(toutes.map(l => l.date && l.date.getFullYear()).filter(Boolean))].sort((a, b) => b - a);
+    const agences = [...new Set(toutes.map(l => l.a.agence).filter(Boolean))].sort();
+    const types = [...new Set(toutes.map(l => l.a.type).filter(Boolean))].sort();
+    const n = {
+      tous: base.length,
+      parc: base.filter(l => !l.parti && !l.horsPlanning).length,
+      partis: base.filter(l => l.parti).length,
+      horsplanning: base.filter(l => l.horsPlanning).length,
+      sansot: base.filter(l => l.otAFaire).length,
+    };
+    const onglet = (cle, nom) => `<button type="button" class="pb-onglet" aria-pressed="${A.statut === cle}" onclick="App.prodArr('statut','${cle}')">${nom} <b>${pret ? n[cle] : '…'}</b></button>`;
+    const select = (champ, id, libelle, options, tous) => `<label for="${id}" class="pb-etiquette">${libelle}</label>
+      <select id="${id}" class="pb-select" onchange="App.prodArr('${champ}', this.value)">
+        <option value="">${tous}</option>${options.map(o => `<option${String(A[champ]) === String(o) ? ' selected' : ''}>${_otEsc(o)}</option>`).join('')}
+      </select>`;
+    el.innerHTML = `<div class="sx-ecran pb-ecran">
+      ${this._otEntete({ retour: { texte: 'LOXAM', action: 'App.go(\'loxam-menu\')' }, titre: 'Production',
+        sousTitre: pret ? toutes.length + ' arrivées enregistrées' : 'chargement des arrivées…', large: true, bandeau: this._pbNav('arr') })}
+      <div class="pb-barre"><div class="pb-barre-in">
+        <div class="pb-ligne">
+          <div class="sx-recherche pb-recherche">${_OT_SVG_LOUPE}
+            <label for="pb-aq" class="sx-sr">Rechercher</label>
+            <input id="pb-aq" type="search" placeholder="Code, n° module, n° de série, agence, chantier, LV, n° OT…" value="${_otEsc(A.q)}" oninput="App.prodArr('q', this.value)">
+          </div>
+          ${select('annee', 'pb-an', 'Année', annees, 'Toutes')}
+          ${select('agence', 'pb-ag', 'Provenance', agences, 'Toutes')}
+          ${select('type', 'pb-ty', 'Type', types, 'Tous')}
+          <button type="button" class="pb-bouton" onclick="App._pbArrCharger(true)">Actualiser</button>
+        </div>
+        <div class="pb-ligne pb-defile" role="group" aria-label="Statut">
+          ${onglet('tous', 'Toutes')}${onglet('parc', 'Sur parc')}${onglet('partis', 'Partis')}
+          ${n.horsplanning || !pret ? onglet('horsplanning', 'Pas au Planning') : ''}
+          ${Array.isArray(S.pb.fiches) && n.sansot ? onglet('sansot', 'Partis sans OT') : ''}
+        </div>
+      </div></div>
+      <main class="pb-contenu" id="pb-corps"></main>
+    </div>`;
+    this._pbArrRendreCorps();
+  },
+
+  _pbArrRendreCorps() {
+    const el = document.getElementById('pb-corps');
+    if (!el) return;
+    const A = S.pb.arr;
+    if (!A.donnees || !S.depsLoaded) { el.innerHTML = '<div class="sx-chargement">Chargement des arrivées…</div>'; return; }
+    const lignes = this._pbArrFiltrees(this._pbArrLignes());
+    if (!lignes.length) { el.innerHTML = '<div class="sx-carte"><div class="sx-vide">Aucune arrivée ne correspond.</div></div>'; return; }
+    // Groupes par mois d'arrivée, du plus récent au plus ancien ; les arrivées sans date à la fin
+    const groupes = [];
+    const parCle = {};
+    lignes.slice().sort((a, b) => (b.date || 0) - (a.date || 0)).forEach(l => {
+      const cle = l.date ? l.date.getFullYear() + '-' + String(l.date.getMonth() + 1).padStart(2, '0') : 'sans';
+      if (!parCle[cle]) {
+        const titre = l.date ? l.date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }) : 'Sans date d\'arrivée';
+        parCle[cle] = { cle, titre, ls: [] };
+        groupes.push(parCle[cle]);
+      }
+      parCle[cle].ls.push(l);
+    });
+    const visibles = groupes.slice(0, A.mois);
+    const admin = this._otAdmin();
+    const entete = `<div class="pb-grille-arr pb-tete"><span>Code</span><span>N° module</span><span>Type</span><span>Arrivée</span><span>Provenance</span>
+      <span>Statut</span><span>LV départ</span><span>Chantier · destination</span><span>OT</span><span>${admin ? 'Documents' : ''}</span><span>Fiche</span></div>`;
+    el.innerHTML = `<div class="pb-tableau"><div class="pb-interieur">${entete}${visibles.map(g => `
+      <button type="button" class="pb-groupe pb-g-demarrer" aria-expanded="${!S.pb.replies['m' + g.cle]}" onclick="App.prodReplier('m${g.cle}')">
+        ${_PB_SVG_CHEVRON}<span>${_otEsc(g.titre)}</span><span class="pb-groupe-n">${g.ls.length} arrivée${g.ls.length > 1 ? 's' : ''}</span>
+      </button>
+      ${S.pb.replies['m' + g.cle] ? '' : g.ls.map(l => this._pbArrHtmlLigne(l, admin)).join('')}`).join('')}
+      ${groupes.length > visibles.length ? `<button type="button" class="pb-plus" onclick="App.prodArrPlus()">Afficher les mois précédents (${groupes.length - visibles.length} de plus)</button>` : ''}
+    </div></div>`;
+  },
+
+  _pbArrHtmlLigne(l, admin) {
+    const a = l.a, f = l.fiche, pl = l.pl ? l.pl.d : null;
+    let ot = '<span class="pb-gris">—</span>';
+    if (Array.isArray(S.pb.fiches)) {
+      if (f) {
+        const lib = { brouillon: 'Fiche en cours', a_valider: 'Fiche à valider' }[f.statut];
+        ot = `<button type="button" class="pb-ot pb-ot-${_otEsc(f.statut)}" onclick="App.prodOuvrirFiche(${Number(f.id)})" title="Ouvrir la fiche d'opérations">${_otEsc(lib || f.numero_ot || 'Validée')}</button>`;
+      } else if (l.otAFaire) ot = '<span class="pb-ot pb-ot-afaire">OT à faire</span>';
+    }
+    const docs = (admin && f && f.documents) ? (() => {
+      const pdf = (f.documents.fichiers || []).find(x => x.type === 'pdf');
+      return `${pdf && pdf.url ? `<a class="pb-doc" href="${_otEsc(pdf.url)}" target="_blank" rel="noopener">PDF</a>` : ''}
+        ${f.documents.dossier ? `<a class="pb-doc" href="${_otEsc(f.documents.dossier)}" target="_blank" rel="noopener">Dossier OT</a>` : ''}`;
+    })() : '';
+    const code = _otEsc(a.code || '');
+    const dest = (pl && pl.chantier) || a.destination || '';
+    const numero = pl
+      ? `<button type="button" class="pb-numero" onclick="App.prodOuvrirModule(${l.pl === null ? false : !!(S.archive || []).includes(pl)}, ${l.pl.i})" title="Ouvrir la fiche du module">${_otEsc(a.numModule || pl.codeModule || '—')}</button>`
+      : `<span class="pb-numero">${_otEsc(a.numModule || '—')}</span>`;
+    const poses = `<button type="button" class="pb-poses" onclick="App.prodPosesCode('${code}', '${_otEsc(a.numModule || '')}')" title="Fiche d'opérations : saisir les poses">${_PB_SVG_CLE}Poses</button>`;
+    return `<div class="pb-grille-arr pb-ligne-module${l.parti ? ' pb-parti' : ''}">
+      <button type="button" class="pb-code" onclick="App.prodDossierArrivee('${code}')" title="Ouvrir le dossier du module (photos, papiers d'arrivée et de départ)">${_PB_SVG_DOSSIER}${code}</button>
+      ${numero}
+      <span class="pb-type">${_otEsc(a.type || '')}</span>
+      <span class="pb-gris2">${l.date ? _otEsc(l.date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })) : '—'}</span>
+      <span class="pb-texte" title="${_otEsc(a.agence || '')}">${_otEsc(a.agence || '')}</span>
+      <span><span class="pb-statut pb-statut-${l.statut.classe}">${_otEsc(l.statut.texte)}</span></span>
+      <span class="pb-gris2">${_otEsc((pl && pl.lv) || '')}</span>
+      <span class="pb-texte" title="${_otEsc(dest)}">${_otEsc(dest)}</span>
+      <span>${ot}</span>
+      <span class="pb-docs">${docs}</span>
+      ${poses}
+    </div>`;
+  },
+
+  // Dossier depuis l'onglet Arrivées : le lien est sur le code de l'onglet Arrivées du Planning
+  async prodDossierArrivee(code) {
+    const fen = window.open('', '_blank');
+    try {
+      const r = await _fetchWithTimeout(`${S.apiUrl}?action=drive_link&code=${encodeURIComponent(code)}&source=arrivals`, {}, 20000);
+      const d = await r.json();
+      if (d.status === 'ok' && d.lienDrive) { if (fen) fen.location.href = d.lienDrive; else window.open(d.lienDrive, '_blank'); return; }
+      if (fen) fen.close();
+      this.toast('Aucun dossier Drive trouvé pour ' + code);
+    } catch (e) {
+      if (fen) fen.close();
+      this.toast('Dossier indisponible : ' + e.message, 4000);
+    }
+  },
+
+  prodPosesCode(code, numModule) {
+    S.ot.retourFiche = 'prod-bureau';
+    S.pb.fiches = null;
+    this.otDepuisPose(code, numModule || '', '');
   },
 });
