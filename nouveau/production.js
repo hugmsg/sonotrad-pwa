@@ -355,7 +355,7 @@ Object.assign(App, {
   },
 
   async _pbArrCharger(force = false) {
-    const A = S.pb.arr = S.pb.arr || { donnees: null, chargement: false, statut: 'tous', annee: '', agence: '', type: '', q: '', mois: PB_MOIS_PAR_PAGE };
+    const A = S.pb.arr = S.pb.arr || { donnees: null, chargement: false, statut: 'tous', annee: '', agence: '', type: '', q: '', mois: PB_MOIS_PAR_PAGE, choix: new Set() };
     const attentes = [];
     if ((force || !A.donnees) && !A.chargement) {
       A.chargement = true;
@@ -432,7 +432,7 @@ Object.assign(App, {
   _pbArrRendre() {
     const el = document.getElementById('prod-bureau-root');
     if (!el) return;
-    if (!S.pb.arr) S.pb.arr = { donnees: null, chargement: false, statut: 'tous', annee: '', agence: '', type: '', q: '', mois: PB_MOIS_PAR_PAGE };
+    if (!S.pb.arr) S.pb.arr = { donnees: null, chargement: false, statut: 'tous', annee: '', agence: '', type: '', q: '', mois: PB_MOIS_PAR_PAGE, choix: new Set() };
     const A = S.pb.arr;
     const pret = !!A.donnees && S.depsLoaded;
     const toutes = pret ? this._pbArrLignes() : [];
@@ -473,8 +473,10 @@ Object.assign(App, {
         </div>
       </div></div>
       <main class="pb-contenu" id="pb-corps"></main>
+      <div id="pb-selection"></div>
     </div>`;
     this._pbArrRendreCorps();
+    this._pbArrRendreSelection();
   },
 
   _pbArrRendreCorps() {
@@ -535,7 +537,8 @@ Object.assign(App, {
       <span class="pb-type">${_otEsc(a.type || '')}</span>
       <span class="pb-gris2">${l.date ? _otEsc(l.date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })) : '—'}</span>
       <span class="pb-texte" title="${_otEsc(a.agence || '')}">${_otEsc(a.agence || '')}</span>
-      <span><span class="pb-statut pb-statut-${l.statut.classe}">${_otEsc(l.statut.texte)}</span></span>
+      <span class="pb-statut-cellule"><span class="pb-statut pb-statut-${l.statut.classe}">${_otEsc(l.statut.texte)}</span>${l.horsPlanning && admin
+        ? `<button type="button" class="pb-ajout" aria-pressed="${S.pb.arr.choix.has(l.code)}" onclick="App.prodArrChoisir('${code}')" title="Choisir pour l'ajouter au Planning">${S.pb.arr.choix.has(l.code) ? '✓ choisi' : '+ Planning'}</button>` : ''}</span>
       <span class="pb-gris2">${_otEsc((pl && pl.lv) || '')}</span>
       <span class="pb-texte" title="${_otEsc(dest)}">${_otEsc(dest)}</span>
       <span>${ot}</span>
@@ -563,5 +566,88 @@ Object.assign(App, {
     S.ot.retourFiche = 'prod-bureau';
     S.pb.fiches = null;
     this.otDepuisPose(code, numModule || '', '');
+  },
+});
+
+/* ─ Ajout au Planning (admins, 2026-11-17) : action `planning_ajouter` de masterfile ─ */
+Object.assign(App, {
+
+  prodArrChoisir(code) {
+    const c = S.pb.arr.choix;
+    if (c.has(code)) c.delete(code); else c.add(code);
+    this._pbArrRendreCorps();
+    this._pbArrRendreSelection();
+  },
+
+  _pbArrRendreSelection() {
+    const el = document.getElementById('pb-selection');
+    if (!el) return;
+    const n = S.pb.arr.choix.size;
+    el.innerHTML = n ? `<div class="pb-selection">
+      <span>${n} module${n > 1 ? 's' : ''} choisi${n > 1 ? 's' : ''} pour le Planning</span>
+      <button type="button" class="pb-bouton" onclick="S.pb.arr.choix.clear();App._pbArrRendreCorps();App._pbArrRendreSelection()">Annuler</button>
+      <button type="button" class="sx-btn sx-btn-principal" onclick="App.prodArrFenetreAjout()">Ajouter au Planning</button>
+    </div>` : '';
+  },
+
+  prodArrFenetreAjout() {
+    const A = S.pb.arr;
+    const mods = (A.donnees || []).filter(a => A.choix.has(String(a.code || '').toUpperCase()));
+    if (!mods.length) return;
+    const voile = document.createElement('div');
+    voile.className = 'sx-voile';
+    voile.innerHTML = `<div class="sx-fenetre pb-fenetre" role="dialog" aria-modal="true" aria-labelledby="pb-aj-titre">
+      <h3 id="pb-aj-titre">Ajouter au Planning (${mods.length})</h3>
+      <p class="sx-aide">Les lignes sont insérées en haut du Planning, comme avec « insérer ». Le code, le lien du dossier, le type et le n° de module viennent de l'onglet Arrivées.</p>
+      <div class="pb-champs">
+        <label>Code agence<input id="pb-aj-agence" class="sx-champ" inputmode="numeric" placeholder="ex. 7430 (vide = sans agence)"></label>
+        <label>Livraison prévue<input id="pb-aj-liv" class="sx-champ" type="date"></label>
+        <label class="pb-large">Description (travaux)<input id="pb-aj-desc" class="sx-champ" placeholder="ex. STANDARD PORTE ET FENETRE PIGNON + BOITE DE DERIVATION"></label>
+      </div>
+      <div class="pb-aj-liste">${mods.map(a => `<div class="pb-aj-ligne">
+        <span class="pb-code">${_otEsc(a.code)}</span><span>${_otEsc([a.type, a.numModule].filter(Boolean).join(' · '))}</span>
+        <input class="sx-champ pb-aj-dem" data-code="${_otEsc(a.code)}" placeholder="Code demande (facultatif)" aria-label="Code demande pour ${_otEsc(a.code)}">
+      </div>`).join('')}</div>
+      <p class="sx-aide">Avec un code demande : la ligne est complétée depuis le fichier Demandes (agence et livraison si vides ici, grutage) et Demandes est mis à jour. Il peut aussi être saisi plus tard dans le Sheet.</p>
+      <div class="sx-fenetre-boutons">
+        <button type="button" class="sx-btn sx-btn-discret" data-r="0">Annuler</button>
+        <button type="button" class="sx-btn sx-btn-principal" data-r="1">Ajouter</button>
+      </div></div>`;
+    const fermer = () => voile.remove();
+    voile.addEventListener('click', async e => {
+      if (e.target === voile) return fermer();
+      const b = e.target.closest('[data-r]');
+      if (!b) return;
+      if (b.dataset.r === '0') return fermer();
+      const val = id => (voile.querySelector('#' + id).value || '').trim();
+      const lignes = mods.map(a => ({
+        code: a.code, agence: val('pb-aj-agence'), description: val('pb-aj-desc'), livraison: val('pb-aj-liv'),
+        codeDemande: (voile.querySelector(`.pb-aj-dem[data-code="${CSS.escape(a.code)}"]`).value || '').trim(),
+      }));
+      b.disabled = true; b.textContent = 'Ajout…';
+      const ok = await this._pbArrAjouter(lignes);
+      if (ok) fermer(); else { b.disabled = false; b.textContent = 'Ajouter'; }
+    });
+    document.body.appendChild(voile);
+    voile.querySelector('#pb-aj-agence').focus();
+  },
+
+  async _pbArrAjouter(lignes, confirmerDemandes = false) {
+    try {
+      const d = await this._otPost({ action: 'planning_ajouter', lignes, confirmerDemandes }, 90000);
+      this.toast('✓ Ajouté au Planning : ' + (d.ajoutes || []).join(', '), 5000);
+      if ((d.avertissements || []).length) setTimeout(() => this.toast('⚠ ' + d.avertissements.join(' · '), 8000), 5200);
+      S.pb.arr.choix.clear();
+      await this._pbArrCharger(true);
+      return true;
+    } catch (e) {
+      const m = String(e.message || e);
+      if (!confirmerDemandes && /Déjà en cours dans le fichier Demandes/.test(m)) {
+        const ok = await this._otConfirmer({ titre: 'Demande déjà en cours', texte: m + ' Ajouter quand même ?', ok: 'Ajouter quand même' });
+        return ok ? this._pbArrAjouter(lignes, true) : false;
+      }
+      this.toast('Ajout impossible : ' + m, 7000);
+      return false;
+    }
   },
 });
