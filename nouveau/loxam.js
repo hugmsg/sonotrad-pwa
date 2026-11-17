@@ -972,6 +972,8 @@ Object.assign(App, {
         <p style="font-size:12px;color:#64748B;margin-top:4px;">Cet article a quitté le parc.</p>
       </div>`}`;
     if (!S.depFromArchive) this._renderDepPhotoGrid();
+    // « Retirer du Planning » (admins, production.js) — module où rien n'est encore fait
+    if (!S.depFromArchive && this.prodHtmlRetrait) document.getElementById('dep-detail-body').insertAdjacentHTML('beforeend', this.prodHtmlRetrait(d));
     this._loadDriveLinkForDetail(d.code, S.depFromArchive ? 'archive' : 'production', 'dep-drive-section', 'drive-files-panel', 'btn-drive-files');
   },
   toggleLivraisonPrevueEdit() {

@@ -685,3 +685,57 @@ Object.assign(App, {
     }
   },
 });
+
+/* ─ Retirer du Planning (admins, 2026-11-17) : action `planning_retirer` de masterfile ─
+   Bouton sur la fiche du module (vue dep-detail). Le serveur refait les mêmes contrôles. */
+Object.assign(App, {
+
+  // Ce qui empêche le retrait (mêmes règles que le serveur)
+  _pbRetraitBloquants(d) {
+    const s = d.status || {};
+    const b = [];
+    if (s.enCours) b.push('en cours');
+    if (s.aControler) b.push('à contrôler');
+    if (s.termine) b.push('terminé');
+    if (s.mail) b.push('mail');
+    if (s.cmd) b.push('cmd');
+    if (s.deCote) b.push('de côté');
+    if (d.debut) b.push('date de début');
+    if (d.fin) b.push('date de fin');
+    if (d.commande) b.push('commande');
+    if (d.lv) b.push('LV');
+    return b;
+  },
+
+  prodHtmlRetrait(d) {
+    if (!this._otAdmin() || !d || !d.code) return '';
+    const b = this._pbRetraitBloquants(d);
+    return `<div class="card" style="margin-top:14px;border:1px solid #F3C4C4;">
+      <p style="font-size:14px;font-weight:600;color:#1E293B;margin:0 0 4px;">Retirer du Planning</p>
+      <p style="font-size:12px;color:#64748B;margin:0 0 10px;">${b.length
+        ? 'Impossible : ' + _otEsc(b.join(', ')) + '. Seul un module où rien n\'est encore fait peut être retiré (sinon, dans le Sheet).'
+        : 'Supprime la ligne du Planning (le module reste dans les Arrivées et pourra être rajouté). Si elle a un code demande, le fichier Demandes et le raccourci « Mail demande » sont remis comme avant.'}</p>
+      <button type="button" ${b.length ? 'disabled' : ''} onclick="App.prodRetirer('${_otEsc(d.code)}')"
+        style="background:${b.length ? '#F1F5F9' : '#FDECEC'};color:${b.length ? '#94A3B8' : '#9B1C1C'};border:none;padding:12px;border-radius:10px;font-size:14px;font-weight:700;cursor:${b.length ? 'not-allowed' : 'pointer'};width:100%;">Retirer ${_otEsc(d.code)} du Planning</button>
+    </div>`;
+  },
+
+  async prodRetirer(code) {
+    const d = (S.deps || []).find(x => x.code === code);
+    const ok = await this._otConfirmer({ titre: 'Retirer ' + code + ' du Planning ?',
+      texte: [d && d.module, d && d.codeModule, d && d.chantier].filter(Boolean).join(' · ') + ' — la ligne est supprimée du Planning. Le module reste dans les Arrivées.',
+      ok: 'Retirer', annuler: 'Annuler' });
+    if (!ok) return;
+    this.toast('⏳ Retrait…');
+    try {
+      const r = await this._otPost({ action: 'planning_retirer', code }, 60000);
+      S.deps = (S.deps || []).filter(x => x.code !== code);
+      if (S.pb && S.pb.arr) S.pb.arr.donnees = null;
+      this.toast('✓ ' + code + ' retiré du Planning', 4000);
+      if ((r.avertissements || []).length) setTimeout(() => this.toast('⚠ ' + r.avertissements.join(' · '), 8000), 4200);
+      this.goBack();
+    } catch (e) {
+      this.toast('Retrait impossible : ' + e.message, 7000);
+    }
+  },
+});
