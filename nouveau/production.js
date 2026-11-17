@@ -587,8 +587,8 @@ Object.assign(App, {
     voile.innerHTML = `<div class="sx-fenetre pb-fenetre" role="dialog" aria-modal="true" aria-labelledby="pb-aj-titre">
       <h3 id="pb-aj-titre">Ajouter au Planning</h3>
       <form class="pb-aj-saisie" id="pb-aj-form">
-        <label for="pb-aj-code" class="pb-etiquette">Code planning</label>
-        <input id="pb-aj-code" class="sx-champ" autocomplete="off" autocapitalize="characters" maxlength="6" placeholder="ex. ZHUCSW">
+        <label for="pb-aj-code" class="pb-etiquette">Code planning ou n° de module</label>
+        <input id="pb-aj-code" class="sx-champ" autocomplete="off" autocapitalize="characters" maxlength="20" placeholder="ex. ZHUCSW ou 60151845">
         <button type="submit" class="sx-btn sx-btn-second">Vérifier</button>
       </form>
       <div id="pb-aj-msg" class="sx-aide" role="status">Chargement des arrivées sur parc…</div>
@@ -616,15 +616,24 @@ Object.assign(App, {
       $('[data-r="1"]').disabled = !F.modules.length;
       $('[data-r="1"]').textContent = F.modules.length > 1 ? `Ajouter les ${F.modules.length}` : 'Ajouter';
     };
+    const norm = v => String(v || '').trim().toUpperCase().replace(/\s+/g, '');
     const verifier = () => {
-      const code = ($('#pb-aj-code').value || '').trim().toUpperCase();
-      if (!code) return;
+      const saisie = norm($('#pb-aj-code').value);
+      if (!saisie) return;
       if (!F.arrivees) { message('Arrivées pas encore chargées, un instant…', true); return; }
-      if (F.modules.some(m => m.code === code)) { message(code + ' est déjà dans la liste.', true); return; }
-      const a = F.arrivees.find(x => String(x.code || '').toUpperCase() === code);
-      if (!a) { message(code + ' : pas dans les arrivées sur parc (code inconnu ou module parti).', true); return; }
+      // Code planning, sinon n° de module (colonne C des Arrivées)
+      let a = F.arrivees.find(x => norm(x.code) === saisie);
+      if (!a) {
+        const parNumero = F.arrivees.filter(x => norm(x.numModule) === saisie);
+        const libres = parNumero.filter(x => !(S.deps || []).some(d => norm(d.code) === norm(x.code)));
+        if (libres.length > 1) { message('N° ' + saisie + ' : plusieurs arrivées sur parc (' + libres.map(x => x.code).join(', ') + '). Tapez le code planning.', true); return; }
+        a = libres[0] || parNumero[0];
+      }
+      if (!a) { message(saisie + ' : ni code planning ni n° de module des arrivées sur parc (inconnu ou module parti).', true); return; }
+      const code = norm(a.code);
+      if (F.modules.some(m => m.code === code)) { message(code + ' (' + (a.numModule || '') + ') est déjà dans la liste.', true); return; }
       const dansPlanning = (S.deps || []).some(d => String(d.code || '').toUpperCase() === code);
-      if (dansPlanning) { message(code + ' est déjà dans le Planning.', true); return; }
+      if (dansPlanning) { message(code + (a.numModule ? ' (n° ' + a.numModule + ')' : '') + ' est déjà dans le Planning.', true); return; }
       F.modules.push({ code, type: a.type || '', numModule: a.numModule || '', codeDemande: '' });
       $('#pb-aj-code').value = '';
       message(code + ' vérifié : ' + [a.type, a.numModule, a.agence].filter(Boolean).join(' · ') + '. Un autre code ?', false);
@@ -653,7 +662,7 @@ Object.assign(App, {
       if (!S.depsLoaded) await this._pbChargerProduction();
       F.arrivees = (await this._pbArriveesSurParc()).filter(a => !a.isParti);
       const hors = F.arrivees.filter(a => !(S.deps || []).some(d => String(d.code || '').toUpperCase() === String(a.code || '').toUpperCase())).length;
-      message(`Tapez le code planning du module (${hors} arrivé${hors > 1 ? 's' : ''} sur parc pas encore au Planning), puis Entrée.`, false);
+      message(`Tapez le code planning ou le n° de module (${hors} arrivé${hors > 1 ? 's' : ''} sur parc pas encore au Planning), puis Entrée.`, false);
     } catch (e) { message('Arrivées indisponibles : ' + e.message, true); }
   },
 
