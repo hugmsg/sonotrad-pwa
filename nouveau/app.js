@@ -274,6 +274,7 @@ const App = {
     const onHome = v === 'home';
     // Écrans du socle commun (socle.css) : ils portent leur propre en-tête.
     document.body.classList.toggle('socle', v.startsWith('ot-') || v.startsWith('stk-') || v.startsWith('prod-'));
+    document.body.classList.toggle('pb-plein', v === 'prod-bureau');   // tableau Production : pleine largeur, seul le tableau défile
 
     // ── Nav : cachée sur l'accueil, tabs selon activité ─────────────────
     const nav = document.getElementById('main-nav');

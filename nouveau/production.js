@@ -238,11 +238,11 @@ Object.assign(App, {
           </div>
           <button type="button" class="pb-bouton" onclick="App.prodActualiser()">Actualiser</button>
         </div>
-        <div class="pb-ligne" role="group" aria-label="Étapes">
+        <div class="pb-ligne pb-defile" role="group" aria-label="Étapes">
           ${onglet('tous', 'Tous', base.filter(l => !l.parti).length)}
           ${PB_ETAPES.map(e => onglet(e.cle, e.nom, S.archiveLoaded || e.cle !== 'parti' ? nb(e.cle) : '…')).join('')}
         </div>
-        <div class="pb-ligne">
+        <div class="pb-ligne pb-defile">
           <span class="pb-etiquette">À traiter :</span>
           ${puce('retard', comptes.retard, 'en retard', 'rouge')}
           ${fichesOk ? puce('otAFaire', comptes.otAFaire, 'OT à faire', 'jaune') : ''}

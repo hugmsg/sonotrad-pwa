@@ -477,7 +477,16 @@ body.socle { background: var(--sx-fond); }
 .sx-onglets.sx-onglets-toujours { display: grid; }
 
 /* ── Production — tableau bureau (production.js) ─────────────────────────── */
-.pb-barre { position: sticky; top: 0; z-index: 5; background: var(--sx-fond); border-bottom: 1px solid var(--sx-bord); }
+/* Le défilement de la PWA se fait dans .main-content, pas dans la page : en-tête et barre de filtres
+   restent donc en place (hauteur fixe), seul le tableau défile, dans les deux sens. La ligne des titres
+   et la colonne Code y restent visibles (sticky dans le tableau lui-même). */
+body.pb-plein .app { max-width: none; }
+body.pb-plein .main-content { overflow: hidden; display: flex; flex-direction: column; }
+body.pb-plein #view-prod-bureau.active { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#prod-bureau-root { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.pb-ecran { flex: 1; min-height: 0; }
+.pb-ecran .sx-entete { position: static; flex-shrink: 0; }
+.pb-barre { flex-shrink: 0; background: var(--sx-fond); border-bottom: 1px solid var(--sx-bord); }
 .pb-barre-in { max-width: 1440px; margin: 0 auto; padding: 10px 16px; display: flex; flex-direction: column; gap: 8px; }
 .pb-ligne { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
 .pb-recherche { flex: 1 1 280px; height: 40px; }
@@ -496,9 +505,14 @@ body.socle { background: var(--sx-fond); }
 .pb-puce-jaune  { background: #FFF4D1; color: #7A4E00; border-color: #F1DE9C; }
 .pb-puce-bleu   { background: #E7EEF9; color: #0B3A7A; border-color: #C3D4F0; }
 .pb-puce-violet { background: #F1ECFA; color: #4B3A7A; border-color: #D8CDEE; }
-.pb-contenu { max-width: 1440px; margin: 0 auto; padding: 12px 16px 40px; box-sizing: border-box; }
-.pb-tableau { overflow-x: auto; background: #FFFFFF; border: 1px solid var(--sx-bord); border-radius: 12px; }
+.pb-contenu { flex: 1; min-height: 0; width: 100%; max-width: 1440px; margin: 0 auto; padding: 10px 16px 12px; box-sizing: border-box; display: flex; flex-direction: column; }
+.pb-contenu > .sx-carte, .pb-contenu > .sx-chargement { flex-shrink: 0; }
+.pb-tableau { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; background: #FFFFFF; border: 1px solid var(--sx-bord); border-radius: 12px; }
 .pb-interieur { min-width: 1280px; font-size: 13px; }
+.pb-tete { position: sticky; top: 0; z-index: 3; }
+.pb-groupe { position: sticky; top: 34px; z-index: 2; }
+.pb-tete > :first-child, .pb-code { position: sticky; left: 0; z-index: 1; background: inherit; align-self: stretch; display: flex; align-items: center; margin-left: -12px; padding-left: 12px; }
+.pb-groupe > span, .pb-groupe > svg { position: sticky; left: 12px; }
 .pb-grille { display: grid; grid-template-columns: 112px 100px 84px minmax(180px, 1fr) 120px 84px 74px 168px 92px 136px 74px; align-items: center; column-gap: 10px; padding: 0 12px; }
 .pb-tete { height: 34px; background: #EEF1F5; font-size: 11px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; color: #3D4B5C; }
 .pb-groupe { display: flex; width: 100%; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border: 0; border-top: 1px solid var(--sx-bord); font-family: inherit; font-size: 12px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; cursor: pointer; text-align: left; }
@@ -539,3 +553,11 @@ body.socle { background: var(--sx-fond); }
 .pb-doc { font-size: 11px; font-weight: 700; color: #0B3A7A; background: #E7EEF9; border-radius: 5px; padding: 2px 7px; text-decoration: none; white-space: nowrap; }
 .pb-doc:hover { background: #D3E0F5; }
 .pb-poses { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--sx-bleu); }
+/* Tablette / téléphone : étapes et « À traiter » sur une ligne qui défile, pour laisser la place au tableau */
+@media (max-width: 899px) {
+  .pb-defile { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .pb-defile::-webkit-scrollbar { display: none; }
+  .pb-defile > * { flex-shrink: 0; }
+  .pb-barre-in { padding: 8px 12px; gap: 6px; }
+  .pb-contenu { padding: 8px 8px 8px; }
+}
