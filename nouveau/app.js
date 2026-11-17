@@ -216,6 +216,7 @@ const App = {
     if (view === 'ot-liste')      this.otChargerListe();
     if (view === 'ot-fiche')      this._otRendreFiche();
     if (view === 'ot-tarifs')     this.otTarifsInit();
+    if (view === 'ot-bord')       this.otBordInit();
     if (view.startsWith('stk-'))  this._stkAfficher(view);
   },
   breadcrumbGoActivity() {

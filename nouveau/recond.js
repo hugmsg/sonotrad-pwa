@@ -1,9 +1,10 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// RECONDITIONNEMENT — fiches d'opérations (OT), essai (2026-10-28)
+// RECONDITIONNEMENT — fiches d'opérations (OT) (essai du 2026-10-28, sortie d'essai le 2026-11-16)
 // Premier écran du socle commun (socle.css). Serveur : actions ot_* de masterfile
 // (ot_supabase.js) → fonctions Supabase ot_*. Les montants sont calculés en base et
-// ne sont renvoyés qu'aux administrateurs. Pendant l'essai : numéros ESSAI-…,
-// aucune sortie de stock (la 🔧 du Stock reste la vraie sortie).
+// ne sont renvoyés qu'aux administrateurs. Mode donné par le serveur (S.ot.essai, paramètre
+// ot_parametres.essai) : en essai, numéros ESSAI-… et aucune sortie de stock ; hors essai,
+// vrais numéros (suite de la matrice Excel) et stock sorti par la fiche (la 🔧 ouvre la fiche du module).
 // ═══════════════════════════════════════════════════════════════════════════
 
 S.ot = {
@@ -22,6 +23,7 @@ S.ot = {
   rapide: (() => { try { return localStorage.getItem('snt_ot_rapide') !== '0'; } catch { return true; } })(),
   rgIdx: { p: [], s: [], t: [] }, rgSugg: [], rgSel: -1,
   mail: null,       // brouillon du mail LOXAM préparé : { blob (URL locale du .eml), url (copie Drive), nom, ids, modules }
+  essai: null,      // mode donné par le serveur (ot_liste) : true / false ; null = pas encore connu (traité comme essai)
 };
 
 // Saisie rapide : tableaux (p = pièces et forfaits, s = sanitaire, t = temps passé) → blocs des lignes
@@ -142,6 +144,7 @@ Object.assign(App, {
       const d = await this._otGet({ action: 'ot_liste' });
       S.ot.liste = d.fiches || [];
       S.ot.listeChargee = true;
+      if (d.essai !== undefined) S.ot.essai = Number(d.essai) === 1;
     } catch (e) {
       this.toast('Fiches indisponibles : ' + e.message, 4000);
     } finally {
@@ -185,14 +188,15 @@ Object.assign(App, {
     }).join('');
 
     el.innerHTML = `<div class="sx-ecran">
-      ${this._otEntete({ retour: { texte: 'Accueil', action: 'App.goHome()' }, titre: 'Fiches d\'opérations', sousTitre: 'Reconditionnement · essai' })}
+      ${this._otEntete({ retour: { texte: 'Accueil', action: 'App.goHome()' }, titre: 'Fiches d\'opérations', sousTitre: 'Reconditionnement' + (this._otEssai() ? ' · essai' : '') })}
       <main class="sx-contenu">
-        <div class="sx-bandeau sx-bandeau-info">Essai : la fiche ne sort rien du stock (la 🔧 reste la vraie sortie) et la matrice Excel garde les vrais numéros d'OT.</div>
+        ${this._otEssai() ? '<div class="sx-bandeau sx-bandeau-info">Essai : la fiche ne sort rien du stock (la 🔧 reste la vraie sortie) et la matrice Excel garde les vrais numéros d\'OT.</div>' : ''}
         <button type="button" class="sx-btn sx-btn-principal sx-btn-plein" onclick="App.otNouvelle()">+ Nouvelle fiche</button>
         ${admin && S.ot.listeChargee ? this._otHtmlMail() : ''}
         ${corps}
         <div class="sx-ligne-champs">
           <button type="button" class="sx-btn sx-btn-discret" style="flex:1 1 140px;" onclick="App.otChargerListe(true)">Actualiser</button>
+          ${admin ? '<button type="button" class="sx-btn sx-btn-second" style="flex:1 1 140px;" onclick="App.otOuvrirBord()">Tableau de bord</button>' : ''}
           ${admin ? '<button type="button" class="sx-btn sx-btn-second" style="flex:1 1 140px;" onclick="App.otOuvrirTarifs()">Tarifs</button>' : ''}
         </div>
       </main></div>`;
@@ -288,6 +292,38 @@ Object.assign(App, {
       const d = await this._otPost({ action: 'ot_ouvrir', code: m.code, module: {
         numero_module: m.codeModule || '', agence: m.ag || '', type_module: m.module || '', commentaire: m.description || '' } });
       if (d.existante) this.toast('Une fiche existe déjà pour ce module : elle est rouverte');
+      S.ot.choix = false;
+      S.ot.listeChargee = false;
+      await this._otChargerTarifs();
+      this._otAfficherFiche(d.fiche);
+    } catch (e) {
+      this.toast('Ouverture impossible : ' + e.message, 4000);
+    }
+  },
+
+  /* ─ 🔧 du Stock / de LOXAM (2026-11-16) : hors essai, ouvre la fiche d'opérations du module ─ */
+  // Le stock sort à la validation de la fiche (ou par « Sortir du stock maintenant ») ; ce que la 🔧 a sorti
+  // avant la bascule est déduit (notes « [Pose CODE] »). Pendant l'essai : fenêtre de pose habituelle.
+  async otDepuisPose(code, codeModule, chantier) {
+    if (S.ot.essai === null) {
+      this.toast('⏳ Ouverture…');
+      try { const d = await this._otGet({ action: 'ot_liste', statuts: 'brouillon' }); if (d.essai !== undefined) S.ot.essai = Number(d.essai) === 1; }
+      catch (e) { if (!this._otAutorise()) S.ot.essai = true; else { this.toast('Ouverture impossible : ' + e.message, 4000); return; } }
+    }
+    if (this._otEssai()) return this._openPoseModalDirect(code, codeModule, chantier);
+    if (!this._otAutorise()) {
+      this.toast('⛔ Les pièces posées se saisissent maintenant sur la fiche d\'opérations : demandez l\'accès « Reconditionnement »', 6000);
+      return;
+    }
+    const cle = String(code || '').toUpperCase();
+    const m = [...(S.deps || []), ...(S.archive || [])].find(x => String(x.code || '').toUpperCase() === cle) || {};
+    this.toast('⏳ Ouverture de la fiche d\'opérations…');
+    try {
+      const d = await this._otPost({ action: 'ot_ouvrir', code: m.code || code, module: {
+        numero_module: m.codeModule || codeModule || '', agence: m.ag || '', type_module: m.module || '',
+        commentaire: m.description || chantier || '' } });
+      if (d.existante) this.toast('Fiche d\'opérations du module rouverte');
+      S.activity = 'recond';
       S.ot.choix = false;
       S.ot.listeChargee = false;
       await this._otChargerTarifs();
@@ -692,15 +728,19 @@ Object.assign(App, {
         ? ['Rouvrir la fiche ?', 'Elle repasse « à valider » : le numéro est gardé, les prix ne sont plus figés.', 'Rouvrir']
         : ['Envoyer à valider ?', 'La fiche passe au bureau pour contrôle. Vous ne pourrez plus la modifier, sauf en la reprenant en brouillon.', 'Envoyer'],
       brouillon: ['Reprendre en brouillon ?', 'La fiche redevient modifiable à l\'atelier.', 'Reprendre'],
-      validee:   ['Valider la fiche ?', `Total ${_otEuros(S.ot.fiche.totaux?.total)} HT. Un numéro ESSAI-… est attribué, les prix sont figés et les documents (Excel LOXAM, Excel SONOTRAD, PDF) sont créés.`, 'Valider'],
+      validee:   ['Valider la fiche ?', `Total ${_otEuros(S.ot.fiche.totaux?.total)} HT. ` + (this._otEssai()
+                    ? 'Un numéro ESSAI-… est attribué, les prix sont figés et les documents (Excel LOXAM, Excel SONOTRAD, PDF) sont créés.'
+                    : 'Un numéro d\'OT est attribué, les prix sont figés, les pièces sont sorties du stock (ce que la 🔧 n\'a pas déjà sorti) et les documents (Excel LOXAM, Excel SONOTRAD, PDF) sont créés.'), 'Valider'],
     };
     const t = textes[statut];
     if (t && !(await this._otConfirmer({ titre: t[0], texte: t[1], ok: t[2] }))) return;
     if (statut === 'validee') this.toast('⏳ Validation et création des documents…', 20000);
     try {
       const d = await this._otPost({ action: 'ot_statut', id: f.id, statut }, statut === 'validee' ? OT_DELAI_DOCUMENTS : undefined);
-      if (d.fiche.documents_erreur) this.toast('Fiche validée, mais documents non créés : ' + d.fiche.documents_erreur + ' — « Créer les documents » pour réessayer', 7000);
-      else this.toast('✓ ' + (OT_STATUTS[d.fiche.statut] || d.fiche.statut) + (d.fiche.numero_ot ? ' · ' + d.fiche.numero_ot : '') + (d.fiche.documents ? ' · documents créés' : ''));
+      const stock = d.fiche.stock ? ' · ' + this._otTexteStock(d.fiche.stock) : '';
+      if (d.fiche.documents_erreur) this.toast('Fiche validée' + stock + ', mais documents non créés : ' + d.fiche.documents_erreur + ' — « Créer les documents » pour réessayer', 8000);
+      else this.toast('✓ ' + (OT_STATUTS[d.fiche.statut] || d.fiche.statut) + (d.fiche.numero_ot ? ' · ' + d.fiche.numero_ot : '') + (d.fiche.documents ? ' · documents créés' : '') + stock, stock ? 6000 : undefined);
+      delete d.fiche.stock;
       S.ot.listeChargee = false;
       this._otAfficherFiche(d.fiche);
     } catch (e) {
@@ -768,13 +808,9 @@ Object.assign(App, {
               <span class="sx-gros-montant" id="ot-ctrl-total"></span>
               <span class="sx-aide" id="ot-ctrl-detail"></span>
             </section>` : ''}
-          ${f.statut === 'a_valider' && ctrl ? `<section class="sx-bandeau sx-bandeau-info" style="display:flex;flex-direction:column;gap:4px;">
-              <strong>En validant (essai), la PWA va :</strong>
-              <span>1. attribuer un numéro ESSAI-… (la matrice garde les vrais) ;</span>
-              <span>2. figer les prix de chaque ligne ;</span>
-              <span>3. créer les documents : Excel LOXAM, Excel SONOTRAD et PDF.</span>
-            </section>` : ''}
+          ${f.statut === 'a_valider' && ctrl ? this._otHtmlEnValidant(false) : ''}
           ${ctrl && ['validee', 'envoyee'].includes(f.statut) ? this._otHtmlDocuments(f) : ''}
+          ${this._otHtmlStock(f)}
           <div class="sx-carte sx-carte-pad sx-rg-recap" id="ot-rg-recap"></div>
           ${modif ? `<div class="sx-carte sx-carte-pad sx-rg-touches">
             <span class="sx-h2" style="font-size:15px;">Au clavier</span>
@@ -1276,19 +1312,67 @@ Object.assign(App, {
                 oninput="S.ot.notes=this.value;App._otModifie(false)">${_otEsc(S.ot.notes)}</textarea>
               <span class="sx-aide">Pour le bureau, jamais dans les documents LOXAM.</span>
             </section>
-            ${f.statut === 'a_valider' ? `<section class="sx-bandeau sx-bandeau-info" style="display:flex;flex-direction:column;gap:4px;">
-              <strong>En validant (essai), la PWA va :</strong>
-              <span>1. attribuer un numéro ESSAI-… (la matrice garde les vrais) ;</span>
-              <span>2. figer les prix de chaque ligne ;</span>
-              <span>3. créer les documents : Excel LOXAM, Excel SONOTRAD et PDF (quelques secondes).</span>
-              <span>Le mail à LOXAM se prépare ensuite depuis la liste des fiches. Aucune sortie de stock pendant l'essai.</span>
-            </section>` : ''}
+            ${f.statut === 'a_valider' ? this._otHtmlEnValidant(true) : ''}
             ${['validee', 'envoyee'].includes(f.statut) ? this._otHtmlDocuments(f) : ''}
+            ${this._otHtmlStock(f)}
             <div style="display:flex;gap:10px;flex-wrap:wrap;">${actions}</div>
           </aside>
         </div>
       </main></div>`;
     this._otRendreTableControle();
+  },
+
+  /* ─ Mode essai / sortie de stock (2026-11-16) ─ */
+
+  _otEssai() { return S.ot.essai !== false; },
+
+  _otHtmlEnValidant(complet) {
+    const essai = this._otEssai();
+    return `<section class="sx-bandeau sx-bandeau-info" style="display:flex;flex-direction:column;gap:4px;">
+      <strong>En validant${essai ? ' (essai)' : ''}, la PWA va :</strong>
+      <span>1. ${essai ? 'attribuer un numéro ESSAI-… (la matrice garde les vrais)' : 'attribuer le numéro d\'OT suivant (à la suite de la matrice Excel)'} ;</span>
+      <span>2. figer les prix de chaque ligne ;</span>
+      ${essai ? '' : '<span>3. sortir du stock les pièces de la fiche, sauf ce que la 🔧 a déjà sorti pour ce module ;</span>'}
+      <span>${essai ? '3' : '4'}. créer les documents : Excel LOXAM, Excel SONOTRAD et PDF${complet ? ' (quelques secondes)' : ''}.</span>
+      ${complet ? `<span>Le mail à LOXAM se prépare ensuite depuis la liste des fiches.${essai ? ' Aucune sortie de stock pendant l\'essai.' : ''}</span>` : ''}
+    </section>`;
+  },
+
+  // Carte « Stock » (hors essai) : état de la sortie de stock du module et bouton pour la faire tout de suite.
+  _otHtmlStock(f) {
+    if (this._otEssai() || !f || f.statut === 'annulee') return '';
+    const quand = f.stock_le ? new Date(f.stock_le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+    return `<section class="sx-carte sx-carte-pad" style="display:flex;flex-direction:column;gap:8px;">
+      <span class="sx-h2" style="font-size:16px;">Stock</span>
+      <span class="sx-aide">${quand
+        ? 'Stock mis à jour le ' + _otEsc(quand) + '. Si la fiche a changé depuis, la validation (ou le bouton) ne passe que la différence.'
+        : (['validee', 'envoyee'].includes(f.statut) ? 'Pièces pas encore sorties du stock pour cette fiche.' : 'Les pièces sortent du stock à la validation. Besoin des pièces avant ? Sortez-les maintenant : la validation ne passera que la différence.')}</span>
+      <button type="button" class="sx-btn sx-btn-second" style="align-self:flex-start;" onclick="App.otSortirStock()">${quand ? 'Remettre le stock à jour' : 'Sortir du stock maintenant'}</button>
+    </section>`;
+  },
+
+  _otTexteStock(s) {
+    const n = a => (a || []).length;
+    if (!n(s.sorties) && !n(s.entrees)) return 'stock déjà à jour (rien à sortir)';
+    return [n(s.sorties) ? `stock : ${n(s.sorties)} réf. sortie${n(s.sorties) > 1 ? 's' : ''}` : '',
+            n(s.entrees) ? `${n(s.entrees)} réf. remise${n(s.entrees) > 1 ? 's' : ''} en stock (trop sorti)` : ''].filter(Boolean).join(', ');
+  },
+
+  async otSortirStock() {
+    const f = S.ot.fiche;
+    if (!f) return;
+    if (!(await this._otEnregistrer())) return;
+    if (!(await this._otConfirmer({ titre: 'Sortir du stock ?',
+        texte: 'Les pièces de la fiche sortent du Stock Pidem, sauf ce qui est déjà sorti pour ce module (🔧 ou sortie précédente). Si une pièce a été retirée de la fiche, elle est remise en stock.',
+        ok: 'Sortir' }))) return;
+    try {
+      const d = await this._otPost({ action: 'ot_stock', id: f.id });
+      this.toast('✓ ' + this._otTexteStock(d.stock || {}), 5000);
+      f.stock_le = new Date().toISOString();
+      this._otRendreFiche();
+    } catch (e) {
+      this.toast('Sortie de stock impossible : ' + e.message, 5000);
+    }
   },
 
   /* ─ Documents d'une fiche validée (créés par le serveur à la validation) ─ */
@@ -1302,6 +1386,9 @@ Object.assign(App, {
       <span class="sx-h2" style="font-size:16px;">Documents</span>
       ${d ? `<span class="sx-aide">Créés le ${_otEsc(new Date(d.genere_le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}
           · date de fin ${_otEsc(d.date_fin ? d.date_fin.split('-').reverse().join('/') : '—')}</span>
+        <button type="button" class="sx-btn sx-btn-principal" id="ot-doc-telecharger" style="align-self:flex-start;"
+          onclick="App.otTelechargerDocuments()">Télécharger les 3 fichiers</button>
+        <span class="sx-aide">À ranger dans votre dossier OneDrive « operation sur module ». Une copie reste aussi sur le Drive :</span>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">${liens}
           <a class="sx-btn sx-btn-discret" href="${_otEsc(d.dossier)}" target="_blank" rel="noopener">Dossier</a></div>`
         : '<div class="sx-bandeau sx-bandeau-info">Pas encore de documents pour cette fiche.</div>'}
@@ -2111,5 +2198,230 @@ Object.assign(App, {
     const ok = await this._otConfirmer({ titre: 'Changer le coefficient ?', ok: 'Enregistrer',
       texte: `${_otQte(avant)} → ${_otQte(v.val)}. S'applique aux fiches non validées.` });
     if (ok) await this._otEnvoyerTarif('parametre', cle, { valeur: v.val }, 'Coefficient');
+  },
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TABLEAU DE BORD + HISTORIQUE EXCEL (2026-11-16, sortie d'essai)
+// Même calcul que la feuille « Feuil2 » de la matrice : par mois, montant HT, nombre d'OT,
+// moyenne, et l'écart avec le même mois de l'année précédente. Source : « Historique OT » de
+// la matrice (importé depuis le .xlsm) + fiches PWA validées pas encore reportées dans l'Excel.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const OT_MOIS_COURTS = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
+
+Object.assign(App, {
+
+  otOuvrirBord() {
+    if (!this._otAdmin()) { this.toast('⛔ Réservé aux administrateurs'); return; }
+    this.go('ot-bord');
+  },
+
+  async otBordInit() {
+    S.ot.bord = S.ot.bord || { donnees: null, annee: new Date().getFullYear(), reporter: null, import: null };
+    this._otRendreBord();
+    try {
+      const [b, r] = await Promise.all([this._otGet({ action: 'ot_bord' }), this._otGet({ action: 'ot_a_reporter' })]);
+      S.ot.bord.donnees = b.bord || {};
+      S.ot.bord.reporter = r.reporter || {};
+      S.ot.essai = Number(S.ot.bord.donnees.essai) === 1;
+    } catch (e) {
+      this.toast('Tableau de bord indisponible : ' + e.message, 4000);
+    }
+    this._otRendreBord();
+  },
+
+  // { 'AAAA-M': {nb, total, nb_pwa} }
+  _otBordIndex() {
+    const idx = {};
+    (S.ot.bord.donnees?.mois || []).forEach(m => { idx[m.annee + '-' + m.mois] = m; });
+    return idx;
+  },
+
+  _otRendreBord() {
+    const el = document.getElementById('ot-bord-root');
+    if (!el) return;
+    const B = S.ot.bord, d = B.donnees;
+    const entete = this._otEntete({ retour: { texte: 'Fiches', action: "App.go('ot-liste')" },
+      titre: 'Tableau de bord', sousTitre: 'OT réalisés par mois', large: true });
+    if (!d) {
+      el.innerHTML = `<div class="sx-ecran">${entete}<main class="sx-contenu sx-large"><div class="sx-chargement">Chargement…</div></main></div>`;
+      return;
+    }
+    const idx = this._otBordIndex();
+    const annees = [...new Set((d.mois || []).map(m => m.annee))].sort((a, b) => b - a);
+    if (!annees.includes(B.annee) && annees.length) B.annee = annees[0];
+    const a = B.annee;
+    const val = (an, m) => idx[an + '-' + m] || { nb: 0, total: 0, nb_pwa: 0 };
+    // Totaux de l'année (comme la colonne « Total » de l'Excel : année entière contre année N-1 entière)
+    const cumul = an => { let nb = 0, total = 0; for (let m = 1; m <= 12; m++) { nb += val(an, m).nb; total += Number(val(an, m).total); } return { nb, total }; };
+    const ecart = (x, y, euros) => {
+      if (!x) return '<td class="sx-centre" style="color:var(--sx-gris);">–</td>';
+      const e = x - y, c = e > 0 ? 'var(--sx-vert)' : e < 0 ? 'var(--sx-rouge)' : 'var(--sx-gris)';
+      const t = euros ? _otPrix(Math.round(e)).replace(',00', '') : String(Math.round(e));
+      return `<td class="sx-centre" style="color:${c};font-size:12px;">${e > 0 ? '+' : ''}${t}</td>`;
+    };
+    const ent = n => (Math.round(n) || 0).toLocaleString('fr-FR');
+    let lMt = '', lMtE = '', lNb = '', lNbE = '', lMoy = '', lMoyE = '';
+    const cellules = (n, p, pwa) => {
+      const moy = n.nb ? n.total / n.nb : 0, moyP = p.nb ? p.total / p.nb : 0;
+      lMt  += `<td class="sx-centre"${pwa ? ' style="background:var(--sx-bleu-clair);"' : ''}>${n.nb ? ent(n.total) : ''}</td>`;
+      lMtE += ecart(Number(n.total), Number(p.total), true);
+      lNb  += `<td class="sx-centre"><b>${n.nb || ''}</b></td>`;
+      lNbE += ecart(n.nb, p.nb, false);
+      lMoy += `<td class="sx-centre">${n.nb ? ent(moy) : ''}</td>`;
+      lMoyE += n.nb && p.nb ? ecart(moy, moyP, true) : '<td class="sx-centre" style="color:var(--sx-gris);">–</td>';
+    };
+    for (let m = 1; m <= 12; m++) cellules(val(a, m), val(a - 1, m), val(a, m).nb_pwa > 0);
+    cellules(cumul(a), cumul(a - 1), false);
+    const tete = `<tr><th style="text-align:left;">${a}</th>${OT_MOIS_COURTS.map(m => `<th class="sx-centre">${m}</th>`).join('')}<th class="sx-centre">Total</th></tr>`;
+    const ligne = (titre, cells, sous) => `<tr${sous ? ' style="background:#FAFBFD;"' : ''}><td style="white-space:nowrap;${sous ? 'font-size:12px;color:var(--sx-gris);' : 'font-weight:700;'}">${titre}</td>${cells}</tr>`;
+    const table = `<div class="sx-carte sx-table-boite"><table class="sx-table sx-grille sx-serre" style="min-width:980px;">${tete}
+      ${ligne('Montant HT (€)', lMt)}${ligne('écart N-1', lMtE, true)}
+      ${ligne('Nombre d\'OT', lNb)}${ligne('écart N-1', lNbE, true)}
+      ${ligne('Moyenne / OT (€)', lMoy)}${ligne('écart N-1', lMoyE, true)}</table></div>`;
+
+    const choix = annees.slice(0, 11).map(y => `<button type="button" class="sx-btn ${y === a ? 'sx-btn-principal' : 'sx-btn-discret'}"
+        style="min-width:64px;" onclick="S.ot.bord.annee=${y};App._otRendreBord()">${y}</button>`).join('');
+    const imp = d.import;
+    const reporter = B.reporter?.lignes || [];
+    el.innerHTML = `<div class="sx-ecran">${entete}
+      <main class="sx-contenu sx-large">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">${choix}</div>
+        ${table}
+        <span class="sx-aide">Écart = différence avec le même mois de ${a - 1}. Total : année ${a} entière contre ${a - 1} entière (comme l'Excel).
+          ${(d.mois || []).some(m => m.nb_pwa > 0) ? 'Fond bleu : le mois compte des OT faits dans la PWA, pas encore reportés dans l\'Excel.' : ''}</span>
+
+        <section class="sx-carte sx-carte-pad" style="display:flex;flex-direction:column;gap:8px;">
+          <span class="sx-h2" style="font-size:16px;">Historique de la matrice Excel</span>
+          <span class="sx-aide">${imp ? `Dernière mise à jour : ${_otEsc(new Date(imp.le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}
+              par ${_otEsc(imp.par || '?')} — ${Number(imp.nb).toLocaleString('fr-FR')} OT (${_otEsc(imp.fichier || '')}).`
+            : 'Jamais importé : choisissez votre matrice pour charger l\'historique.'}
+            Prochain numéro d'OT : <b>${_otEsc(d.prochain || '?')}</b>${Number(d.essai) === 1 ? ' (encore en essai : la PWA donne des numéros ESSAI-…)' : ''}.</span>
+          <span class="sx-aide">Après avoir enregistré des OT dans l'Excel, remettez l'historique à jour ici : la PWA repart après le dernier numéro.</span>
+          <label class="sx-btn sx-btn-principal" id="ot-imp-btn" style="align-self:flex-start;cursor:pointer;">
+            Mettre à jour depuis l'Excel…
+            <input type="file" accept=".xlsm,.xlsx,.xls" style="display:none" onchange="App.otImporterHistorique(this.files[0]);this.value=''">
+          </label>
+        </section>
+
+        <section class="sx-carte sx-carte-pad" style="display:flex;flex-direction:column;gap:8px;">
+          <span class="sx-h2" style="font-size:16px;">À reporter dans l'Excel (${reporter.length})</span>
+          ${reporter.length ? `<span class="sx-aide">OT validés dans la PWA qui ne sont pas encore dans « Historique OT ». Pour garder l'Excel à jour
+              (compteur, tableau de bord, retour possible à l'Excel) : dans « Historique OT », insérez ${reporter.length} ligne${reporter.length > 1 ? 's' : ''}
+              au-dessus de la ligne 5, cliquez sur A5 et collez.</span>
+            <div class="sx-carte sx-table-boite"><table class="sx-table sx-serre" style="min-width:520px;">
+              <tr><th>N° OT</th><th>Module</th><th>Agence</th><th>Date</th><th style="text-align:right;">Total HT</th></tr>
+              ${reporter.map(r => `<tr><td>${_otEsc(r.numero)}</td><td>${_otEsc(r.module)} · <span class="sx-ref">${_otEsc(r.code)}</span></td>
+                <td>${_otEsc(r.agence)}</td><td>${_otEsc(String(r.date || '').split('-').reverse().join('/'))}</td>
+                <td style="text-align:right;">${_otEuros(r.total)}</td></tr>`).join('')}
+            </table></div>
+            <button type="button" class="sx-btn sx-btn-principal" style="align-self:flex-start;" onclick="App.otCopierLignesExcel()"
+              ${B.reporter?.colonnes ? '' : 'disabled title="Importez d\'abord la matrice (colonnes OP)"'}>Copier les lignes pour l'Excel</button>`
+            : '<span class="sx-aide">Rien à reporter : l\'Excel contient tous les OT validés dans la PWA.</span>'}
+        </section>
+      </main></div>`;
+  },
+
+  // Lit la feuille « Historique OT » du .xlsm (dans le navigateur) et envoie numéros, mois, totaux.
+  async otImporterHistorique(fichier) {
+    if (!fichier) return;
+    const b = document.getElementById('ot-imp-btn');
+    const etat = t => { if (b) b.firstChild.textContent = t + ' '; };
+    etat('Lecture du fichier…');
+    try {
+      const buf = await fichier.arrayBuffer();
+      await new Promise(r => setTimeout(r, 30));           // laisse l'écran afficher « Lecture… »
+      const wb = XLSX.read(buf, { type: 'array', sheets: ['Historique OT'] });
+      const ws = wb.Sheets['Historique OT'];
+      if (!ws) throw new Error('Feuille « Historique OT » introuvable dans ce fichier');
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null, blankrows: true });
+      const colonnes = (rows[3] || []).map(v => (v === null || v === undefined || v === '') ? null : String(v).trim());
+      if (!/agence/i.test(colonnes[1] || '') || !/planning/i.test(colonnes[7] || '')) {
+        throw new Error('La ligne 4 de « Historique OT » ne ressemble pas aux en-têtes attendus (N°, Agence, M/B, Date…)');
+      }
+      let dernier = 0;
+      colonnes.forEach((v, i) => { if (v) dernier = i; });
+      const iTotal = dernier + 2;                          // comme la macro : 1 colonne vide après les codes OP
+      const jour = v => {
+        if (typeof v === 'number' && v > 0) { const p = XLSX.SSF.parse_date_code(v); return p ? `${p.y}-${String(p.m).padStart(2, '0')}-${String(p.d).padStart(2, '0')}` : null; }
+        return null;
+      };
+      const lignes = [];
+      for (let i = 4; i < rows.length; i++) {
+        const r = rows[i] || [];
+        if (r[6] === null && r[0] === null && r[7] === null) continue;
+        lignes.push({
+          module: r[0] === null ? '' : String(r[0]), agence: r[1] === null ? '' : String(r[1]),
+          type: r[2] === null ? '' : String(r[2]), date: jour(r[3]),
+          mois: r[4] === null ? '' : String(r[4]), annee: r[5] === null ? '' : String(r[5]),
+          numero: r[6] === null ? '' : String(r[6]), code: r[7] === null ? '' : String(r[7]),
+          total: typeof r[iTotal] === 'number' ? String(r[iTotal]) : '',
+        });
+      }
+      etat(`Envoi de ${lignes.length} OT…`);
+      const d = await this._otPost({ action: 'ot_historique_import', lignes, colonnes, fichier: fichier.name }, 90000);
+      this.toast(`✓ ${d.nb} OT importés — prochain numéro ${d.prochain}`, 5000);
+      this.otBordInit();
+    } catch (e) {
+      this.toast('Import impossible : ' + e.message, 6000);
+      etat('Mettre à jour depuis l\'Excel…');
+    }
+  },
+
+  // Lignes au format « Historique OT » (colonnes A à H, quantités par code OP, total), séparées par des tabulations.
+  async otCopierLignesExcel() {
+    const R = S.ot.bord.reporter;
+    const col = R?.colonnes || [];
+    if (!col.length) return;
+    let dernier = 0;
+    col.forEach((v, i) => { if (v) dernier = i; });
+    const largeur = dernier + 3;
+    const nombre = v => String(v).replace('.', ',');
+    const inconnus = new Set();
+    const texte = (R.lignes || []).map(r => {
+      const c = new Array(largeur).fill('');
+      const [y, m, j] = String(r.date || '').split('-');
+      c[0] = r.module || ''; c[1] = r.agence || ''; c[2] = r.type || '';
+      c[3] = j ? `${j}/${m}/${y}` : ''; c[4] = m ? String(Number(m)) : ''; c[5] = y || '';
+      c[6] = r.numero || ''; c[7] = r.code || '';
+      Object.entries(r.op || {}).forEach(([op, q]) => {
+        const k = col.indexOf(op);
+        if (k > 7) c[k] = nombre(q); else inconnus.add(op);
+      });
+      c[dernier + 2] = nombre(r.total ?? '');
+      return c.join('\t');
+    }).join('\r\n');
+    try {
+      await navigator.clipboard.writeText(texte);
+      this.toast(`✓ ${R.lignes.length} ligne(s) copiée(s) — collez en A5 de « Historique OT »`
+        + (inconnus.size ? ` (codes absents de l'Excel : ${[...inconnus].join(', ')})` : ''), 6000);
+    } catch (e) {
+      this.toast('Copie impossible : ' + e.message, 5000);
+    }
+  },
+
+  // Fiche validée : télécharge les 3 documents (à ranger dans les dossiers OneDrive).
+  async otTelechargerDocuments() {
+    const f = S.ot.fiche;
+    if (!f) return;
+    const b = document.getElementById('ot-doc-telecharger');
+    if (b) { b.disabled = true; b.textContent = 'Téléchargement…'; }
+    try {
+      const d = await this._otPost({ action: 'ot_fichiers', id: f.id }, 90000);
+      for (const x of d.fichiers || []) {
+        const octets = Uint8Array.from(atob(x.b64 || ''), c => c.charCodeAt(0));
+        const url = URL.createObjectURL(new Blob([octets], { type: x.mime || 'application/octet-stream' }));
+        const a = document.createElement('a');
+        a.href = url; a.download = x.nom;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        await new Promise(r => setTimeout(r, 400));        // un fichier après l'autre
+      }
+      this.toast(`✓ ${(d.fichiers || []).length} fichiers téléchargés`);
+    } catch (e) {
+      this.toast('Téléchargement impossible : ' + e.message, 5000);
+    }
+    if (b) { b.disabled = false; b.textContent = 'Télécharger les 3 fichiers'; }
   },
 });

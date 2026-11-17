@@ -769,7 +769,14 @@ Object.assign(App, {
 
   /* ─ Saisie pose depuis LOXAM ─ */
 
+  // Depuis la sortie d'essai des fiches OT (2026-11-16) : la 🔧 ouvre la fiche d'opérations du module,
+  // qui sort le stock à la validation (recond.js, otDepuisPose). Pendant l'essai : la fenêtre de pose ci-dessous.
   openPoseModal(code, codeModule, chantier) {
+    if (typeof this.otDepuisPose === 'function') return this.otDepuisPose(code, codeModule, chantier);
+    return this._openPoseModalDirect(code, codeModule, chantier);
+  },
+
+  _openPoseModalDirect(code, codeModule, chantier) {
     S.poseModuleCode  = code;
     S.poseModuleLabel = [codeModule, chantier].filter(Boolean).join(' — ') || code;
     S.poseItems       = {};
