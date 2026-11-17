@@ -581,154 +581,158 @@ Object.assign(App, {
   },
 
   async prodFenetreAjout() {
-    const F = { modules: [], arrivees: null, demandes: null, actif: null, q: '' };
+    // F.modules : [{code, type, numModule, dem (demande choisie ou null)}] ; F.ouvert : module dont la liste des demandes est ouverte
+    const F = { modules: [], arrivees: null, demandes: null, ouvert: null, qDem: '', sugg: [] };
+    const norm = v => String(v || '').trim().toUpperCase().replace(/\s+/g, '');
     const voile = document.createElement('div');
     voile.className = 'sx-voile';
     voile.innerHTML = `<div class="sx-fenetre pb-fenetre" role="dialog" aria-modal="true" aria-labelledby="pb-aj-titre">
       <h3 id="pb-aj-titre">Ajouter au Planning</h3>
-      <form class="pb-aj-saisie" id="pb-aj-form">
-        <label for="pb-aj-code" class="pb-etiquette">Code planning ou n° de module</label>
-        <input id="pb-aj-code" class="sx-champ" autocomplete="off" autocapitalize="characters" maxlength="20" placeholder="ex. ZHUCSW ou 60151845">
-        <button type="submit" class="sx-btn sx-btn-second">Vérifier</button>
-      </form>
+      <div class="pb-aj-recherche">
+        <label for="pb-aj-code" class="pb-etiquette">Module (code planning ou n° de module)</label>
+        <input id="pb-aj-code" class="sx-champ" type="search" autocomplete="off" autocapitalize="characters" placeholder="Tapez quelques caractères…"
+          role="combobox" aria-expanded="false" aria-controls="pb-aj-sugg" aria-autocomplete="list">
+        <div id="pb-aj-sugg" class="pb-aj-sugg" role="listbox" aria-label="Arrivées sur parc"></div>
+      </div>
       <div id="pb-aj-msg" class="sx-aide" role="status">Chargement des arrivées sur parc…</div>
       <div class="pb-aj-liste" id="pb-aj-liste"></div>
-      <details class="pb-dem" open>
-        <summary>Demandes LOXAM à traiter <span id="pb-dem-n" class="sx-aide"></span></summary>
-        <p class="sx-aide">Sans module ni code planning, pas parties. Un clic met le code dans le module surligné.</p>
-        <input id="pb-dem-q" class="sx-champ" type="search" placeholder="Filtrer : agence, chantier, module, mail, code…" aria-label="Filtrer les demandes">
-        <div id="pb-dem-liste" class="pb-dem-liste"><div class="sx-aide">Chargement des demandes…</div></div>
-      </details>
       <div class="pb-champs">
-        <label>Code agence<input id="pb-aj-agence" class="sx-champ" inputmode="numeric" placeholder="ex. 7430 (vide = sans agence)"></label>
+        <label>Code agence<input id="pb-aj-agence" class="sx-champ" inputmode="numeric" placeholder="vide = LIBRE"></label>
         <label>Livraison prévue<input id="pb-aj-liv" class="sx-champ" type="date"></label>
-        <label class="pb-large">Description (travaux)<input id="pb-aj-desc" class="sx-champ" placeholder="ex. STANDARD PORTE ET FENETRE PIGNON + BOITE DE DERIVATION"></label>
+        <label class="pb-large">Description des travaux<input id="pb-aj-desc" class="sx-champ" placeholder="ex. STANDARD PORTE ET FENETRE PIGNON + BOITE DE DERIVATION"></label>
       </div>
-      <p class="sx-aide">Insertion en haut du Planning, comme « insérer ». Code demande facultatif : la ligne est alors complétée depuis le fichier Demandes (agence et livraison si vides ici, grutage). Il peut aussi être saisi plus tard dans le Sheet.</p>
       <div class="sx-fenetre-boutons">
         <button type="button" class="sx-btn sx-btn-discret" data-r="0">Annuler</button>
         <button type="button" class="sx-btn sx-btn-principal" data-r="1" disabled>Ajouter</button>
       </div></div>`;
     const $ = sel => voile.querySelector(sel);
     const message = (texte, erreur) => { const m = $('#pb-aj-msg'); m.textContent = texte; m.classList.toggle('pb-erreur', !!erreur); };
-    const dessiner = () => {
-      // (les codes demande tapés sont déjà dans F.modules : événement « input » plus bas)
-      if (!F.modules.some(m => m.code === F.actif)) F.actif = (F.modules.find(m => !m.codeDemande) || F.modules[0] || {}).code || null;
-      $('#pb-aj-liste').innerHTML = F.modules.map(m => {
-        const dm = (F.demandes || []).find(x => x.code === norm(m.codeDemande));
-        return `<div class="pb-aj-ligne${m.code === F.actif ? ' pb-aj-actif' : ''}">
-        <span class="pb-code">${_otEsc(m.code)}</span><span>${_otEsc([m.type, m.numModule].filter(Boolean).join(' · '))}</span>
-        <input class="sx-champ pb-aj-dem" data-code="${_otEsc(m.code)}" value="${_otEsc(m.codeDemande || '')}" placeholder="Code demande (option)" aria-label="Code demande pour ${_otEsc(m.code)}">
-        <button type="button" class="pb-aj-retirer" data-retirer="${_otEsc(m.code)}" aria-label="Retirer ${_otEsc(m.code)}">✕</button>
-        ${dm ? `<span class="pb-aj-info">${_otEsc([dm.chantier, dm.module, dm.livraison ? 'livr. ' + _fmtDateShort(dm.livraison) : '', dm.grutage ? 'grutage' : ''].filter(Boolean).join(' · '))}</span>` : ''}
-      </div>`;
-      }).join('');
-      dessinerDemandes();
-      $('[data-r="1"]').disabled = !F.modules.length;
-      $('[data-r="1"]').textContent = F.modules.length > 1 ? `Ajouter les ${F.modules.length}` : 'Ajouter';
+    const dansPlanning = code => (S.deps || []).some(d => norm(d.code) === code);
+    const dateCourte = v => { const d = v ? new Date(v) : null; return d && !isNaN(d) ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : ''; };
+
+    // ── Recherche en direct dans les arrivées sur parc ──
+    const chercher = () => {
+      const q = norm($('#pb-aj-code').value);
+      const el = $('#pb-aj-sugg');
+      F.sugg = [];
+      if (!q || !F.arrivees) { el.innerHTML = ''; $('#pb-aj-code').setAttribute('aria-expanded', 'false'); return; }
+      const deja = new Set(F.modules.map(m => m.code));
+      const trouves = F.arrivees.filter(a => norm(a.code).includes(q) || norm(a.numModule).includes(q));
+      F.sugg = trouves.filter(a => !dansPlanning(norm(a.code)) && !deja.has(norm(a.code))).slice(0, 8);
+      const exclus = trouves.filter(a => dansPlanning(norm(a.code)) || deja.has(norm(a.code))).slice(0, 3);
+      el.innerHTML = F.sugg.map((a, i) => `<button type="button" class="pb-aj-sug" role="option" data-sug="${i}">
+          <b>${_otEsc(a.code)}</b><span>${_otEsc([a.type, a.numModule].filter(Boolean).join(' · '))}</span>
+          <span class="sx-aide">${_otEsc([a.dateArrivee ? 'arrivé le ' + dateCourte(a.dateArrivee) : '', a.agence].filter(Boolean).join(' · '))}</span></button>`).join('')
+        + exclus.map(a => `<div class="pb-aj-sug pb-aj-sug-non"><b>${_otEsc(a.code)}</b><span>${_otEsc([a.type, a.numModule].filter(Boolean).join(' · '))}</span>
+          <span class="sx-aide">${deja.has(norm(a.code)) ? 'déjà choisi' : 'déjà au Planning'}</span></div>`).join('')
+        + (!trouves.length ? '<div class="pb-aj-sug pb-aj-sug-non"><span class="sx-aide">Aucune arrivée sur parc ne correspond (module parti ou pas encore arrivé ?)</span></div>' : '');
+      $('#pb-aj-code').setAttribute('aria-expanded', 'true');
     };
-    const norm = v => String(v || '').trim().toUpperCase().replace(/\s+/g, '');
-    // Demandes à traiter, groupées par mail (même chantier, même mail = une commande LOXAM)
-    const dessinerDemandes = () => {
-      const el = $('#pb-dem-liste');
-      if (!F.demandes) return;
-      const prises = {};
-      F.modules.forEach(m => { if (m.codeDemande) prises[norm(m.codeDemande)] = m.code; });
-      const q = F.q.trim().toLowerCase();
-      const liste = F.demandes.filter(d => !q || [d.code, d.chantier, d.ag, d.module, d.description, d.mail].some(v => String(v || '').toLowerCase().includes(q)));
-      $('#pb-dem-n').textContent = '(' + F.demandes.length + ')';
-      if (!liste.length) { el.innerHTML = '<div class="sx-aide">' + (F.demandes.length ? 'Aucune demande ne correspond.' : 'Aucune demande à traiter.') + '</div>'; return; }
-      const groupes = [], parCle = {};
-      liste.forEach(d => {
-        const cle = d.chantier + '|' + d.mail;
-        if (!parCle[cle]) { parCle[cle] = { d, ls: [] }; groupes.push(parCle[cle]); }
-        parCle[cle].ls.push(d);
-      });
-      el.innerHTML = groupes.map(g => `<div class="pb-dem-groupe">
-        <div class="pb-dem-tete"><b>${_otEsc(g.d.chantier || 'Sans agence')}</b>
-          ${g.d.mail ? (g.d.mailUrl ? `<a href="${_otEsc(g.d.mailUrl)}" target="_blank" rel="noopener">${_otEsc(g.d.mail)}</a>` : `<span>${_otEsc(g.d.mail)}</span>`) : ''}
-          <span class="pb-dem-desc" title="${_otEsc(g.d.description)}">${_otEsc(g.d.description)}</span></div>
-        <div class="pb-dem-boutons">${g.ls.map(d => {
-          const prise = prises[d.code];
-          return `<button type="button" class="pb-dem-btn" data-dem="${_otEsc(d.code)}" ${prise ? 'aria-pressed="true"' : ''}
-            title="${_otEsc([d.code, d.module, d.livraison ? 'livraison ' + _fmtDateShort(d.livraison) : '', d.grutage ? 'grutage' : '', d.enCours ? 'déjà en cours' : ''].filter(Boolean).join(' · '))}">
-            <b>${_otEsc(d.code)}</b> ${_otEsc(d.module || '')}${d.livraison ? ' · ' + _otEsc(_fmtDateShort(d.livraison)) : ''}${d.grutage ? ' · grut.' : ''}${d.enCours ? ' · en cours' : ''}${prise ? ' → ' + _otEsc(prise) : ''}</button>`;
-        }).join('')}</div></div>`).join('');
-    };
-    const choisirDemande = codeDem => {
-      if (!F.modules.length) { message('Ajoutez d\'abord un module (code planning ou n° de module), puis choisissez sa demande.', true); $('#pb-aj-code').focus(); return; }
-      const deja = F.modules.find(m => norm(m.codeDemande) === codeDem);
-      if (deja) { deja.codeDemande = ''; F.actif = deja.code; dessiner(); return; }   // second clic = on la retire
-      const m = F.modules.find(x => x.code === F.actif) || F.modules[0];
-      m.codeDemande = codeDem;
-      F.actif = (F.modules.find(x => !x.codeDemande) || m).code;
-      dessiner();
-      message(codeDem + ' → ' + m.code + '.', false);
-    };
-    const verifier = () => {
-      const saisie = norm($('#pb-aj-code').value);
-      if (!saisie) return;
-      if (!F.arrivees) { message('Arrivées pas encore chargées, un instant…', true); return; }
-      // Code planning, sinon n° de module (colonne C des Arrivées)
-      let a = F.arrivees.find(x => norm(x.code) === saisie);
-      if (!a) {
-        const parNumero = F.arrivees.filter(x => norm(x.numModule) === saisie);
-        const libres = parNumero.filter(x => !(S.deps || []).some(d => norm(d.code) === norm(x.code)));
-        if (libres.length > 1) { message('N° ' + saisie + ' : plusieurs arrivées sur parc (' + libres.map(x => x.code).join(', ') + '). Tapez le code planning.', true); return; }
-        a = libres[0] || parNumero[0];
-      }
-      if (!a) { message(saisie + ' : ni code planning ni n° de module des arrivées sur parc (inconnu ou module parti).', true); return; }
-      const code = norm(a.code);
-      if (F.modules.some(m => m.code === code)) { message(code + ' (' + (a.numModule || '') + ') est déjà dans la liste.', true); return; }
-      const dansPlanning = (S.deps || []).some(d => String(d.code || '').toUpperCase() === code);
-      if (dansPlanning) { message(code + (a.numModule ? ' (n° ' + a.numModule + ')' : '') + ' est déjà dans le Planning.', true); return; }
-      F.modules.push({ code, type: a.type || '', numModule: a.numModule || '', codeDemande: '' });
+    const ajouterModule = a => {
+      F.modules.push({ code: norm(a.code), type: a.type || '', numModule: a.numModule || '', dem: null });
       $('#pb-aj-code').value = '';
-      message(code + ' vérifié : ' + [a.type, a.numModule, a.agence].filter(Boolean).join(' · ') + '. Un autre code ?', false);
+      chercher();
+      message('', false);
       dessiner();
       $('#pb-aj-code').focus();
     };
-    $('#pb-aj-form').addEventListener('submit', e => { e.preventDefault(); verifier(); });
-    $('#pb-dem-q').addEventListener('input', e => { F.q = e.target.value; dessinerDemandes(); });
-    voile.addEventListener('focusin', e => {
-      const i = e.target.closest('.pb-aj-dem');
-      if (i && F.actif !== i.dataset.code) {
-        F.actif = i.dataset.code;
-        voile.querySelectorAll('.pb-aj-ligne').forEach(l => l.classList.toggle('pb-aj-actif', l.querySelector('.pb-aj-dem') === i));
-      }
+
+    // ── Modules choisis, avec leur demande ──
+    const htmlDemandes = m => {
+      if (!F.demandes) return '<div class="sx-aide">Chargement des demandes…</div>';
+      const prises = new Set(F.modules.filter(x => x.dem && x !== m).map(x => x.dem.code));
+      const q = F.qDem.trim().toLowerCase();
+      const liste = F.demandes.filter(d => !prises.has(d.code)
+        && (!q || [d.code, d.chantier, d.ag, d.module, d.description, d.mail].some(v => String(v || '').toLowerCase().includes(q))));
+      // Les demandes du même type de module d'abord
+      const t = norm(m.type);
+      liste.sort((a, b) => (norm(b.module) === t) - (norm(a.module) === t));
+      return `<input class="sx-champ pb-dem-q" type="search" placeholder="Filtrer : agence, chantier, type, mail, code…" value="${_otEsc(F.qDem)}" aria-label="Filtrer les demandes">
+        <div class="pb-dem-liste">${liste.length ? liste.map(d => `<button type="button" class="pb-dem-item" data-dem="${_otEsc(d.code)}">
+            <span class="pb-dem-l1"><b>${_otEsc(d.code)}</b> ${_otEsc(d.chantier || 'Sans agence')} · ${_otEsc(d.module || '')}${d.livraison ? ' · livr. ' + _otEsc(dateCourte(d.livraison)) : ''}${d.grutage ? ' · grutage' : ''}${d.enCours ? ' · <i>déjà en cours</i>' : ''}</span>
+            <span class="pb-dem-l2">${_otEsc(d.description || '')}</span></button>`).join('')
+          : `<div class="sx-aide">${F.demandes.length ? 'Aucune demande ne correspond.' : 'Aucune demande à traiter dans le fichier Demandes.'}</div>`}</div>`;
+    };
+    const dessiner = () => {
+      $('#pb-aj-liste').innerHTML = F.modules.map(m => `<div class="pb-aj-carte">
+        <div class="pb-aj-l1"><span class="pb-code">${_otEsc(m.code)}</span><span>${_otEsc([m.type, m.numModule].filter(Boolean).join(' · '))}</span>
+          <button type="button" class="pb-aj-retirer" data-retirer="${_otEsc(m.code)}" aria-label="Retirer ${_otEsc(m.code)}">✕</button></div>
+        ${m.dem
+          ? `<div class="pb-aj-dem-choisie"><span><b>${_otEsc(m.dem.code)}</b> ${_otEsc([m.dem.chantier, m.dem.module, m.dem.livraison ? 'livr. ' + dateCourte(m.dem.livraison) : '', m.dem.grutage ? 'grutage' : ''].filter(Boolean).join(' · '))}</span>
+              <button type="button" class="pb-lien" data-sans-dem="${_otEsc(m.code)}">Retirer la demande</button></div>`
+          : (F.ouvert === m.code
+            ? `<div class="pb-aj-dem-panneau">${htmlDemandes(m)}<button type="button" class="pb-lien" data-fermer-dem>Fermer</button></div>`
+            : `<button type="button" class="pb-lien" data-ouvrir-dem="${_otEsc(m.code)}">+ Ajouter un code demande</button>`)}
+      </div>`).join('');
+      $('[data-r="1"]').disabled = !F.modules.length;
+      $('[data-r="1"]').textContent = F.modules.length > 1 ? `Ajouter les ${F.modules.length}` : 'Ajouter';
+    };
+    // Pré-remplit agence, livraison et description depuis la demande, seulement si vides
+    const preRemplir = d => {
+      const champ = (id, v) => { const i = $('#' + id); if (v && !i.value.trim()) i.value = v; };
+      champ('pb-aj-agence', d.ag);
+      champ('pb-aj-liv', /^\d{4}-\d{2}-\d{2}$/.test(d.livraison) ? d.livraison : '');
+      champ('pb-aj-desc', d.description);
+    };
+
+    // ── Événements ──
+    $('#pb-aj-code').addEventListener('input', chercher);
+    $('#pb-aj-code').addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const q = norm($('#pb-aj-code').value);
+      const exact = F.sugg.find(a => norm(a.code) === q || norm(a.numModule) === q);
+      if (exact || F.sugg.length === 1) ajouterModule(exact || F.sugg[0]);
     });
     voile.addEventListener('input', e => {
-      const i = e.target.closest('.pb-aj-dem');
-      if (!i) return;
-      const m = F.modules.find(x => x.code === i.dataset.code);
-      if (m) { m.codeDemande = i.value; dessinerDemandes(); }
+      if (!e.target.classList.contains('pb-dem-q')) return;
+      F.qDem = e.target.value;
+      const pos = e.target.selectionStart;
+      dessiner();
+      const i = $('.pb-dem-q'); if (i) { i.focus(); i.setSelectionRange(pos, pos); }
     });
     voile.addEventListener('click', async e => {
       if (e.target === voile) return voile.remove();
-      const dem = e.target.closest('[data-dem]');
-      if (dem) { choisirDemande(dem.dataset.dem); return; }
-      const ret = e.target.closest('[data-retirer]');
-      if (ret) { F.modules = F.modules.filter(m => m.code !== ret.dataset.retirer); dessiner(); return; }
-      const b = e.target.closest('[data-r]');
+      const t = e.target;
+      const sug = t.closest('[data-sug]');
+      if (sug) return ajouterModule(F.sugg[Number(sug.dataset.sug)]);
+      const ret = t.closest('[data-retirer]');
+      if (ret) { F.modules = F.modules.filter(m => m.code !== ret.dataset.retirer); if (F.ouvert === ret.dataset.retirer) F.ouvert = null; chercher(); dessiner(); return; }
+      const ouvrir = t.closest('[data-ouvrir-dem]');
+      if (ouvrir) { F.ouvert = ouvrir.dataset.ouvrirDem; F.qDem = ''; dessiner(); const i = $('.pb-dem-q'); if (i) i.focus(); return; }
+      if (t.closest('[data-fermer-dem]')) { F.ouvert = null; dessiner(); return; }
+      const sans = t.closest('[data-sans-dem]');
+      if (sans) { const m = F.modules.find(x => x.code === sans.dataset.sansDem); if (m) m.dem = null; dessiner(); return; }
+      const dem = t.closest('[data-dem]');
+      if (dem) {
+        const m = F.modules.find(x => x.code === F.ouvert);
+        const d = (F.demandes || []).find(x => x.code === dem.dataset.dem);
+        if (m && d) { m.dem = d; F.ouvert = null; preRemplir(d); dessiner(); }
+        return;
+      }
+      const b = t.closest('[data-r]');
       if (!b) return;
       if (b.dataset.r === '0') return voile.remove();
       const val = id => ($('#' + id).value || '').trim();
       const lignes = F.modules.map(m => ({ code: m.code, agence: val('pb-aj-agence'), description: val('pb-aj-desc'),
-        livraison: val('pb-aj-liv'), codeDemande: (m.codeDemande || '').trim() }));
+        livraison: val('pb-aj-liv'), codeDemande: m.dem ? m.dem.code : '' }));
       b.disabled = true; b.textContent = 'Ajout…';
       if (await this._pbAjouter(lignes)) voile.remove();
       else { b.disabled = false; b.textContent = 'Ajouter'; }
     });
     document.body.appendChild(voile);
     $('#pb-aj-code').focus();
+
+    // Demandes chargées en fond (affichées seulement si on en ajoute une)
     this._otGet({ action: 'demandes_a_traiter' }, 40000)
-      .then(d => { F.demandes = d.demandes || []; dessiner(); })
-      .catch(e => { $('#pb-dem-liste').innerHTML = '<div class="sx-aide pb-erreur">Demandes indisponibles : ' + _otEsc(e.message) + '</div>'; });
+      .then(d => { F.demandes = d.demandes || []; if (F.ouvert) dessiner(); })
+      .catch(e => { F.demandes = []; message('Demandes indisponibles : ' + e.message, true); });
     try {
       if (!S.depsLoaded) await this._pbChargerProduction();
       F.arrivees = (await this._pbArriveesSurParc()).filter(a => !a.isParti);
-      const hors = F.arrivees.filter(a => !(S.deps || []).some(d => String(d.code || '').toUpperCase() === String(a.code || '').toUpperCase())).length;
-      message(`Tapez le code planning ou le n° de module (${hors} arrivé${hors > 1 ? 's' : ''} sur parc pas encore au Planning), puis Entrée.`, false);
+      const hors = F.arrivees.filter(a => !dansPlanning(norm(a.code))).length;
+      message(`${hors} arrivé${hors > 1 ? 's' : ''} sur parc pas encore au Planning.`, false);
+      chercher();
     } catch (e) { message('Arrivées indisponibles : ' + e.message, true); }
   },
 
