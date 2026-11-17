@@ -238,6 +238,7 @@ Object.assign(App, {
             <button type="button" aria-pressed="false" onclick="App.prodColonnes()">Colonnes</button>
           </div>
           <button type="button" class="pb-bouton" onclick="App.prodActualiser()">Actualiser</button>
+          ${this._otAdmin() ? '<button type="button" class="sx-btn sx-btn-principal pb-btn-ajout" onclick="App.prodFenetreAjout()">+ Ajouter au Planning</button>' : ''}
         </div>
         <div class="pb-ligne pb-defile" role="group" aria-label="Étapes">
           ${onglet('tous', 'Tous', base.filter(l => !l.parti).length)}
@@ -355,7 +356,7 @@ Object.assign(App, {
   },
 
   async _pbArrCharger(force = false) {
-    const A = S.pb.arr = S.pb.arr || { donnees: null, chargement: false, statut: 'tous', annee: '', agence: '', type: '', q: '', mois: PB_MOIS_PAR_PAGE, choix: new Set() };
+    const A = S.pb.arr = S.pb.arr || { donnees: null, chargement: false, statut: 'tous', annee: '', agence: '', type: '', q: '', mois: PB_MOIS_PAR_PAGE };
     const attentes = [];
     if ((force || !A.donnees) && !A.chargement) {
       A.chargement = true;
@@ -432,7 +433,7 @@ Object.assign(App, {
   _pbArrRendre() {
     const el = document.getElementById('prod-bureau-root');
     if (!el) return;
-    if (!S.pb.arr) S.pb.arr = { donnees: null, chargement: false, statut: 'tous', annee: '', agence: '', type: '', q: '', mois: PB_MOIS_PAR_PAGE, choix: new Set() };
+    if (!S.pb.arr) S.pb.arr = { donnees: null, chargement: false, statut: 'tous', annee: '', agence: '', type: '', q: '', mois: PB_MOIS_PAR_PAGE };
     const A = S.pb.arr;
     const pret = !!A.donnees && S.depsLoaded;
     const toutes = pret ? this._pbArrLignes() : [];
@@ -473,10 +474,8 @@ Object.assign(App, {
         </div>
       </div></div>
       <main class="pb-contenu" id="pb-corps"></main>
-      <div id="pb-selection"></div>
     </div>`;
     this._pbArrRendreCorps();
-    this._pbArrRendreSelection();
   },
 
   _pbArrRendreCorps() {
@@ -537,8 +536,7 @@ Object.assign(App, {
       <span class="pb-type">${_otEsc(a.type || '')}</span>
       <span class="pb-gris2">${l.date ? _otEsc(l.date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' })) : '—'}</span>
       <span class="pb-texte" title="${_otEsc(a.agence || '')}">${_otEsc(a.agence || '')}</span>
-      <span class="pb-statut-cellule"><span class="pb-statut pb-statut-${l.statut.classe}">${_otEsc(l.statut.texte)}</span>${l.horsPlanning && admin
-        ? `<button type="button" class="pb-ajout" aria-pressed="${S.pb.arr.choix.has(l.code)}" onclick="App.prodArrChoisir('${code}')" title="Choisir pour l'ajouter au Planning">${S.pb.arr.choix.has(l.code) ? '✓ choisi' : '+ Planning'}</button>` : ''}</span>
+      <span><span class="pb-statut pb-statut-${l.statut.classe}">${_otEsc(l.statut.texte)}</span></span>
       <span class="pb-gris2">${_otEsc((pl && pl.lv) || '')}</span>
       <span class="pb-texte" title="${_otEsc(dest)}">${_otEsc(dest)}</span>
       <span>${ot}</span>
@@ -569,82 +567,109 @@ Object.assign(App, {
   },
 });
 
-/* ─ Ajout au Planning (admins, 2026-11-17) : action `planning_ajouter` de masterfile ─ */
+/* ─ Ajout au Planning (admins, 2026-11-17) : un seul bouton dans Production ; on tape le code planning,
+   vérifié contre les Arrivées sur parc (et absent du Planning), code demande en option.
+   Écriture : action `planning_ajouter` de masterfile (refait les effets du déclencheur du Sheet). ─ */
 Object.assign(App, {
 
-  prodArrChoisir(code) {
-    const c = S.pb.arr.choix;
-    if (c.has(code)) c.delete(code); else c.add(code);
-    this._pbArrRendreCorps();
-    this._pbArrRendreSelection();
+  // Arrivées sur parc (même source que l'écran Arrivées de LOXAM) : chargées à la demande
+  async _pbArriveesSurParc() {
+    if (S.arrivalsLoaded && Array.isArray(S.arrivalsData)) return S.arrivalsData;
+    const r = await _fetchWithTimeout(S.apiUrl + '?action=arrivals&scope=active', {}, 50000);
+    const d = await r.json();
+    return Array.isArray(d) ? d : (d.data || []);
   },
 
-  _pbArrRendreSelection() {
-    const el = document.getElementById('pb-selection');
-    if (!el) return;
-    const n = S.pb.arr.choix.size;
-    el.innerHTML = n ? `<div class="pb-selection">
-      <span>${n} module${n > 1 ? 's' : ''} choisi${n > 1 ? 's' : ''} pour le Planning</span>
-      <button type="button" class="pb-bouton" onclick="S.pb.arr.choix.clear();App._pbArrRendreCorps();App._pbArrRendreSelection()">Annuler</button>
-      <button type="button" class="sx-btn sx-btn-principal" onclick="App.prodArrFenetreAjout()">Ajouter au Planning</button>
-    </div>` : '';
-  },
-
-  prodArrFenetreAjout() {
-    const A = S.pb.arr;
-    const mods = (A.donnees || []).filter(a => A.choix.has(String(a.code || '').toUpperCase()));
-    if (!mods.length) return;
+  async prodFenetreAjout() {
+    const F = { modules: [], arrivees: null };
     const voile = document.createElement('div');
     voile.className = 'sx-voile';
     voile.innerHTML = `<div class="sx-fenetre pb-fenetre" role="dialog" aria-modal="true" aria-labelledby="pb-aj-titre">
-      <h3 id="pb-aj-titre">Ajouter au Planning (${mods.length})</h3>
-      <p class="sx-aide">Les lignes sont insérées en haut du Planning, comme avec « insérer ». Le code, le lien du dossier, le type et le n° de module viennent de l'onglet Arrivées.</p>
+      <h3 id="pb-aj-titre">Ajouter au Planning</h3>
+      <form class="pb-aj-saisie" id="pb-aj-form">
+        <label for="pb-aj-code" class="pb-etiquette">Code planning</label>
+        <input id="pb-aj-code" class="sx-champ" autocomplete="off" autocapitalize="characters" maxlength="6" placeholder="ex. ZHUCSW">
+        <button type="submit" class="sx-btn sx-btn-second">Vérifier</button>
+      </form>
+      <div id="pb-aj-msg" class="sx-aide" role="status">Chargement des arrivées sur parc…</div>
+      <div class="pb-aj-liste" id="pb-aj-liste"></div>
       <div class="pb-champs">
         <label>Code agence<input id="pb-aj-agence" class="sx-champ" inputmode="numeric" placeholder="ex. 7430 (vide = sans agence)"></label>
         <label>Livraison prévue<input id="pb-aj-liv" class="sx-champ" type="date"></label>
         <label class="pb-large">Description (travaux)<input id="pb-aj-desc" class="sx-champ" placeholder="ex. STANDARD PORTE ET FENETRE PIGNON + BOITE DE DERIVATION"></label>
       </div>
-      <div class="pb-aj-liste">${mods.map(a => `<div class="pb-aj-ligne">
-        <span class="pb-code">${_otEsc(a.code)}</span><span>${_otEsc([a.type, a.numModule].filter(Boolean).join(' · '))}</span>
-        <input class="sx-champ pb-aj-dem" data-code="${_otEsc(a.code)}" placeholder="Code demande (facultatif)" aria-label="Code demande pour ${_otEsc(a.code)}">
-      </div>`).join('')}</div>
-      <p class="sx-aide">Avec un code demande : la ligne est complétée depuis le fichier Demandes (agence et livraison si vides ici, grutage) et Demandes est mis à jour. Il peut aussi être saisi plus tard dans le Sheet.</p>
+      <p class="sx-aide">Insertion en haut du Planning, comme « insérer ». Code demande facultatif : la ligne est alors complétée depuis le fichier Demandes (agence et livraison si vides ici, grutage). Il peut aussi être saisi plus tard dans le Sheet.</p>
       <div class="sx-fenetre-boutons">
         <button type="button" class="sx-btn sx-btn-discret" data-r="0">Annuler</button>
-        <button type="button" class="sx-btn sx-btn-principal" data-r="1">Ajouter</button>
+        <button type="button" class="sx-btn sx-btn-principal" data-r="1" disabled>Ajouter</button>
       </div></div>`;
-    const fermer = () => voile.remove();
+    const $ = sel => voile.querySelector(sel);
+    const message = (texte, erreur) => { const m = $('#pb-aj-msg'); m.textContent = texte; m.classList.toggle('pb-erreur', !!erreur); };
+    const dessiner = () => {
+      // garder les codes demande déjà tapés
+      voile.querySelectorAll('.pb-aj-dem').forEach(i => { const m = F.modules.find(x => x.code === i.dataset.code); if (m) m.codeDemande = i.value; });
+      $('#pb-aj-liste').innerHTML = F.modules.map(m => `<div class="pb-aj-ligne">
+        <span class="pb-code">${_otEsc(m.code)}</span><span>${_otEsc([m.type, m.numModule].filter(Boolean).join(' · '))}</span>
+        <input class="sx-champ pb-aj-dem" data-code="${_otEsc(m.code)}" value="${_otEsc(m.codeDemande || '')}" placeholder="Code demande (option)" aria-label="Code demande pour ${_otEsc(m.code)}">
+        <button type="button" class="pb-aj-retirer" data-retirer="${_otEsc(m.code)}" aria-label="Retirer ${_otEsc(m.code)}">✕</button>
+      </div>`).join('');
+      $('[data-r="1"]').disabled = !F.modules.length;
+      $('[data-r="1"]').textContent = F.modules.length > 1 ? `Ajouter les ${F.modules.length}` : 'Ajouter';
+    };
+    const verifier = () => {
+      const code = ($('#pb-aj-code').value || '').trim().toUpperCase();
+      if (!code) return;
+      if (!F.arrivees) { message('Arrivées pas encore chargées, un instant…', true); return; }
+      if (F.modules.some(m => m.code === code)) { message(code + ' est déjà dans la liste.', true); return; }
+      const a = F.arrivees.find(x => String(x.code || '').toUpperCase() === code);
+      if (!a) { message(code + ' : pas dans les arrivées sur parc (code inconnu ou module parti).', true); return; }
+      const dansPlanning = (S.deps || []).some(d => String(d.code || '').toUpperCase() === code);
+      if (dansPlanning) { message(code + ' est déjà dans le Planning.', true); return; }
+      F.modules.push({ code, type: a.type || '', numModule: a.numModule || '', codeDemande: '' });
+      $('#pb-aj-code').value = '';
+      message(code + ' vérifié : ' + [a.type, a.numModule, a.agence].filter(Boolean).join(' · ') + '. Un autre code ?', false);
+      dessiner();
+      $('#pb-aj-code').focus();
+    };
+    $('#pb-aj-form').addEventListener('submit', e => { e.preventDefault(); verifier(); });
     voile.addEventListener('click', async e => {
-      if (e.target === voile) return fermer();
+      if (e.target === voile) return voile.remove();
+      const ret = e.target.closest('[data-retirer]');
+      if (ret) { F.modules = F.modules.filter(m => m.code !== ret.dataset.retirer); dessiner(); return; }
       const b = e.target.closest('[data-r]');
       if (!b) return;
-      if (b.dataset.r === '0') return fermer();
-      const val = id => (voile.querySelector('#' + id).value || '').trim();
-      const lignes = mods.map(a => ({
-        code: a.code, agence: val('pb-aj-agence'), description: val('pb-aj-desc'), livraison: val('pb-aj-liv'),
-        codeDemande: (voile.querySelector(`.pb-aj-dem[data-code="${CSS.escape(a.code)}"]`).value || '').trim(),
-      }));
+      if (b.dataset.r === '0') return voile.remove();
+      dessiner();
+      const val = id => ($('#' + id).value || '').trim();
+      const lignes = F.modules.map(m => ({ code: m.code, agence: val('pb-aj-agence'), description: val('pb-aj-desc'),
+        livraison: val('pb-aj-liv'), codeDemande: (m.codeDemande || '').trim() }));
       b.disabled = true; b.textContent = 'Ajout…';
-      const ok = await this._pbArrAjouter(lignes);
-      if (ok) fermer(); else { b.disabled = false; b.textContent = 'Ajouter'; }
+      if (await this._pbAjouter(lignes)) voile.remove();
+      else { b.disabled = false; b.textContent = 'Ajouter'; }
     });
     document.body.appendChild(voile);
-    voile.querySelector('#pb-aj-agence').focus();
+    $('#pb-aj-code').focus();
+    try {
+      if (!S.depsLoaded) await this._pbChargerProduction();
+      F.arrivees = (await this._pbArriveesSurParc()).filter(a => !a.isParti);
+      const hors = F.arrivees.filter(a => !(S.deps || []).some(d => String(d.code || '').toUpperCase() === String(a.code || '').toUpperCase())).length;
+      message(`Tapez le code planning du module (${hors} arrivé${hors > 1 ? 's' : ''} sur parc pas encore au Planning), puis Entrée.`, false);
+    } catch (e) { message('Arrivées indisponibles : ' + e.message, true); }
   },
 
-  async _pbArrAjouter(lignes, confirmerDemandes = false) {
+  async _pbAjouter(lignes, confirmerDemandes = false) {
     try {
       const d = await this._otPost({ action: 'planning_ajouter', lignes, confirmerDemandes }, 90000);
       this.toast('✓ Ajouté au Planning : ' + (d.ajoutes || []).join(', '), 5000);
       if ((d.avertissements || []).length) setTimeout(() => this.toast('⚠ ' + d.avertissements.join(' · '), 8000), 5200);
-      S.pb.arr.choix.clear();
-      await this._pbArrCharger(true);
+      if (S.pb.arr) S.pb.arr.donnees = null;
+      if (S.pb.vue === 'arr') this._pbArrCharger(true); else this.prodActualiser();
       return true;
     } catch (e) {
       const m = String(e.message || e);
       if (!confirmerDemandes && /Déjà en cours dans le fichier Demandes/.test(m)) {
         const ok = await this._otConfirmer({ titre: 'Demande déjà en cours', texte: m + ' Ajouter quand même ?', ok: 'Ajouter quand même' });
-        return ok ? this._pbArrAjouter(lignes, true) : false;
+        return ok ? this._pbAjouter(lignes, true) : false;
       }
       this.toast('Ajout impossible : ' + m, 7000);
       return false;

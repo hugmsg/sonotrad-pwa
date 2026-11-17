@@ -571,16 +571,20 @@ body.pb-plein #view-prod-bureau.active { flex: 1; min-height: 0; display: flex; 
 .pb-statut-parti { background: #EEF1F5; color: #3D4B5C; font-weight: 600; }
 .pb-statut-horsplanning { background: #FFF4D1; color: #7A4E00; }
 .pb-plus { display: block; width: 100%; padding: 14px; border: 0; border-top: 1px solid var(--sx-separateur); background: #FFFFFF; color: var(--sx-bleu); font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
-/* Production › Arrivées : ajout au Planning */
-.pb-statut-cellule { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.pb-ajout { height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--sx-bleu); background: #FFFFFF; color: var(--sx-bleu); font-family: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
-.pb-ajout[aria-pressed="true"] { background: var(--sx-bleu); color: #FFFFFF; }
-.pb-selection { flex-shrink: 0; display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; padding: 10px 16px; background: #FFFFFF; border-top: 1px solid var(--sx-bord); font-size: 14px; font-weight: 600; }
-.pb-selection > span { margin-right: auto; }
+/* Production : ajout au Planning (fenêtre) */
+.pb-btn-ajout { height: 34px; min-height: 34px; padding: 0 14px; font-size: 13px; }
 .pb-fenetre { max-width: 640px; width: calc(100vw - 32px); max-height: calc(100dvh - 32px); overflow-y: auto; box-sizing: border-box; }
-.pb-champs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+.pb-aj-saisie { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
+.pb-aj-saisie .sx-champ { text-transform: uppercase; font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: 1px; }
+.pb-erreur { color: var(--sx-rouge); font-weight: 600; }
+.pb-champs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 4px 0; }
 .pb-champs label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; color: var(--sx-gris); }
 .pb-champs .pb-large { grid-column: 1 / -1; }
-.pb-aj-liste { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
-.pb-aj-ligne { display: grid; grid-template-columns: 96px 1fr 180px; gap: 8px; align-items: center; font-size: 13px; }
-@media (max-width: 560px) { .pb-champs { grid-template-columns: 1fr; } .pb-aj-ligne { grid-template-columns: 80px 1fr; } .pb-aj-ligne input { grid-column: 1 / -1; } }
+.pb-aj-liste { display: flex; flex-direction: column; gap: 6px; }
+.pb-aj-ligne { display: grid; grid-template-columns: 96px 1fr 170px 36px; gap: 8px; align-items: center; font-size: 13px; background: var(--sx-fond); border-radius: 10px; padding: 6px 8px; }
+.pb-aj-retirer { width: 36px; height: 36px; border: 0; border-radius: 8px; background: #FFFFFF; color: var(--sx-gris); cursor: pointer; font-size: 14px; }
+@media (max-width: 560px) {
+  .pb-champs { grid-template-columns: 1fr; }
+  .pb-aj-saisie { grid-template-columns: 1fr auto; } .pb-aj-saisie label { grid-column: 1 / -1; }
+  .pb-aj-ligne { grid-template-columns: 80px 1fr 36px; } .pb-aj-ligne input { grid-column: 1 / -1; grid-row: 2; }
+}
