@@ -76,6 +76,7 @@ Object.assign(App, {
   otOuvrirActivite(depuis) {
     if (!this._otAutorise()) { this.toast('⛔ Vous n\'avez pas accès au reconditionnement'); return; }
     S.ot.retour = depuis === 'loxam' ? 'loxam' : 'accueil';
+    S.ot.retourFiche = null;
     S.activity = 'recond';
     S.ot.choix = false;
     this.go('ot-liste');
@@ -718,6 +719,10 @@ Object.assign(App, {
     }
     S.ot.fiche = null;
     S.ot.listeChargee = false;
+    // Fiche ouverte depuis le tableau Production : on y revient
+    const retour = S.ot.retourFiche;
+    S.ot.retourFiche = null;
+    if (retour) { S.activity = 'loxam'; this.go(retour); return; }
     this.go('ot-liste');
   },
 

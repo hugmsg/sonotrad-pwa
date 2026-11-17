@@ -306,6 +306,8 @@
     <div class="view" id="view-ot-fiche"><div id="ot-fiche-root"></div></div>
     <div class="view" id="view-ot-tarifs"><div id="ot-tarifs-root"></div></div>
     <div class="view" id="view-ot-bord"><div id="ot-bord-root"></div></div>
+    <!-- VIEW : PRODUCTION, tableau bureau (voir production.js) -->
+    <div class="view" id="view-prod-bureau"><div id="prod-bureau-root"></div></div>
     <!-- VIEWS : STOCK, refonte sur le socle (voir stock_socle.js) -->
     <div class="view" id="view-stk-accueil"><div id="stk-accueil-root"></div></div>
     <div class="view" id="view-stk-catalogue"><div id="stk-catalogue-root"></div></div>
@@ -493,7 +495,7 @@
       <div id="lxmenu-grid" style="display:none;padding:20px;">
         <div id="activity-grid" style="grid-template-columns:1fr 1fr;">
           <!-- Production -->
-          <div class="activity-card" data-ready="true" onclick="App.go('departures')">
+          <div class="activity-card" data-ready="true" onclick="App.prodEntree()">
             <div class="activity-icon">🏭</div>
             <div class="activity-name">Production</div>
             <div class="activity-desc">En cours · Arrivées · Historique LV</div>
@@ -726,6 +728,7 @@
             style="background:none;border:1px solid #E2E8F0;border-radius:16px;padding:4px 10px;font-size:11px;color:#64748B;cursor:pointer;display:flex;align-items:center;gap:3px;">
             <span id="dep-sort-icon">↑</span><span id="dep-sort-label">En cours → Terminé</span>
           </button>
+          <button onclick="App.prodOuvrir()" style="background:var(--brand);color:white;border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">Vue tableau</button>
           <button onclick="App.loadDepartures(true)" style="background:#EBF5FB;color:var(--brand);border:none;padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">↻</button>
         </div>
       </div>
@@ -1901,6 +1904,7 @@
 <script src="lv.js"></script>
 <script src="annuaire.js"></script>
 <script src="recond.js"></script>
+<script src="production.js"></script>
 <script src="stock_socle.js"></script>
 
 <!-- ── MODAL : SAISIE RAPIDE ──────────────────────────────────────────── -->

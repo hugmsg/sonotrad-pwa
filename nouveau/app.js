@@ -217,6 +217,7 @@ const App = {
     if (view === 'ot-fiche')      this._otRendreFiche();
     if (view === 'ot-tarifs')     this.otTarifsInit();
     if (view === 'ot-bord')       this.otBordInit();
+    if (view === 'prod-bureau')   this.prodBureauInit();
     if (view.startsWith('stk-'))  this._stkAfficher(view);
   },
   breadcrumbGoActivity() {
@@ -272,7 +273,7 @@ const App = {
     const v      = S.view;
     const onHome = v === 'home';
     // Écrans du socle commun (socle.css) : ils portent leur propre en-tête.
-    document.body.classList.toggle('socle', v.startsWith('ot-') || v.startsWith('stk-'));
+    document.body.classList.toggle('socle', v.startsWith('ot-') || v.startsWith('stk-') || v.startsWith('prod-'));
 
     // ── Nav : cachée sur l'accueil, tabs selon activité ─────────────────
     const nav = document.getElementById('main-nav');
