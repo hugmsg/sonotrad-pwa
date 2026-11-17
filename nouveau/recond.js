@@ -1388,7 +1388,7 @@ Object.assign(App, {
           · date de fin ${_otEsc(d.date_fin ? d.date_fin.split('-').reverse().join('/') : '—')}</span>
         <button type="button" class="sx-btn sx-btn-principal" id="ot-doc-telecharger" style="align-self:flex-start;"
           onclick="App.otTelechargerDocuments()">Télécharger les 3 fichiers</button>
-        <span class="sx-aide">Laissez-les dans Téléchargements : la macro « Reporter les OT PWA » de la matrice les range dans le dossier du module. Une copie reste aussi sur le Drive :</span>
+        <span class="sx-aide">Inutile de les télécharger pour la matrice : son bouton « Reporter les OT PWA » les enregistre dans le dossier du module. Une copie reste aussi sur le Drive :</span>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">${liens}
           <a class="sx-btn sx-btn-discret" href="${_otEsc(d.dossier)}" target="_blank" rel="noopener">Dossier</a></div>`
         : '<div class="sx-bandeau sx-bandeau-info">Pas encore de documents pour cette fiche.</div>'}
@@ -2307,18 +2307,18 @@ Object.assign(App, {
 
         <section class="sx-carte sx-carte-pad" style="display:flex;flex-direction:column;gap:8px;">
           <span class="sx-h2" style="font-size:16px;">À reporter dans l'Excel (${reporter.length})</span>
-          ${reporter.length ? `<span class="sx-aide">OT validés dans la PWA qui ne sont pas encore dans l'Excel. Téléchargez les 3 fichiers de chaque fiche,
-              cliquez « Copier les lignes pour l'Excel », puis dans la matrice lancez la macro « Reporter les OT PWA » :
-              elle remplit « Historique OT » et l'onglet PLANNING (n° Evt, montant, liens pdf et dossier) et range les fichiers téléchargés.
-              Ensuite, « Mettre à jour depuis l'Excel » vide cette liste.</span>
+          ${reporter.length ? `<span class="sx-aide">OT validés dans la PWA qui ne sont pas encore dans l'Excel. Dans la matrice, un clic sur
+              « Reporter les OT PWA » suffit : la macro les récupère, remplit « Historique OT » et l'onglet PLANNING
+              (n° Evt, montant, liens pdf et dossier), enregistre les 3 fichiers dans le dossier du module, puis vide cette liste.</span>
             <div class="sx-carte sx-table-boite"><table class="sx-table sx-serre" style="min-width:520px;">
               <tr><th>N° OT</th><th>Module</th><th>Agence</th><th>Date</th><th style="text-align:right;">Total HT</th></tr>
               ${reporter.map(r => `<tr><td>${_otEsc(r.numero)}</td><td>${_otEsc(r.module)} · <span class="sx-ref">${_otEsc(r.code)}</span></td>
                 <td>${_otEsc(r.agence)}</td><td>${_otEsc(String(r.date || '').split('-').reverse().join('/'))}</td>
                 <td style="text-align:right;">${_otEuros(r.total)}</td></tr>`).join('')}
             </table></div>
-            <button type="button" class="sx-btn sx-btn-principal" style="align-self:flex-start;" onclick="App.otCopierLignesExcel()"
-              ${B.reporter?.colonnes ? '' : 'disabled title="Importez d\'abord la matrice (colonnes OP)"'}>Copier les lignes pour l'Excel</button>`
+            <button type="button" class="sx-btn sx-btn-discret" style="align-self:flex-start;" onclick="App.otCopierLignesExcel()"
+              title="Secours, sans la macro : lignes à coller en A5 de « Historique OT »"
+              ${B.reporter?.colonnes ? '' : 'disabled title="Importez d\'abord la matrice (colonnes OP)"'}>Copier les lignes (sans la macro)</button>`
             : '<span class="sx-aide">Rien à reporter : l\'Excel contient tous les OT validés dans la PWA.</span>'}
         </section>
       </main></div>`;
@@ -2395,7 +2395,7 @@ Object.assign(App, {
     }).join('\r\n');
     try {
       await navigator.clipboard.writeText(texte);
-      this.toast(`✓ ${R.lignes.length} ligne(s) copiée(s) — lancez « Reporter les OT PWA » dans la matrice`
+      this.toast(`✓ ${R.lignes.length} ligne(s) copiée(s) — collez en A5 de « Historique OT »`
         + (inconnus.size ? ` (codes absents de l'Excel : ${[...inconnus].join(', ')})` : ''), 6000);
     } catch (e) {
       this.toast('Copie impossible : ' + e.message, 5000);
