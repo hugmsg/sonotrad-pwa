@@ -35,13 +35,13 @@ Object.assign(App, {
     if (this._otAdmin() && window.matchMedia('(min-width: 900px)').matches) this.prodOuvrir(); else this.go('departures');
   },
   prodOuvrir() {
-    S.pb = S.pb || { onglet: 'tous', filtre: '', type: '', q: '', replies: {}, fiches: null, fichesChargement: false };
+    S.pb = S.pb || { etapes: [], filtre: '', type: '', q: '', replies: {}, fiches: null, fichesChargement: false };
     this.go('prod-bureau');
   },
 
   // Appelé par go('prod-bureau')
   async prodBureauInit() {
-    S.pb = S.pb || { onglet: 'tous', filtre: '', type: '', q: '', replies: {}, fiches: null, fichesChargement: false };
+    S.pb = S.pb || { etapes: [], filtre: '', type: '', q: '', replies: {}, fiches: null, fichesChargement: false };
     this._pbRendre();
     const attentes = [];
     if (!S.depsLoaded && !S.depsLoading) attentes.push(this._pbChargerProduction());
@@ -150,8 +150,15 @@ Object.assign(App, {
 
   /* ─ Actions ─ */
 
-  prodOnglet(cle) { S.pb.onglet = cle; S.pb.filtre = ''; this._pbRendre(); },
-  prodFiltre(cle) { S.pb.filtre = S.pb.filtre === cle ? '' : cle; S.pb.onglet = 'tous'; this._pbRendre(); },
+  // Étapes cumulables (« Tous » = aucune étape choisie). Un filtre « À traiter » remplace les étapes, et inversement.
+  prodOnglet(cle) {
+    const E = S.pb.etapes = S.pb.etapes || [];
+    if (cle === 'tous') E.length = 0;
+    else { const i = E.indexOf(cle); if (i >= 0) E.splice(i, 1); else E.push(cle); }
+    S.pb.filtre = '';
+    this._pbRendre();
+  },
+  prodFiltre(cle) { S.pb.filtre = S.pb.filtre === cle ? '' : cle; S.pb.etapes = []; this._pbRendre(); },
   prodType(v) { S.pb.type = v; this._pbRendre(); },
   prodRecherche(v) {
     S.pb.q = v;
@@ -216,7 +223,9 @@ Object.assign(App, {
       partisSansOt: base.filter(l => l.otAFaire && l.parti).length,
     };
     const types = [...new Set(lignes.map(l => (l.d.module || '').trim()).filter(Boolean))].sort();
-    const onglet = (cle, nom, n) => `<button type="button" class="pb-onglet" aria-pressed="${P.onglet === cle && !P.filtre}" onclick="App.prodOnglet('${cle}')">${_otEsc(nom)} <b>${n}</b></button>`;
+    const etapes = P.etapes || [];
+    const actif = cle => !P.filtre && (cle === 'tous' ? !etapes.length : etapes.includes(cle));
+    const onglet = (cle, nom, n) => `<button type="button" class="pb-onglet" aria-pressed="${actif(cle)}" onclick="App.prodOnglet('${cle}')">${_otEsc(nom)} <b>${n}</b></button>`;
     const puce = (cle, n, texte, classe) => n ? `<button type="button" class="pb-puce pb-puce-${classe}" aria-pressed="${P.filtre === cle}" onclick="App.prodFiltre('${cle}')">${n} ${texte}</button>` : '';
     const maj = pret ? 'à jour à ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : 'chargement…';
 
@@ -270,7 +279,7 @@ Object.assign(App, {
     else if (P.filtre === 'otAFaire') lignes = lignes.filter(l => l.otAFaire && !l.parti);
     else if (P.filtre === 'otAEnvoyer') lignes = lignes.filter(l => l.otAEnvoyer);
     else if (P.filtre === 'partisSansOt') lignes = lignes.filter(l => l.otAFaire && l.parti);
-    else if (P.onglet !== 'tous') lignes = lignes.filter(l => l.etape === P.onglet);
+    else if ((P.etapes || []).length) lignes = lignes.filter(l => P.etapes.includes(l.etape));
     // « Tous » : le parc, plus les partis encore sans OT (départs précipités) pour ne pas les perdre de vue
     else lignes = lignes.filter(l => !l.parti || l.otAFaire);
 
@@ -278,7 +287,7 @@ Object.assign(App, {
     const groupes = ordre.map(cle => {
       const e = PB_ETAPES.find(x => x.cle === cle);
       let titre = e.nom;
-      if (cle === 'parti' && P.onglet === 'tous' && !P.filtre) titre = 'Partis sans OT (départs précipités)';
+      if (cle === 'parti' && !(P.etapes || []).length && !P.filtre) titre = 'Partis sans OT (départs précipités)';
       const ls = lignes.filter(l => l.etape === cle);
       ls.sort((a, b) => (b.retard - a.retard) || String(a.d.debut || '').localeCompare(String(b.d.debut || '')));
       if (cle === 'parti') ls.sort((a, b) => (b.fin || 0) - (a.fin || 0));
