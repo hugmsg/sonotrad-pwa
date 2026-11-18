@@ -367,7 +367,7 @@ Object.assign(App, {
       ${this._pbHtmlAgence(l, `${_otEsc(d.chantier || '')}${d.status && d.status.grutage ? ' <span class="pb-grutage">grutage</span>' : ''}`)}
       ${S.pb.desc ? `<button type="button" class="pb-texte pb-desc" onclick="App.prodOuvrirModule(${l.parti}, ${l.idx})" title="${_otEsc(d.description || '')}">${d.description ? _otEsc(d.description) : '<span class="pb-gris">—</span>'}</button>` : ''}
       ${this._pbHtmlEtape(l, admin, barre, nomEtape)}
-      <span class="pb-gris2">${_otEsc(duree)}${this._pbHtmlAnnonce(l)}</span>
+      <span class="pb-gris2 pb-duree">${l.parti ? '' : `<span class="pb-annonce-place">${this._pbHtmlAnnonce(l)}</span>`}${_otEsc(duree)}</span>
       <span class="${l.retard ? 'pb-rouge' : (d.livraisonPrevue ? '' : 'pb-gris')}">${_otEsc(liv)}</span>
       <span class="pb-ot-cell">${ot}</span>
       <span>${this._pbHtmlStock(f)}</span>
@@ -1256,7 +1256,7 @@ Object.assign(App, {
 
   _pbHtmlAnnonce(l) {
     if (l.parti || !(l.d.status && l.d.status.mail) || !['termine', 'pret'].includes(l.etape)) return '';
-    return ` <span class="pb-annonce" title="Mail de dispo envoyé (annoncé à LOXAM)">${_PB_SVG_MAIL}</span>`;
+    return `<span class="pb-annonce" title="Mail de dispo envoyé (annoncé à LOXAM)">${_PB_SVG_MAIL}</span>`;
   },
 
   async prodSelMailDispo() {
