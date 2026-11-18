@@ -583,6 +583,7 @@ Object.assign(App, {
             <span class="sx-aide">Pour le bureau, pas pour LOXAM.</span>
           </div>
         </section>
+        ${this._otAutorise() ? this._otHtmlStock(f) : ''}
       </main>
       <footer class="sx-pied"><div class="sx-pied-in" id="ot-pied">${this._otHtmlPied()}</div></footer>
     </div>`;
