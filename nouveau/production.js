@@ -325,7 +325,7 @@ Object.assign(App, {
 
     const sel = this._pbPeutSel();
     const entete = `<div class="pb-grille pb-tete"><span class="pb-code-cell">${sel ? `<input type="checkbox" class="pb-sel" id="pb-sel-tout" aria-label="Tout sélectionner (lignes affichées)" onclick="App.prodSelTout(this.checked)">` : ''}Code</span><span>N° module</span><span>Type</span><span>Agence · chantier</span>${P.desc ? '<span>Travaux</span>' : ''}
-      <span>Étape</span><span>Durée</span><span>Livraison</span><span>OT</span><span class="pb-droite">${admin ? 'Montant' : ''}</span><span>${admin ? 'Documents' : ''}</span><span>Fiche</span></div>`;
+      <span>Étape</span><span>Durée</span><span>Livraison</span><span>OT</span><span title="Fournitures sorties du stock">Stock</span><span class="pb-droite">${admin ? 'Montant' : ''}</span><span>${admin ? 'Documents' : ''}</span><span>Fiche</span></div>`;
     el.innerHTML = `<div class="pb-tableau${P.desc ? ' pb-avec-desc' : ''}"><div class="pb-interieur">${entete}${groupes.map(g => `
       <button type="button" class="pb-groupe pb-g-${g.cle}" aria-expanded="${!P.replies[g.cle]}" onclick="App.prodReplier('${g.cle}')">
         ${_PB_SVG_CHEVRON}<span>${_otEsc(g.titre)}</span><span class="pb-groupe-n">${g.ls.length} module${g.ls.length > 1 ? 's' : ''}</span>
@@ -362,7 +362,8 @@ Object.assign(App, {
       ${this._pbHtmlEtape(l, admin, barre, nomEtape)}
       <span class="pb-gris2">${_otEsc(duree)}</span>
       <span class="${l.retard ? 'pb-rouge' : (d.livraisonPrevue ? '' : 'pb-gris')}">${_otEsc(liv)}</span>
-      <span>${ot}</span>
+      <span class="pb-ot-cell">${ot}</span>
+      <span>${this._pbHtmlStock(f)}</span>
       <span class="pb-droite pb-montant">${admin && f && f.total_ht !== undefined && f.total_ht !== null && f.statut !== 'brouillon' ? _otEuros(f.total_ht) : ''}</span>
       <span class="pb-docs">${docs}</span>
       <button type="button" class="pb-poses" onclick="App.prodPoses(${l.parti}, ${l.idx})" title="Fiche d'opérations : saisir les poses">${_PB_SVG_CLE}Poses</button>
@@ -932,6 +933,7 @@ Object.assign(App, {
         <span class="pb-gris2">${_otEsc(duree || '')}</span>
         ${!l.parti ? `<span class="${l.retard ? 'pb-rouge' : 'pb-gris'}">livr. ${_otEsc(d.livraisonPrevue ? _fmtDateShort(d.livraisonPrevue) : '—')}</span>` : ''}
         ${ot}
+        ${f && f.stock_le ? this._pbHtmlStock(f, true) : ''}
         ${pdf && pdf.url ? `<a class="pb-doc" href="${_otEsc(pdf.url)}" target="_blank" rel="noopener">PDF</a>` : ''}
         ${admin && f && f.documents && f.documents.dossier ? `<a class="pb-doc" href="${_otEsc(f.documents.dossier)}" target="_blank" rel="noopener">Dossier OT</a>` : ''}
         <button type="button" class="pb-poses" onclick="App.prodPoses(${l.parti}, ${l.idx})">${_PB_SVG_CLE}Poses</button>
@@ -1135,8 +1137,8 @@ Object.assign(App, {
     if (l.sansOt) {
       const t = _otEsc(this._otTexteSansOt(l.sansOt));
       return l.sansOt.auto || !this._otAutorise()
-        ? `<span class="pb-ot pb-ot-sans" title="${t}">Pas d'OT · ${_otEsc(OT_MOTIFS[l.sansOt.motif] || l.sansOt.motif)}</span>`
-        : `<button type="button" class="pb-ot pb-ot-sans" onclick="App.otRemettreAFaire('${code}')" title="${t} — cliquer pour remettre à faire">Pas d'OT · ${_otEsc(OT_MOTIFS[l.sansOt.motif] || l.sansOt.motif)}</button>`;
+        ? `<span class="pb-ot pb-ot-sans" title="${t}">Pas d'OT</span>`
+        : `<button type="button" class="pb-ot pb-ot-sans" onclick="App.otRemettreAFaire('${code}')" title="${t} — cliquer pour remettre à faire">Pas d'OT</button>`;
     }
     const etat = l.otAFaire ? '<span class="pb-ot pb-ot-afaire">OT à faire</span>' : (gris ? '<span class="pb-gris">Pas de fiche</span>' : '');
     // Petite croix rouge (demande de Hugo) : plus léger, et on ne lit pas « pas d'OT » comme « rien à faire »
@@ -1218,5 +1220,14 @@ Object.assign(App, {
     }
     this.toast('✓ ' + faits + ' module' + (faits > 1 ? 's' : '') + ' sans OT' + (echecs.length ? ' — échec : ' + echecs.join(', ') : ''), echecs.length ? 8000 : 3500);
     this._pbRendre();
+  },
+});
+
+/* Fournitures sorties du stock (2026-11-18) : colonne « Stock » du tableau, étiquette sur les cartes. */
+Object.assign(App, {
+  _pbHtmlStock(f, texte) {
+    if (!f || !f.stock_le) return texte ? '' : '<span class="pb-gris">—</span>';
+    const quand = new Date(f.stock_le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+    return `<span class="pb-stock" title="Fournitures sorties du stock le ${_otEsc(quand)}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>${texte ? 'stock sorti' : 'sorti'}</span>`;
   },
 });

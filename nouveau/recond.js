@@ -270,7 +270,7 @@ Object.assign(App, {
         <div class="sx-item-texte">
           <span class="sx-item-titre">${_otEsc([f.type_module, f.numero_module].filter(Boolean).join(' ') || f.code_planning)}
             · <span class="sx-ref">${_otEsc(f.code_planning)}</span></span>
-          <span class="sx-item-detail">${st ? `<span class="sx-tag-planning sx-tp-${_otEsc(st.classe)}" title="Étape au Planning">${_otEsc(st.texte)}</span> ` : ''}${_otEsc([m && m.chantier ? m.chantier : f.agence, f.numero_ot, f.saisi_par, _otDate(f.modifie_le)].filter(Boolean).join(' · '))}</span>
+          <span class="sx-item-detail">${st ? `<span class="sx-tag-planning sx-tp-${_otEsc(st.classe)}" title="Étape au Planning">${_otEsc(st.texte)}</span> ` : ''}${f.stock_le ? `<span class="sx-tag-planning sx-tag-stock" title="Fournitures sorties du stock le ${_otEsc(new Date(f.stock_le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}">stock sorti</span> ` : ''}${_otEsc([m && m.chantier ? m.chantier : f.agence, f.numero_ot, f.saisi_par, _otDate(f.modifie_le)].filter(Boolean).join(' · '))}</span>
         </div>
         ${admin && f.total_ht !== undefined ? `<span class="sx-montant">${_otEuros(f.total_ht)}</span>` : ''}
         <span class="sx-pastille sx-p-${_otEsc(f.statut)}">${_otEsc(OT_STATUTS[f.statut] || f.statut)}</span>
