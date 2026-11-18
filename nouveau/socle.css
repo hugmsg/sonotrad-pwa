@@ -715,3 +715,7 @@ span.pb-ot-sans { cursor: default; }
 .pb-actions-in { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 16px; font-size: 14px; }
 .pb-action { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 8px; border: 0; background: #FFFFFF; color: #9B1C1C; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
 .pb-action-discret { background: transparent; color: #FFFFFF; border: 1px solid rgba(255,255,255,.5); }
+/* Liste des fiches : étape au Planning (2026-11-18) — étiquette à bord, distincte de la pastille de la fiche */
+.sx-tag-planning { display: inline-block; font-size: 11px; font-weight: 700; border: 1px solid currentColor; border-radius: 4px; padding: 0 5px; margin-right: 2px; white-space: nowrap; }
+.sx-tp-brouillon { color: #5B6878; } .sx-tp-encours { color: #1D4E9E; } .sx-tp-a_valider { color: #8A5A00; }
+.sx-tp-validee { color: #14532D; } .sx-tp-envoyee { color: #4B3A7A; }

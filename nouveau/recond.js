@@ -228,15 +228,21 @@ Object.assign(App, {
       { titre: 'Validées',      statuts: ['validee'] },
       { titre: 'Envoyées',      statuts: ['envoyee'], max: 15 },
     ];
-    const item = f => `<button type="button" class="sx-item" onclick="App.otOuvrirFiche(${Number(f.id)})">
+    // Destination et étape lues dans le Planning (modules chargés à côté de la liste), demande de Hugo du 18/11
+    const parCode = new Map((S.ot.modules || []).map(m => [String(m.code || '').toUpperCase(), m]));
+    const item = f => {
+      const m = parCode.get(String(f.code_planning || '').toUpperCase());
+      const st = m ? this._otStatutModule(m) : null;
+      return `<button type="button" class="sx-item" onclick="App.otOuvrirFiche(${Number(f.id)})">
         <div class="sx-item-texte">
           <span class="sx-item-titre">${_otEsc([f.type_module, f.numero_module].filter(Boolean).join(' ') || f.code_planning)}
             · <span class="sx-ref">${_otEsc(f.code_planning)}</span></span>
-          <span class="sx-item-detail">${_otEsc([f.numero_ot, f.agence, f.saisi_par, _otDate(f.modifie_le)].filter(Boolean).join(' · '))}</span>
+          <span class="sx-item-detail">${st ? `<span class="sx-tag-planning sx-tp-${_otEsc(st.classe)}" title="Étape au Planning">${_otEsc(st.texte)}</span> ` : ''}${_otEsc([m && m.chantier ? m.chantier : f.agence, f.numero_ot, f.saisi_par, _otDate(f.modifie_le)].filter(Boolean).join(' · '))}</span>
         </div>
         ${admin && f.total_ht !== undefined ? `<span class="sx-montant">${_otEuros(f.total_ht)}</span>` : ''}
         <span class="sx-pastille sx-p-${_otEsc(f.statut)}">${_otEsc(OT_STATUTS[f.statut] || f.statut)}</span>
       </button>`;
+    };
 
     const aOuvrir = this._otModulesAOuvrir();
     const itemModule = m => {
