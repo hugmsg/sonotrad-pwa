@@ -33,7 +33,7 @@ Object.assign(App, {
   // depuis le 2026-11-18 (avant : admins seulement). L'ancienne vue reste derrière « Colonnes ».
   prodEntree() { this.prodOuvrir(); },
 
-  // Changer d'étape : admins et activité LOXAM (2026-11-18). Ajouter / retirer du Planning restent admins.
+  // Changer d'étape, ajouter au Planning, retirer du Planning : admins et activité LOXAM (2026-11-18).
   _pbPeutEtape() {
     const u = S.currentUser;
     return !!u && (u.role === 'admin' || (u.activites || []).includes('loxam'));
@@ -251,7 +251,7 @@ Object.assign(App, {
             <button type="button" aria-pressed="false" onclick="App.prodColonnes()">Colonnes</button>
           </div>
           <button type="button" class="pb-bouton" onclick="App.prodActualiser()">Actualiser</button>
-          ${this._otAdmin() ? '<button type="button" class="sx-btn sx-btn-principal pb-btn-ajout" onclick="App.prodFenetreAjout()">+ Ajouter<span class="pb-sans-tel"> au Planning</span></button>' : ''}
+          ${this._pbPeutEtape() ? '<button type="button" class="sx-btn sx-btn-principal pb-btn-ajout" onclick="App.prodFenetreAjout()">+ Ajouter<span class="pb-sans-tel"> au Planning</span></button>' : ''}
         </div>
         <div class="pb-ligne pb-defile" role="group" aria-label="Étapes">
           ${onglet('tous', 'Tous', base.filter(l => !l.parti).length)}
@@ -614,7 +614,7 @@ Object.assign(App, {
   },
 });
 
-/* ─ Ajout au Planning (admins, 2026-11-17) : un seul bouton dans Production ; on tape le code planning,
+/* ─ Ajout au Planning (2026-11-17 ; admins + activité LOXAM depuis le 2026-11-18) : un seul bouton dans Production ; on tape le code planning,
    vérifié contre les Arrivées sur parc (et absent du Planning), code demande en option.
    Écriture : action `planning_ajouter` de masterfile (refait les effets du déclencheur du Sheet). ─ */
 Object.assign(App, {
@@ -803,7 +803,7 @@ Object.assign(App, {
   },
 });
 
-/* ─ Retirer du Planning (admins, 2026-11-17) : action `planning_retirer` de masterfile ─
+/* ─ Retirer du Planning (2026-11-17 ; admins + activité LOXAM depuis le 2026-11-18) : action `planning_retirer` de masterfile ─
    Bouton sur la fiche du module (vue dep-detail). Le serveur refait les mêmes contrôles. */
 Object.assign(App, {
 
@@ -825,7 +825,7 @@ Object.assign(App, {
   },
 
   prodHtmlRetrait(d) {
-    if (!this._otAdmin() || !d || !d.code) return '';
+    if (!this._pbPeutEtape() || !d || !d.code) return '';
     const b = this._pbRetraitBloquants(d);
     return `<div class="card" style="margin-top:14px;border:1px solid #F3C4C4;">
       <p style="font-size:14px;font-weight:600;color:#1E293B;margin:0 0 4px;">Retirer du Planning</p>
