@@ -179,8 +179,39 @@ Object.assign(App, {
       S.ot.listeChargement = false;
       this._otRendreListe();
     }
-    // Modules du Planning (terminés sans fiche → « À compléter ») : chargés à côté, la liste se redessine à l'arrivée
-    if (force || !S.ot.modules) this._otChargerModules(force).then(() => { if (S.ot.choix) this._otRendreModules(); else this._otRendreListe(); });
+    // Modules du Planning (terminés sans fiche, étape et destination des fiches) : d'abord ce qu'on a déjà
+    // (Planning chargé par Production / LOXAM, sinon dernière copie gardée sur l'appareil), puis rafraîchis
+    // en arrière-plan — la liste se redessine à l'arrivée (2026-11-18).
+    if (!S.ot.modules) this._otModulesDejaLa();
+    if (force || !S.ot.modules || S.ot.modulesAncien) {
+      const lecture = this._otChargerModules(true);     // pose « en cours » tout de suite, avant le rendu
+      this._otRendreListe();
+      lecture.then(() => { if (S.ot.choix) this._otRendreModules(); else this._otRendreListe(); });
+    }
+  },
+
+  // Planning déjà en mémoire (Production / LOXAM) ou dernière copie de l'appareil → S.ot.modules, marqué « ancien »
+  _otModulesDejaLa() {
+    let mods = null;
+    if (S.depsLoaded && Array.isArray(S.deps)) {
+      mods = [...S.deps.map(m => ({ ...m, parti: false })),
+              ...(S.archiveLoaded && Array.isArray(S.archive) ? S.archive.map(m => ({ ...m, parti: true, status: m.status || {} })) : [])];
+    } else {
+      try { const c = JSON.parse(localStorage.getItem('snt_ot_planning') || 'null'); if (c && Array.isArray(c.modules)) mods = c.modules; } catch (e) { mods = null; }
+    }
+    if (mods && mods.length) { S.ot.modules = mods; S.ot.modulesAncien = true; }
+  },
+
+  // Copie légère gardée sur l'appareil : champs utiles à la liste, partis récents seulement
+  _otGarderModules() {
+    try {
+      const depuis = new Date('2026-10-01');
+      const leger = (S.ot.modules || [])
+        .filter(m => !m.parti || (m.fin && new Date(m.fin) >= depuis))
+        .map(m => ({ code: m.code, codeModule: m.codeModule, module: m.module, chantier: m.chantier, ag: m.ag,
+                     description: m.description, fin: m.fin, parti: !!m.parti, status: m.status || {} }));
+      localStorage.setItem('snt_ot_planning', JSON.stringify({ le: Date.now(), modules: leger }));
+    } catch (e) { /* stockage plein ou indisponible : on s'en passe */ }
   },
 
   async _otChargerModules(force = false) {
@@ -195,6 +226,8 @@ Object.assign(App, {
         ...(prod.data || []).map(m => ({ ...m, parti: false })),
         ...(partis.data || []).map(m => ({ ...m, parti: true, status: m.status || {} })),
       ];
+      S.ot.modulesAncien = false;
+      this._otGarderModules();
     } catch (e) {
       this.toast('Modules indisponibles : ' + e.message, 4000);
     } finally {
@@ -272,7 +305,7 @@ Object.assign(App, {
         <div class="sx-statut sx-statut-groupe"><span class="sx-statut-nom">${g.titre}</span><span class="sx-statut-texte">${compte}</span></div>
         <div class="sx-carte">${modules.map(itemModule).join('')}${fiches.map(item).join('')}</div></section>`;
     }).join('');
-    if (S.ot.listeChargee && S.ot.modulesChargement && !S.ot.modules) corps = '<div class="sx-aide">Recherche des modules terminés au Planning…</div>' + corps;
+    if (S.ot.listeChargee && S.ot.modulesChargement) corps = `<div class="sx-aide">${S.ot.modules ? 'Mise à jour du Planning…' : 'Recherche des modules terminés au Planning…'}</div>` + corps;
     // Modules marqués « pas d'OT » (les ventes reconnues d'office n'y figurent pas) : repliés, annulables
     const sansOt = S.ot.sansOt ? [...S.ot.sansOt.values()] : [];
     if (sansOt.length) {
