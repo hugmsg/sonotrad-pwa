@@ -683,4 +683,16 @@ body.pb-plein #view-prod-bureau.active { flex: 1; min-height: 0; display: flex; 
 }
 /* Liste des fiches : modules terminés sans fiche, en tête de « À compléter » (2026-11-18) */
 .sx-item-a-ouvrir { background: #FFFBEB; }
-.sx-item-ouvrir { min-height: 36px; padding: 0 12px; font-size: 13px; flex-shrink: 0; pointer-events: none; }
+.sx-item-ouvrir { min-height: 40px; padding: 0 12px; font-size: 13px; flex-shrink: 0; }
+.sx-item-a-ouvrir { cursor: default; flex-wrap: wrap; }
+.sx-item-btn { border: 0; background: none; padding: 0; text-align: left; font-family: inherit; color: inherit; cursor: pointer; }
+.sx-so-groupe > summary { cursor: pointer; list-style: none; }
+.sx-so-groupe > summary::-webkit-details-marker { display: none; }
+.sx-so-groupe .sx-item { cursor: default; }
+.sx-so-motifs { border: 0; padding: 0; margin: 8px 0; display: flex; flex-direction: column; gap: 4px; }
+.sx-so-motif { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 15px; }
+.sx-so-motif input { width: 20px; height: 20px; }
+.pb-ot-sans { background: #EEF1F5; color: #3D4B5C; border: 0; font-family: inherit; cursor: pointer; }
+span.pb-ot-sans { cursor: default; }
+.pb-sans-btn { border: 1px solid var(--sx-bord-champ); background: #FFFFFF; color: #3D4B5C; border-radius: 5px; padding: 1px 6px; font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.pb-sans-btn:hover { background: var(--sx-bleu-clair); }

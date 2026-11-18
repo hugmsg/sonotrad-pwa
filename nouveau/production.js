@@ -89,6 +89,7 @@ Object.assign(App, {
     try {
       const d = await this._otGet({ action: 'ot_liste' });
       S.pb.fiches = d.fiches || [];
+      if (this._otSansOtMaj) this._otSansOtMaj(d.sans_ot);
     } catch (e) { S.pb.fiches = []; this.toast('Fiches d\'opérations indisponibles : ' + e.message, 4000); }
     finally { S.pb.fichesChargement = false; }
   },
@@ -132,8 +133,9 @@ Object.assign(App, {
       const fin = d.fin ? new Date(d.fin) : null;
       // OT attendue : module terminé (ou parti depuis la mise en service des fiches) sans fiche validée
       const otAttendue = ['termine', 'pret'].includes(etape) || (parti && fin && fin >= debutOt);
-      const otAFaire = otAttendue && (!f || f.statut === 'brouillon' || f.statut === 'a_valider');
-      return { d, idx, parti, code, etape, fiche: f, retard, fin, otAFaire,
+      const sansOt = !f && this._otSansOtDe ? this._otSansOtDe(code, d) : null;   // pas d'OT (marqué ou vente)
+      const otAFaire = !sansOt && otAttendue && (!f || f.statut === 'brouillon' || f.statut === 'a_valider');
+      return { d, idx, parti, code, etape, fiche: f, retard, fin, otAFaire, sansOt,
         otAEnvoyer: !!f && f.statut === 'validee' };
     };
     const actifs = (S.deps || []).map((d, i) => ligne(d, i, false));
@@ -330,8 +332,7 @@ Object.assign(App, {
       if (f) {
         const lib = { brouillon: 'Fiche en cours', a_valider: 'Fiche à valider' }[f.statut];
         ot = `<button type="button" class="pb-ot pb-ot-${_otEsc(f.statut)}" onclick="App.prodOuvrirFiche(${Number(f.id)})" title="Ouvrir la fiche d'opérations">${_otEsc(lib || f.numero_ot || 'Validée')}${f.statut === 'validee' ? ' · à envoyer' : ''}</button>`;
-      } else if (l.otAFaire) ot = '<span class="pb-ot pb-ot-afaire">OT à faire</span>';
-      else ot = '<span class="pb-gris">Pas de fiche</span>';
+      } else ot = this._pbHtmlOtSansFiche(l, true);
     }
     const docs = (admin && f && f.documents) ? (() => {
       const pdf = (f.documents.fichiers || []).find(x => x.type === 'pdf');
@@ -434,12 +435,13 @@ Object.assign(App, {
       const date = a.dateArrivee ? new Date(a.dateArrivee) : null;
       const f = fiches[code] || null;
       const fin = par && par.d.fin ? new Date(par.d.fin) : null;
-      const otAFaire = !!par && fin && !isNaN(fin) && fin >= debutOt && (!f || f.statut === 'brouillon' || f.statut === 'a_valider');
+      const sansOt = !f && this._otSansOtDe ? this._otSansOtDe(code, pl ? pl.d : null) : null;
+      const otAFaire = !sansOt && !!par && fin && !isNaN(fin) && fin >= debutOt && (!f || f.statut === 'brouillon' || f.statut === 'a_valider');
       let statut;
       if (act) statut = { texte: 'Sur parc · ' + ((PB_ETAPES.find(e => e.cle === this._pbEtape(act.d, false)) || {}).nom || ''), classe: 'parc' };
       else if (parti) statut = { texte: 'Parti', classe: 'parti' };
       else statut = { texte: 'Pas au Planning', classe: 'horsplanning' };
-      return { a, code, date: date && !isNaN(date) ? date : null, pl, parti, statut, fiche: f, otAFaire,
+      return { a, code, date: date && !isNaN(date) ? date : null, pl, parti, statut, fiche: f, otAFaire, sansOt,
         horsPlanning: !pl && !a.isParti };
     });
   },
@@ -564,7 +566,7 @@ Object.assign(App, {
       if (f) {
         const lib = { brouillon: 'Fiche en cours', a_valider: 'Fiche à valider' }[f.statut];
         ot = `<button type="button" class="pb-ot pb-ot-${_otEsc(f.statut)}" onclick="App.prodOuvrirFiche(${Number(f.id)})" title="Ouvrir la fiche d'opérations">${_otEsc(lib || f.numero_ot || 'Validée')}</button>`;
-      } else if (l.otAFaire) ot = '<span class="pb-ot pb-ot-afaire">OT à faire</span>';
+      } else ot = this._pbHtmlOtSansFiche(l, false);
     }
     const docs = (admin && f && f.documents) ? (() => {
       const pdf = (f.documents.fichiers || []).find(x => x.type === 'pdf');
@@ -898,7 +900,7 @@ Object.assign(App, {
       if (f) {
         const lib = { brouillon: 'Fiche en cours', a_valider: 'Fiche à valider' }[f.statut];
         ot = `<button type="button" class="pb-ot pb-ot-${_otEsc(f.statut)}" onclick="App.prodOuvrirFiche(${Number(f.id)})">${_otEsc(lib || f.numero_ot || 'Validée')}${f.statut === 'validee' ? ' · à envoyer' : ''}</button>`;
-      } else if (l.otAFaire) ot = '<span class="pb-ot pb-ot-afaire">OT à faire</span>';
+      } else ot = this._pbHtmlOtSansFiche(l, false);
     }
     const pdf = admin && f && f.documents ? (f.documents.fichiers || []).find(x => x.type === 'pdf') : null;
     return `<div class="pb-carte${l.retard ? ' pb-retard' : ''}${l.parti ? ' pb-parti' : ''}">
@@ -1107,5 +1109,20 @@ Object.assign(App, {
       $('#pb-ag-msg').textContent = agences.length + ' agences LOXAM';
       dessiner();
     } catch (e) { $('#pb-ag-msg').textContent = 'Annuaire indisponible : ' + e.message; }
+  },
+});
+
+/* Colonne OT d'un module sans fiche (2026-11-18) : « OT à faire » + bouton « Pas d'OT », ou le marquage. */
+Object.assign(App, {
+  _pbHtmlOtSansFiche(l, gris) {
+    const code = _otEsc(l.code || '');
+    if (l.sansOt) {
+      const t = _otEsc(this._otTexteSansOt(l.sansOt));
+      return l.sansOt.auto || !this._otAutorise()
+        ? `<span class="pb-ot pb-ot-sans" title="${t}">Pas d'OT · ${_otEsc(OT_MOTIFS[l.sansOt.motif] || l.sansOt.motif)}</span>`
+        : `<button type="button" class="pb-ot pb-ot-sans" onclick="App.otRemettreAFaire('${code}')" title="${t} — cliquer pour remettre à faire">Pas d'OT · ${_otEsc(OT_MOTIFS[l.sansOt.motif] || l.sansOt.motif)}</button>`;
+    }
+    const etat = l.otAFaire ? '<span class="pb-ot pb-ot-afaire">OT à faire</span>' : (gris ? '<span class="pb-gris">Pas de fiche</span>' : '');
+    return etat + (this._otAutorise() && l.code ? ` <button type="button" class="pb-sans-btn" onclick="App.otPasDOt('${code}')" title="Ce module n'aura pas d'OT (vente en l'état, épave…)">Pas d'OT</button>` : '');
   },
 });

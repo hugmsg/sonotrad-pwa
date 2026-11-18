@@ -172,6 +172,7 @@ Object.assign(App, {
       S.ot.liste = d.fiches || [];
       S.ot.listeChargee = true;
       if (d.essai !== undefined) S.ot.essai = Number(d.essai) === 1;
+      this._otSansOtMaj(d.sans_ot);
     } catch (e) {
       this.toast('Fiches indisponibles : ' + e.message, 4000);
     } finally {
@@ -209,6 +210,7 @@ Object.assign(App, {
     const debut = new Date('2026-11-16');
     return S.ot.modules.filter(m => {
       if (!m.code || avecFiche.has(String(m.code).toUpperCase())) return false;
+      if (this._otSansOtDe(m.code, m)) return false;          // pas d'OT (marqué, ou vente RBSA / BCBJ / DRCB)
       if (m.parti) { const fin = m.fin ? new Date(m.fin) : null; return !!fin && !isNaN(fin) && fin >= debut; }
       return !!(m.status && m.status.termine && !m.status.deCote);
     }).sort((a, b) => (a.parti - b.parti) || String(a.fin || '').localeCompare(String(b.fin || '')));
@@ -237,13 +239,18 @@ Object.assign(App, {
       </button>`;
 
     const aOuvrir = this._otModulesAOuvrir();
-    const itemModule = m => `<button type="button" class="sx-item sx-item-a-ouvrir" onclick="App._otChoisirModule('${_otEsc(m.code)}', ${m.parti ? 'true' : 'false'})">
-        <div class="sx-item-texte">
+    const itemModule = m => {
+      const ouvrir = `App._otChoisirModule('${_otEsc(m.code)}', ${m.parti ? 'true' : 'false'})`;
+      const vente = this._otVente(m) === 'proposee';
+      return `<div class="sx-item sx-item-a-ouvrir">
+        <button type="button" class="sx-item-texte sx-item-btn" onclick="${ouvrir}">
           <span class="sx-item-titre">${_otEsc([m.module, m.codeModule].filter(Boolean).join(' ') || '—')} · <span class="sx-ref">${_otEsc(m.code)}</span></span>
-          <span class="sx-item-detail">${_otEsc([m.ag, m.chantier].filter(Boolean).join(' · '))}${m.parti ? ' · parti sans OT' : ' · terminé au Planning'}</span>
-        </div>
-        <span class="sx-btn sx-btn-second sx-item-ouvrir">Ouvrir la fiche</span>
-      </button>`;
+          <span class="sx-item-detail">${_otEsc([m.ag, m.chantier].filter(Boolean).join(' · '))}${m.parti ? ' · parti sans OT' : ' · terminé au Planning'}${vente ? ' · <b>vente probable ?</b>' : ''}</span>
+        </button>
+        <button type="button" class="sx-btn sx-btn-discret sx-item-ouvrir" onclick="App.otPasDOt('${_otEsc(m.code)}')">Pas d'OT</button>
+        <button type="button" class="sx-btn sx-btn-second sx-item-ouvrir" onclick="${ouvrir}">Ouvrir la fiche</button>
+      </div>`;
+    };
 
     let corps;
     if (S.ot.listeChargement && !S.ot.listeChargee) corps = '<div class="sx-chargement">Chargement des fiches…</div>';
@@ -260,6 +267,17 @@ Object.assign(App, {
         <div class="sx-carte">${modules.map(itemModule).join('')}${fiches.map(item).join('')}</div></section>`;
     }).join('');
     if (S.ot.listeChargee && S.ot.modulesChargement && !S.ot.modules) corps = '<div class="sx-aide">Recherche des modules terminés au Planning…</div>' + corps;
+    // Modules marqués « pas d'OT » (les ventes reconnues d'office n'y figurent pas) : repliés, annulables
+    const sansOt = S.ot.sansOt ? [...S.ot.sansOt.values()] : [];
+    if (sansOt.length) {
+      const nomDe = code => { const m = (S.ot.modules || []).find(x => String(x.code || '').toUpperCase() === code); return m ? [m.module, m.codeModule].filter(Boolean).join(' ') : ''; };
+      corps += `<details class="sx-section sx-so-groupe"><summary class="sx-statut sx-statut-groupe"><span class="sx-statut-nom">Sans OT</span><span class="sx-statut-texte">${sansOt.length} module${sansOt.length > 1 ? 's' : ''}</span></summary>
+        <div class="sx-carte">${sansOt.map(x => `<div class="sx-item">
+          <div class="sx-item-texte"><span class="sx-item-titre">${_otEsc(nomDe(x.code_planning) || '—')} · <span class="sx-ref">${_otEsc(x.code_planning)}</span></span>
+            <span class="sx-item-detail">${_otEsc(this._otTexteSansOt(x) + ' · ' + [x.par, _otDate(x.le)].filter(Boolean).join(' · '))}</span></div>
+          <button type="button" class="sx-btn sx-btn-discret sx-item-ouvrir" onclick="App.otRemettreAFaire('${_otEsc(x.code_planning)}')">Remettre à faire</button>
+        </div>`).join('')}</div></details>`;
+    }
 
     el.innerHTML = `<div class="sx-ecran">
       ${this._otEntete({ retour: S.ot.retour === 'loxam' ? { texte: 'LOXAM', action: 'App.go(\'loxam-menu\')' } : { texte: 'Accueil', action: 'App.goHome()' }, titre: 'Fiches d\'opérations', sousTitre: 'Reconditionnement' + (this._otEssai() ? ' · essai' : '') })}
@@ -2524,5 +2542,102 @@ Object.assign(App, {
       this.toast('Téléchargement impossible : ' + e.message, 5000);
     }
     if (b) { b.disabled = false; b.textContent = 'Télécharger les 3 fichiers'; }
+  },
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Modules SANS OT (2026-11-18, demande de Hugo) : trop abîmés, vendus en l'état… — table ot_sans_ot
+   (action ot_sans_ot de masterfile, liste renvoyée par ot_liste). Destinations de vente reconnues d'office
+   (agence du Planning, colonne D) : RBSA, BCBJ, DRCB = pas d'OT ; Saint-Paterne (0102) = proposé seulement
+   (des modules y sont partis avec un OT). Marquer / annuler : admins et accès « Reconditionnement ».
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const OT_VENTE_AUTO = ['RBSA', 'BCBJ', 'DRCB'];
+const OT_VENTE_PROPOSEE = ['102'];
+const OT_MOTIFS = { vente: 'vente en l\u2019état', epave: 'épave / pièces', autre: 'autre' };
+
+Object.assign(App, {
+
+  _otCleAgence(v) { return String(v === null || v === undefined ? '' : v).trim().replace(/^0+/, '').toUpperCase(); },
+  // 'auto' (vente reconnue), 'proposee' (vente probable) ou ''
+  _otVente(m) {
+    if (!m) return '';
+    const ag = this._otCleAgence(m.ag);
+    const lib = String(m.chantier || '').toUpperCase();
+    if (OT_VENTE_AUTO.includes(ag) || OT_VENTE_AUTO.some(c => lib.startsWith(c + ' ') || lib === c)) return 'auto';
+    if (OT_VENTE_PROPOSEE.includes(ag) || lib.includes('SAINT PATERNE')) return 'proposee';
+    return '';
+  },
+  _otSansOtMaj(liste) {
+    if (!Array.isArray(liste)) return;
+    S.ot.sansOt = new Map(liste.map(s => [String(s.code_planning || '').toUpperCase(), s]));
+  },
+  // Marquage enregistré, ou vente reconnue d'office : { motif, auto?, detail?, par?, le? } ; sinon null
+  _otSansOtDe(code, m) {
+    const s = S.ot.sansOt && S.ot.sansOt.get(String(code || '').toUpperCase());
+    if (s) return s;
+    if (this._otVente(m) === 'auto') return { motif: 'vente', auto: true, detail: this._otCleAgence(m.ag) || String(m.chantier || '') };
+    return null;
+  },
+  _otTexteSansOt(s) {
+    return 'Pas d\u2019OT · ' + (OT_MOTIFS[s.motif] || s.motif) + (s.detail ? ' (' + s.detail + ')' : '');
+  },
+
+  _otApresSansOt() {
+    if (S.view === 'ot-liste') this._otRendreListe();
+    if (S.view === 'prod-bureau' && this._pbRendre) this._pbRendre();
+  },
+
+  async otPasDOt(code) {
+    if (!this._otAutorise()) return;
+    const m = [...(S.ot.modules || []), ...(S.deps || []), ...(S.archive || [])].find(x => String(x.code || '').toUpperCase() === String(code).toUpperCase()) || {};
+    const choix = await new Promise(resolve => {
+      const voile = document.createElement('div');
+      voile.className = 'sx-voile';
+      voile.innerHTML = `<div class="sx-fenetre" role="dialog" aria-modal="true" aria-labelledby="ot-so-titre">
+        <h3 id="ot-so-titre">Pas d'OT pour ${_otEsc(code)} ?</h3>
+        <p class="sx-aide">${_otEsc([m.module, m.codeModule, m.chantier].filter(Boolean).join(' · '))}</p>
+        <fieldset class="sx-so-motifs"><legend class="sx-sr">Motif</legend>
+          ${Object.entries(OT_MOTIFS).map(([k, t], i) => `<label class="sx-so-motif"><input type="radio" name="ot-so-motif" value="${k}" ${i === 0 ? 'checked' : ''}> ${_otEsc(t.charAt(0).toUpperCase() + t.slice(1))}</label>`).join('')}
+        </fieldset>
+        <label class="sx-aide" for="ot-so-detail">Précision (facultatif)</label>
+        <input id="ot-so-detail" class="sx-champ" type="text" placeholder="ex. vendu à RBSA, toiture percée…" value="${this._otVente(m) === 'proposee' ? 'Saint-Paterne' : ''}">
+        <p class="sx-aide">Le module sort de « À compléter » et de « OT à faire ». Annulable (« Remettre à faire »).</p>
+        <div class="sx-fenetre-boutons">
+          <button type="button" class="sx-btn sx-btn-discret" data-r="0">Annuler</button>
+          <button type="button" class="sx-btn sx-btn-principal" data-r="1">Pas d'OT</button>
+        </div></div>`;
+      const fin = r => { voile.remove(); resolve(r); };
+      voile.addEventListener('click', e => {
+        if (e.target === voile) return fin(null);
+        const b = e.target.closest('[data-r]');
+        if (!b) return;
+        if (b.dataset.r !== '1') return fin(null);
+        fin({ motif: (voile.querySelector('input[name="ot-so-motif"]:checked') || {}).value || 'vente',
+              detail: voile.querySelector('#ot-so-detail').value.trim() });
+      });
+      document.body.appendChild(voile);
+      voile.querySelector('[data-r="1"]').focus();
+    });
+    if (!choix) return;
+    try {
+      const d = await this._otPost({ action: 'ot_sans_ot', code, motif: choix.motif, detail: choix.detail });
+      S.ot.sansOt = S.ot.sansOt || new Map();
+      if (d.sans_ot) S.ot.sansOt.set(String(code).toUpperCase(), d.sans_ot);
+      this.toast('✓ ' + code + ' : pas d\u2019OT');
+      this._otApresSansOt();
+    } catch (e) { this.toast('Impossible : ' + e.message, 5000); }
+  },
+
+  async otRemettreAFaire(code) {
+    if (!this._otAutorise()) return;
+    const ok = await this._otConfirmer({ titre: 'Remettre ' + code + ' à faire ?', texte: 'Le module revient dans « À compléter » et « OT à faire ».', ok: 'Remettre à faire' });
+    if (!ok) return;
+    try {
+      await this._otPost({ action: 'ot_sans_ot', code, motif: '' });
+      if (S.ot.sansOt) S.ot.sansOt.delete(String(code).toUpperCase());
+      this.toast('✓ ' + code + ' remis à faire');
+      this._otApresSansOt();
+    } catch (e) { this.toast('Impossible : ' + e.message, 5000); }
   },
 });
