@@ -29,10 +29,14 @@ const _PB_SVG_CHEVRON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="n
 Object.assign(App, {
 
   /* ─ Entrée ─ */
-  // Carte « Production » du menu LOXAM. Pendant le test : la nouvelle vue par défaut pour les admins seulement
-  // (tableau sur grand écran, cartes sur téléphone depuis le 2026-11-18) ; les autres l'ont par « Vue tableau ».
-  prodEntree() {
-    if (this._otAdmin()) this.prodOuvrir(); else this.go('departures');
+  // Carte « Production » du menu LOXAM : tableau sur grand écran, cartes sur téléphone — pour tout le monde
+  // depuis le 2026-11-18 (avant : admins seulement). L'ancienne vue reste derrière « Colonnes ».
+  prodEntree() { this.prodOuvrir(); },
+
+  // Changer d'étape : admins et activité LOXAM (2026-11-18). Ajouter / retirer du Planning restent admins.
+  _pbPeutEtape() {
+    const u = S.currentUser;
+    return !!u && (u.role === 'admin' || (u.activites || []).includes('loxam'));
   },
   prodOuvrir() {
     S.pb = S.pb || { etapes: [], filtre: '', type: '', q: '', replies: {}, fiches: null, fichesChargement: false };
@@ -856,7 +860,7 @@ Object.assign(App, {
 /* ═══════════════════════════════════════════════════════════════════════════
    Changement d'étape (2026-11-18) — action `planning_etape` de masterfile : coche M / N / O / S
    dans le Planning et remplit les dates de début / fin comme le déclencheur du Sheet.
-   Depuis la barre d'étape du tableau, la carte téléphone ou la fiche du module. Admins pendant le test.
+   Depuis la barre d'étape du tableau, la carte téléphone ou la fiche du module. Admins et activité LOXAM.
    Version téléphone (< 760 px) : une carte par module au lieu d'une ligne de tableau.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -878,7 +882,7 @@ Object.assign(App, {
   },
 
   _pbHtmlEtape(l, admin, barre, nomEtape) {
-    if (!admin || l.parti) return `<span class="pb-etape" title="${_otEsc(nomEtape)}">${barre}</span>`;
+    if (!this._pbPeutEtape() || l.parti) return `<span class="pb-etape" title="${_otEsc(nomEtape)}">${barre}</span>`;
     return `<button type="button" class="pb-etape pb-etape-btn" onclick="App.prodEtape('${_otEsc(l.d.code)}')" title="${_otEsc(nomEtape)} — changer d'étape">${barre}</button>`;
   },
 
@@ -917,9 +921,9 @@ Object.assign(App, {
     </div>`;
   },
 
-  // Carte « Étape » de la fiche du module (vue dep-detail), admins
+  // Carte « Étape » de la fiche du module (vue dep-detail), admins et activité LOXAM
   prodHtmlEtape(d) {
-    if (!this._otAdmin() || !d || !d.code) return '';
+    if (!this._pbPeutEtape() || !d || !d.code) return '';
     const cle = this._pbEtapePlanning(d);
     const prete = cle === 'termine' && (d.lv || d.commande);
     const frise = ['Arrivé', 'Atelier', 'Contrôle', 'Terminé', 'Commande / LV', 'Parti'];
