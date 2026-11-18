@@ -651,3 +651,6 @@ body.pb-plein #view-prod-bureau.active { flex: 1; min-height: 0; display: flex; 
 .sx-ligne.sx-pense-bete .sx-ligne-nom { color: var(--sx-gris); }
 .sx-rg tr.sx-rg-pense-bete .sx-rg-nom { color: var(--sx-gris); }
 .sx-rg tr.sx-rg-groupe td { padding: 8px 6px 2px; font-size: 11px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; color: var(--sx-bleu); background: var(--sx-fond); }
+/* Production : agence de destination cliquable (2026-11-18) */
+.pb-agence-btn { border: 0; background: none; padding: 4px 6px; margin: -4px -6px; border-radius: 6px; font: inherit; color: inherit; text-align: left; cursor: pointer; display: block; width: calc(100% + 12px); }
+.pb-agence-btn:hover, .pb-agence-btn:focus-visible { background: var(--sx-bleu-clair); }

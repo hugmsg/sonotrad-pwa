@@ -343,7 +343,7 @@ Object.assign(App, {
       <button type="button" class="pb-code" onclick="App.prodDossier('${code}', ${l.parti})" title="Ouvrir le dossier du module (photos, papiers d'arrivée et de départ)">${_PB_SVG_DOSSIER}${code}</button>
       <button type="button" class="pb-numero" onclick="App.prodOuvrirModule(${l.parti}, ${l.idx})" title="Ouvrir la fiche du module">${_otEsc(d.codeModule || '—')}</button>
       <span class="pb-type">${_otEsc(d.module || '')}</span>
-      <span class="pb-texte" title="${_otEsc([d.ag, d.chantier].filter(Boolean).join(' · '))}">${_otEsc(d.chantier || '')}${d.status && d.status.grutage ? ' <span class="pb-grutage">grutage</span>' : ''}</span>
+      ${this._pbHtmlAgence(l, `${_otEsc(d.chantier || '')}${d.status && d.status.grutage ? ' <span class="pb-grutage">grutage</span>' : ''}`)}
       ${this._pbHtmlEtape(l, admin, barre, nomEtape)}
       <span class="pb-gris2">${_otEsc(duree)}</span>
       <span class="${l.retard ? 'pb-rouge' : (d.livraisonPrevue ? '' : 'pb-gris')}">${_otEsc(liv)}</span>
@@ -907,7 +907,7 @@ Object.assign(App, {
         <button type="button" class="pb-numero" onclick="App.prodOuvrirModule(${l.parti}, ${l.idx})">${_otEsc(d.codeModule || '—')}</button>
         <span class="pb-type">${_otEsc(d.module || '')}</span>
       </div>
-      <div class="pb-carte-l2 pb-texte">${_otEsc(d.chantier || 'Sans chantier')}${d.status && d.status.grutage ? ' <span class="pb-grutage">grutage</span>' : ''}</div>
+      <div class="pb-carte-l2">${this._pbHtmlAgence(l, `${_otEsc(d.chantier || 'Sans chantier')}${d.status && d.status.grutage ? ' <span class="pb-grutage">grutage</span>' : ''}`)}</div>
       <div class="pb-carte-l3">
         ${this._pbHtmlEtape(l, admin, barre, nomEtape)}
         <span class="pb-carte-etape">${_otEsc(nomEtape)}</span>
@@ -1003,4 +1003,109 @@ Object.assign(App, {
 // Passage tableau ↔ cartes quand la largeur change (rotation de tablette, fenêtre redimensionnée)
 window.matchMedia('(max-width: 759px)').addEventListener('change', () => {
   if (S.view === 'prod-bureau' && S.pb && S.pb.vue !== 'arr') App._pbRendreCorps();
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Agence de destination (2026-11-18) — action `planning_agence` de masterfile : D = code agence,
+   C = libellé (annuaire LOXAM, onglet Adresses), report dans Demandes si code demande ; vide = LIBRE.
+   Depuis la colonne Agence du tableau, la carte téléphone ou la fiche du module. Admins et activité LOXAM.
+   ═══════════════════════════════════════════════════════════════════════════ */
+Object.assign(App, {
+
+  _pbHtmlAgence(l, contenu) {
+    const titre = _otEsc([l.d.ag, l.d.chantier].filter(Boolean).join(' · '));
+    if (!this._pbPeutEtape() || l.parti) return `<span class="pb-texte" title="${titre}">${contenu}</span>`;
+    return `<button type="button" class="pb-texte pb-agence-btn" onclick="App.prodAgence('${_otEsc(l.d.code)}')" title="${titre} — changer la destination">${contenu}</button>`;
+  },
+
+  // Carte « Destination » de la fiche du module (vue dep-detail)
+  prodHtmlAgenceFiche(d) {
+    if (!this._pbPeutEtape() || !d || !d.code) return '';
+    const libre = !d.ag;
+    return `<div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <div style="min-width:0;">
+        <p style="font-size:14px;font-weight:600;color:#1E293B;margin:0;">Destination</p>
+        <p style="font-size:13px;margin:2px 0 0;color:${libre ? '#94A3B8' : '#1E293B'};">${_otEsc(d.chantier || 'LIBRE')}${libre ? ' · pas encore d\'agence' : ''}</p>
+      </div>
+      <button type="button" class="sx-btn sx-btn-second pb-btn-ajout" onclick="App.prodAgence('${_otEsc(d.code)}')">${libre ? 'Choisir l\'agence' : 'Modifier'}</button>
+    </div>`;
+  },
+
+  async _pbAgences() {
+    if (!(S.annuaireData && S.annuaireData.length)) {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_agencies', {}, 20000);
+      const d = await r.json();
+      if (d.status !== 'ok') throw new Error(d.error || 'annuaire indisponible');
+      S.annuaireData = d.agencies || [];
+      if (S.lvu) S.lvu.agencies = S.annuaireData;
+    }
+    // Le Planning ne connaît que l'annuaire LOXAM (onglet Adresses), comme le déclencheur du Sheet. Une adresse
+    // « custom » remplace la LOXAM de même code dans lv_agencies : on garde les codes numériques, le serveur tranche.
+    return S.annuaireData.filter(a => a.source === 'loxam' || /^\d+$/.test(String(a.code).trim()));
+  },
+
+  async prodAgence(code) {
+    const d = (S.deps || []).find(x => x.code === code);
+    if (!d) return this.toast('Module introuvable dans le Planning : actualisez');
+    const voile = document.createElement('div');
+    voile.className = 'sx-voile';
+    voile.innerHTML = `<div class="sx-fenetre pb-fenetre" role="dialog" aria-modal="true" aria-labelledby="pb-ag-titre">
+      <h3 id="pb-ag-titre">Destination de ${_otEsc(code)}</h3>
+      <p class="sx-aide">${_otEsc([d.module, d.codeModule].filter(Boolean).join(' · '))} — actuellement : <b>${_otEsc(d.chantier || 'LIBRE')}</b></p>
+      <div class="pb-aj-recherche">
+        <label for="pb-ag-q" class="pb-etiquette">Agence (code, ville, nom ou code postal)</label>
+        <input id="pb-ag-q" class="sx-champ" type="search" autocomplete="off" placeholder="ex. 457, MOUGUERRE, 64…">
+        <div id="pb-ag-liste" class="pb-aj-sugg" role="listbox" aria-label="Agences"></div>
+      </div>
+      <div id="pb-ag-msg" class="sx-aide" role="status">Chargement de l'annuaire…</div>
+      <div class="sx-fenetre-boutons">
+        <button type="button" class="sx-btn sx-btn-discret" data-r="0">Annuler</button>
+        <button type="button" class="sx-btn sx-btn-second" data-libre ${d.ag ? '' : 'disabled'}>Mettre LIBRE</button>
+      </div></div>`;
+    const $ = sel => voile.querySelector(sel);
+    let agences = [], affichees = [];
+    const norm = v => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const cle = v => String(v || '').trim().replace(/^0+/, '');
+    const dessiner = () => {
+      const q = norm($('#pb-ag-q').value.trim());
+      affichees = !q ? [] : agences.filter(a => cle(a.code) === cle(q) || cle(a.code).startsWith(cle(q))
+        || [a.nom, a.ville, a.cp].some(v => norm(v).includes(q))).slice(0, 10);
+      $('#pb-ag-liste').innerHTML = affichees.map((a, i) => `<button type="button" class="pb-aj-sug" role="option" data-ag="${i}">
+        <b>${_otEsc(String(a.code).padStart(4, '0'))}</b><span>${_otEsc(String(a.cp || '').padStart(5, '0').slice(0, 2) + ' ' + (a.ville || ''))}</span>
+        <span class="sx-aide">${_otEsc(a.nom || '')}</span></button>`).join('')
+        + (q && !affichees.length ? '<div class="pb-aj-sug pb-aj-sug-non"><span class="sx-aide">Aucune agence LOXAM ne correspond (à ajouter dans l\'onglet Adresses du fichier LV/CMR).</span></div>' : '');
+    };
+    const fermer = () => voile.remove();
+    const enregistrer = async (agence, texte) => {
+      $('#pb-ag-msg').textContent = 'Enregistrement dans le Planning…';
+      voile.querySelectorAll('button').forEach(b => { b.disabled = true; });
+      try {
+        const res = await this._otPost({ action: 'planning_agence', code, agence }, 60000);
+        d.ag = res.ag; d.chantier = res.chantier;
+        fermer();
+        this.toast('✓ ' + code + ' → ' + res.chantier + ' — Planning mis à jour', 3500);
+        if ((res.avertissements || []).length) setTimeout(() => this.toast('⚠ ' + res.avertissements.join(' · '), 8000), 3600);
+        this._pbApresEtape();
+      } catch (e) {
+        voile.querySelectorAll('button').forEach(b => { b.disabled = false; });
+        $('#pb-ag-msg').textContent = '';
+        this.toast('Changement impossible : ' + e.message, 6000);
+      }
+    };
+    voile.addEventListener('click', e => {
+      if (e.target === voile || e.target.closest('[data-r="0"]')) return fermer();
+      const b = e.target.closest('[data-ag]');
+      if (b) { const a = affichees[+b.dataset.ag]; if (a) enregistrer(String(a.code), a.ville); return; }
+      if (e.target.closest('[data-libre]')) enregistrer('', 'LIBRE');
+    });
+    $('#pb-ag-q').addEventListener('input', dessiner);
+    $('#pb-ag-q').addEventListener('keydown', e => { if (e.key === 'Enter' && affichees.length === 1) enregistrer(String(affichees[0].code)); });
+    document.body.appendChild(voile);
+    $('#pb-ag-q').focus();
+    try {
+      agences = await this._pbAgences();
+      $('#pb-ag-msg').textContent = agences.length + ' agences LOXAM';
+      dessiner();
+    } catch (e) { $('#pb-ag-msg').textContent = 'Annuaire indisponible : ' + e.message; }
+  },
 });
