@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    Production — tableau bureau (2026-11-17, maquette « Production LOXAM — refonte »)
-   Une ligne par module, groupée par étape du Planning ; lecture seule : le Planning Google
-   reste la référence (les étapes se changent encore dans le Sheet). L'ancienne vue en cartes
+   Une ligne par module, groupée par étape du Planning ; le Planning Google reste la référence :
+   les étapes se changent dans le Sheet ou ici (`planning_etape`, qui écrit dans le Sheet, 2026-11-18). L'ancienne vue en cartes
    reste accessible (« Colonnes » → vue `departures`).
    Données : `production` + `archive` (Planning, déjà chargées par l'activité LOXAM) et
    `ot_liste` (fiches d'opérations : état, n° d'OT ; montant et documents pour les admins).
@@ -29,10 +29,10 @@ const _PB_SVG_CHEVRON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="n
 Object.assign(App, {
 
   /* ─ Entrée ─ */
-  // Carte « Production » du menu LOXAM : le tableau sur grand écran, l'ancienne vue en cartes sur téléphone.
-  // Pendant le test (2026-11-17) : tableau par défaut pour les admins seulement ; les autres l'ont par « Vue tableau ».
+  // Carte « Production » du menu LOXAM. Pendant le test : la nouvelle vue par défaut pour les admins seulement
+  // (tableau sur grand écran, cartes sur téléphone depuis le 2026-11-18) ; les autres l'ont par « Vue tableau ».
   prodEntree() {
-    if (this._otAdmin() && window.matchMedia('(min-width: 900px)').matches) this.prodOuvrir(); else this.go('departures');
+    if (this._otAdmin()) this.prodOuvrir(); else this.go('departures');
   },
   prodOuvrir() {
     S.pb = S.pb || { etapes: [], filtre: '', type: '', q: '', replies: {}, fiches: null, fichesChargement: false };
@@ -238,7 +238,7 @@ Object.assign(App, {
             <label for="pb-q" class="sx-sr">Rechercher</label>
             <input id="pb-q" type="search" placeholder="Code, n° module, agence, chantier, n° OT, LV…" value="${_otEsc(P.q)}" oninput="App.prodRecherche(this.value)">
           </div>
-          <label for="pb-type" class="pb-etiquette">Type</label>
+          <label for="pb-type" class="pb-etiquette pb-sans-tel">Type</label>
           <select id="pb-type" class="pb-select" onchange="App.prodType(this.value)">
             <option value="">Tous</option>${types.map(t => `<option${P.type === t ? ' selected' : ''}>${_otEsc(t)}</option>`).join('')}
           </select>
@@ -247,7 +247,7 @@ Object.assign(App, {
             <button type="button" aria-pressed="false" onclick="App.prodColonnes()">Colonnes</button>
           </div>
           <button type="button" class="pb-bouton" onclick="App.prodActualiser()">Actualiser</button>
-          ${this._otAdmin() ? '<button type="button" class="sx-btn sx-btn-principal pb-btn-ajout" onclick="App.prodFenetreAjout()">+ Ajouter au Planning</button>' : ''}
+          ${this._otAdmin() ? '<button type="button" class="sx-btn sx-btn-principal pb-btn-ajout" onclick="App.prodFenetreAjout()">+ Ajouter<span class="pb-sans-tel"> au Planning</span></button>' : ''}
         </div>
         <div class="pb-ligne pb-defile" role="group" aria-label="Étapes">
           ${onglet('tous', 'Tous', base.filter(l => !l.parti).length)}
@@ -296,6 +296,15 @@ Object.assign(App, {
 
     if (!groupes.length) { el.innerHTML = '<div class="sx-carte"><div class="sx-vide">Aucun module ne correspond.</div></div>'; return; }
 
+    if (this._pbEtroit()) {
+      el.innerHTML = `<div class="pb-cartes">${groupes.map(g => `
+        <button type="button" class="pb-groupe pb-g-${g.cle}" aria-expanded="${!P.replies[g.cle]}" onclick="App.prodReplier('${g.cle}')">
+          ${_PB_SVG_CHEVRON}<span>${_otEsc(g.titre)}</span><span class="pb-groupe-n">${g.ls.length} module${g.ls.length > 1 ? 's' : ''}</span>
+        </button>
+        ${P.replies[g.cle] ? '' : g.ls.map(l => this._pbHtmlCarte(l, admin)).join('')}`).join('')}</div>`;
+      return;
+    }
+
     const entete = `<div class="pb-grille pb-tete"><span>Code</span><span>N° module</span><span>Type</span><span>Agence · chantier</span>
       <span>Étape</span><span>Durée</span><span>Livraison</span><span>OT</span><span class="pb-droite">${admin ? 'Montant' : ''}</span><span>${admin ? 'Documents' : ''}</span><span>Fiche</span></div>`;
     el.innerHTML = `<div class="pb-tableau"><div class="pb-interieur">${entete}${groupes.map(g => `
@@ -331,7 +340,7 @@ Object.assign(App, {
       <button type="button" class="pb-numero" onclick="App.prodOuvrirModule(${l.parti}, ${l.idx})" title="Ouvrir la fiche du module">${_otEsc(d.codeModule || '—')}</button>
       <span class="pb-type">${_otEsc(d.module || '')}</span>
       <span class="pb-texte" title="${_otEsc([d.ag, d.chantier].filter(Boolean).join(' · '))}">${_otEsc(d.chantier || '')}${d.status && d.status.grutage ? ' <span class="pb-grutage">grutage</span>' : ''}</span>
-      <span class="pb-etape" title="${_otEsc(nomEtape)}">${barre}</span>
+      ${this._pbHtmlEtape(l, admin, barre, nomEtape)}
       <span class="pb-gris2">${_otEsc(duree)}</span>
       <span class="${l.retard ? 'pb-rouge' : (d.livraisonPrevue ? '' : 'pb-gris')}">${_otEsc(liv)}</span>
       <span>${ot}</span>
@@ -842,4 +851,152 @@ Object.assign(App, {
       this.toast('Retrait impossible : ' + e.message, 7000);
     }
   },
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Changement d'étape (2026-11-18) — action `planning_etape` de masterfile : coche M / N / O / S
+   dans le Planning et remplit les dates de début / fin comme le déclencheur du Sheet.
+   Depuis la barre d'étape du tableau, la carte téléphone ou la fiche du module. Admins pendant le test.
+   Version téléphone (< 760 px) : une carte par module au lieu d'une ligne de tableau.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const PB_ETAPES_PLANNING = [
+  { cle: 'demarrer', nom: 'À démarrer',  aide: 'rien de coché' },
+  { cle: 'atelier',  nom: 'Atelier',     aide: '« En cours » — date de début si vide' },
+  { cle: 'controle', nom: 'Contrôle',    aide: '« À contrôler » — date de fin si vide' },
+  { cle: 'termine',  nom: 'Terminé',     aide: '« Terminé » — prêt à partir avec commande ou LV' },
+];
+
+Object.assign(App, {
+
+  _pbEtroit() { return window.matchMedia('(max-width: 759px)').matches; },
+
+  // Étape « Planning » (les 4 cases) d'un module, sans tenir compte de « de côté » ni de « prêt »
+  _pbEtapePlanning(d) {
+    const s = d.status || {};
+    return s.termine ? 'termine' : s.aControler ? 'controle' : s.enCours ? 'atelier' : 'demarrer';
+  },
+
+  _pbHtmlEtape(l, admin, barre, nomEtape) {
+    if (!admin || l.parti) return `<span class="pb-etape" title="${_otEsc(nomEtape)}">${barre}</span>`;
+    return `<button type="button" class="pb-etape pb-etape-btn" onclick="App.prodEtape('${_otEsc(l.d.code)}')" title="${_otEsc(nomEtape)} — changer d'étape">${barre}</button>`;
+  },
+
+  _pbHtmlCarte(l, admin) {
+    const d = l.d, f = l.fiche;
+    const rang = (PB_ETAPES.find(e => e.cle === l.etape) || {}).rang || 0;
+    const barre = [1, 2, 3, 4, 5, 6].map(i => `<span class="pb-seg${i <= rang ? ' pb-seg-' + rang : ''}"></span>`).join('');
+    const nomEtape = (PB_ETAPES.find(e => e.cle === l.etape) || {}).nom || '';
+    const code = _otEsc(d.code || '');
+    const duree = l.parti ? 'fini le ' + _fmtDateShort(d.fin) : _duration(d.debut, null);
+    let ot = '';
+    if (Array.isArray(S.pb.fiches)) {
+      if (f) {
+        const lib = { brouillon: 'Fiche en cours', a_valider: 'Fiche à valider' }[f.statut];
+        ot = `<button type="button" class="pb-ot pb-ot-${_otEsc(f.statut)}" onclick="App.prodOuvrirFiche(${Number(f.id)})">${_otEsc(lib || f.numero_ot || 'Validée')}${f.statut === 'validee' ? ' · à envoyer' : ''}</button>`;
+      } else if (l.otAFaire) ot = '<span class="pb-ot pb-ot-afaire">OT à faire</span>';
+    }
+    const pdf = admin && f && f.documents ? (f.documents.fichiers || []).find(x => x.type === 'pdf') : null;
+    return `<div class="pb-carte${l.retard ? ' pb-retard' : ''}${l.parti ? ' pb-parti' : ''}">
+      <div class="pb-carte-l1">
+        <button type="button" class="pb-code" onclick="App.prodDossier('${code}', ${l.parti})" aria-label="Dossier du module ${code}">${_PB_SVG_DOSSIER}${code}</button>
+        <button type="button" class="pb-numero" onclick="App.prodOuvrirModule(${l.parti}, ${l.idx})">${_otEsc(d.codeModule || '—')}</button>
+        <span class="pb-type">${_otEsc(d.module || '')}</span>
+      </div>
+      <div class="pb-carte-l2 pb-texte">${_otEsc(d.chantier || 'Sans chantier')}${d.status && d.status.grutage ? ' <span class="pb-grutage">grutage</span>' : ''}</div>
+      <div class="pb-carte-l3">
+        ${this._pbHtmlEtape(l, admin, barre, nomEtape)}
+        <span class="pb-carte-etape">${_otEsc(nomEtape)}</span>
+        <span class="pb-gris2">${_otEsc(duree || '')}</span>
+        ${!l.parti ? `<span class="${l.retard ? 'pb-rouge' : 'pb-gris'}">livr. ${_otEsc(d.livraisonPrevue ? _fmtDateShort(d.livraisonPrevue) : '—')}</span>` : ''}
+        ${ot}
+        ${pdf && pdf.url ? `<a class="pb-doc" href="${_otEsc(pdf.url)}" target="_blank" rel="noopener">PDF</a>` : ''}
+        ${admin && f && f.documents && f.documents.dossier ? `<a class="pb-doc" href="${_otEsc(f.documents.dossier)}" target="_blank" rel="noopener">Dossier OT</a>` : ''}
+        <button type="button" class="pb-poses" onclick="App.prodPoses(${l.parti}, ${l.idx})">${_PB_SVG_CLE}Poses</button>
+      </div>
+    </div>`;
+  },
+
+  // Carte « Étape » de la fiche du module (vue dep-detail), admins
+  prodHtmlEtape(d) {
+    if (!this._otAdmin() || !d || !d.code) return '';
+    const cle = this._pbEtapePlanning(d);
+    const prete = cle === 'termine' && (d.lv || d.commande);
+    const frise = ['Arrivé', 'Atelier', 'Contrôle', 'Terminé', 'Commande / LV', 'Parti'];
+    const rang = { demarrer: 0, atelier: 1, controle: 2, termine: 3 }[cle] + (prete ? 1 : 0);
+    return `<div class="card pb-fiche-etape">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">
+        <p style="font-size:14px;font-weight:600;color:#1E293B;margin:0;">Étape${d.status && d.status.deCote ? ' · <span class="pb-decote">de côté</span>' : ''}</p>
+        <button type="button" class="sx-btn sx-btn-principal pb-btn-ajout" onclick="App.prodEtape('${_otEsc(d.code)}')">Changer d'étape</button>
+      </div>
+      <ol class="pb-frise">${frise.map((t, i) => `<li class="${i < rang ? 'pb-frise-fait' : i === rang ? 'pb-frise-ici' : ''}">${_otEsc(t)}</li>`).join('')}</ol>
+    </div>`;
+  },
+
+  async prodEtape(code) {
+    const d = (S.deps || []).find(x => x.code === code);
+    if (!d) return this.toast('Module introuvable dans le Planning : actualisez');
+    const actuelle = this._pbEtapePlanning(d);
+    const deCote = !!(d.status && d.status.deCote);
+    const voile = document.createElement('div');
+    voile.className = 'sx-voile';
+    voile.innerHTML = `<div class="sx-fenetre pb-fenetre pb-fen-etape" role="dialog" aria-modal="true" aria-labelledby="pb-et-titre">
+      <h3 id="pb-et-titre">Étape de ${_otEsc(code)}</h3>
+      <p class="sx-aide">${_otEsc([d.module, d.codeModule, d.chantier].filter(Boolean).join(' · '))}</p>
+      <div class="pb-et-choix" role="group" aria-label="Étape">${PB_ETAPES_PLANNING.map(e => `
+        <button type="button" class="pb-et-btn pb-g-${e.cle}" data-etape="${e.cle}" aria-pressed="${e.cle === actuelle}">
+          <b>${_otEsc(e.nom)}</b><span>${e.cle === actuelle ? 'étape actuelle' : _otEsc(e.aide)}</span></button>`).join('')}
+      </div>
+      <label class="pb-et-decote"><input type="checkbox" id="pb-et-decote" ${deCote ? 'checked' : ''}> De côté</label>
+      <p class="sx-aide">Le Planning Google est mis à jour (mêmes cases et mêmes dates que si on cochait dans le Sheet).</p>
+      <div class="sx-fenetre-boutons">
+        <button type="button" class="sx-btn sx-btn-discret" data-r="0">Annuler</button>
+        <button type="button" class="sx-btn sx-btn-principal" data-r="1">Enregistrer</button>
+      </div></div>`;
+    let choix = actuelle;
+    const fermer = () => voile.remove();
+    voile.addEventListener('click', async e => {
+      if (e.target === voile) return fermer();
+      const b = e.target.closest('[data-etape]');
+      if (b) {
+        choix = b.dataset.etape;
+        voile.querySelectorAll('[data-etape]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+        return;
+      }
+      const r = e.target.closest('[data-r]');
+      if (!r) return;
+      if (r.dataset.r === '0') return fermer();
+      const nouveauDeCote = voile.querySelector('#pb-et-decote').checked;
+      const payload = { action: 'planning_etape', code };
+      if (choix !== actuelle) payload.etape = choix;
+      if (nouveauDeCote !== deCote) payload.deCote = nouveauDeCote;
+      if (!payload.etape && payload.deCote === undefined) return fermer();
+      r.disabled = true; r.textContent = 'Enregistrement…';
+      try {
+        const res = await this._otPost(payload, 60000);
+        d.status = Object.assign({}, d.status, { enCours: res.enCours, aControler: res.aControler, termine: res.termine, deCote: res.deCote });
+        d.debut = res.debut; d.fin = res.fin;
+        fermer();
+        this.toast('✓ ' + code + ' : ' + ((PB_ETAPES_PLANNING.find(e => e.cle === this._pbEtapePlanning(d)) || {}).nom || '') + (res.deCote ? ' (de côté)' : '') + ' — Planning mis à jour', 3500);
+        this._pbApresEtape();
+      } catch (err) {
+        r.disabled = false; r.textContent = 'Enregistrer';
+        this.toast('Changement impossible : ' + err.message, 6000);
+      }
+    });
+    document.body.appendChild(voile);
+    voile.querySelector('[aria-pressed="true"]').focus();
+  },
+
+  // Redessine ce qui est à l'écran après un changement d'étape
+  _pbApresEtape() {
+    if (S.view === 'prod-bureau') this._pbRendre();
+    else if (S.view === 'dep-detail') this._renderDepDetail();
+    if (typeof this._renderDepList === 'function' && document.getElementById('dep-list')) { try { this._renderDepList(); } catch (e) { /* liste pas affichée */ } }
+  },
+});
+
+// Passage tableau ↔ cartes quand la largeur change (rotation de tablette, fenêtre redimensionnée)
+window.matchMedia('(max-width: 759px)').addEventListener('change', () => {
+  if (S.view === 'prod-bureau' && S.pb && S.pb.vue !== 'arr') App._pbRendreCorps();
 });

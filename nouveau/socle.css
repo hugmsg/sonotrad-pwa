@@ -610,3 +610,39 @@ body.pb-plein #view-prod-bureau.active { flex: 1; min-height: 0; display: flex; 
 .pb-total b { font-variant-numeric: tabular-nums; color: var(--sx-bleu); }
 .pb-total[aria-pressed="true"] { background: var(--sx-bleu); border-color: var(--sx-bleu); color: #FFFFFF; } .pb-total[aria-pressed="true"] b { color: #FFFFFF; }
 .pb-total-somme { cursor: default; background: var(--sx-bleu-clair); font-weight: 700; }
+/* Production : changement d'étape (2026-11-18) */
+.pb-etape-btn { border: 0; background: none; padding: 6px 4px; margin: -6px -4px; border-radius: 6px; cursor: pointer; }
+.pb-etape-btn:hover, .pb-etape-btn:focus-visible { background: var(--sx-bleu-clair); }
+.pb-fen-etape { max-width: 440px; }
+.pb-et-choix { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+.pb-et-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 64px; padding: 10px 12px; border: 2px solid transparent; border-radius: 12px; font-family: inherit; font-size: 15px; text-align: left; cursor: pointer; }
+.pb-et-btn span { font-size: 12px; opacity: .85; }
+.pb-et-btn.pb-g-pret, .pb-et-btn.pb-g-termine { color: #14532D; }
+.pb-et-btn[aria-pressed="true"] { border-color: var(--sx-texte); box-shadow: 0 0 0 2px #FFFFFF inset; }
+.pb-et-decote { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; font-weight: 600; color: #4B3A7A; }
+.pb-et-decote input { width: 20px; height: 20px; }
+.pb-decote { font-size: 12px; font-weight: 700; color: #4B3A7A; background: #ECE7F7; border-radius: 5px; padding: 1px 6px; }
+.pb-frise { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.pb-frise li { font-size: 11px; font-weight: 600; color: #9AA6B5; padding-top: 8px; border-top: 5px solid #E1E6EE; text-align: center; }
+.pb-frise li.pb-frise-fait { color: #3D4B5C; border-top-color: #1F9254; }
+.pb-frise li.pb-frise-ici { color: var(--sx-bleu); border-top-color: var(--sx-bleu); font-weight: 800; }
+/* Production sur téléphone : une carte par module */
+.pb-cartes { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 6px; }
+.pb-cartes .pb-groupe { position: sticky; top: 0; z-index: 2; border-radius: 8px; border: 0; min-height: 36px; flex-shrink: 0; }
+.pb-carte { flex-shrink: 0; background: #FFFFFF; border: 1px solid var(--sx-bord); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.pb-carte.pb-retard { background: #FFF8F8; border-color: #F3C4C4; }
+.pb-carte-l1 { display: flex; align-items: center; gap: 10px; min-height: 32px; }
+.pb-carte-l1 .pb-code { position: static; margin: 0; padding: 0; font-size: 14px; }
+.pb-carte-l1 .pb-numero { font-size: 14px; }
+.pb-carte-l1 .pb-type { margin-left: auto; }
+.pb-carte-l2 { color: var(--sx-texte); }
+.pb-carte-l3 { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 12px; }
+.pb-carte-l3 .pb-etape-btn { padding: 10px 6px; margin: -10px -6px; }
+.pb-carte-etape { font-weight: 700; color: var(--sx-texte); }
+.pb-carte-l3 .pb-poses { margin-left: auto; min-height: 36px; padding: 0 4px; }
+@media (max-width: 759px) {
+  .pb-sans-tel { display: none; }
+  .pb-select { flex: 1 1 90px; min-width: 90px; }
+  .pb-et-choix { grid-template-columns: 1fr; }
+  .pb-recherche { flex-basis: 100%; }
+}

@@ -974,6 +974,8 @@ Object.assign(App, {
     if (!S.depFromArchive) this._renderDepPhotoGrid();
     // « Retirer du Planning » (admins, production.js) — module où rien n'est encore fait
     if (!S.depFromArchive && this.prodHtmlRetrait) document.getElementById('dep-detail-body').insertAdjacentHTML('beforeend', this.prodHtmlRetrait(d));
+    // « Changer d'étape » (admins, production.js) — sous la carte d'identité du module
+    if (!S.depFromArchive && this.prodHtmlEtape) { const c1 = document.getElementById('dep-detail-body').firstElementChild; if (c1) c1.insertAdjacentHTML('afterend', this.prodHtmlEtape(d)); }
     this._loadDriveLinkForDetail(d.code, S.depFromArchive ? 'archive' : 'production', 'dep-drive-section', 'drive-files-panel', 'btn-drive-files');
   },
   toggleLivraisonPrevueEdit() {
