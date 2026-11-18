@@ -219,6 +219,7 @@ Object.assign(App, {
     const el = document.getElementById('prod-bureau-root');
     if (!el) return;
     // Colonne « Travaux » (description du Planning) : affichée par défaut, choix mémorisé par appareil (2026-11-18)
+    S.pb.sel = S.pb.sel || new Set();
     if (S.pb.desc === undefined) S.pb.desc = (() => { try { return localStorage.getItem('snt_pb_travaux') !== '0'; } catch (e) { return true; } })();
     if (S.pb.vue === 'arr') return this._pbArrRendre();
     const P = S.pb;
@@ -278,6 +279,7 @@ Object.assign(App, {
         </div>
       </div></div>
       <main class="pb-contenu" id="pb-corps"></main>
+      <div class="pb-actions" id="pb-actions" hidden></div>
     </div>`;
     this._pbRendreCorps();
   },
@@ -308,6 +310,8 @@ Object.assign(App, {
       return { cle, titre, ls };
     }).filter(g => g.ls.length);
 
+    S.pb.visibles = groupes.flatMap(g => P.replies[g.cle] ? [] : g.ls.map(l => l.code));
+    setTimeout(() => this._pbMajActions(), 0);
     if (!groupes.length) { el.innerHTML = '<div class="sx-carte"><div class="sx-vide">Aucun module ne correspond.</div></div>'; return; }
 
     if (this._pbEtroit()) {
@@ -319,7 +323,8 @@ Object.assign(App, {
       return;
     }
 
-    const entete = `<div class="pb-grille pb-tete"><span>Code</span><span>N° module</span><span>Type</span><span>Agence · chantier</span>${P.desc ? '<span>Travaux</span>' : ''}
+    const sel = this._pbPeutSel();
+    const entete = `<div class="pb-grille pb-tete"><span class="pb-code-cell">${sel ? `<input type="checkbox" class="pb-sel" id="pb-sel-tout" aria-label="Tout sélectionner (lignes affichées)" onclick="App.prodSelTout(this.checked)">` : ''}Code</span><span>N° module</span><span>Type</span><span>Agence · chantier</span>${P.desc ? '<span>Travaux</span>' : ''}
       <span>Étape</span><span>Durée</span><span>Livraison</span><span>OT</span><span class="pb-droite">${admin ? 'Montant' : ''}</span><span>${admin ? 'Documents' : ''}</span><span>Fiche</span></div>`;
     el.innerHTML = `<div class="pb-tableau${P.desc ? ' pb-avec-desc' : ''}"><div class="pb-interieur">${entete}${groupes.map(g => `
       <button type="button" class="pb-groupe pb-g-${g.cle}" aria-expanded="${!P.replies[g.cle]}" onclick="App.prodReplier('${g.cle}')">
@@ -349,7 +354,7 @@ Object.assign(App, {
     })() : '';
     const code = _otEsc(d.code || '');
     return `<div class="pb-grille pb-ligne-module${l.retard ? ' pb-retard' : ''}${l.parti ? ' pb-parti' : ''}">
-      <button type="button" class="pb-code" onclick="App.prodDossier('${code}', ${l.parti})" title="Ouvrir le dossier du module (photos, papiers d'arrivée et de départ)">${_PB_SVG_DOSSIER}${code}</button>
+      <span class="pb-code-cell">${this._pbHtmlCase(l)}<button type="button" class="pb-code" onclick="App.prodDossier('${code}', ${l.parti})" title="Ouvrir le dossier du module (photos, papiers d'arrivée et de départ)">${_PB_SVG_DOSSIER}${code}</button></span>
       <button type="button" class="pb-numero" onclick="App.prodOuvrirModule(${l.parti}, ${l.idx})" title="Ouvrir la fiche du module">${_otEsc(d.codeModule || '—')}</button>
       <span class="pb-type">${_otEsc(d.module || '')}</span>
       ${this._pbHtmlAgence(l, `${_otEsc(d.chantier || '')}${d.status && d.status.grutage ? ' <span class="pb-grutage">grutage</span>' : ''}`)}
@@ -914,6 +919,7 @@ Object.assign(App, {
     const pdf = admin && f && f.documents ? (f.documents.fichiers || []).find(x => x.type === 'pdf') : null;
     return `<div class="pb-carte${l.retard ? ' pb-retard' : ''}${l.parti ? ' pb-parti' : ''}">
       <div class="pb-carte-l1">
+        ${this._pbHtmlCase(l)}
         <button type="button" class="pb-code" onclick="App.prodDossier('${code}', ${l.parti})" aria-label="Dossier du module ${code}">${_PB_SVG_DOSSIER}${code}</button>
         <button type="button" class="pb-numero" onclick="App.prodOuvrirModule(${l.parti}, ${l.idx})">${_otEsc(d.codeModule || '—')}</button>
         <span class="pb-type">${_otEsc(d.module || '')}</span>
@@ -1135,5 +1141,82 @@ Object.assign(App, {
     const etat = l.otAFaire ? '<span class="pb-ot pb-ot-afaire">OT à faire</span>' : (gris ? '<span class="pb-gris">Pas de fiche</span>' : '');
     // Petite croix rouge (demande de Hugo) : plus léger, et on ne lit pas « pas d'OT » comme « rien à faire »
     return etat + (this._otAutorise() && l.code ? ` <button type="button" class="pb-sans-btn" onclick="App.otPasDOt('${code}')" title="Marquer : ce module n'aura pas d'OT (vente en l'état, épave…)" aria-label="Marquer ${code} sans OT"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>` : '');
+  },
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Sélection multiple dans Production (2026-11-18) : une case par module, « tout sélectionner » sur les
+   lignes affichées, barre d'actions en bas dès qu'un module est coché. Action : « Pas d'OT » (même motif
+   pour toute la sélection). D'autres actions s'ajouteront dans _pbMajActions.
+   ═══════════════════════════════════════════════════════════════════════════ */
+Object.assign(App, {
+  _pbPeutSel() { return this._otAutorise(); },
+
+  _pbHtmlCase(l) {
+    if (!this._pbPeutSel() || !l.code) return '';
+    const c = _otEsc(l.code);
+    return `<input type="checkbox" class="pb-sel" data-sel="${c}" ${S.pb.sel && S.pb.sel.has(l.code) ? 'checked' : ''} aria-label="Sélectionner ${c}" onclick="App.prodSel('${c}', this.checked)">`;
+  },
+
+  prodSel(code, on) {
+    S.pb.sel = S.pb.sel || new Set();
+    if (on) S.pb.sel.add(code); else S.pb.sel.delete(code);
+    this._pbMajActions();
+  },
+  prodSelTout(on) {
+    S.pb.sel = S.pb.sel || new Set();
+    (S.pb.visibles || []).forEach(c => { if (on) S.pb.sel.add(c); else S.pb.sel.delete(c); });
+    document.querySelectorAll('#pb-corps .pb-sel[data-sel]').forEach(x => { x.checked = S.pb.sel.has(x.dataset.sel); });
+    this._pbMajActions();
+  },
+  prodSelVider() {
+    S.pb.sel = new Set();
+    document.querySelectorAll('#pb-corps .pb-sel[data-sel]').forEach(x => { x.checked = false; });
+    this._pbMajActions();
+  },
+
+  _pbMajActions() {
+    const bar = document.getElementById('pb-actions');
+    if (!bar) return;
+    const n = S.pb.sel ? S.pb.sel.size : 0;
+    const tout = document.getElementById('pb-sel-tout');
+    if (tout) {
+      const vis = S.pb.visibles || [];
+      const k = vis.filter(c => S.pb.sel && S.pb.sel.has(c)).length;
+      tout.checked = vis.length > 0 && k === vis.length;
+      tout.indeterminate = k > 0 && k < vis.length;
+    }
+    bar.hidden = !n;
+    if (!n) { bar.innerHTML = ''; return; }
+    bar.innerHTML = `<div class="pb-actions-in">
+      <b>${n} module${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''}</b>
+      <button type="button" class="pb-action" onclick="App.prodSelPasDOt()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg> Pas d'OT…</button>
+      <button type="button" class="pb-action pb-action-discret" onclick="App.prodSelVider()">Tout désélectionner</button>
+    </div>`;
+  },
+
+  async prodSelPasDOt() {
+    const lignes = this._pbLignes().filter(l => S.pb.sel.has(l.code));
+    const ok = lignes.filter(l => !l.fiche && !l.sansOt);
+    const ignores = lignes.length - ok.length;
+    if (!ok.length) { this.toast('Aucun des modules sélectionnés ne peut être marqué : ils ont déjà une fiche ou sont déjà sans OT', 5000); return; }
+    const choix = await this._otDialogueSansOt(
+      'Pas d\u2019OT pour ' + ok.length + ' module' + (ok.length > 1 ? 's' : '') + ' ?',
+      ok.map(l => l.code).join(', ') + (ignores ? ' — ' + ignores + ' ignoré' + (ignores > 1 ? 's' : '') + ' (fiche existante ou déjà sans OT)' : ''),
+      '', 'Pas d\u2019OT pour les ' + ok.length);
+    if (!choix) return;
+    let faits = 0; const echecs = [];
+    for (const l of ok) {
+      this.toast('⏳ ' + (faits + echecs.length + 1) + ' / ' + ok.length + '…', 20000);
+      try {
+        const d = await this._otPost({ action: 'ot_sans_ot', code: l.code, motif: choix.motif, detail: choix.detail });
+        S.ot.sansOt = S.ot.sansOt || new Map();
+        if (d.sans_ot) S.ot.sansOt.set(String(l.code).toUpperCase(), d.sans_ot);
+        S.pb.sel.delete(l.code);
+        faits++;
+      } catch (e) { echecs.push(l.code + ' (' + e.message + ')'); }
+    }
+    this.toast('✓ ' + faits + ' module' + (faits > 1 ? 's' : '') + ' sans OT' + (echecs.length ? ' — échec : ' + echecs.join(', ') : ''), echecs.length ? 8000 : 3500);
+    this._pbRendre();
   },
 });

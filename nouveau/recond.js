@@ -2588,24 +2588,23 @@ Object.assign(App, {
     if (S.view === 'prod-bureau' && this._pbRendre) this._pbRendre();
   },
 
-  async otPasDOt(code) {
-    if (!this._otAutorise()) return;
-    const m = [...(S.ot.modules || []), ...(S.deps || []), ...(S.archive || [])].find(x => String(x.code || '').toUpperCase() === String(code).toUpperCase()) || {};
-    const choix = await new Promise(resolve => {
+  // Fenêtre « Pas d'OT » : motif + précision → { motif, detail } ou null (un module ou une sélection)
+  _otDialogueSansOt(titre, sous, detail, bouton) {
+    return new Promise(resolve => {
       const voile = document.createElement('div');
       voile.className = 'sx-voile';
       voile.innerHTML = `<div class="sx-fenetre" role="dialog" aria-modal="true" aria-labelledby="ot-so-titre">
-        <h3 id="ot-so-titre">Pas d'OT pour ${_otEsc(code)} ?</h3>
-        <p class="sx-aide">${_otEsc([m.module, m.codeModule, m.chantier].filter(Boolean).join(' · '))}</p>
+        <h3 id="ot-so-titre">${_otEsc(titre)}</h3>
+        <p class="sx-aide">${_otEsc(sous)}</p>
         <fieldset class="sx-so-motifs"><legend class="sx-sr">Motif</legend>
           ${Object.entries(OT_MOTIFS).map(([k, t], i) => `<label class="sx-so-motif"><input type="radio" name="ot-so-motif" value="${k}" ${i === 0 ? 'checked' : ''}> ${_otEsc(t.charAt(0).toUpperCase() + t.slice(1))}</label>`).join('')}
         </fieldset>
         <label class="sx-aide" for="ot-so-detail">Précision (facultatif)</label>
-        <input id="ot-so-detail" class="sx-champ" type="text" placeholder="ex. vendu à RBSA, toiture percée…" value="${this._otVente(m) === 'proposee' ? 'Saint-Paterne' : ''}">
+        <input id="ot-so-detail" class="sx-champ" type="text" placeholder="ex. vendu à RBSA, toiture percée…" value="${_otEsc(detail || '')}">
         <p class="sx-aide">Le module sort de « À compléter » et de « OT à faire ». Annulable (« Remettre à faire »).</p>
         <div class="sx-fenetre-boutons">
           <button type="button" class="sx-btn sx-btn-discret" data-r="0">Annuler</button>
-          <button type="button" class="sx-btn sx-btn-principal" data-r="1">Pas d'OT</button>
+          <button type="button" class="sx-btn sx-btn-principal" data-r="1">${_otEsc(bouton || 'Pas d’OT')}</button>
         </div></div>`;
       const fin = r => { voile.remove(); resolve(r); };
       voile.addEventListener('click', e => {
@@ -2619,6 +2618,13 @@ Object.assign(App, {
       document.body.appendChild(voile);
       voile.querySelector('[data-r="1"]').focus();
     });
+  },
+
+  async otPasDOt(code) {
+    if (!this._otAutorise()) return;
+    const m = [...(S.ot.modules || []), ...(S.deps || []), ...(S.archive || [])].find(x => String(x.code || '').toUpperCase() === String(code).toUpperCase()) || {};
+    const choix = await this._otDialogueSansOt('Pas d’OT pour ' + code + ' ?', [m.module, m.codeModule, m.chantier].filter(Boolean).join(' · '),
+      this._otVente(m) === 'proposee' ? 'Saint-Paterne' : '');
     if (!choix) return;
     try {
       const d = await this._otPost({ action: 'ot_sans_ot', code, motif: choix.motif, detail: choix.detail });
