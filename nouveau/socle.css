@@ -726,3 +726,11 @@ span.pb-ot-sans { cursor: default; }
 /* Liste des fiches : place fixe pour « stock sorti » avant le montant (pas de décalage), plus de pastille de statut (2026-11-18) */
 .sx-item-stock { flex: 0 0 84px; display: flex; justify-content: flex-end; }
 .sx-ot-liste .sx-montant { min-width: 88px; text-align: right; }
+/* Mail de dispo (2026-11-18) */
+.pb-puce-vert { background: #E3F4EA; color: #14532D; border-color: #B7DFC6; }
+.pb-annonce { display: inline-flex; vertical-align: -2px; margin-left: 4px; color: #14532D; }
+.pb-action-mail { color: #0B3A7A; }
+.pb-md-liste { display: flex; flex-direction: column; gap: 4px; max-height: 50vh; overflow-y: auto; margin: 8px 0; }
+.pb-md-ligne { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--sx-bord); border-radius: 10px; font-size: 14px; cursor: pointer; }
+.pb-md-ligne input { width: 20px; height: 20px; margin-top: 1px; flex-shrink: 0; }
+.pb-md-note { font-size: 11px; font-weight: 700; color: #8A5A00; background: #FFF4D1; border-radius: 4px; padding: 0 5px; }

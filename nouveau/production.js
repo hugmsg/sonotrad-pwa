@@ -239,6 +239,7 @@ Object.assign(App, {
       otAFaire: base.filter(l => l.otAFaire && !l.parti).length,
       otAEnvoyer: base.filter(l => l.otAEnvoyer).length,
       partisSansOt: base.filter(l => l.otAFaire && l.parti).length,
+      annoncer: base.filter(l => this._pbAAnnoncer(l)).length,
     };
     const types = [...new Set(lignes.map(l => (l.d.module || '').trim()).filter(Boolean))].sort();
     const etapes = P.etapes || [];
@@ -278,8 +279,9 @@ Object.assign(App, {
           ${fichesOk ? puce('otAFaire', comptes.otAFaire, 'OT à faire', 'jaune') : ''}
           ${fichesOk ? puce('otAEnvoyer', comptes.otAEnvoyer, 'OT à envoyer à LOXAM', 'bleu') : ''}
           ${fichesOk ? puce('partisSansOt', comptes.partisSansOt, 'partis sans OT', 'violet') : ''}
+          ${puce('annoncer', comptes.annoncer, 'à annoncer (mail de dispo)', 'vert')}
           ${!this._otAutorise() ? '<span class="sx-aide">(état des OT : accès « Reconditionnement »)</span>' : (P.fichesChargement ? '<span class="sx-aide">état des OT…</span>' : '')}
-          ${pret && !comptes.retard && !(fichesOk && (comptes.otAFaire || comptes.otAEnvoyer || comptes.partisSansOt)) ? '<span class="sx-aide">rien</span>' : ''}
+          ${pret && !comptes.retard && !comptes.annoncer && !(fichesOk && (comptes.otAFaire || comptes.otAEnvoyer || comptes.partisSansOt)) ? '<span class="sx-aide">rien</span>' : ''}
         </div>
       </div></div>
       <main class="pb-contenu" id="pb-corps"></main>
@@ -299,6 +301,7 @@ Object.assign(App, {
     else if (P.filtre === 'otAFaire') lignes = lignes.filter(l => l.otAFaire && !l.parti);
     else if (P.filtre === 'otAEnvoyer') lignes = lignes.filter(l => l.otAEnvoyer);
     else if (P.filtre === 'partisSansOt') lignes = lignes.filter(l => l.otAFaire && l.parti);
+    else if (P.filtre === 'annoncer') lignes = lignes.filter(l => this._pbAAnnoncer(l));
     else if ((P.etapes || []).length) lignes = lignes.filter(l => P.etapes.includes(l.etape));
     // « Tous » : le parc, plus les partis encore sans OT (départs précipités) pour ne pas les perdre de vue
     else lignes = lignes.filter(l => !l.parti || l.otAFaire);
@@ -364,7 +367,7 @@ Object.assign(App, {
       ${this._pbHtmlAgence(l, `${_otEsc(d.chantier || '')}${d.status && d.status.grutage ? ' <span class="pb-grutage">grutage</span>' : ''}`)}
       ${S.pb.desc ? `<button type="button" class="pb-texte pb-desc" onclick="App.prodOuvrirModule(${l.parti}, ${l.idx})" title="${_otEsc(d.description || '')}">${d.description ? _otEsc(d.description) : '<span class="pb-gris">—</span>'}</button>` : ''}
       ${this._pbHtmlEtape(l, admin, barre, nomEtape)}
-      <span class="pb-gris2">${_otEsc(duree)}</span>
+      <span class="pb-gris2">${_otEsc(duree)}${this._pbHtmlAnnonce(l)}</span>
       <span class="${l.retard ? 'pb-rouge' : (d.livraisonPrevue ? '' : 'pb-gris')}">${_otEsc(liv)}</span>
       <span class="pb-ot-cell">${ot}</span>
       <span>${this._pbHtmlStock(f)}</span>
@@ -936,6 +939,7 @@ Object.assign(App, {
         ${this._pbHtmlEtape(l, admin, barre, nomEtape)}
         <span class="pb-carte-etape">${_otEsc(nomEtape)}</span>
         <span class="pb-gris2">${_otEsc(duree || '')}</span>
+        ${this._pbHtmlAnnonce(l)}
         ${!l.parti ? `<span class="${l.retard ? 'pb-rouge' : 'pb-gris'}">livr. ${_otEsc(d.livraisonPrevue ? _fmtDateShort(d.livraisonPrevue) : '—')}</span>` : ''}
         ${ot}
         ${f && f.stock_le ? this._pbHtmlStock(f, true) : ''}
@@ -1199,6 +1203,7 @@ Object.assign(App, {
     bar.innerHTML = `<div class="pb-actions-in">
       <b>${n} module${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''}</b>
       <button type="button" class="pb-action" onclick="App.prodSelPasDOt()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg> Pas d'OT…</button>
+      ${this._otAdmin() ? `<button type="button" class="pb-action pb-action-mail" onclick="App.prodSelMailDispo()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg> Mail de dispo…</button>` : ''}
       <button type="button" class="pb-action pb-action-discret" onclick="App.prodSelVider()">Tout désélectionner</button>
     </div>`;
   },
@@ -1235,5 +1240,86 @@ Object.assign(App, {
     if (!f || !f.stock_le) return texte ? '' : '<span class="pb-gris">—</span>';
     const quand = new Date(f.stock_le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
     return `<span class="pb-stock" title="Fournitures sorties du stock le ${_otEsc(quand)}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>${texte ? 'stock sorti' : 'sorti'}</span>`;
+  },
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Mail de dispo (2026-11-18, admins) : annonce à LOXAM des modules terminés (macro preparerEmailOutlook du
+   Planning) — brouillon Outlook (.eml) préparé par masterfile (planning_mail_dispo, etape 'eml'), puis, une
+   fois le mail envoyé, « Mail » (colonne P) coché au Planning (etape 'marquer').
+   À annoncer = terminé, pas encore annoncé (P), ni de côté, ni parti, sans commande ni LV.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const _PB_SVG_MAIL = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>';
+
+Object.assign(App, {
+  _pbAAnnoncer(l) { return !l.parti && l.etape === 'termine' && !(l.d.status && l.d.status.mail); },
+
+  _pbHtmlAnnonce(l) {
+    if (l.parti || !(l.d.status && l.d.status.mail) || !['termine', 'pret'].includes(l.etape)) return '';
+    return ` <span class="pb-annonce" title="Mail de dispo envoyé (annoncé à LOXAM)">${_PB_SVG_MAIL}</span>`;
+  },
+
+  async prodSelMailDispo() {
+    if (!this._otAdmin()) return;
+    const lignes = this._pbLignes().filter(l => S.pb.sel.has(l.code));
+    const ok = lignes.filter(l => !l.parti && l.etape !== 'decote');
+    const ignores = lignes.length - ok.length;
+    if (!ok.length) { this.toast('Aucun module à annoncer dans la sélection (partis ou de côté)', 5000); return; }
+    const choisis = await new Promise(resolve => {
+      const voile = document.createElement('div');
+      voile.className = 'sx-voile';
+      const ligne = (l, i) => {
+        const notes = [l.etape !== 'termine' && l.etape !== 'pret' ? 'pas encore terminé' : '', l.d.status && l.d.status.mail ? 'déjà annoncé' : '']
+          .filter(Boolean).map(t => `<span class="pb-md-note">${t}</span>`).join(' ');
+        return `<label class="pb-md-ligne"><input type="checkbox" data-i="${i}" ${l.d.status && l.d.status.mail ? '' : 'checked'}>
+          <span><b>${_otEsc(l.d.codeModule || '—')}</b> · ${_otEsc(l.d.chantier || '')} · ${_otEsc(l.d.module || '')} <span class="sx-aide">${_otEsc(l.code)}</span> ${notes}
+          ${l.d.description ? `<br><span class="sx-aide">${_otEsc(l.d.description)}</span>` : ''}</span></label>`;
+      };
+      voile.innerHTML = `<div class="sx-fenetre pb-fenetre" role="dialog" aria-modal="true" aria-labelledby="pb-md-titre">
+        <h3 id="pb-md-titre">Mail de dispo</h3>
+        <p class="sx-aide">Brouillon Outlook à relire et envoyer depuis ta messagerie.<br>
+          <b>À</b> nathalie.jadeau@loxam.fr · <b>Cc</b> N. Mesnager, A. Lavello, N. Siblas, S. Dugué · <b>Cci</b> Hugo, Benjamin<br>
+          <b>Objet</b> Module dispo - ${new Date().toLocaleDateString('fr-FR')}${ignores ? ' · ' + ignores + ' module' + (ignores > 1 ? 's' : '') + ' ignoré' + (ignores > 1 ? 's' : '') + ' (partis ou de côté)' : ''}</p>
+        <div class="pb-md-liste">${ok.map(ligne).join('')}</div>
+        <div class="sx-fenetre-boutons">
+          <button type="button" class="sx-btn sx-btn-discret" data-r="0">Annuler</button>
+          <button type="button" class="sx-btn sx-btn-principal" data-r="1">Préparer le brouillon Outlook</button>
+        </div></div>`;
+      const fin = r => { voile.remove(); resolve(r); };
+      voile.addEventListener('click', e => {
+        if (e.target === voile) return fin(null);
+        const b = e.target.closest('[data-r]');
+        if (!b) return;
+        if (b.dataset.r !== '1') return fin(null);
+        const sel = [...voile.querySelectorAll('input[data-i]:checked')].map(x => ok[+x.dataset.i]);
+        if (!sel.length) { this.toast('Cochez au moins un module'); return; }
+        fin(sel);
+      });
+      document.body.appendChild(voile);
+    });
+    if (!choisis) return;
+    const codes = choisis.map(l => l.code);
+    this.toast('⏳ Préparation du brouillon…', 20000);
+    let d;
+    try { d = await this._otPost({ action: 'planning_mail_dispo', etape: 'eml', codes }, 60000); }
+    catch (e) { this.toast('Brouillon impossible : ' + e.message, 6000); return; }
+    // Téléchargement direct du .eml (comme le mail des OT)
+    const octets = Uint8Array.from(atob(d.eml || ''), c => c.charCodeAt(0));
+    const url = URL.createObjectURL(new Blob([octets], { type: 'message/rfc822' }));
+    const a = document.createElement('a'); a.href = url; a.download = d.nom || 'Module dispo.eml'; document.body.appendChild(a); a.click(); a.remove();
+    this.toast('✓ Brouillon téléchargé : ouvrez-le dans Outlook', 4000);
+    const marquer = await this._otConfirmer({
+      titre: 'Mail envoyé ?',
+      texte: 'Ouvrez le fichier « ' + (d.nom || 'Module dispo.eml') + ' » (il s\u2019ouvre dans Outlook), relisez et envoyez. Une fois envoyé : cocher « Mail » au Planning pour les ' + codes.length + ' module' + (codes.length > 1 ? 's' : '') + ' ?',
+      ok: 'Mail envoyé : cocher « Mail »', annuler: 'Plus tard' });
+    if (!marquer) { setTimeout(() => URL.revokeObjectURL(url), 60000); return; }
+    try {
+      await this._otPost({ action: 'planning_mail_dispo', etape: 'marquer', codes }, 60000);
+      codes.forEach(c => { const x = (S.deps || []).find(m => m.code === c); if (x) x.status = Object.assign({}, x.status, { mail: true }); });
+      codes.forEach(c => S.pb.sel.delete(c));
+      this.toast('✓ ' + codes.length + ' module' + (codes.length > 1 ? 's' : '') + ' annoncé' + (codes.length > 1 ? 's' : '') + ' — « Mail » coché au Planning', 4000);
+      this._pbRendre();
+    } catch (e) { this.toast('Planning non mis à jour : ' + e.message, 6000); }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   },
 });
