@@ -1245,8 +1245,8 @@ Object.assign(App, {
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Mail de dispo (2026-11-18, admins) : annonce à LOXAM des modules terminés (macro preparerEmailOutlook du
-   Planning) — brouillon Outlook (.eml) préparé par masterfile (planning_mail_dispo, etape 'eml'), puis, une
-   fois le mail envoyé, « Mail » (colonne P) coché au Planning (etape 'marquer').
+   Planning) — aperçu (planning_mail_dispo, etape 'apercu') puis envoi DIRECT par masterfile (etape 'envoyer')
+   qui coche « Mail » (colonne P) au Planning. (Le brouillon Outlook du matin reste possible côté serveur : 'eml'.)
    À annoncer = terminé, pas encore annoncé (P), ni de côté, ni parti, sans commande ni LV.
    ═══════════════════════════════════════════════════════════════════════════ */
 const _PB_SVG_MAIL = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>';
@@ -1277,13 +1277,13 @@ Object.assign(App, {
       };
       voile.innerHTML = `<div class="sx-fenetre pb-fenetre" role="dialog" aria-modal="true" aria-labelledby="pb-md-titre">
         <h3 id="pb-md-titre">Mail de dispo</h3>
-        <p class="sx-aide">Brouillon Outlook à relire et envoyer depuis ta messagerie.<br>
+        <p class="sx-aide">Choisissez les modules ; l’aperçu du mail s’affiche avant l’envoi.<br>
           <b>À</b> nathalie.jadeau@loxam.fr · <b>Cc</b> N. Mesnager, A. Lavello, N. Siblas, S. Dugué · <b>Cci</b> Hugo, Benjamin<br>
           <b>Objet</b> Module dispo - ${new Date().toLocaleDateString('fr-FR')}${ignores ? ' · ' + ignores + ' module' + (ignores > 1 ? 's' : '') + ' ignoré' + (ignores > 1 ? 's' : '') + ' (partis ou de côté)' : ''}</p>
         <div class="pb-md-liste">${ok.map(ligne).join('')}</div>
         <div class="sx-fenetre-boutons">
           <button type="button" class="sx-btn sx-btn-discret" data-r="0">Annuler</button>
-          <button type="button" class="sx-btn sx-btn-principal" data-r="1">Préparer le brouillon Outlook</button>
+          <button type="button" class="sx-btn sx-btn-principal" data-r="1">Prévisualiser le mail</button>
         </div></div>`;
       const fin = r => { voile.remove(); resolve(r); };
       voile.addEventListener('click', e => {
@@ -1299,27 +1299,45 @@ Object.assign(App, {
     });
     if (!choisis) return;
     const codes = choisis.map(l => l.code);
-    this.toast('⏳ Préparation du brouillon…', 20000);
-    let d;
-    try { d = await this._otPost({ action: 'planning_mail_dispo', etape: 'eml', codes }, 60000); }
-    catch (e) { this.toast('Brouillon impossible : ' + e.message, 6000); return; }
-    // Téléchargement direct du .eml (comme le mail des OT)
-    const octets = Uint8Array.from(atob(d.eml || ''), c => c.charCodeAt(0));
-    const url = URL.createObjectURL(new Blob([octets], { type: 'message/rfc822' }));
-    const a = document.createElement('a'); a.href = url; a.download = d.nom || 'Module dispo.eml'; document.body.appendChild(a); a.click(); a.remove();
-    this.toast('✓ Brouillon téléchargé : ouvrez-le dans Outlook', 4000);
-    const marquer = await this._otConfirmer({
-      titre: 'Mail envoyé ?',
-      texte: 'Ouvrez le fichier « ' + (d.nom || 'Module dispo.eml') + ' » (il s\u2019ouvre dans Outlook), relisez et envoyez. Une fois envoyé : cocher « Mail » au Planning pour les ' + codes.length + ' module' + (codes.length > 1 ? 's' : '') + ' ?',
-      ok: 'Mail envoyé : cocher « Mail »', annuler: 'Plus tard' });
-    if (!marquer) { setTimeout(() => URL.revokeObjectURL(url), 60000); return; }
+    this.toast('⏳ Préparation de l’aperçu…', 20000);
+    let ap;
+    try { ap = await this._otPost({ action: 'planning_mail_dispo', etape: 'apercu', codes }, 60000); }
+    catch (e) { this.toast('Aperçu impossible : ' + e.message, 6000); return; }
+    // Aperçu du mail tel qu'il partira (contenu affiché dans un cadre isolé), puis envoi direct
+    const envoyer = await new Promise(resolve => {
+      const voile = document.createElement('div');
+      voile.className = 'sx-voile';
+      voile.innerHTML = `<div class="sx-fenetre pb-fenetre pb-md-apercu" role="dialog" aria-modal="true" aria-labelledby="pb-mda-titre">
+        <h3 id="pb-mda-titre">Envoyer le mail de dispo ?</h3>
+        <dl class="pb-md-entetes">
+          <dt>À</dt><dd>${_otEsc((ap.a || []).join(', '))}</dd>
+          <dt>Cc</dt><dd>${_otEsc((ap.cc || []).join(', '))}</dd>
+          <dt>Cci</dt><dd>${_otEsc((ap.cci || []).join(', '))}</dd>
+          <dt>Objet</dt><dd><b>${_otEsc(ap.sujet || '')}</b></dd>
+        </dl>
+        <iframe class="pb-md-cadre" sandbox="" title="Aperçu du mail"></iframe>
+        <p class="sx-aide">Le mail part tout de suite depuis le compte Google de SONOTRAD (comme la macro du Sheet), puis « Mail » est coché au Planning pour ${codes.length} module${codes.length > 1 ? 's' : ''}.</p>
+        <div class="sx-fenetre-boutons">
+          <button type="button" class="sx-btn sx-btn-discret" data-r="0">Annuler</button>
+          <button type="button" class="sx-btn sx-btn-principal" data-r="1">Envoyer le mail</button>
+        </div></div>`;
+      voile.querySelector('.pb-md-cadre').srcdoc = ap.html || '';
+      const fin = r => { voile.remove(); resolve(r); };
+      voile.addEventListener('click', e => {
+        if (e.target === voile) return fin(false);
+        const b = e.target.closest('[data-r]');
+        if (b) fin(b.dataset.r === '1');
+      });
+      document.body.appendChild(voile);
+    });
+    if (!envoyer) return;
+    this.toast('⏳ Envoi du mail…', 30000);
     try {
-      await this._otPost({ action: 'planning_mail_dispo', etape: 'marquer', codes }, 60000);
+      await this._otPost({ action: 'planning_mail_dispo', etape: 'envoyer', codes }, 90000);
       codes.forEach(c => { const x = (S.deps || []).find(m => m.code === c); if (x) x.status = Object.assign({}, x.status, { mail: true }); });
       codes.forEach(c => S.pb.sel.delete(c));
-      this.toast('✓ ' + codes.length + ' module' + (codes.length > 1 ? 's' : '') + ' annoncé' + (codes.length > 1 ? 's' : '') + ' — « Mail » coché au Planning', 4000);
+      this.toast('✓ Mail de dispo envoyé — ' + codes.length + ' module' + (codes.length > 1 ? 's' : '') + ' annoncé' + (codes.length > 1 ? 's' : ''), 4000);
       this._pbRendre();
-    } catch (e) { this.toast('Planning non mis à jour : ' + e.message, 6000); }
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) { this.toast('Envoi impossible : ' + e.message, 8000); }
   },
 });
