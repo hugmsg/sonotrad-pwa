@@ -450,12 +450,28 @@ const App = {
         document.getElementById('login-overlay').style.display = 'none';
         this._render();
         this._prefetch();
+        this._rafraichirCompte();
         return;
       } catch(e) { localStorage.removeItem('snt_user'); }
     }
     // Pré-remplir l'URL si déjà connue
     if (S.apiUrl) document.getElementById('login-url-input').value = S.apiUrl;
     this._afficherConnexion();
+  },
+
+  /** Relit rôle et activités du compte (action `moi`) : une activité cochée après la connexion
+   *  (ex. « Reconditionnement ») est prise en compte à la prochaine ouverture, sans se reconnecter. */
+  async _rafraichirCompte() {
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=moi', {}, 20000);
+      const d = await r.json();
+      if (d.status !== 'ok' || !S.currentUser || !Array.isArray(d.activites)) return;
+      const u = S.currentUser;
+      if (u.role === d.role && JSON.stringify(u.activites || []) === JSON.stringify(d.activites)) return;
+      u.role = d.role; u.activites = d.activites;
+      localStorage.setItem('snt_user', JSON.stringify(u));
+      this._render();
+    } catch (e) { /* hors ligne : on garde les accès connus */ }
   },
 
   /** Lit l'expiration inscrite dans le jeton (la signature, elle, n'est vérifiable que côté serveur). */

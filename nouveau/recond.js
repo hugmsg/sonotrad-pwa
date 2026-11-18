@@ -31,6 +31,30 @@ const OT_RG = { p: ['pieces', 'diverses'], s: ['sanitaire'], t: ['travaux'] };
 const OT_RG_MAXC = { p: 2, s: 1, t: 2 };
 const OT_RG_UNITES = ['h', 'min', 'm', 'm²', 'u'];
 
+// Sanitaire : les pièces du bloc SANITAIRE du modèle « OPERATIONS (2) std » de la matrice Excel, dans son ordre
+// (2026-11-18, demande de Hugo). Sur une fiche en brouillon, celles qui n'y sont pas encore sont ajoutées À L'ÉCRAN
+// SEULEMENT (origine « modele », sans quantité) : rien n'est envoyé au serveur tant qu'aucune quantité n'est tapée
+// (voir _otEnregistrer), donc ni documents, ni totaux, ni stock ne changent. Bouton Grouper / Dégrouper.
+// Premix (394), réducteur (399), urinoir sans eau (forfait I) et « Autre » (SON-0000) n'ont pas de prix pièce :
+// ils restent en section 1 (choix de Hugo).
+const OT_SAN_MODELE = [
+  ['Chauffe-eau', [['SON-0002', 'Ballon eau chaude 200 L'], ['SON-0065', 'Ballon eau chaude 300 L + kit + thermostat'],
+    ['SON-0049', 'Petit chauffe-eau instantané'], ['SON-0028', 'Grand chauffe-eau instantané'], ['SON-0030', 'Kit de sécurité'],
+    ['SON-0066', 'Kit contrôle température']]],
+  ['Multicouche', [['SON-0054', 'Tube multicouche (m)'], ['SON-0052', 'Té égal'], ['SON-0053', 'Té mâle'], ['SON-0050', 'Raccord droit mâle'],
+    ['SON-0051', 'Raccord droit femelle écrou libre'], ['SON-0017', 'Autre raccord'], ['SON-0076', 'Collier']]],
+  ['Sanitaire', [['SON-0004', 'Robinet presto'], ['SON-0020', 'Douche presto'], ['SON-0032', 'WC anglaise + robinet'], ['SON-0055', 'Urinoir'],
+    ['SON-0080', 'Bonde évacuation'], ['SON-0058', 'Robinet de service']]],
+  ['PVC', [['SON-0025', 'Tube Ø 32'], ['SON-0026', 'Tube Ø 40'], ['SON-0027', 'Tube Ø 100'], ['SON-0061', 'Raccords (tout diamètre)'],
+    ['SON-0048', 'Manchon'], ['SON-0012', 'Réduction'], ['SON-0060', 'Tampon de réduction'], ['SON-0013', 'Tube souple Ø 40'],
+    ['SON-0078', 'Manchon de dilatation'], ['SON-0077', 'Collier']]],
+  ['Autre', [['SON-0024', 'Raccord pompier'], ['SON-0016', 'Vanne d\'alimentation'], ['SON-0046', 'Té 3x mâle'], ['SON-0014', 'Flexible 15x21 F/F'],
+    ['SON-0015', 'Flexible coudé'], ['SON-0043', 'Coude égal'], ['SON-0007', 'Traversée de cloison'], ['SON-0057', 'Rallonge'],
+    ['SON-0059', 'Réduction laiton'], ['SON-0003', 'Pipe souple WC'], ['SON-0075', 'Pipe orientable WC'], ['SON-0062', 'Siphon 40/40'],
+    ['SON-0063', 'Siphon 32/40'], ['SON-0079', 'Siphon ballon'], ['SON-0018', 'Tringle'], ['SON-0006', 'Rideau'],
+    ['SON-0064', 'Dévidoir papier WC'], ['SON-0005', 'Tube fileté'], ['SON-0011', 'Contre-écrou']]],
+];
+
 const OT_STATUTS = {
   brouillon: 'Brouillon', a_valider: 'À valider', validee: 'Validée', envoyee: 'Envoyée', annulee: 'Annulée',
 };
@@ -363,6 +387,18 @@ Object.assign(App, {
       occasion: !!l.occasion, origine: l.origine, mo_saisi: l.mo_saisi ?? null, prix_piece_saisi: l.prix_piece_saisi ?? null,
     }));
     S.ot.calc = fiche.lignes || [];
+    // Sanitaire dégroupé d'office pour un module sanitaire ou une fiche qui a déjà du sanitaire, groupé sinon.
+    S.ot.sanOuvert = /SANI/i.test(fiche.type_module || '') || S.ot.lignes.some(l => l.bloc === 'sanitaire');
+    if (fiche.statut === 'brouillon') {
+      const deja = new Set(S.ot.lignes.filter(l => l.bloc === 'sanitaire').map(l => String(l.ref || '').toUpperCase()));
+      OT_SAN_MODELE.forEach(([groupe, pieces]) => pieces.forEach(([ref, nom]) => {
+        if (deja.has(ref)) return;
+        const r = S.ot.refs.get(ref);
+        S.ot.lignes.push({ bloc: 'sanitaire', ref, libelle: (r && r.description) || nom, quantite: null,
+          unite: r && r.unite && r.unite !== 'unité' ? r.unite : 'u', occasion: false, origine: 'modele', groupe,
+          mo_saisi: null, prix_piece_saisi: null });
+      }));
+    }
     S.ot.notes = fiche.notes || '';
     S.ot.rev = 0; S.ot.revEnvoyee = 0; S.ot.etat = 'Enregistré';
     S.ot.recherche = { pieces: '', sanitaire: '', bureau: '' };
@@ -395,6 +431,20 @@ Object.assign(App, {
 
   // Sanitaire = pièces refacturées en « main-d'œuvre pièces » (réf. SON- avec un prix pièce).
   _otEstSanitaire(r) { return /^SON-/.test(r.ref) && Number(r.prix_piece) > 0; },
+
+  // Ligne de la liste sanitaire de l'Excel encore sans quantité : affichée seulement, jamais enregistrée.
+  _otPenseBete(l) { return !!l && l.origine === 'modele' && !(Number(l.quantite) > 0); },
+  _otSanCachee(l) { return !S.ot.sanOuvert && this._otPenseBete(l); },
+  _otHtmlSanBascule() {
+    const n = S.ot.lignes.filter(l => this._otPenseBete(l)).length;
+    if (!n) return '';
+    return `<button type="button" class="sx-btn sx-btn-discret sx-san-bascule" aria-expanded="${!!S.ot.sanOuvert}" onclick="App.otSanBasculer()">${S.ot.sanOuvert
+      ? 'Grouper la liste sanitaire' : 'Dégrouper : liste sanitaire (' + n + ' pièces)'}</button>`;
+  },
+  otSanBasculer() {
+    S.ot.sanOuvert = !S.ot.sanOuvert;
+    this._otRendreFiche();
+  },
 
   _otRendreFiche() {
     const el = document.getElementById('ot-fiche-root');
@@ -446,7 +496,7 @@ Object.assign(App, {
         </section>
 
         <section class="sx-section sx-bloc" ${S.ot.onglet === 'sanitaire' ? '' : 'hidden'} aria-labelledby="ot-t-san">
-          <div class="sx-section-tete"><h2 class="sx-h2" id="ot-t-san">2. Sanitaire</h2></div>
+          <div class="sx-section-tete"><h2 class="sx-h2" id="ot-t-san">2. Sanitaire</h2>${this._otHtmlSanBascule()}</div>
           <div class="sx-carte" id="ot-lignes-sanitaire">${this._otHtmlLignes(['sanitaire'], modif)}</div>
           ${modif ? `<div class="sx-recherche">${_OT_SVG_LOUPE}
               <label for="ot-rech-sanitaire" class="sx-sr">Ajouter une pièce sanitaire</label>
@@ -484,7 +534,7 @@ Object.assign(App, {
   },
 
   _otHtmlLignes(blocs, modif) {
-    const lignes = S.ot.lignes.map((l, i) => ({ l, i })).filter(x => blocs.includes(x.l.bloc));
+    const lignes = S.ot.lignes.map((l, i) => ({ l, i })).filter(x => blocs.includes(x.l.bloc) && !this._otSanCachee(x.l));
     if (!lignes.length) return '<div class="sx-vide">Aucune ligne.</div>';
     const dis = modif ? '' : 'disabled';
     return lignes.map(({ l, i }) => {
@@ -497,7 +547,7 @@ Object.assign(App, {
       if (l.ref && !forfait && !S.ot.refs.has(l.ref)) badges.push('<span class="sx-badge sx-badge-prevu">RÉF. SANS TARIF · montant à saisir au contrôle</span>');
       const occasionPossible = l.bloc === 'pieces' && !forfait && !/^SON-/.test(l.ref || '');
       const unite = l.unite && l.unite !== 'u' ? ` <span class="sx-aide">${_otEsc(l.unite)}</span>` : '';
-      return `<div class="sx-ligne${vide ? ' sx-a-confirmer' : ''}">
+      return `<div class="sx-ligne${this._otPenseBete(l) ? ' sx-pense-bete' : vide ? ' sx-a-confirmer' : ''}">
         <div class="sx-ligne-texte">
           <span class="sx-ligne-nom">${l.ref ? `<span class="sx-ref">${_otEsc(l.ref)}</span> · ` : ''}${_otEsc(l.libelle || '')}</span>
           ${badges.join('')}
@@ -588,7 +638,10 @@ Object.assign(App, {
     l.quantite = v === '' || isNaN(n) ? null : Math.max(0, n);
     this._otModifie(false);
     const ligne = document.getElementById('ot-q-' + i)?.closest('.sx-ligne');
-    if (ligne) ligne.classList.toggle('sx-a-confirmer', !(Number(l.quantite) > 0));
+    if (ligne) {
+      ligne.classList.toggle('sx-a-confirmer', !(Number(l.quantite) > 0) && l.origine !== 'modele');
+      ligne.classList.toggle('sx-pense-bete', this._otPenseBete(l));
+    }
   },
 
   _otOccasion(i) {
@@ -680,8 +733,8 @@ Object.assign(App, {
     const f = S.ot.fiche;
     this._otAfficherEtat('Enregistrement…');
     const envoi = this._otPost({ action: 'ot_enregistrer', id: f.id, version: f.version, notes: S.ot.notes,
-      lignes: S.ot.lignes.map(l => ({ bloc: l.bloc, ref: l.ref, libelle: l.libelle, quantite: l.quantite, unite: l.unite,
-        occasion: l.occasion, origine: l.origine, mo_saisi: l.mo_saisi, prix_piece_saisi: l.prix_piece_saisi })) });
+      lignes: S.ot.lignes.filter(l => !this._otPenseBete(l)).map(l => ({ bloc: l.bloc, ref: l.ref, libelle: l.libelle, quantite: l.quantite, unite: l.unite,
+        occasion: l.occasion, origine: l.origine === 'modele' ? 'atelier' : l.origine, mo_saisi: l.mo_saisi, prix_piece_saisi: l.prix_piece_saisi })) });
     S.ot.enCours = envoi.then(() => {}, () => {});
     try {
       const d = await envoi;
@@ -777,7 +830,7 @@ Object.assign(App, {
     const colsPrix = (pu, m) => admin ? `<th class="sx-rg-d sx-rg-pu" title="${pu}">P.U.</th><th class="sx-rg-d">${m}</th>` : '';
     const tableau = (g, titre, aide, tetes) => `
       <section class="sx-section" aria-labelledby="ot-rg-t-${g}">
-        <div class="sx-section-tete"><h2 class="sx-h2" id="ot-rg-t-${g}">${titre}</h2><span class="sx-aide">${aide}</span></div>
+        <div class="sx-section-tete"><h2 class="sx-h2" id="ot-rg-t-${g}">${titre}</h2><span class="sx-aide">${aide}</span>${g === 's' ? this._otHtmlSanBascule() : ''}</div>
         <div class="sx-carte sx-rg-defile"><table class="sx-rg">
           <thead><tr>${tetes}</tr></thead><tbody id="ot-rg-${g}"></tbody>
         </table></div>
@@ -867,7 +920,7 @@ Object.assign(App, {
     const modif = this._otModifiable();
     Object.keys(OT_RG).forEach(g => {
       const idx = [];
-      S.ot.lignes.forEach((l, i) => { if (OT_RG[g].includes(l.bloc)) idx.push(i); });
+      S.ot.lignes.forEach((l, i) => { if (OT_RG[g].includes(l.bloc) && !this._otSanCachee(l)) idx.push(i); });
       if (modif) idx.push(null);
       S.ot.rgIdx[g] = idx;
     });
@@ -930,13 +983,14 @@ Object.assign(App, {
     }).join('');
 
     const vus = {};
-    idx.forEach((i, r) => { const k = i === null ? '' : String(S.ot.lignes[i].ref || '').toUpperCase(); if (k) (vus[k] = vus[k] || []).push(r + 1); });
+    idx.forEach((i, r) => { const k = i === null || this._otPenseBete(S.ot.lignes[i]) ? '' : String(S.ot.lignes[i].ref || '').toUpperCase(); if (k) (vus[k] = vus[k] || []).push(r + 1); });
     let h = idx.map((i, r) => {
       const l = i === null ? null : S.ot.lignes[i];
       const { k, f, r: tr } = this._otRgTarif(l ? l.ref : '');
-      const attente = l && k && !(Number(l.quantite) > 0);
+      const penseBete = this._otPenseBete(l);
+      const attente = l && k && !(Number(l.quantite) > 0) && !penseBete;
       const puces = [];
-      if (l) {
+      if (l && !penseBete) {
         if (l.origine === 'office') puces.push('<span class="sx-badge sx-badge-office">D\'OFFICE</span>');
         if (l.origine === 'prevu') puces.push(attente ? '<span class="sx-badge sx-badge-prevu">PRÉVU 🔧 · À CONFIRMER</span>' : '<span class="sx-badge sx-badge-ok">POSÉ 🔧</span>');
         if (f) puces.push('<span class="sx-badge sx-badge-office">FORFAIT</span>');
@@ -947,7 +1001,9 @@ Object.assign(App, {
       }
       const nom = l ? (l.libelle || (f ? f.intitule : tr ? tr.description : '')) : '';
       const occPossible = g === 'p' && l && k && !f && !/^SON-/.test(k);
-      return `<tr data-r="${r}" class="${attente ? 'sx-rg-attente' : ''}">
+      const grp = penseBete && l.groupe && (r === 0 || (this._otRgLigne(g, r - 1) || {}).groupe !== l.groupe)
+        ? `<tr class="sx-rg-groupe"><td></td><td colspan="${admin ? 6 : 4}">${_otEsc(l.groupe)}</td></tr>` : '';
+      return `${grp}<tr data-r="${r}" class="${attente ? 'sx-rg-attente' : penseBete ? 'sx-rg-pense-bete' : ''}">
         <td class="sx-rg-n">${r + 1}</td>
         <td class="sx-rg-saisie sx-rg-ref"><input id="ot-rg-${g}-${r}-0" data-rg="${g}" data-r="${r}" data-c="0" value="${_otEsc(l ? l.ref || '' : '')}" autocomplete="off" spellcheck="false"
           ${modif && !(l && l.origine === 'office') ? '' : 'readonly'} aria-label="Réf. ligne ${r + 1}"></td>
@@ -973,7 +1029,7 @@ Object.assign(App, {
     if (!el) return;
     const admin = this._otAdmin();
     const lignes = g => S.ot.rgIdx[g].map((i, r) => [i === null ? null : S.ot.lignes[i], r]).filter(([l]) => l);
-    const sansQte = g => lignes(g).filter(([l]) => String(l.ref || '').trim() && !(Number(l.quantite) > 0));
+    const sansQte = g => lignes(g).filter(([l]) => String(l.ref || '').trim() && !(Number(l.quantite) > 0) && !this._otPenseBete(l));
     const inconnues = g => lignes(g).filter(([l]) => { const { k, f, r } = this._otRgTarif(l.ref); return k && !f && !r; });
     const n = ['p', 's', 't'].reduce((s, g) => s + lignes(g).filter(([l]) => Number(l.quantite) > 0).length, 0);
     let h = `<span class="sx-h2" style="font-size:15px;">Fiche</span>
@@ -1019,7 +1075,7 @@ Object.assign(App, {
     if (el.select && !el.readOnly) el.select();
   },
   _otRgQteManquante(g) {
-    return S.ot.rgIdx[g].findIndex(i => i !== null && String(S.ot.lignes[i].ref || '').trim() && !(Number(S.ot.lignes[i].quantite) > 0));
+    return S.ot.rgIdx[g].findIndex(i => i !== null && String(S.ot.lignes[i].ref || '').trim() && !(Number(S.ot.lignes[i].quantite) > 0) && !this._otPenseBete(S.ot.lignes[i]));
   },
 
   /* ─ Saisie ─ */

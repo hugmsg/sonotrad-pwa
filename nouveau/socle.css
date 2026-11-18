@@ -646,3 +646,8 @@ body.pb-plein #view-prod-bureau.active { flex: 1; min-height: 0; display: flex; 
   .pb-et-choix { grid-template-columns: 1fr; }
   .pb-recherche { flex-basis: 100%; }
 }
+/* Fiche OT : liste sanitaire de l'Excel (2026-11-18) — lignes affichées sans quantité, non enregistrées */
+.sx-san-bascule { margin-left: auto; min-height: 36px; padding: 0 12px; font-size: 13px; }
+.sx-ligne.sx-pense-bete .sx-ligne-nom { color: var(--sx-gris); }
+.sx-rg tr.sx-rg-pense-bete .sx-rg-nom { color: var(--sx-gris); }
+.sx-rg tr.sx-rg-groupe td { padding: 8px 6px 2px; font-size: 11px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; color: var(--sx-bleu); background: var(--sx-fond); }
