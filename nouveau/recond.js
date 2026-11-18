@@ -389,7 +389,8 @@ Object.assign(App, {
     S.ot.calc = fiche.lignes || [];
     // Sanitaire dégroupé d'office pour un module sanitaire ou une fiche qui a déjà du sanitaire, groupé sinon.
     S.ot.sanOuvert = /SANI/i.test(fiche.type_module || '') || S.ot.lignes.some(l => l.bloc === 'sanitaire');
-    if (fiche.statut === 'brouillon') {
+    S.ot.ctTaille = null;
+    if (fiche.statut === 'brouillon' && fiche.modele !== 'container') {
       const deja = new Set(S.ot.lignes.filter(l => l.bloc === 'sanitaire').map(l => String(l.ref || '').toUpperCase()));
       OT_SAN_MODELE.forEach(([groupe, pieces]) => pieces.forEach(([ref, nom]) => {
         if (deja.has(ref)) return;
@@ -425,7 +426,7 @@ Object.assign(App, {
       <span class="sx-statut-nom">${_otEsc(t[0])}</span>
       ${f.numero_ot ? `<span class="sx-statut-num">${_otEsc(f.numero_ot)}</span>` : ''}
       <span class="sx-statut-texte">${_otEsc(t[1])}</span>
-      ${droite ? `<span style="margin-left:auto;">${droite}</span>` : ''}
+      ${droite || this._otHtmlBoutonModele ? `<span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;">${this._otHtmlBoutonModele ? this._otHtmlBoutonModele() : ''}${droite}</span>` : ''}
     </div>`;
   },
 
@@ -450,6 +451,8 @@ Object.assign(App, {
     const el = document.getElementById('ot-fiche-root');
     const f = S.ot.fiche;
     if (!el || !f) return;
+    // Fiche container (container.js) : son propre écran, sauf au contrôle de l'administrateur
+    if (f.modele === 'container' && !this._otVueControle() && this._otRendreContainer) { this._otRendreContainer(); return; }
     if (S.ot.rapide && this._otRapideDispo()) { this._otRendreRapide(); return; }
     if (this._otVueControle()) { this._otRendreControle(); return; }
     const modif = this._otModifiable();
@@ -608,6 +611,7 @@ Object.assign(App, {
     S.ot.rev++;
     if (redessiner) {
       if (document.getElementById('ot-rg-p')) this._otRgDessiner();
+      else if (S.ot.fiche && S.ot.fiche.modele === 'container' && !this._otVueControle() && this._otRendreContainer) this._otRendreContainer();
       else if (this._otVueControle()) this._otRendreTableControle();
       else this._otRafraichirBlocs();
     }
