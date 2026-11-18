@@ -251,7 +251,7 @@ Object.assign(App, {
       return `<div class="sx-item sx-item-a-ouvrir">
         <button type="button" class="sx-item-texte sx-item-btn" onclick="${ouvrir}">
           <span class="sx-item-titre">${_otEsc([m.module, m.codeModule].filter(Boolean).join(' ') || '—')} · <span class="sx-ref">${_otEsc(m.code)}</span></span>
-          <span class="sx-item-detail">${_otEsc([m.ag, m.chantier].filter(Boolean).join(' · '))}${m.parti ? ' · parti sans OT' : ' · terminé au Planning'}${vente ? ' · <b>vente probable ?</b>' : ''}</span>
+          <span class="sx-item-detail">${(st => `<span class="sx-tag-planning sx-tp-${_otEsc(st.classe)}" title="Étape au Planning">${_otEsc(st.texte)}</span> `)(this._otStatutModule(m))}${_otEsc(m.chantier || m.ag || '')}${m.parti ? ' · sans OT' : ''}${vente ? ' · <b>vente probable ?</b>' : ''}</span>
         </button>
         <button type="button" class="sx-btn sx-btn-discret sx-item-ouvrir" onclick="App.otPasDOt('${_otEsc(m.code)}')">Pas d'OT</button>
         <button type="button" class="sx-btn sx-btn-second sx-item-ouvrir" onclick="${ouvrir}">Ouvrir la fiche</button>
