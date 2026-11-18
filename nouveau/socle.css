@@ -694,5 +694,5 @@ body.pb-plein #view-prod-bureau.active { flex: 1; min-height: 0; display: flex; 
 .sx-so-motif input { width: 20px; height: 20px; }
 .pb-ot-sans { background: #EEF1F5; color: #3D4B5C; border: 0; font-family: inherit; cursor: pointer; }
 span.pb-ot-sans { cursor: default; }
-.pb-sans-btn { border: 1px solid var(--sx-bord-champ); background: #FFFFFF; color: #3D4B5C; border-radius: 5px; padding: 1px 6px; font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
-.pb-sans-btn:hover { background: var(--sx-bleu-clair); }
+.pb-sans-btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin: -4px 0 -4px 2px; vertical-align: middle; border: 0; border-radius: 6px; background: none; color: #C62828; cursor: pointer; }
+.pb-sans-btn:hover, .pb-sans-btn:focus-visible { background: #FDECEC; }

@@ -1123,6 +1123,7 @@ Object.assign(App, {
         : `<button type="button" class="pb-ot pb-ot-sans" onclick="App.otRemettreAFaire('${code}')" title="${t} — cliquer pour remettre à faire">Pas d'OT · ${_otEsc(OT_MOTIFS[l.sansOt.motif] || l.sansOt.motif)}</button>`;
     }
     const etat = l.otAFaire ? '<span class="pb-ot pb-ot-afaire">OT à faire</span>' : (gris ? '<span class="pb-gris">Pas de fiche</span>' : '');
-    return etat + (this._otAutorise() && l.code ? ` <button type="button" class="pb-sans-btn" onclick="App.otPasDOt('${code}')" title="Ce module n'aura pas d'OT (vente en l'état, épave…)">Pas d'OT</button>` : '');
+    // Petite croix rouge (demande de Hugo) : plus léger, et on ne lit pas « pas d'OT » comme « rien à faire »
+    return etat + (this._otAutorise() && l.code ? ` <button type="button" class="pb-sans-btn" onclick="App.otPasDOt('${code}')" title="Marquer : ce module n'aura pas d'OT (vente en l'état, épave…)" aria-label="Marquer ${code} sans OT"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>` : '');
   },
 });
