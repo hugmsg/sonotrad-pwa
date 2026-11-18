@@ -129,7 +129,7 @@ Object.assign(App, {
     el.innerHTML = `<div class="sx-ecran sx-ot sx-ot-${_otEsc(f.statut)}">
       ${this._otEntete({ retour: { texte: 'Fiches', action: 'App.otQuitterFiche()' }, titre: 'Fiche container', large: true,
           sousTitre: [f.type_module, f.numero_module, f.agence, f.code_planning].filter(Boolean).join(' · '), etat: S.ot.etat,
-          bandeau: this._otBandeauStatut(f) })}
+          bandeau: this._otBandeauStatut(f, this._otVueControle() ? '<button type="button" class="sx-btn sx-btn-discret" onclick="App.otCtVueTableau(true)">Vue tableau</button>' : '') })}
       <main class="sx-contenu sx-large sx-ct-page">
         <div class="sx-ct-col">
           ${f.commentaire ? `<span class="sx-aide" style="font-size:13px;">${_otEsc(f.commentaire)}</span>` : ''}
@@ -169,7 +169,10 @@ Object.assign(App, {
             <div class="sx-carte">${autres.length ? autres.map(({ l, i }) => `<div class="sx-ligne">
                 <div class="sx-ligne-texte"><span class="sx-ligne-nom">${l.ref ? `<span class="sx-ref">${_otEsc(l.ref)}</span> · ` : ''}${_otEsc(l.libelle || '')}</span>
                   ${l.ref && !S.ot.forfaits.has(l.ref) && !S.ot.refs.has(l.ref) ? '<span class="sx-badge sx-badge-prevu">RÉF. SANS TARIF · montant au contrôle</span>' : ''}</div>
-                <div class="sx-ligne-actions"><div class="sx-compteur">
+                <div class="sx-ligne-actions">${admin ? `<label class="sx-ct-mo-saisi"><span class="sx-sr">Montant MO (remplace le tarif)</span>
+                    <input id="ot-ct-mo-${i}" type="text" inputmode="decimal" ${dis} class="${l.mo_saisi != null ? 'sx-manuel' : ''}"
+                      value="${l.mo_saisi != null ? _otEsc(_otQte(l.mo_saisi)) : ''}" placeholder="${this._otCtPrix(l.ref) !== null ? _otEsc(_otQte(this._otCtPrix(l.ref) * (Number(l.quantite) || 0))) : 'montant'}"
+                      title="Montant de MO tapé : remplace le tarif ; vide = tarif" onchange="App.otCtMontant(${i}, this.value)"> €</label>` : ''}<div class="sx-compteur">
                   <button type="button" class="sx-moins" aria-label="Retirer un" ${dis} onclick="App._otPas(${i}, -1);App._otRendreContainer()">−</button>
                   <label for="ot-q-${i}" class="sx-sr">Quantité</label>
                   <input id="ot-q-${i}" class="sx-qte" type="number" inputmode="decimal" min="0" step="any" placeholder="—" ${dis}
@@ -192,26 +195,60 @@ Object.assign(App, {
             <span class="sx-aide">Pour le bureau, pas pour LOXAM.</span>
           </div>
         </div>
-        <aside class="sx-carte sx-ct-recap" aria-label="Lignes de l'OT">
+        <aside class="sx-ct-cote">
+        ${admin && f.statut !== 'brouillon' ? `<section class="sx-carte sx-carte-pad" style="display:flex;flex-direction:column;gap:4px;">
+            <span class="sx-aide" style="font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Montant de l'OT</span>
+            <span class="sx-gros-montant" id="ot-ct-total">${f.totaux && f.totaux.total != null ? _otEuros(f.totaux.total) : '…'}</span>
+            <span class="sx-aide">calculé par le serveur</span>
+          </section>` : ''}
+        ${admin && f.statut === 'a_valider' ? this._otHtmlEnValidant(false) : ''}
+        ${admin && ['validee', 'envoyee'].includes(f.statut) ? this._otHtmlDocuments(f) : ''}
+        ${this._otHtmlStock(f)}
+        <div class="sx-carte sx-ct-recap" aria-label="Lignes de l'OT">
           <div class="sx-carte-pad"><b>Lignes de l'OT</b><br><span class="sx-aide">ce que reçoivent le PDF et les Excel</span></div>
           ${lignesOt.length ? lignesOt.map(l => {
             const p = admin ? this._otCtPrix(l.ref) : null;
+            const mo = l.mo_saisi != null ? Number(l.mo_saisi) : (p !== null ? p * Number(l.quantite) : null);
             return `<div class="sx-ct-recap-l"><span class="sx-ref">${_otEsc(l.ref || '')}</span><span>${_otEsc(l.libelle || '')}</span><b>${_otQte(l.quantite)}</b>
-              <span class="sx-ct-mo">${admin && p !== null ? _otEuros(p * Number(l.quantite)) : ''}</span></div>`;
+              <span class="sx-ct-mo">${admin && mo !== null ? _otEuros(mo) : ''}</span></div>`;
           }).join('') : '<div class="sx-vide">Aucune ligne.</div>'}
+        </div>
         </aside>
       </main>
       <footer class="sx-pied"><div class="sx-pied-in" id="ot-pied">${this._otHtmlPied()}</div></footer>
     </div>`;
   },
 
+  // Montant de MO tapé par l'administrateur (ligne « Autre travail ») : remplace le tarif ; vide = tarif
+  otCtMontant(i, v) {
+    const l = S.ot.lignes[i];
+    if (!l || !this._otModifiable() || !this._otAdmin()) return;
+    const n = parseFloat(String(v).replace(/\s/g, '').replace(',', '.'));
+    l.mo_saisi = String(v).trim() === '' || isNaN(n) ? null : Math.max(0, n);
+    this._otModifie(false);
+    this._otRendreContainer();
+  },
+  // Total du serveur, après chaque enregistrement
+  _otCtMajTotal() {
+    const el = document.getElementById('ot-ct-total');
+    const t = S.ot.fiche && S.ot.fiche.totaux;
+    if (el && t && t.total != null) el.textContent = _otEuros(t.total);
+  },
+  otCtVueTableau(on) {
+    S.ot.ctTableau = !!on;
+    this._otRendreFiche();
+  },
+
   /* ─ Bascule module ↔ container ─ */
 
   _otHtmlBoutonModele() {
     const f = S.ot.fiche;
-    if (!f || !this._otModifiable()) return '';
+    // Contrôle d'une fiche container en « Vue tableau » : retour à la fiche container
+    const retour = f && f.modele === 'container' && S.ot.ctTableau && this._otVueControle()
+      ? '<button type="button" class="sx-btn sx-btn-discret" onclick="App.otCtVueTableau(false)">Fiche container</button>' : '';
+    if (!f || !this._otModifiable()) return retour;
     const vers = f.modele === 'container' ? 'module' : 'container';
-    return `<button type="button" class="sx-btn sx-btn-discret" onclick="App.otBasculerModele()">Passer en fiche ${vers}</button>`;
+    return retour + `<button type="button" class="sx-btn sx-btn-discret" onclick="App.otBasculerModele()">Passer en fiche ${vers}</button>`;
   },
 
   // Même règle que ot_fiche_modele (serveur) : aperçu de ce qui part, reste et arrive.

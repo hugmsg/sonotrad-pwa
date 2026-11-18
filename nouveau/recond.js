@@ -503,7 +503,8 @@ Object.assign(App, {
     const f = S.ot.fiche;
     if (!el || !f) return;
     // Fiche container (container.js) : son propre écran, sauf au contrôle de l'administrateur
-    if (f.modele === 'container' && !this._otVueControle() && this._otRendreContainer) { this._otRendreContainer(); return; }
+    // (aussi au contrôle depuis le 2026-11-18 ; « Vue tableau » = S.ot.ctTableau)
+    if (f.modele === 'container' && !(this._otVueControle() && S.ot.ctTableau) && this._otRendreContainer) { this._otRendreContainer(); return; }
     if (S.ot.rapide && this._otRapideDispo()) { this._otRendreRapide(); return; }
     if (this._otVueControle()) { this._otRendreControle(); return; }
     const modif = this._otModifiable();
@@ -662,7 +663,7 @@ Object.assign(App, {
     S.ot.rev++;
     if (redessiner) {
       if (document.getElementById('ot-rg-p')) this._otRgDessiner();
-      else if (S.ot.fiche && S.ot.fiche.modele === 'container' && !this._otVueControle() && this._otRendreContainer) this._otRendreContainer();
+      else if (S.ot.fiche && S.ot.fiche.modele === 'container' && !(this._otVueControle() && S.ot.ctTableau) && this._otRendreContainer) this._otRendreContainer();
       else if (this._otVueControle()) this._otRendreTableControle();
       else this._otRafraichirBlocs();
     }
@@ -799,6 +800,7 @@ Object.assign(App, {
         this._otAfficherEtat('Enregistré');
         S.ot.calc = d.fiche.lignes || [];
         if (this._otVueControle() && S.view === 'ot-fiche') this._otMajMontants();
+        if (this._otCtMajTotal) this._otCtMajTotal();
       }
       const pied = document.getElementById('ot-pied');
       if (pied && S.view === 'ot-fiche') pied.innerHTML = this._otHtmlPied();

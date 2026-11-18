@@ -670,7 +670,11 @@ body.pb-plein #view-prod-bureau.active { flex: 1; min-height: 0; display: flex; 
 .sx-ct-n { min-width: 34px; text-align: center; font-size: 18px; font-weight: 800; }
 .sx-ct-zero { color: #9AA6B5; }
 .sx-ct-note { margin: 8px 0; background: var(--sx-bleu-clair); color: #0B3A7A; border-radius: 10px; padding: 10px 12px; font-size: 13px; font-weight: 600; }
-.sx-ct-recap { position: sticky; top: 12px; overflow: hidden; }
+.sx-ct-cote { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 12px; }
+.sx-ct-recap { overflow: hidden; }
+.sx-ct-mo-saisi { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--sx-gris); }
+.sx-ct-mo-saisi input { width: 84px; min-height: 40px; padding: 0 8px; border: 1px solid var(--sx-bord-champ); border-radius: 8px; font-family: inherit; font-size: 14px; text-align: right; }
+.sx-ct-mo-saisi input.sx-manuel { border-color: var(--sx-orange); background: var(--sx-orange-fond); }
 .sx-ct-recap-l { display: grid; grid-template-columns: 70px minmax(0, 1fr) 34px 76px; gap: 0 8px; padding: 7px 14px; border-top: 1px solid var(--sx-separateur); font-size: 13px; align-items: baseline; }
 .sx-ct-mo { text-align: right; }
 .sx-ct-fen { max-width: 520px; width: calc(100vw - 32px); max-height: calc(100dvh - 32px); overflow-y: auto; box-sizing: border-box; }
@@ -679,7 +683,7 @@ body.pb-plein #view-prod-bureau.active { flex: 1; min-height: 0; display: flex; 
 .sx-ct-t-r { color: #9B1C1C; } .sx-ct-t-g { color: #14532D; } .sx-ct-t-a { color: #0B3A7A; }
 @media (max-width: 899px) {
   .sx-ct-page { grid-template-columns: minmax(0, 1fr); }
-  .sx-ct-recap { position: static; }
+  .sx-ct-cote { position: static; }
 }
 /* Liste des fiches : modules terminés sans fiche, en tête de « À compléter » (2026-11-18) */
 .sx-item-a-ouvrir { background: #FFFBEB; }
