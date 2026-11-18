@@ -178,6 +178,40 @@ Object.assign(App, {
       S.ot.listeChargement = false;
       this._otRendreListe();
     }
+    // Modules du Planning (terminés sans fiche → « À compléter ») : chargés à côté, la liste se redessine à l'arrivée
+    if (force || !S.ot.modules) this._otChargerModules(force).then(() => { if (S.ot.choix) this._otRendreModules(); else this._otRendreListe(); });
+  },
+
+  async _otChargerModules(force = false) {
+    if (S.ot.modulesChargement || (S.ot.modules && !force)) return;
+    S.ot.modulesChargement = true;
+    try {
+      const [prod, partis] = await Promise.all([
+        this._otGet({ action: 'production' }, 90000),
+        this._otGet({ action: 'archive' }, 60000).catch(() => ({ data: [] })),
+      ]);
+      S.ot.modules = [
+        ...(prod.data || []).map(m => ({ ...m, parti: false })),
+        ...(partis.data || []).map(m => ({ ...m, parti: true, status: m.status || {} })),
+      ];
+    } catch (e) {
+      this.toast('Modules indisponibles : ' + e.message, 4000);
+    } finally {
+      S.ot.modulesChargement = false;
+    }
+  },
+
+  // Modules qui attendent leur fiche : terminés au Planning (ou partis depuis la mise en service des fiches,
+  // le 16/11) et sans fiche (même annulée exclue). Ils s'affichent en tête de « À compléter » (demande de Hugo, 18/11).
+  _otModulesAOuvrir() {
+    if (!S.ot.modules || !S.ot.listeChargee) return [];
+    const avecFiche = new Set(S.ot.liste.filter(f => f.statut !== 'annulee').map(f => String(f.code_planning || '').toUpperCase()));
+    const debut = new Date('2026-11-16');
+    return S.ot.modules.filter(m => {
+      if (!m.code || avecFiche.has(String(m.code).toUpperCase())) return false;
+      if (m.parti) { const fin = m.fin ? new Date(m.fin) : null; return !!fin && !isNaN(fin) && fin >= debut; }
+      return !!(m.status && m.status.termine && !m.status.deCote);
+    }).sort((a, b) => (a.parti - b.parti) || String(a.fin || '').localeCompare(String(b.fin || '')));
   },
 
   _otRendreListe() {
@@ -202,17 +236,30 @@ Object.assign(App, {
         <span class="sx-pastille sx-p-${_otEsc(f.statut)}">${_otEsc(OT_STATUTS[f.statut] || f.statut)}</span>
       </button>`;
 
+    const aOuvrir = this._otModulesAOuvrir();
+    const itemModule = m => `<button type="button" class="sx-item sx-item-a-ouvrir" onclick="App._otChoisirModule('${_otEsc(m.code)}', ${m.parti ? 'true' : 'false'})">
+        <div class="sx-item-texte">
+          <span class="sx-item-titre">${_otEsc([m.module, m.codeModule].filter(Boolean).join(' ') || '—')} · <span class="sx-ref">${_otEsc(m.code)}</span></span>
+          <span class="sx-item-detail">${_otEsc([m.ag, m.chantier].filter(Boolean).join(' · '))}${m.parti ? ' · parti sans OT' : ' · terminé au Planning'}</span>
+        </div>
+        <span class="sx-btn sx-btn-second sx-item-ouvrir">Ouvrir la fiche</span>
+      </button>`;
+
     let corps;
     if (S.ot.listeChargement && !S.ot.listeChargee) corps = '<div class="sx-chargement">Chargement des fiches…</div>';
-    else if (!S.ot.liste.length) corps = '<div class="sx-carte"><div class="sx-vide">Aucune fiche pour l\'instant.<br>Commencez par « Nouvelle fiche ».</div></div>';
+    else if (!S.ot.liste.length && !aOuvrir.length) corps = '<div class="sx-carte"><div class="sx-vide">Aucune fiche pour l\'instant.<br>Commencez par « Nouvelle fiche ».</div></div>';
     else corps = groupes.map(g => {
       const fiches = S.ot.liste.filter(f => g.statuts.includes(f.statut)).slice(0, g.max || 1e9);
-      if (!fiches.length) return '';
+      const modules = g.statuts[0] === 'brouillon' ? aOuvrir : [];
+      if (!fiches.length && !modules.length) return '';
+      const compte = [fiches.length ? fiches.length + ' fiche' + (fiches.length > 1 ? 's' : '') : '',
+        modules.length ? modules.length + ' module' + (modules.length > 1 ? 's' : '') + ' à ouvrir' : ''].filter(Boolean).join(' · ');
       // Couleur de l'étape (la même que le bandeau en tête de fiche) : titre en bandeau, filet sur chaque fiche.
       return `<section class="sx-section sx-ot sx-ot-liste sx-ot-${g.statuts[0]}">
-        <div class="sx-statut sx-statut-groupe"><span class="sx-statut-nom">${g.titre}</span><span class="sx-statut-texte">${fiches.length} fiche${fiches.length > 1 ? 's' : ''}</span></div>
-        <div class="sx-carte">${fiches.map(item).join('')}</div></section>`;
+        <div class="sx-statut sx-statut-groupe"><span class="sx-statut-nom">${g.titre}</span><span class="sx-statut-texte">${compte}</span></div>
+        <div class="sx-carte">${modules.map(itemModule).join('')}${fiches.map(item).join('')}</div></section>`;
     }).join('');
+    if (S.ot.listeChargee && S.ot.modulesChargement && !S.ot.modules) corps = '<div class="sx-aide">Recherche des modules terminés au Planning…</div>' + corps;
 
     el.innerHTML = `<div class="sx-ecran">
       ${this._otEntete({ retour: S.ot.retour === 'loxam' ? { texte: 'LOXAM', action: 'App.go(\'loxam-menu\')' } : { texte: 'Accueil', action: 'App.goHome()' }, titre: 'Fiches d\'opérations', sousTitre: 'Reconditionnement' + (this._otEssai() ? ' · essai' : '') })}
@@ -235,23 +282,9 @@ Object.assign(App, {
     S.ot.choix = true;
     S.ot.rechercheModule = '';
     this._otRendreListe();
-    if (S.ot.modules || S.ot.modulesChargement) return;
-    S.ot.modulesChargement = true;
-    try {
-      const [prod, partis] = await Promise.all([
-        this._otGet({ action: 'production' }, 90000),
-        this._otGet({ action: 'archive' }, 60000).catch(() => ({ data: [] })),
-      ]);
-      S.ot.modules = [
-        ...(prod.data || []).map(m => ({ ...m, parti: false })),
-        ...(partis.data || []).map(m => ({ ...m, parti: true, status: m.status || {} })),
-      ];
-    } catch (e) {
-      this.toast('Modules indisponibles : ' + e.message, 4000);
-    } finally {
-      S.ot.modulesChargement = false;
-      if (S.ot.choix) this._otRendreModules();
-    }
+    if (S.ot.modules) return;
+    await this._otChargerModules();
+    if (S.ot.choix) this._otRendreModules();
   },
 
   otAnnulerChoix() { S.ot.choix = false; this._otRendreListe(); },
