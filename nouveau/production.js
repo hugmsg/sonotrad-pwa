@@ -149,7 +149,7 @@ Object.assign(App, {
     const P = S.pb;
     if (P.type && (l.d.module || '').trim() !== P.type) return false;
     const q = P.q.trim().toLowerCase();
-    if (q && ![l.d.code, l.d.codeModule, l.d.chantier, l.d.ag, l.d.module, l.d.lv, l.d.commande, l.fiche?.numero_ot]
+    if (q && ![l.d.code, l.d.codeModule, l.d.chantier, l.d.ag, l.d.module, l.d.lv, l.d.commande, l.fiche?.numero_ot, l.d.description]
       .some(v => String(v || '').toLowerCase().includes(q))) return false;
     return true;
   },
@@ -170,6 +170,11 @@ Object.assign(App, {
     S.pb.q = v;
     clearTimeout(this._pbMinuterie);
     this._pbMinuterie = setTimeout(() => this._pbRendreCorps(), 120);
+  },
+  prodTravaux() {
+    S.pb.desc = !S.pb.desc;
+    try { localStorage.setItem('snt_pb_travaux', S.pb.desc ? '1' : '0'); } catch (e) { /* stockage indisponible */ }
+    this._pbRendre();
   },
   prodReplier(cle) { S.pb.replies[cle] = !S.pb.replies[cle]; this._pbRendreCorps(); },
   prodColonnes() { this.go('departures'); },
@@ -213,6 +218,8 @@ Object.assign(App, {
   _pbRendre() {
     const el = document.getElementById('prod-bureau-root');
     if (!el) return;
+    // Colonne « Travaux » (description du Planning) : affichée par défaut, choix mémorisé par appareil (2026-11-18)
+    if (S.pb.desc === undefined) S.pb.desc = (() => { try { return localStorage.getItem('snt_pb_travaux') !== '0'; } catch (e) { return true; } })();
     if (S.pb.vue === 'arr') return this._pbArrRendre();
     const P = S.pb;
     const pret = S.depsLoaded;
@@ -252,6 +259,7 @@ Object.assign(App, {
             <button type="button" aria-pressed="true">Tableau</button>
             <button type="button" aria-pressed="false" onclick="App.prodColonnes()">Colonnes</button>
           </div>
+          <button type="button" class="pb-bouton" aria-pressed="${!!P.desc}" onclick="App.prodTravaux()" title="Afficher ou masquer la description des travaux (Planning, colonne G)">Travaux</button>
           <button type="button" class="pb-bouton" onclick="App.prodActualiser()">Actualiser</button>
           ${this._pbPeutEtape() ? '<button type="button" class="sx-btn sx-btn-principal pb-btn-ajout" onclick="App.prodFenetreAjout()">+ Ajouter<span class="pb-sans-tel"> au Planning</span></button>' : ''}
         </div>
@@ -311,9 +319,9 @@ Object.assign(App, {
       return;
     }
 
-    const entete = `<div class="pb-grille pb-tete"><span>Code</span><span>N° module</span><span>Type</span><span>Agence · chantier</span>
+    const entete = `<div class="pb-grille pb-tete"><span>Code</span><span>N° module</span><span>Type</span><span>Agence · chantier</span>${P.desc ? '<span>Travaux</span>' : ''}
       <span>Étape</span><span>Durée</span><span>Livraison</span><span>OT</span><span class="pb-droite">${admin ? 'Montant' : ''}</span><span>${admin ? 'Documents' : ''}</span><span>Fiche</span></div>`;
-    el.innerHTML = `<div class="pb-tableau"><div class="pb-interieur">${entete}${groupes.map(g => `
+    el.innerHTML = `<div class="pb-tableau${P.desc ? ' pb-avec-desc' : ''}"><div class="pb-interieur">${entete}${groupes.map(g => `
       <button type="button" class="pb-groupe pb-g-${g.cle}" aria-expanded="${!P.replies[g.cle]}" onclick="App.prodReplier('${g.cle}')">
         ${_PB_SVG_CHEVRON}<span>${_otEsc(g.titre)}</span><span class="pb-groupe-n">${g.ls.length} module${g.ls.length > 1 ? 's' : ''}</span>
       </button>
@@ -345,6 +353,7 @@ Object.assign(App, {
       <button type="button" class="pb-numero" onclick="App.prodOuvrirModule(${l.parti}, ${l.idx})" title="Ouvrir la fiche du module">${_otEsc(d.codeModule || '—')}</button>
       <span class="pb-type">${_otEsc(d.module || '')}</span>
       ${this._pbHtmlAgence(l, `${_otEsc(d.chantier || '')}${d.status && d.status.grutage ? ' <span class="pb-grutage">grutage</span>' : ''}`)}
+      ${S.pb.desc ? `<button type="button" class="pb-texte pb-desc" onclick="App.prodOuvrirModule(${l.parti}, ${l.idx})" title="${_otEsc(d.description || '')}">${d.description ? _otEsc(d.description) : '<span class="pb-gris">—</span>'}</button>` : ''}
       ${this._pbHtmlEtape(l, admin, barre, nomEtape)}
       <span class="pb-gris2">${_otEsc(duree)}</span>
       <span class="${l.retard ? 'pb-rouge' : (d.livraisonPrevue ? '' : 'pb-gris')}">${_otEsc(liv)}</span>
@@ -909,6 +918,7 @@ Object.assign(App, {
         <button type="button" class="pb-numero" onclick="App.prodOuvrirModule(${l.parti}, ${l.idx})">${_otEsc(d.codeModule || '—')}</button>
         <span class="pb-type">${_otEsc(d.module || '')}</span>
       </div>
+      ${S.pb.desc && d.description ? `<div class="pb-carte-desc">${_otEsc(d.description)}</div>` : ''}
       <div class="pb-carte-l2">${this._pbHtmlAgence(l, `${_otEsc(d.chantier || 'Sans chantier')}${d.status && d.status.grutage ? ' <span class="pb-grutage">grutage</span>' : ''}`)}</div>
       <div class="pb-carte-l3">
         ${this._pbHtmlEtape(l, admin, barre, nomEtape)}

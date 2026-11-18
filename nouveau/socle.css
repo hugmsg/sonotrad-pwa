@@ -696,3 +696,10 @@ body.pb-plein #view-prod-bureau.active { flex: 1; min-height: 0; display: flex; 
 span.pb-ot-sans { cursor: default; }
 .pb-sans-btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin: -4px 0 -4px 2px; vertical-align: middle; border: 0; border-radius: 6px; background: none; color: #C62828; cursor: pointer; }
 .pb-sans-btn:hover, .pb-sans-btn:focus-visible { background: #FDECEC; }
+/* Production : colonne « Travaux » (description du Planning), masquable (2026-11-18) */
+.pb-avec-desc .pb-interieur { min-width: 1500px; }
+.pb-avec-desc .pb-grille { grid-template-columns: 112px 100px 84px minmax(170px, .8fr) minmax(220px, 1.4fr) 120px 84px 74px 168px 92px 136px 74px; }
+.pb-desc { display: block; width: 100%; min-width: 0; border: 0; background: none; padding: 0; font-family: inherit; font-size: 12.5px; color: #3D4B5C; text-align: left; cursor: pointer; }
+.pb-desc:hover { text-decoration: underline; }
+.pb-bouton[aria-pressed="true"] { background: var(--sx-bleu-clair); border-color: var(--sx-bleu); color: var(--sx-bleu); }
+.pb-carte-desc { font-size: 12.5px; color: #3D4B5C; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
