@@ -307,6 +307,7 @@ Object.assign(App, {
       document.getElementById('settings-user-name').textContent = `${u.prenom} ${u.nom}`;
       document.getElementById('settings-user-role').textContent = roleLabels[u.role] || u.role;
     }
+    if (this._dispoReglagesRendre) this._dispoReglagesRendre();   // Mail de dispo : destinataires (admins)
   },
   saveSettings() {
     const url = document.getElementById('set-url').value.trim();

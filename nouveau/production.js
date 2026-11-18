@@ -1309,12 +1309,13 @@ Object.assign(App, {
       voile.className = 'sx-voile';
       voile.innerHTML = `<div class="sx-fenetre pb-fenetre pb-md-apercu" role="dialog" aria-modal="true" aria-labelledby="pb-mda-titre">
         <h3 id="pb-mda-titre">Envoyer le mail de dispo ?</h3>
-        <dl class="pb-md-entetes">
-          <dt>À</dt><dd>${_otEsc((ap.a || []).join(', '))}</dd>
-          <dt>Cc</dt><dd>${_otEsc((ap.cc || []).join(', '))}</dd>
-          <dt>Cci</dt><dd>${_otEsc((ap.cci || []).join(', '))}</dd>
-          <dt>Objet</dt><dd><b>${_otEsc(ap.sujet || '')}</b></dd>
-        </dl>
+        <div class="pb-md-entetes">
+          <label for="pb-md-a">À</label><input id="pb-md-a" class="sx-champ" type="text" value="${_otEsc((ap.a || []).join(', '))}">
+          <label for="pb-md-cc">Cc</label><input id="pb-md-cc" class="sx-champ" type="text" value="${_otEsc((ap.cc || []).join(', '))}">
+          <label for="pb-md-cci">Cci</label><input id="pb-md-cci" class="sx-champ" type="text" value="${_otEsc((ap.cci || []).join(', '))}">
+          <span>Objet</span><b>${_otEsc(ap.sujet || '')}</b>
+        </div>
+        <span class="sx-aide">Adresses séparées par des virgules ; modifiées pour ce mail seulement (liste par défaut : Réglages).</span>
         <iframe class="pb-md-cadre" sandbox="" title="Aperçu du mail"></iframe>
         <p class="sx-aide">Le mail part tout de suite depuis le compte Google de SONOTRAD (comme la macro du Sheet), puis « Mail » est coché au Planning pour ${codes.length} module${codes.length > 1 ? 's' : ''}.</p>
         <div class="sx-fenetre-boutons">
@@ -1326,18 +1327,46 @@ Object.assign(App, {
       voile.addEventListener('click', e => {
         if (e.target === voile) return fin(false);
         const b = e.target.closest('[data-r]');
-        if (b) fin(b.dataset.r === '1');
+        if (!b) return;
+        if (b.dataset.r !== '1') return fin(false);
+        fin({ a: voile.querySelector('#pb-md-a').value, cc: voile.querySelector('#pb-md-cc').value, cci: voile.querySelector('#pb-md-cci').value });
       });
       document.body.appendChild(voile);
     });
     if (!envoyer) return;
     this.toast('⏳ Envoi du mail…', 30000);
     try {
-      await this._otPost({ action: 'planning_mail_dispo', etape: 'envoyer', codes }, 90000);
+      await this._otPost({ action: 'planning_mail_dispo', etape: 'envoyer', codes, a: envoyer.a, cc: envoyer.cc, cci: envoyer.cci }, 90000);
       codes.forEach(c => { const x = (S.deps || []).find(m => m.code === c); if (x) x.status = Object.assign({}, x.status, { mail: true }); });
       codes.forEach(c => S.pb.sel.delete(c));
       this.toast('✓ Mail de dispo envoyé — ' + codes.length + ' module' + (codes.length > 1 ? 's' : '') + ' annoncé' + (codes.length > 1 ? 's' : ''), 4000);
       this._pbRendre();
     } catch (e) { this.toast('Envoi impossible : ' + e.message, 8000); }
+  },
+});
+
+/* Réglages › Mail de dispo (admins, 2026-11-18) : liste de destinataires par défaut (action dispo_reglages). */
+Object.assign(App, {
+  async _dispoReglagesRendre() {
+    const el = document.getElementById('settings-dispo');
+    if (!el) return;
+    if (!this._otAdmin()) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div class="card" style="margin-bottom:12px;"><p style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:6px;">✉ Mail de dispo — destinataires</p>
+      <p style="font-size:12px;color:#64748B;margin-bottom:10px;">Liste utilisée par défaut (modifiable aussi pour un seul envoi dans l'aperçu). Adresses séparées par des virgules.</p>
+      <div id="dispo-reglages-corps" style="font-size:13px;color:#64748B;">Chargement…</div></div>`;
+    try {
+      const d = await this._otPost({ action: 'dispo_reglages', etape: 'lire' }, 30000);
+      const champ = (id, nom, v) => `<label class="label-sm" for="${id}">${nom}</label><textarea id="${id}" class="input-field" rows="2" style="font-size:13px;">${_otEsc((v || []).join(', '))}</textarea>`;
+      document.getElementById('dispo-reglages-corps').innerHTML = champ('dispo-a', 'À', d.a) + champ('dispo-cc', 'Cc', d.cc) + champ('dispo-cci', 'Cci', d.cci)
+        + `<button class="btn btn-primary" style="margin-top:8px;" onclick="App.dispoReglagesEnregistrer()">Enregistrer les destinataires</button>`;
+    } catch (e) { document.getElementById('dispo-reglages-corps').textContent = 'Indisponible : ' + e.message; }
+  },
+  async dispoReglagesEnregistrer() {
+    const v = id => document.getElementById(id).value;
+    try {
+      await this._otPost({ action: 'dispo_reglages', etape: 'enregistrer', a: v('dispo-a'), cc: v('dispo-cc'), cci: v('dispo-cci') }, 30000);
+      this.toast('✓ Destinataires du mail de dispo enregistrés');
+      this._dispoReglagesRendre();
+    } catch (e) { this.toast('Enregistrement impossible : ' + e.message, 6000); }
   },
 });
