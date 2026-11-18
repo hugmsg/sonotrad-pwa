@@ -40,6 +40,8 @@ Object.assign(App, {
   },
   prodOuvrir() {
     S.pb = S.pb || { etapes: [], filtre: '', type: '', q: '', replies: {}, fiches: null, fichesChargement: false };
+    // « À démarrer » replié à chaque ouverture (demande de Hugo, 18/11) : un clic sur son titre le déplie
+    S.pb.replies = Object.assign({}, S.pb.replies, { demarrer: true });
     this.go('prod-bureau');
   },
 
