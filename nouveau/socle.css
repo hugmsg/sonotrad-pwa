@@ -723,3 +723,6 @@ span.pb-ot-sans { cursor: default; }
 .pb-stock { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 700; color: #14532D; white-space: nowrap; }
 .sx-tag-stock { color: #14532D; }
 .pb-ot-cell { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Liste des fiches : place fixe pour « stock sorti » avant le montant (pas de décalage), plus de pastille de statut (2026-11-18) */
+.sx-item-stock { flex: 0 0 84px; display: flex; justify-content: flex-end; }
+.sx-ot-liste .sx-montant { min-width: 88px; text-align: right; }
