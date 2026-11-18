@@ -90,6 +90,7 @@ Object.assign(App, {
       const d = await this._otGet({ action: 'ot_liste' });
       S.pb.fiches = d.fiches || [];
       if (this._otSansOtMaj) this._otSansOtMaj(d.sans_ot);
+      if (this._otExcelMaj) this._otExcelMaj(d.ot_excel);
     } catch (e) { S.pb.fiches = []; this.toast('Fiches d\'opérations indisponibles : ' + e.message, 4000); }
     finally { S.pb.fichesChargement = false; }
   },
@@ -134,8 +135,9 @@ Object.assign(App, {
       // OT attendue : module terminé (ou parti depuis la mise en service des fiches) sans fiche validée
       const otAttendue = ['termine', 'pret'].includes(etape) || (parti && fin && fin >= debutOt);
       const sansOt = !f && this._otSansOtDe ? this._otSansOtDe(code, d) : null;   // pas d'OT (marqué ou vente)
-      const otAFaire = !sansOt && otAttendue && (!f || f.statut === 'brouillon' || f.statut === 'a_valider');
-      return { d, idx, parti, code, etape, fiche: f, retard, fin, otAFaire, sansOt,
+      const otExcel = !f && this._otExcelDe ? this._otExcelDe(code) : '';          // OT déjà fait dans l'Excel
+      const otAFaire = !sansOt && !otExcel && otAttendue && (!f || f.statut === 'brouillon' || f.statut === 'a_valider');
+      return { d, idx, parti, code, etape, fiche: f, retard, fin, otAFaire, sansOt, otExcel,
         otAEnvoyer: !!f && f.statut === 'validee' };
     };
     const actifs = (S.deps || []).map((d, i) => ligne(d, i, false));
@@ -451,12 +453,13 @@ Object.assign(App, {
       const f = fiches[code] || null;
       const fin = par && par.d.fin ? new Date(par.d.fin) : null;
       const sansOt = !f && this._otSansOtDe ? this._otSansOtDe(code, pl ? pl.d : null) : null;
-      const otAFaire = !sansOt && !!par && fin && !isNaN(fin) && fin >= debutOt && (!f || f.statut === 'brouillon' || f.statut === 'a_valider');
+      const otExcel = !f && this._otExcelDe ? this._otExcelDe(code) : '';
+      const otAFaire = !sansOt && !otExcel && !!par && fin && !isNaN(fin) && fin >= debutOt && (!f || f.statut === 'brouillon' || f.statut === 'a_valider');
       let statut;
       if (act) statut = { texte: 'Sur parc · ' + ((PB_ETAPES.find(e => e.cle === this._pbEtape(act.d, false)) || {}).nom || ''), classe: 'parc' };
       else if (parti) statut = { texte: 'Parti', classe: 'parti' };
       else statut = { texte: 'Pas au Planning', classe: 'horsplanning' };
-      return { a, code, date: date && !isNaN(date) ? date : null, pl, parti, statut, fiche: f, otAFaire, sansOt,
+      return { a, code, date: date && !isNaN(date) ? date : null, pl, parti, statut, fiche: f, otAFaire, sansOt, otExcel,
         horsPlanning: !pl && !a.isParti };
     });
   },
@@ -1134,6 +1137,7 @@ Object.assign(App, {
 Object.assign(App, {
   _pbHtmlOtSansFiche(l, gris) {
     const code = _otEsc(l.code || '');
+    if (l.otExcel) return `<span class="pb-ot pb-ot-envoyee" title="OT fait dans la matrice Excel">${_otEsc(l.otExcel)}</span>`;
     if (l.sansOt) {
       const t = _otEsc(this._otTexteSansOt(l.sansOt));
       return l.sansOt.auto || !this._otAutorise()

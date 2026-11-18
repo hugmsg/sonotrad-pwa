@@ -173,6 +173,7 @@ Object.assign(App, {
       S.ot.listeChargee = true;
       if (d.essai !== undefined) S.ot.essai = Number(d.essai) === 1;
       this._otSansOtMaj(d.sans_ot);
+      this._otExcelMaj(d.ot_excel);
     } catch (e) {
       this.toast('Fiches indisponibles : ' + e.message, 4000);
     } finally {
@@ -244,6 +245,7 @@ Object.assign(App, {
     return S.ot.modules.filter(m => {
       if (!m.code || avecFiche.has(String(m.code).toUpperCase())) return false;
       if (this._otSansOtDe(m.code, m)) return false;          // pas d'OT (marqué, ou vente RBSA / BCBJ / DRCB)
+      if (this._otExcelDe(m.code)) return false;               // OT déjà fait dans la matrice Excel
       if (m.parti) { const fin = m.fin ? new Date(m.fin) : null; return !!fin && !isNaN(fin) && fin >= debut; }
       return !!(m.status && m.status.termine && !m.status.deCote);
     }).sort((a, b) => (a.parti - b.parti) || String(a.fin || '').localeCompare(String(b.fin || '')));
@@ -2610,6 +2612,10 @@ Object.assign(App, {
     if (OT_VENTE_PROPOSEE.includes(ag) || lib.includes('SAINT PATERNE')) return 'proposee';
     return '';
   },
+  // OT faits dans la matrice Excel avant les fiches PWA : { CODE: n° d'OT } (ot_historique, via ot_liste)
+  _otExcelMaj(obj) { if (obj && typeof obj === 'object') S.ot.otExcel = obj; },
+  _otExcelDe(code) { return (S.ot.otExcel && S.ot.otExcel[String(code || '').toUpperCase()]) || ''; },
+
   _otSansOtMaj(liste) {
     if (!Array.isArray(liste)) return;
     S.ot.sansOt = new Map(liste.map(s => [String(s.code_planning || '').toUpperCase(), s]));
