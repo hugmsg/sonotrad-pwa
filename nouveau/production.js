@@ -1256,6 +1256,7 @@ Object.assign(App, {
 
   _pbHtmlAnnonce(l) {
     if (l.parti || !(l.d.status && l.d.status.mail) || !['termine', 'pret'].includes(l.etape)) return '';
+    if (this._otAdmin()) return `<button type="button" class="pb-annonce pb-annonce-btn" onclick="App.prodRetirerAnnonce('${_otEsc(l.code)}')" title="Mail de dispo envoyé — cliquer pour retirer l'annonce" aria-label="Retirer l'annonce de ${_otEsc(l.code)}">${_PB_SVG_MAIL}</button>`;
     return `<span class="pb-annonce" title="Mail de dispo envoyé (annoncé à LOXAM)">${_PB_SVG_MAIL}</span>`;
   },
 
@@ -1368,5 +1369,22 @@ Object.assign(App, {
       this.toast('✓ Destinataires du mail de dispo enregistrés');
       this._dispoReglagesRendre();
     } catch (e) { this.toast('Enregistrement impossible : ' + e.message, 6000); }
+  },
+});
+
+/* Retirer l'annonce (2026-11-18, admins) : décoche « Mail » (P) au Planning — après un mail de test, par exemple. */
+Object.assign(App, {
+  async prodRetirerAnnonce(code) {
+    if (!this._otAdmin()) return;
+    const ok = await this._otConfirmer({ titre: 'Retirer l\u2019annonce de ' + code + ' ?',
+      texte: '« Mail » est décoché au Planning : le module redevient « à annoncer ». Aucun mail n\u2019est envoyé ni annulé.', ok: 'Retirer l\u2019annonce' });
+    if (!ok) return;
+    try {
+      await this._otPost({ action: 'planning_mail_dispo', etape: 'demarquer', codes: [code] }, 60000);
+      const x = (S.deps || []).find(m => m.code === code);
+      if (x) x.status = Object.assign({}, x.status, { mail: false });
+      this.toast('✓ ' + code + ' : annonce retirée');
+      this._pbRendre();
+    } catch (e) { this.toast('Impossible : ' + e.message, 6000); }
   },
 });
