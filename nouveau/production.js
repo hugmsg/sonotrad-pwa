@@ -365,13 +365,13 @@ Object.assign(App, {
     })() : '';
     const code = _otEsc(d.code || '');
     return `<div class="pb-grille pb-ligne-module${l.retard ? ' pb-retard' : ''}${l.parti ? ' pb-parti' : ''}">
-      <span class="pb-code-cell">${this._pbHtmlCase(l)}<button type="button" class="pb-code" onclick="App.prodDossier('${code}', ${l.parti})" title="Ouvrir le dossier du module (photos, papiers d'arrivée et de départ)">${_PB_SVG_DOSSIER}${code}</button></span>
+      <span class="pb-code-cell">${this._pbHtmlCase(l)}<button type="button" class="pb-code" onclick="App.prodDossier('${code}', ${l.parti})" title="Ouvrir le dossier du module (photos, papiers d'arrivée et de départ)">${_PB_SVG_DOSSIER}${code}</button><span class="pb-icones">${this._pbHtmlPlace(l, false)}</span></span>
       <button type="button" class="pb-numero" onclick="App.prodOuvrirModule(${l.parti}, ${l.idx})" title="Ouvrir la fiche du module">${_otEsc(d.codeModule || '—')}</button>
       <span class="pb-type">${_otEsc(d.module || '')}</span>
       ${this._pbHtmlAgence(l, `${_otEsc(d.chantier || '')}${d.status && d.status.grutage ? ' <span class="pb-grutage">grutage</span>' : ''}`)}
       ${S.pb.desc ? `<button type="button" class="pb-texte pb-desc" onclick="App.prodOuvrirModule(${l.parti}, ${l.idx})" title="${_otEsc(d.description || '')}">${d.description ? _otEsc(d.description) : '<span class="pb-gris">—</span>'}</button>` : ''}
       ${this._pbHtmlEtape(l, admin, barre, nomEtape)}
-      <span class="pb-gris2 pb-duree">${l.parti ? '' : `<span class="pb-annonce-place">${this._pbHtmlPlace(l, false)}</span>`}${_otEsc(duree)}</span>
+      <span class="pb-gris2 pb-duree">${_otEsc(duree)}</span>
       <span class="${l.retard ? 'pb-rouge' : (d.livraisonPrevue ? '' : 'pb-gris')}">${_otEsc(liv)}</span>
       <span class="pb-ot-cell">${ot}</span>
       <span>${this._pbHtmlStock(f)}</span>
@@ -1267,18 +1267,20 @@ Object.assign(App, {
     return `<span class="pb-annonce" title="Mail de dispo envoyé (annoncé à LOXAM)">${_PB_SVG_MAIL}</span>`;
   },
 
-  /* Petite place devant la durée (2026-11-19) : ⏸ « de côté » (prioritaire), sinon ✉ annoncé. Un clic sur ⏸
-     (admins + LOXAM) retire « de côté » au Planning (S) : le module redevient annonçable ; sur une ligne non
-     annoncée, ⏸ apparaît en pâle au survol pour le mettre de côté. carte = version téléphone (pas de survol). */
+  /* Icônes à droite du code (2026-11-19) : ⏸ « de côté » et ✉ annoncé (en principe jamais les deux). Un clic sur ⏸
+     (admins + LOXAM) retire « de côté » au Planning (S) : le module redevient annonçable ; sur une ligne ni de côté
+     ni annoncée, ⏸ apparaît en pâle au survol pour la mettre de côté. carte = version téléphone (pas de survol). */
   _pbHtmlPlace(l, carte) {
     if (l.parti) return '';
     const peut = this._pbPeutEtape(), code = _otEsc(l.code || '');
-    if (l.deCote) return peut
+    const annonce = this._pbHtmlAnnonce(l);
+    let pause = '';
+    if (l.deCote) pause = peut
       ? `<button type="button" class="pb-decote-btn" onclick="App.prodBasculerDeCote('${code}')" title="De côté (pas de mail de dispo) — cliquer pour le remettre disponible" aria-label="Retirer ${code} de côté">${_PB_SVG_PAUSE}</button>`
       : `<span class="pb-decote-ic" title="De côté : pas de mail de dispo">${_PB_SVG_PAUSE}</span>`;
-    const annonce = this._pbHtmlAnnonce(l);
-    if (annonce || carte || !peut) return annonce;
-    return `<button type="button" class="pb-decote-btn pb-decote-vide" onclick="App.prodBasculerDeCote('${code}')" title="Mettre de côté (bloque le mail de dispo)" aria-label="Mettre ${code} de côté">${_PB_SVG_PAUSE}</button>`;
+    else if (!annonce && !carte && peut)
+      pause = `<button type="button" class="pb-decote-btn pb-decote-vide" onclick="App.prodBasculerDeCote('${code}')" title="Mettre de côté (bloque le mail de dispo)" aria-label="Mettre ${code} de côté">${_PB_SVG_PAUSE}</button>`;
+    return pause + annonce;
   },
 
   async prodBasculerDeCote(code) {
