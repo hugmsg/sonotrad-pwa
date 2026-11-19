@@ -68,7 +68,9 @@ Object.assign(App, {
 
   _stkArticle(ref) { return S.stockData.find(d => d.ref === ref); },
   _stkQte(d) { return d && d.qte !== null && d.qte !== undefined ? Number(d.qte) : null; },
-  _stkSousSeuil(d) { const q = this._stkQte(d); return !!d && d.seuil > 0 && q !== null && q <= d.seuil; },
+  // À surveiller = sous le seuil, ou stock NÉGATIF même sans seuil (entrée manquante — 2026-11-19)
+  _stkSousSeuil(d) { const q = this._stkQte(d); return !!d && q !== null && (q < 0 || (d.seuil > 0 && q <= d.seuil)); },
+  _stkRatio(d) { const q = this._stkQte(d); return q < 0 ? q - 1e6 : d.seuil > 0 ? q / d.seuil : 1e6; },   // tri : négatifs d'abord
   _stkNombre(n) { return n === null || n === undefined ? '—' : Number(n).toLocaleString('fr-FR', { maximumFractionDigits: 2 }); },
   _stkJours(d) {
     const q = this._stkQte(d), a = S.stockAnalytics[d.ref];
@@ -119,7 +121,7 @@ Object.assign(App, {
     const el = document.getElementById('stk-accueil-root');
     if (!el) return;
     const alertes = S.stockData.filter(d => this._stkSousSeuil(d))
-      .sort((a, b) => this._stkQte(a) / a.seuil - this._stkQte(b) / b.seuil);
+      .sort((a, b) => this._stkRatio(a) - this._stkRatio(b));
     // La réf. qui va manquer le plus vite (consommation des 30 derniers jours), sous 3 semaines
     const rupture = S.stockData.map(d => ({ d, j: this._stkJours(d) })).filter(x => x.j !== null && x.j <= 21)
       .sort((a, b) => a.j - b.j)[0];
@@ -144,7 +146,7 @@ Object.assign(App, {
         ${this._stkChargementHtml()}
         ${S.stk.charge ? `<section class="sx-carte sx-carte-pad sx-stk-bloc" aria-labelledby="stk-t-alertes">
           <div class="sx-section-tete"><h2 class="sx-h2" id="stk-t-alertes">À surveiller</h2>
-            ${alertes.length ? `<button type="button" class="sx-lien" onclick="App.stkCatalogueFiltre('seuil')">${alertes.length} sous le seuil</button>` : ''}</div>
+            ${alertes.length ? `<button type="button" class="sx-lien" onclick="App.stkCatalogueFiltre('seuil')">${alertes.length} à surveiller</button>` : ''}</div>
           ${rupture ? `<button type="button" class="sx-stk-rupture" onclick="App.stkOuvrirFiche('${_otEsc(rupture.d.ref)}', 'stk-accueil')">
               <strong>${_otEsc(rupture.d.ref)} · ${_otEsc(rupture.d.description)}</strong> : ${this._stkNombre(this._stkQte(rupture.d))} en stock,
               ~${this._stkNombre(S.stockAnalytics[rupture.d.ref].avgPerWeek)} sorties / semaine →
@@ -163,12 +165,12 @@ Object.assign(App, {
   },
 
   _stkHtmlAlerte(d) {
-    const q = this._stkQte(d), pct = Math.max(4, Math.min(100, Math.round(q / d.seuil * 100)));
+    const q = this._stkQte(d), pct = d.seuil > 0 ? Math.max(4, Math.min(100, Math.round(q / d.seuil * 100))) : 4;
     return `<button type="button" class="sx-stk-alerte" onclick="App.stkOuvrirFiche('${_otEsc(d.ref)}', 'stk-accueil')">
       <span class="sx-ref">${_otEsc(d.ref)}</span>
       <span class="sx-stk-alerte-mil"><span class="sx-stk-nom">${_otEsc(d.description)}</span>
         <span class="sx-stk-barre"><span style="width:${pct}%"></span></span></span>
-      <span class="sx-stk-alerte-q">${this._stkNombre(q)} / ${this._stkNombre(d.seuil)}</span></button>`;
+      <span class="sx-stk-alerte-q">${this._stkNombre(q)}${d.seuil > 0 ? ' / ' + this._stkNombre(d.seuil) : q < 0 ? ' · négatif' : ''}</span></button>`;
   },
 
   _stkHtmlOpLigne(op) {
@@ -200,7 +202,7 @@ Object.assign(App, {
   _stkRendreCatalogue() {
     const el = document.getElementById('stk-catalogue-root');
     if (!el) return;
-    const filtres = [['', 'Toutes'], ['mes', '★ Mes réf.'], ['seuil', 'Sous le seuil']];
+    const filtres = [['', 'Toutes'], ['mes', '★ Mes réf.'], ['seuil', 'À surveiller']];
     el.innerHTML = `<div class="sx-ecran">
       ${this._otEntete({ retour: { texte: 'Accueil', action: 'App.goHome()' }, titre: 'Stock Pidem', sousTitre: 'Catalogue' })}
       ${this._stkOnglets('stk-catalogue')}
@@ -296,7 +298,7 @@ Object.assign(App, {
     const bas = this._stkSousSeuil(d);
     const max = Math.max(q || 0, (d.seuil || 0) * 2, 1);
     const sem = a.avgPerWeek > 0 && q !== null ? q / a.avgPerWeek : null;
-    const statut = q === null ? ['Stock inconnu', ''] : bas ? ['Sous le seuil', 'sx-stk-chip-bas'] : d.seuil > 0 ? ['OK · au-dessus du seuil', 'sx-stk-chip-ok'] : ['Pas de seuil', ''];
+    const statut = q === null ? ['Stock inconnu', ''] : q < 0 ? ['Stock négatif — entrée manquante ?', 'sx-stk-chip-bas'] : bas ? ['Sous le seuil', 'sx-stk-chip-bas'] : d.seuil > 0 ? ['OK · au-dessus du seuil', 'sx-stk-chip-ok'] : ['Pas de seuil', ''];
 
     el.innerHTML = `<div class="sx-ecran">${entete}
       <main class="sx-contenu">
