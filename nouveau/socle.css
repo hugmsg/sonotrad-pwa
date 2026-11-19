@@ -519,6 +519,7 @@ body.pb-plein #view-prod-bureau.active { flex: 1; min-height: 0; display: flex; 
 .pb-puce-rouge  { background: #FDECEC; color: #9B1C1C; border-color: #F3C4C4; }
 .pb-puce-jaune  { background: #FFF4D1; color: #7A4E00; border-color: #F1DE9C; }
 .pb-puce-bleu   { background: #E7EEF9; color: #0B3A7A; border-color: #C3D4F0; }
+.pb-puce-orange { background: #FFEFC2; color: #6B4400; border-color: #EBCB7A; }
 .pb-puce-violet { background: #F1ECFA; color: #4B3A7A; border-color: #D8CDEE; }
 .pb-contenu { flex: 1; min-height: 0; width: 100%; max-width: none; margin: 0 auto; padding: 10px 16px 12px; box-sizing: border-box; display: flex; flex-direction: column; }
 .pb-contenu > .sx-carte, .pb-contenu > .sx-chargement { flex-shrink: 0; }

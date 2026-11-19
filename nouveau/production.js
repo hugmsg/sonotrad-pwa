@@ -141,8 +141,12 @@ Object.assign(App, {
       const otAttendue = ['termine', 'pret'].includes(etape) || (parti && fin && fin >= debutOt);
       const sansOt = !f && this._otSansOtDe ? this._otSansOtDe(code, d) : null;   // pas d'OT (marqué ou vente)
       const otExcel = !f && this._otExcelDe ? this._otExcelDe(code) : '';          // OT déjà fait dans l'Excel
-      const otAFaire = !sansOt && !otExcel && otAttendue && (!f || f.statut === 'brouillon' || f.statut === 'a_valider');
-      return { d, idx, parti, code, etape, fiche: f, retard, fin, otAFaire, sansOt, otExcel, deCote,
+      // otManquant : pas encore d'OT validé (pas de fiche, fiche en cours ou à valider) — sert aux « partis sans OT ».
+      // Filtres (2026-11-19) : « OT à faire » = SANS fiche seulement ; « fiches à valider » à part ; en cours : aucun.
+      const otManquant = !sansOt && !otExcel && otAttendue && (!f || f.statut === 'brouillon' || f.statut === 'a_valider');
+      const otAFaire = otManquant && !f;
+      return { d, idx, parti, code, etape, fiche: f, retard, fin, otAFaire, otManquant, sansOt, otExcel, deCote,
+        otAValider: !!f && f.statut === 'a_valider',
         otAEnvoyer: !!f && f.statut === 'validee' };
     };
     const actifs = (S.deps || []).map((d, i) => ligne(d, i, false));
@@ -241,7 +245,8 @@ Object.assign(App, {
       retard: base.filter(l => l.retard).length,
       otAFaire: base.filter(l => l.otAFaire && !l.parti).length,
       otAEnvoyer: base.filter(l => l.otAEnvoyer).length,
-      partisSansOt: base.filter(l => l.otAFaire && l.parti).length,
+      partisSansOt: base.filter(l => l.otManquant && l.parti).length,
+      otAValider: base.filter(l => l.otAValider && !l.parti).length,
       annoncer: base.filter(l => this._pbAAnnoncer(l)).length,
     };
     const types = [...new Set(lignes.map(l => (l.d.module || '').trim()).filter(Boolean))].sort();
@@ -281,11 +286,12 @@ Object.assign(App, {
           <span class="pb-etiquette">À traiter :</span>
           ${puce('retard', comptes.retard, 'en retard', 'rouge')}
           ${fichesOk ? puce('otAFaire', comptes.otAFaire, 'OT à faire', 'jaune') : ''}
+          ${fichesOk ? puce('otAValider', comptes.otAValider, 'fiches à valider', 'orange') : ''}
           ${fichesOk ? puce('otAEnvoyer', comptes.otAEnvoyer, 'OT à envoyer à LOXAM', 'bleu') : ''}
           ${fichesOk ? puce('partisSansOt', comptes.partisSansOt, 'partis sans OT', 'violet') : ''}
           ${puce('annoncer', comptes.annoncer, 'à annoncer (mail de dispo)', 'vert')}
           ${!this._otAutorise() ? '<span class="sx-aide">(état des OT : accès « Reconditionnement »)</span>' : (P.fichesChargement ? '<span class="sx-aide">état des OT…</span>' : '')}
-          ${pret && !comptes.retard && !comptes.annoncer && !(fichesOk && (comptes.otAFaire || comptes.otAEnvoyer || comptes.partisSansOt)) ? '<span class="sx-aide">rien</span>' : ''}
+          ${pret && !comptes.retard && !comptes.annoncer && !(fichesOk && (comptes.otAFaire || comptes.otAValider || comptes.otAEnvoyer || comptes.partisSansOt)) ? '<span class="sx-aide">rien</span>' : ''}
         </div>
         </div>
       </div></div>
@@ -304,12 +310,13 @@ Object.assign(App, {
     let lignes = this._pbLignes().filter(l => this._pbCorrespond(l));
     if (P.filtre === 'retard') lignes = lignes.filter(l => l.retard);
     else if (P.filtre === 'otAFaire') lignes = lignes.filter(l => l.otAFaire && !l.parti);
+    else if (P.filtre === 'otAValider') lignes = lignes.filter(l => l.otAValider && !l.parti);
     else if (P.filtre === 'otAEnvoyer') lignes = lignes.filter(l => l.otAEnvoyer);
-    else if (P.filtre === 'partisSansOt') lignes = lignes.filter(l => l.otAFaire && l.parti);
+    else if (P.filtre === 'partisSansOt') lignes = lignes.filter(l => l.otManquant && l.parti);
     else if (P.filtre === 'annoncer') lignes = lignes.filter(l => this._pbAAnnoncer(l));
     else if ((P.etapes || []).length) lignes = lignes.filter(l => P.etapes.includes(l.etape) || (l.deCote && P.etapes.includes('decote')));
     // « Tous » : le parc, plus les partis encore sans OT (départs précipités) pour ne pas les perdre de vue
-    else lignes = lignes.filter(l => !l.parti || l.otAFaire);
+    else lignes = lignes.filter(l => !l.parti || l.otManquant);
 
     const ordre = ['demarrer', 'atelier', 'controle', 'termine', 'pret', 'parti'];   // de côté : étiquette, pas un groupe
     const groupes = ordre.map(cle => {
