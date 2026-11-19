@@ -581,6 +581,20 @@ body.pb-plein #view-prod-bureau.active { flex: 1; min-height: 0; display: flex; 
 }
 /* Production : bascule Production / Arrivées (dans l'en-tête) et onglet Arrivées */
 .pb-nav { display: flex; gap: 4px; margin-top: 4px; }
+/* Grand écran (2026-11-19) : en-tête de Production sur UNE rangée (retour · titre · vues à droite) et filtres
+   Étapes + « À traiter » côte à côte quand la largeur le permet — le tableau commence plus haut. */
+.pb-filtres { display: flex; flex-direction: column; gap: 6px; }
+@media (min-width: 900px) {
+  .pb-ecran .sx-entete { padding: 6px 16px 8px; }
+  .pb-ecran .sx-entete-in { flex-direction: row; align-items: center; gap: 18px; }
+  .pb-ecran .sx-retour { align-self: center; min-height: 32px; }
+  .pb-ecran .sx-titre-ligne { flex: 0 1 auto; min-width: 0; }
+  .pb-ecran .sx-logo { width: 30px; height: 30px; }
+  .pb-ecran .sx-titre { font-size: 19px; }
+  .pb-ecran .pb-nav { margin: 0 0 0 auto; }
+  .pb-barre-in { padding: 8px 16px; gap: 6px; }
+  .pb-filtres { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px 22px; }
+}
 .pb-nav-btn { height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,.35); background: transparent; color: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .pb-nav-btn[aria-pressed="true"] { background: #FFFFFF; color: var(--sx-bleu); border-color: #FFFFFF; font-weight: 700; }
 .pb-grille-arr { display: grid; grid-template-columns: 112px 100px 84px 76px minmax(150px, .8fr) 170px 74px minmax(160px, 1fr) 128px 136px 74px; align-items: center; column-gap: 10px; padding: 0 12px; }

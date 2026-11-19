@@ -273,6 +273,7 @@ Object.assign(App, {
           <button type="button" class="pb-bouton" onclick="App.prodActualiser()">Actualiser</button>
           ${this._pbPeutEtape() ? '<button type="button" class="sx-btn sx-btn-principal pb-btn-ajout" onclick="App.prodFenetreAjout()">+ Ajouter<span class="pb-sans-tel"> au Planning</span></button>' : ''}
         </div>
+        <div class="pb-filtres">
         <div class="pb-ligne pb-defile" role="group" aria-label="Étapes">
           ${onglet('tous', 'Tous', base.filter(l => !l.parti).length)}
           ${PB_ETAPES.map(e => onglet(e.cle, e.nom, S.archiveLoaded || e.cle !== 'parti' ? nb(e.cle) : '…')).join('')}
@@ -286,6 +287,7 @@ Object.assign(App, {
           ${puce('annoncer', comptes.annoncer, 'à annoncer (mail de dispo)', 'vert')}
           ${!this._otAutorise() ? '<span class="sx-aide">(état des OT : accès « Reconditionnement »)</span>' : (P.fichesChargement ? '<span class="sx-aide">état des OT…</span>' : '')}
           ${pret && !comptes.retard && !comptes.annoncer && !(fichesOk && (comptes.otAFaire || comptes.otAEnvoyer || comptes.partisSansOt)) ? '<span class="sx-aide">rien</span>' : ''}
+        </div>
         </div>
       </div></div>
       <main class="pb-contenu" id="pb-corps"></main>

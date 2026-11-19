@@ -4,7 +4,7 @@
 //             Network-first pour les appels API AppScript
 // ═══════════════════════════════════════════════════════════════════════════
 
-const CACHE_NAME  = 'sonotrad-nouveau-v66';
+const CACHE_NAME  = 'sonotrad-nouveau-v67';
 const ASSETS = [
   './',
   './index.html',
