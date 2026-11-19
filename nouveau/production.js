@@ -1316,7 +1316,8 @@ Object.assign(App, {
           <label for="pb-md-cci">Cci</label><input id="pb-md-cci" class="sx-champ" type="text" value="${_otEsc((ap.cci || []).join(', '))}">
           <span>Objet</span><b>${_otEsc(ap.sujet || '')}</b>
         </div>
-        <span class="sx-aide">Adresses séparées par des virgules ; modifiées pour ce mail seulement (liste par défaut : Réglages).</span>
+        <span class="sx-aide">Adresses séparées par des virgules ; modifiées pour ce mail seulement (liste par défaut : Réglages).<br>
+          Envoyé au nom de <b>${_otEsc(ap.expediteur || '')}</b>${ap.reponse ? ' · réponses à ' + _otEsc(ap.reponse) : ' · réponses au compte SONOTRAD'} (signature : Réglages › Ma signature).</span>
         <iframe class="pb-md-cadre" sandbox="" title="Aperçu du mail"></iframe>
         <p class="sx-aide">Le mail part tout de suite depuis le compte Google de SONOTRAD (comme la macro du Sheet), puis « Mail » est coché au Planning pour ${codes.length} module${codes.length > 1 ? 's' : ''}.</p>
         <div class="sx-fenetre-boutons">
@@ -1369,6 +1370,76 @@ Object.assign(App, {
       this.toast('✓ Destinataires du mail de dispo enregistrés');
       this._dispoReglagesRendre();
     } catch (e) { this.toast('Enregistrement impossible : ' + e.message, 6000); }
+  },
+});
+
+/* Réglages › Ma signature (2026-11-19, tout le monde) : texte au-dessus du logo, logo SONOTRAD fixe, texte sous le
+   logo (petit), adresse de réponse — action ma_signature (lire / enregistrer / modele). Utilisée par le mail de dispo.
+   Aperçu rendu ici avec la même règle que le serveur (_sigTexteHtml) : texte échappé, **gras**, une ligne par retour. */
+Object.assign(App, {
+  _sigTexteHtml(t, taille) {
+    return String(t || '').replace(/\r/g, '').split('\n').map(l => {
+      const h = _otEsc(l).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+      return `<p style="margin:0;font-family:Calibri,Arial,sans-serif;color:#000;font-size:${taille};">${h.trim() ? h : '&nbsp;'}</p>`;
+    }).join('');
+  },
+
+  _signatureApercu() {
+    const el = document.getElementById('sig-apercu');
+    if (!el || !S.sig) return;
+    el.innerHTML = this._sigTexteHtml(document.getElementById('sig-dessus').value, '11pt') + '<br>'
+      + `<img src="${S.sig.logo}" width="120" height="64" alt="SONOTRAD" style="display:block;border:0"><br>`
+      + this._sigTexteHtml(document.getElementById('sig-dessous').value, '8pt');
+  },
+
+  async _signatureRendre() {
+    const el = document.getElementById('settings-signature');
+    if (!el) return;
+    el.innerHTML = `<div class="card" style="margin-bottom:12px;"><p style="font-size:14px;font-weight:700;color:#1E293B;margin-bottom:6px;">✍ Ma signature</p>
+      <p style="font-size:12px;color:#64748B;margin-bottom:10px;">Ajoutée aux mails envoyés depuis la PWA (mail de dispo). Pour du gras : <b>**texte**</b>.</p>
+      <div id="sig-corps" style="font-size:13px;color:#64748B;">Chargement…</div></div>`;
+    try {
+      const d = await this._otPost({ action: 'ma_signature', etape: 'lire' }, 30000);
+      this._signatureRemplir(d);
+    } catch (e) { document.getElementById('sig-corps').textContent = 'Indisponible : ' + e.message; }
+  },
+
+  _signatureRemplir(d) {
+    S.sig = d;
+    const corps = document.getElementById('sig-corps');
+    if (!corps) return;
+    corps.innerHTML = `
+      <label class="label-sm" for="sig-dessus">Texte au-dessus du logo</label>
+      <textarea id="sig-dessus" class="input-field" rows="5" maxlength="600" style="font-size:13px;" oninput="App._signatureApercu()">${_otEsc(d.dessus)}</textarea>
+      <p class="label-sm" style="margin-top:6px;">Logo SONOTRAD (fixe)</p>
+      <label class="label-sm" for="sig-dessous" style="margin-top:6px;">Texte sous le logo (en petit)</label>
+      <textarea id="sig-dessous" class="input-field" rows="3" maxlength="600" style="font-size:13px;" oninput="App._signatureApercu()">${_otEsc(d.dessous)}</textarea>
+      <label class="label-sm" for="sig-reponse" style="margin-top:6px;">Adresse de réponse</label>
+      <input id="sig-reponse" class="input-field" type="email" style="font-size:13px;" placeholder="prenom.nom@sonotrad.fr" value="${_otEsc(d.reponse)}">
+      <p style="font-size:11px;color:#64748B;margin:4px 0 10px;">Le mail part du compte SONOTRAD avec votre nom ; les réponses arrivent à cette adresse (vide = au compte SONOTRAD).</p>
+      <p class="label-sm">Aperçu${d.perso ? '' : ' — modèle, pas encore enregistrée'}</p>
+      <div id="sig-apercu" style="background:#fff;border:1px solid #E2E8F0;border-radius:8px;padding:10px 12px;margin-bottom:10px;"></div>
+      <button class="btn btn-primary" onclick="App.signatureEnregistrer()">Enregistrer ma signature</button>
+      ${d.perso ? `<button class="btn btn-secondary" style="margin-top:6px;" onclick="App.signatureModele()">Revenir au modèle</button>` : ''}`;
+    this._signatureApercu();
+  },
+
+  async signatureEnregistrer() {
+    const v = id => document.getElementById(id).value;
+    try {
+      const d = await this._otPost({ action: 'ma_signature', etape: 'enregistrer', dessus: v('sig-dessus'), dessous: v('sig-dessous'), reponse: v('sig-reponse') }, 30000);
+      this._signatureRemplir(d);
+      this.toast('✓ Signature enregistrée');
+    } catch (e) { this.toast('Enregistrement impossible : ' + e.message, 6000); }
+  },
+
+  async signatureModele() {
+    const ok = await this._otConfirmer({ titre: 'Revenir au modèle ?', texte: 'Votre signature et votre adresse de réponse sont effacées ; le modèle SONOTRAD à votre nom est utilisé.', ok: 'Revenir au modèle' });
+    if (!ok) return;
+    try {
+      this._signatureRemplir(await this._otPost({ action: 'ma_signature', etape: 'modele' }, 30000));
+      this.toast('✓ Modèle rétabli');
+    } catch (e) { this.toast('Impossible : ' + e.message, 6000); }
   },
 });
 

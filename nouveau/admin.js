@@ -307,6 +307,7 @@ Object.assign(App, {
       document.getElementById('settings-user-name').textContent = `${u.prenom} ${u.nom}`;
       document.getElementById('settings-user-role').textContent = roleLabels[u.role] || u.role;
     }
+    if (this._signatureRendre) this._signatureRendre();           // Ma signature (tout le monde)
     if (this._dispoReglagesRendre) this._dispoReglagesRendre();   // Mail de dispo : destinataires (admins)
   },
   saveSettings() {
