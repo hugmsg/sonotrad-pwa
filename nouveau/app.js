@@ -1095,6 +1095,16 @@ Object.assign(App, {
   },
 });
 
+/* Fenêtres sx-voile (2026-11-19) : un « clic sur le fond » ne ferme la fenêtre que si le bouton a aussi été
+   ENFONCÉ sur le fond. Sinon, sélectionner le texte d'un champ à la souris et relâcher hors de la fenêtre
+   (ex. effacer les destinataires du mail de dispo) produisait un clic sur le voile → fenêtre fermée. */
+let _sxDownCible = null;
+document.addEventListener('pointerdown', e => { _sxDownCible = e.target; }, true);
+document.addEventListener('click', e => {
+  const t = e.target;
+  if (t && t.classList && t.classList.contains('sx-voile') && _sxDownCible !== t) e.stopPropagation();
+}, true);
+
 document.addEventListener('DOMContentLoaded', () => {
   // Vérifie la session → affiche login ou accueil
   App._initAuth();
