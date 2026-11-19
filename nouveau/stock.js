@@ -1514,6 +1514,11 @@ Object.assign(App, {
     const lbl   = document.getElementById('seuil-modal-ref');
     if (lbl) lbl.textContent = `${ref}${d.description ? ' — ' + d.description.substring(0, 40) + (d.description.length > 40 ? '…' : '') : ''}`;
     if (inp) { inp.value = d.seuil !== null ? d.seuil : ''; inp.focus(); }
+    const fourn = (d.fournisseur || '').trim();
+    document.getElementById('seuil-modal-delai-f-bloc').style.display = fourn ? '' : 'none';
+    document.getElementById('seuil-modal-fourn').textContent = fourn;
+    document.getElementById('seuil-modal-delai-f').value = d.delaiFourn ?? '';
+    document.getElementById('seuil-modal-delai-r').value = d.delaiRef ?? '';
     if (modal) modal.style.display = 'flex';
   },
 
@@ -1531,22 +1536,47 @@ Object.assign(App, {
     const raw  = inp ? inp.value.trim() : '';
     const seuil = raw === '' ? null : parseInt(raw, 10);
     if (raw !== '' && (isNaN(seuil) || seuil < 0)) { this.toast('Seuil invalide'); return; }
+    // Délais d'appro : seulement ceux qui ont changé (null = vide)
+    const lireDelai = id => { const v = document.getElementById(id).value.trim(); return v === '' ? null : Number(v); };
+    const delaiValide = v => v === null || (Number.isInteger(v) && v >= 0 && v <= 365);
+    const d0 = S.stockData.find(x => x.ref === ref) || {};
+    const fourn = (d0.fournisseur || '').trim();
+    const delaiF = fourn ? lireDelai('seuil-modal-delai-f') : (d0.delaiFourn ?? null);
+    const delaiR = lireDelai('seuil-modal-delai-r');
+    if (!delaiValide(delaiF) || !delaiValide(delaiR)) { this.toast('Délai invalide (0 à 365 jours)'); return; }
+    const seuilChange = seuil !== (d0.seuil ?? null);
+    const fChange = fourn && delaiF !== (d0.delaiFourn ?? null);
+    const rChange = delaiR !== (d0.delaiRef ?? null);
+    if (!seuilChange && !fChange && !rChange) { this.closeSeuilModal(); return; }
+    const poster = async payload => {
+      const fd = new FormData();
+      fd.append('payload', JSON.stringify(payload));
+      const resp = await _fetchWithTimeout(S.apiUrl, { method: 'POST', body: fd }, 15000);
+      const r = await resp.json();
+      if (r.status !== 'ok') throw new Error(r.error || 'Erreur inconnue');
+    };
 
     if (btn) { btn.disabled = true; btn.textContent = '…'; }
     try {
-      const fd = new FormData();
-      fd.append('payload', JSON.stringify({ action: 'save_stock_seuil', ref, seuil }));
-      const resp = await _fetchWithTimeout(S.apiUrl, { method: 'POST', body: fd }, 15000);
-      const data = await resp.json();
-      if (data.status !== 'ok') throw new Error(data.error || 'Erreur inconnue');
+      if (fChange) {
+        await poster({ action: 'save_fournisseur_delai', fournisseur: fourn, delai: delaiF });
+        S.stockData.filter(x => (x.fournisseur || '').trim() === fourn).forEach(x => { x.delaiFourn = delaiF; x.delai = x.delaiRef ?? delaiF; });
+      }
+      if (rChange) {
+        await poster({ action: 'save_stock_delai', ref, delai: delaiR });
+        const x = S.stockData.find(i => i.ref === ref);
+        if (x) { x.delaiRef = delaiR; x.delai = delaiR ?? x.delaiFourn ?? null; }
+      }
+      if (seuilChange) await poster({ action: 'save_stock_seuil', ref, seuil });
 
-      const item = S.stockData.find(x => x.ref === ref);
+      const item = seuilChange ? S.stockData.find(x => x.ref === ref) : null;
       if (item) {
         item.seuil = seuil;
         const qty = this._calcStockActuel(ref, item.qte);
         item.stockStatus = seuil !== null && qty !== null ? (qty >= seuil ? 'ok' : 'low') : (qty !== null ? 'ok' : 'unknown');
       }
-      this.toast(`✓ Seuil ${seuil !== null ? 'fixé à ' + seuil : 'supprimé'} pour ${ref}`);
+      this.toast(seuilChange ? `✓ Seuil ${seuil !== null ? 'fixé à ' + seuil : 'supprimé'} pour ${ref}` + (fChange || rChange ? ' · délai enregistré' : '')
+        : '✓ Délai d’appro enregistré' + (fChange ? ' pour ' + fourn : ''));
       this.closeSeuilModal();
       if (S.view === 'stock') this._renderStockList();
       if (S.view === 'stock-detail') this._renderStockDetail();

@@ -74,6 +74,56 @@ Object.assign(App, {
   _stkSousSeuil(d) { const q = this._stkQte(d); return !!d && q !== null && (q < 0 || this._stkEpuisee(d) || (d.seuil > 0 && q <= d.seuil)); },
   _stkRatio(d) { const q = this._stkQte(d); return q < 0 ? q - 1e6 : d.seuil > 0 ? q / d.seuil : 0; },   // tri : négatifs, puis épuisées / plus bas
   _stkNombre(n) { return n === null || n === undefined ? '—' : Number(n).toLocaleString('fr-FR', { maximumFractionDigits: 2 }); },
+  /* Prévisions (2026-11-19) : réf. ENCORE EN STOCK avec des sorties sur 30 jours. jours = jours avant rupture ;
+     delai = délai d'appro (réf., sinon fournisseur) ; marge = jours avant de devoir commander (= jours − délai,
+     ou jours si délai inconnu). Horizon : marge ≤ 6 semaines. Tri par marge (le plus urgent d'abord). */
+  _STK_HORIZON: 42,
+  _stkPrevision(d) {
+    const q = this._stkQte(d), a = S.stockAnalytics[d.ref];
+    if (q === null || q <= 0 || !a || !(a.avgPerWeek > 0)) return null;
+    const jours = q / (a.avgPerWeek / 7), delai = d.delai ?? null;
+    return { jours, delai, marge: delai === null ? jours : jours - delai };
+  },
+  _stkPrevisions(items) {
+    return (items || S.stockData).map(d => ({ d, p: this._stkPrevision(d) }))
+      .filter(x => x.p && x.p.marge <= this._STK_HORIZON).sort((a, b) => a.p.marge - b.p.marge);
+  },
+  _stkDateDans(j) { const t = new Date(); t.setDate(t.getDate() + Math.floor(j)); return t.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }); },
+  _stkTextePrevision(p) {
+    if (p.delai === null) return p.jours < 1 ? 'rupture sous 24 h' : `rupture dans ~${Math.round(p.jours)} j`;
+    return p.marge <= 0 ? 'commander aujourd\u2019hui' : `commander avant le ${this._stkDateDans(p.marge)}`;
+  },
+  _stkHtmlPrevision(x, origine) {
+    const { d, p } = x, a = S.stockAnalytics[d.ref];
+    const niv = p.marge <= 0 ? ' sx-stk-prev-urgent' : p.marge <= 7 ? ' sx-stk-prev-bientot' : '';
+    const detail = `${this._stkNombre(this._stkQte(d))} en stock · ${this._stkNombre(a.avgPerWeek)}/sem. · `
+      + (p.delai === null ? 'délai d\u2019appro inconnu' : `rupture ~${Math.round(p.jours)} j · délai ${p.delai} j`);
+    return `<button type="button" class="sx-stk-prev${niv}" onclick="App.stkOuvrirFiche('${_otEsc(d.ref)}', '${origine}')">
+      <span class="sx-ref">${_otEsc(d.ref)}</span>
+      <span class="sx-stk-alerte-mil"><span class="sx-stk-nom">${_otEsc(d.description)}</span><span class="sx-aide">${detail}</span></span>
+      <span class="sx-stk-prev-action">${this._stkTextePrevision(p)}</span></button>`;
+  },
+
+  /* Barre de niveau (2026-11-19) : avec seuil, échelle 0 → 2 × seuil, trait au seuil (rouge ≤ seuil, orange ≤ 1,5 ×,
+     vert au-dessus) ; sans seuil mais avec des sorties, couverture 0 → 8 semaines (rouge ≤ 1, orange ≤ 3) ;
+     sinon rien. */
+  _stkHtmlNiveau(d) {
+    const q = this._stkQte(d), a = S.stockAnalytics[d.ref];
+    if (q === null) return '';
+    let pct, niv, trait = '', texte = '';
+    if (d.seuil > 0) {
+      pct = q / (d.seuil * 2) * 100;
+      niv = q <= d.seuil ? 'bas' : q <= d.seuil * 1.5 ? 'moyen' : 'ok';
+      trait = '<i style="left:50%"></i>';
+    } else if (a && a.avgPerWeek > 0) {
+      const sem = q / a.avgPerWeek;
+      pct = sem / 8 * 100;
+      niv = sem <= 1 ? 'bas' : sem <= 3 ? 'moyen' : 'ok';
+      texte = `<span class="sx-stk-niveau-txt">${q <= 0 ? '0 sem.' : sem < 1 ? '< 1 sem.' : '~' + Math.round(sem) + ' sem.'}</span>`;
+    } else return '';
+    return `<span class="sx-stk-niveau-l" aria-hidden="true"><span class="sx-stk-niveau sx-niv-${niv}"><span style="width:${Math.max(q > 0 ? 3 : 0, Math.min(100, pct))}%"></span>${trait}</span>${texte}</span>`;
+  },
+
   _stkJours(d) {
     const q = this._stkQte(d), a = S.stockAnalytics[d.ref];
     if (q === null || !a || !(a.avgPerWeek > 0)) return null;
@@ -124,10 +174,9 @@ Object.assign(App, {
     if (!el) return;
     const alertes = S.stockData.filter(d => this._stkSousSeuil(d))
       .sort((a, b) => this._stkRatio(a) - this._stkRatio(b));
-    // Prévision : la réf. ENCORE EN STOCK qui va manquer le plus vite (consommation des 30 derniers jours), sous
-    // 3 semaines — les réf. déjà à 0 ou négatives sont dans la liste « À surveiller », pas ici.
-    const rupture = S.stockData.filter(d => this._stkQte(d) > 0).map(d => ({ d, j: this._stkJours(d) })).filter(x => x.j !== null && x.j <= 21)
-      .sort((a, b) => a.j - b.j)[0];
+    // Prochaines ruptures (réf. encore en stock, 6 semaines, tri « à commander avant ») — les réf. déjà à 0 ou
+    // négatives sont dans « À surveiller ».
+    const previsions = this._stkPrevisions();
     const ops = this._stkOps().slice(0, 5);
 
     el.innerHTML = `<div class="sx-ecran">
@@ -150,12 +199,14 @@ Object.assign(App, {
         ${S.stk.charge ? `<section class="sx-carte sx-carte-pad sx-stk-bloc" aria-labelledby="stk-t-alertes">
           <div class="sx-section-tete"><h2 class="sx-h2" id="stk-t-alertes">À surveiller</h2>
             ${alertes.length ? `<button type="button" class="sx-lien" onclick="App.stkCatalogueFiltre('seuil')">${alertes.length} à surveiller</button>` : ''}</div>
-          ${rupture ? `<button type="button" class="sx-stk-rupture" onclick="App.stkOuvrirFiche('${_otEsc(rupture.d.ref)}', 'stk-accueil')">
-              <strong>${_otEsc(rupture.d.ref)} · ${_otEsc(rupture.d.description)}</strong> : ${this._stkNombre(this._stkQte(rupture.d))} en stock,
-              ~${this._stkNombre(S.stockAnalytics[rupture.d.ref].avgPerWeek)} sorties / semaine →
-              ${rupture.j <= 0 ? '<strong>rupture sous 24 h</strong>' : `rupture dans <strong>~${rupture.j} jour${rupture.j > 1 ? 's' : ''}</strong>`}</button>` : ''}
           ${alertes.length ? alertes.slice(0, 6).map(d => this._stkHtmlAlerte(d)).join('')
             : '<div class="sx-aide" style="padding:6px 0;">Rien à surveiller.</div>'}
+        </section>
+        <section class="sx-carte sx-carte-pad sx-stk-bloc" aria-labelledby="stk-t-prev">
+          <div class="sx-section-tete"><h2 class="sx-h2" id="stk-t-prev">Prochaines ruptures <span class="sx-aide">· 6 semaines</span></h2>
+            ${previsions.length ? `<button type="button" class="sx-lien" onclick="App.stkCatalogueFiltre('prev')">Tout voir (${previsions.length})</button>` : ''}</div>
+          ${previsions.length ? previsions.slice(0, 5).map(x => this._stkHtmlPrevision(x, 'stk-accueil')).join('')
+            : `<div class="sx-aide" style="padding:6px 0;">${S.analyticsLoaded ? 'Aucune rupture prévue d’ici 6 semaines.' : 'Calcul des consommations…'}</div>`}
         </section>
         <section class="sx-section" aria-labelledby="stk-t-ops">
           <div class="sx-section-tete"><h2 class="sx-h2" id="stk-t-ops">Dernières opérations</h2>
@@ -205,7 +256,7 @@ Object.assign(App, {
   _stkRendreCatalogue() {
     const el = document.getElementById('stk-catalogue-root');
     if (!el) return;
-    const filtres = [['', 'Toutes'], ['mes', '★ Mes réf.'], ['seuil', 'À surveiller']];
+    const filtres = [['', 'Toutes'], ['mes', '★ Mes réf.'], ['seuil', 'À surveiller'], ['prev', 'Prévisions']];
     el.innerHTML = `<div class="sx-ecran">
       ${this._otEntete({ retour: { texte: 'Accueil', action: 'App.goHome()' }, titre: 'Stock Pidem', sousTitre: 'Catalogue' })}
       ${this._stkOnglets('stk-catalogue')}
@@ -244,6 +295,13 @@ Object.assign(App, {
     const compte = document.getElementById('stk-compte');
     if (compte) compte.textContent = S.stk.charge ? `${items.length} réf. sur ${S.stockData.length}` : '';
     if (!S.stk.charge) { el.innerHTML = ''; return; }
+    if (S.stk.filtre === 'prev') {             // Prévisions : ordre « à commander avant »
+      const prev = this._stkPrevisions(items);
+      if (compte) compte.textContent = `${prev.length} réf. en rupture d’ici 6 semaines`;
+      el.innerHTML = prev.length ? `<div class="sx-stk-prev-liste">${prev.map(x => this._stkHtmlPrevision(x, 'stk-catalogue')).join('')}</div>`
+        : '<div class="sx-vide">Aucune rupture prévue d’ici 6 semaines.</div>';
+      return;
+    }
     if (!items.length) { el.innerHTML = '<div class="sx-vide">Aucune référence ne correspond.</div>'; return; }
     el.innerHTML = items.map(d => {
       const qte = this._stkQte(d), bas = this._stkSousSeuil(d), fav = S.stockPrefs.has(d.ref);
@@ -253,7 +311,8 @@ Object.assign(App, {
         <button type="button" class="sx-stk-ligne-corps" onclick="App.stkOuvrirFiche('${_otEsc(d.ref)}', 'stk-catalogue')">
           <span class="sx-ref">${_otEsc(d.ref)}</span>
           <span class="sx-stk-ligne-texte"><span class="sx-stk-nom">${_otEsc(d.description)}</span>
-            <span class="sx-aide">${_otEsc([d.famille, d.fournisseur].filter(Boolean).join(' · '))}${d.retiree ? ' · retirée du catalogue client' : ''}</span></span>
+            <span class="sx-aide">${_otEsc([d.famille, d.fournisseur].filter(Boolean).join(' · '))}${d.retiree ? ' · retirée du catalogue client' : ''}</span>
+            ${this._stkHtmlNiveau(d)}</span>
           <span class="sx-stk-qte${bas ? ' sx-stk-bas' : ''}">${this._stkNombre(qte)}${d.seuil > 0 ? `<small> / ${this._stkNombre(d.seuil)}</small>` : ''}</span>
         </button></div>`;
     }).join('');
@@ -301,6 +360,7 @@ Object.assign(App, {
     const bas = this._stkSousSeuil(d);
     const max = Math.max(q || 0, (d.seuil || 0) * 2, 1);
     const sem = a.avgPerWeek > 0 && q !== null ? q / a.avgPerWeek : null;
+    const prev = this._stkPrevision(d);
     const statut = q === null ? ['Stock inconnu', ''] : q < 0 ? ['Stock négatif — entrée manquante ?', 'sx-stk-chip-bas'] : this._stkEpuisee(d) ? ['Épuisée — sorties récentes', 'sx-stk-chip-bas'] : bas ? ['Sous le seuil', 'sx-stk-chip-bas'] : d.seuil > 0 ? ['OK · au-dessus du seuil', 'sx-stk-chip-ok'] : ['Pas de seuil', ''];
 
     el.innerHTML = `<div class="sx-ecran">${entete}
@@ -317,9 +377,11 @@ Object.assign(App, {
             <div><span>Seuil</span><b>${d.seuil > 0 ? this._stkNombre(d.seuil) : '—'}</b></div>
             <div><span>Sorties / sem.</span><b>${a.avgPerWeek > 0 ? this._stkNombre(a.avgPerWeek) : '—'}</b></div>
             <div><span>Couverture</span><b>${sem === null ? '—' : sem < 1 ? '< 1 sem.' : '~' + Math.round(sem) + ' sem.'}</b></div>
+            <div><span>Délai d’appro</span><b>${d.delai != null ? d.delai + ' j' : '—'}</b>${d.delai != null ? `<span>${d.delaiRef != null ? 'propre à la réf.' : 'du fournisseur'}</span>` : ''}</div>
+            <div><span>Prévision</span><b>${prev ? this._stkTextePrevision(prev) : '—'}</b></div>
           </div>
           <div class="sx-ligne-champs">
-            <button type="button" class="sx-lien" onclick="App.openSeuilModal('${_otEsc(d.ref)}')">Modifier le seuil</button>
+            <button type="button" class="sx-lien" onclick="App.openSeuilModal('${_otEsc(d.ref)}')">Seuil et délai d’appro</button>
             <button type="button" class="sx-lien" aria-pressed="${fav}" onclick="App.stkFavori('${_otEsc(d.ref)}')">${fav ? '★ Dans mes références' : '☆ Ajouter à mes références'}</button>
           </div>
         </section>

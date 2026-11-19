@@ -427,6 +427,21 @@ body.socle { background: var(--sx-fond); }
 .sx-stk-alerte-q { font-size: 13px; font-weight: 700; color: var(--sx-orange); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .sx-stk-barre { height: 5px; background: var(--sx-separateur); border-radius: 3px; overflow: hidden; }
 .sx-stk-barre span { display: block; height: 5px; background: var(--sx-orange); border-radius: 3px; }
+.sx-stk-prev { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 0; border: 0; border-top: 1px solid var(--sx-separateur);
+  background: none; font: inherit; color: var(--sx-texte); cursor: pointer; text-align: left; }
+.sx-stk-prev .sx-ref { width: 60px; flex-shrink: 0; }
+.sx-stk-prev-action { font-size: 13px; font-weight: 700; color: var(--sx-gris); text-align: right; flex-shrink: 0; max-width: 42%; }
+.sx-stk-prev-bientot .sx-stk-prev-action { color: var(--sx-orange); }
+.sx-stk-prev-urgent .sx-stk-prev-action { color: var(--sx-rouge); }
+.sx-stk-prev-liste { background: var(--sx-carte); border-radius: 12px; padding: 0 12px; }
+.sx-stk-prev-liste .sx-stk-prev:first-child { border-top: 0; }
+.sx-stk-niveau-l { display: flex; align-items: center; gap: 8px; margin-top: 3px; }
+.sx-stk-niveau { position: relative; flex: 0 1 200px; height: 5px; background: var(--sx-separateur); border-radius: 3px; }
+.sx-stk-niveau > span { display: block; height: 5px; border-radius: 3px; background: var(--sx-vert); }
+.sx-stk-niveau i { position: absolute; top: -2px; width: 2px; height: 9px; background: var(--sx-texte); opacity: .45; }
+.sx-niv-moyen > span { background: var(--sx-orange); }
+.sx-niv-bas > span { background: var(--sx-rouge); }
+.sx-stk-niveau-txt { font-size: 11px; color: var(--sx-gris); white-space: nowrap; }
 .sx-stk-nom { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sx-stk-badge { font-size: 11px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; border-radius: 6px; padding: 4px 7px; flex-shrink: 0;
   color: var(--sx-gris); background: var(--sx-separateur); }

@@ -1986,7 +1986,7 @@
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
       <span style="font-size:20px;">🎯</span>
       <div style="flex:1;min-width:0;">
-        <div style="font-size:14px;font-weight:700;color:#1E293B;">Seuil d'alerte</div>
+        <div style="font-size:14px;font-weight:700;color:#1E293B;">Seuil d'alerte et délai d'appro</div>
         <div id="seuil-modal-ref" style="font-size:11px;color:#64748B;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
       </div>
       <button onclick="App.closeSeuilModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#475569;padding:2px;line-height:1;">✕</button>
@@ -1997,6 +1997,19 @@
     <input type="number" id="seuil-modal-input" min="0" step="1" inputmode="numeric"
       style="width:100%;padding:12px;border:1.5px solid #CBD5E1;border-radius:10px;font-size:18px;text-align:center;box-sizing:border-box;margin-bottom:14px;"
       onkeydown="if(event.key==='Enter')App.saveSeuilModal()">
+    <!-- Délais d'appro (2026-11-19) : par fournisseur, dérogation par réf. — prévisions « à commander avant » -->
+    <div id="seuil-modal-delai-f-bloc">
+      <label for="seuil-modal-delai-f" style="font-size:12px;color:#64748B;font-weight:600;display:block;margin-bottom:6px;">
+        Délai d'appro du fournisseur <b id="seuil-modal-fourn"></b> (jours, pour toutes ses réf.)
+      </label>
+      <input type="number" id="seuil-modal-delai-f" min="0" max="365" step="1" inputmode="numeric" placeholder="non renseigné"
+      style="width:100%;padding:10px;border:1.5px solid #CBD5E1;border-radius:10px;font-size:16px;text-align:center;box-sizing:border-box;margin-bottom:12px;" onkeydown="if(event.key==='Enter')App.saveSeuilModal()">
+    </div>
+    <label for="seuil-modal-delai-r" style="font-size:12px;color:#64748B;font-weight:600;display:block;margin-bottom:6px;">
+      Délai pour cette réf. seulement (vide = celui du fournisseur)
+    </label>
+    <input type="number" id="seuil-modal-delai-r" min="0" max="365" step="1" inputmode="numeric" placeholder="comme le fournisseur"
+      style="width:100%;padding:10px;border:1.5px solid #CBD5E1;border-radius:10px;font-size:16px;text-align:center;box-sizing:border-box;margin-bottom:12px;" onkeydown="if(event.key==='Enter')App.saveSeuilModal()">
     <button onclick="App.saveSeuilModal()" id="seuil-modal-btn"
       style="width:100%;padding:13px;border:none;background:var(--brand);color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
       ✓ Enregistrer
