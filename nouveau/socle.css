@@ -544,6 +544,9 @@ body.pb-plein #view-prod-bureau.active { flex: 1; min-height: 0; display: flex; 
 .pb-ligne-module:hover { background: #F7F9FC; }
 .pb-retard { background: #FFF8F8; }
 .pb-parti { color: #3D4B5C; }
+.pb-ligne-module.pb-pause { background: #ECEAF1; color: #4A4458; }   /* de côté (2026-11-19) : fond mat */
+.pb-ligne-module.pb-pause:hover { background: #E4E1EB; }
+.pb-carte.pb-pause { background: #ECEAF1; border-color: #D6D1E0; }
 .pb-code, .pb-numero, .pb-poses, .pb-ot { border: 0; background: none; padding: 0; font-family: inherit; cursor: pointer; text-align: left; }
 .pb-code { display: flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12.5px; font-weight: 700; color: var(--sx-bleu); }
 .pb-numero { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 700; color: var(--sx-texte); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

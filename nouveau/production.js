@@ -364,7 +364,7 @@ Object.assign(App, {
         ${f.documents.dossier ? `<a class="pb-doc" href="${_otEsc(f.documents.dossier)}" target="_blank" rel="noopener">Dossier OT</a>` : ''}`;
     })() : '';
     const code = _otEsc(d.code || '');
-    return `<div class="pb-grille pb-ligne-module${l.retard ? ' pb-retard' : ''}${l.parti ? ' pb-parti' : ''}">
+    return `<div class="pb-grille pb-ligne-module${l.retard ? ' pb-retard' : ''}${l.parti ? ' pb-parti' : ''}${l.deCote ? ' pb-pause' : ''}">
       <span class="pb-code-cell">${this._pbHtmlCase(l)}<button type="button" class="pb-code" onclick="App.prodDossier('${code}', ${l.parti})" title="Ouvrir le dossier du module (photos, papiers d'arrivée et de départ)">${_PB_SVG_DOSSIER}${code}</button><span class="pb-icones">${this._pbHtmlPlace(l, false)}</span></span>
       <button type="button" class="pb-numero" onclick="App.prodOuvrirModule(${l.parti}, ${l.idx})" title="Ouvrir la fiche du module">${_otEsc(d.codeModule || '—')}</button>
       <span class="pb-type">${_otEsc(d.module || '')}</span>
@@ -930,7 +930,7 @@ Object.assign(App, {
       } else ot = this._pbHtmlOtSansFiche(l, false);
     }
     const pdf = admin && f && f.documents ? (f.documents.fichiers || []).find(x => x.type === 'pdf') : null;
-    return `<div class="pb-carte${l.retard ? ' pb-retard' : ''}${l.parti ? ' pb-parti' : ''}">
+    return `<div class="pb-carte${l.retard ? ' pb-retard' : ''}${l.parti ? ' pb-parti' : ''}${l.deCote ? ' pb-pause' : ''}">
       <div class="pb-carte-l1">
         ${this._pbHtmlCase(l)}
         <button type="button" class="pb-code" onclick="App.prodDossier('${code}', ${l.parti})" aria-label="Dossier du module ${code}">${_PB_SVG_DOSSIER}${code}</button>
