@@ -756,5 +756,11 @@ span.pb-ot-sans { cursor: default; }
 .pb-md-entetes > label, .pb-md-entetes > span { font-weight: 700; color: var(--sx-gris); }
 .pb-md-entetes .sx-champ { min-height: 38px; font-size: 13px; }
 .pb-md-cadre { width: 100%; height: 300px; border: 1px solid var(--sx-bord); border-radius: 10px; background: #FFFFFF; }
+.pb-decote-btn, .pb-decote-ic { display: inline-flex; color: #5B3FA0; }
+.pb-decote-btn { border: 0; background: none; padding: 2px; margin: -2px; border-radius: 4px; cursor: pointer; }
+.pb-decote-btn:hover, .pb-decote-btn:focus-visible { background: #ECE7F7; }
+.pb-decote-vide { opacity: 0; color: var(--sx-gris); }
+.pb-ligne-module:hover .pb-decote-vide { opacity: .45; }
+.pb-decote-vide:hover, .pb-decote-vide:focus-visible { opacity: 1; }
 .pb-annonce-btn { border: 0; background: none; padding: 2px; margin: -2px; border-radius: 4px; cursor: pointer; }
 .pb-annonce-btn:hover, .pb-annonce-btn:focus-visible { background: #E3F4EA; }
