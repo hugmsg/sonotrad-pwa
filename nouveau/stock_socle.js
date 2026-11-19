@@ -68,9 +68,11 @@ Object.assign(App, {
 
   _stkArticle(ref) { return S.stockData.find(d => d.ref === ref); },
   _stkQte(d) { return d && d.qte !== null && d.qte !== undefined ? Number(d.qte) : null; },
-  // À surveiller = sous le seuil, ou stock NÉGATIF même sans seuil (entrée manquante — 2026-11-19)
-  _stkSousSeuil(d) { const q = this._stkQte(d); return !!d && q !== null && (q < 0 || (d.seuil > 0 && q <= d.seuil)); },
-  _stkRatio(d) { const q = this._stkQte(d); return q < 0 ? q - 1e6 : d.seuil > 0 ? q / d.seuil : 1e6; },   // tri : négatifs d'abord
+  // À surveiller (2026-11-19) = sous le seuil, stock NÉGATIF (entrée manquante), ou ÉPUISÉE (à 0 avec des sorties
+  // ces 30 derniers jours) — même sans seuil. Une réf. à 0 sans sortie récente (plus stockée) n'alerte pas.
+  _stkEpuisee(d) { const a = d && S.stockAnalytics[d.ref]; return this._stkQte(d) === 0 && !!a && a.avgPerWeek > 0; },
+  _stkSousSeuil(d) { const q = this._stkQte(d); return !!d && q !== null && (q < 0 || this._stkEpuisee(d) || (d.seuil > 0 && q <= d.seuil)); },
+  _stkRatio(d) { const q = this._stkQte(d); return q < 0 ? q - 1e6 : d.seuil > 0 ? q / d.seuil : 0; },   // tri : négatifs, puis épuisées / plus bas
   _stkNombre(n) { return n === null || n === undefined ? '—' : Number(n).toLocaleString('fr-FR', { maximumFractionDigits: 2 }); },
   _stkJours(d) {
     const q = this._stkQte(d), a = S.stockAnalytics[d.ref];
@@ -122,8 +124,9 @@ Object.assign(App, {
     if (!el) return;
     const alertes = S.stockData.filter(d => this._stkSousSeuil(d))
       .sort((a, b) => this._stkRatio(a) - this._stkRatio(b));
-    // La réf. qui va manquer le plus vite (consommation des 30 derniers jours), sous 3 semaines
-    const rupture = S.stockData.map(d => ({ d, j: this._stkJours(d) })).filter(x => x.j !== null && x.j <= 21)
+    // Prévision : la réf. ENCORE EN STOCK qui va manquer le plus vite (consommation des 30 derniers jours), sous
+    // 3 semaines — les réf. déjà à 0 ou négatives sont dans la liste « À surveiller », pas ici.
+    const rupture = S.stockData.filter(d => this._stkQte(d) > 0).map(d => ({ d, j: this._stkJours(d) })).filter(x => x.j !== null && x.j <= 21)
       .sort((a, b) => a.j - b.j)[0];
     const ops = this._stkOps().slice(0, 5);
 
@@ -150,9 +153,9 @@ Object.assign(App, {
           ${rupture ? `<button type="button" class="sx-stk-rupture" onclick="App.stkOuvrirFiche('${_otEsc(rupture.d.ref)}', 'stk-accueil')">
               <strong>${_otEsc(rupture.d.ref)} · ${_otEsc(rupture.d.description)}</strong> : ${this._stkNombre(this._stkQte(rupture.d))} en stock,
               ~${this._stkNombre(S.stockAnalytics[rupture.d.ref].avgPerWeek)} sorties / semaine →
-              ${rupture.j <= 0 ? '<strong>rupture</strong>' : `rupture dans <strong>~${rupture.j} jour${rupture.j > 1 ? 's' : ''}</strong>`}</button>` : ''}
+              ${rupture.j <= 0 ? '<strong>rupture sous 24 h</strong>' : `rupture dans <strong>~${rupture.j} jour${rupture.j > 1 ? 's' : ''}</strong>`}</button>` : ''}
           ${alertes.length ? alertes.slice(0, 6).map(d => this._stkHtmlAlerte(d)).join('')
-            : '<div class="sx-aide" style="padding:6px 0;">Aucune réf. sous son seuil.</div>'}
+            : '<div class="sx-aide" style="padding:6px 0;">Rien à surveiller.</div>'}
         </section>
         <section class="sx-section" aria-labelledby="stk-t-ops">
           <div class="sx-section-tete"><h2 class="sx-h2" id="stk-t-ops">Dernières opérations</h2>
@@ -170,7 +173,7 @@ Object.assign(App, {
       <span class="sx-ref">${_otEsc(d.ref)}</span>
       <span class="sx-stk-alerte-mil"><span class="sx-stk-nom">${_otEsc(d.description)}</span>
         <span class="sx-stk-barre"><span style="width:${pct}%"></span></span></span>
-      <span class="sx-stk-alerte-q">${this._stkNombre(q)}${d.seuil > 0 ? ' / ' + this._stkNombre(d.seuil) : q < 0 ? ' · négatif' : ''}</span></button>`;
+      <span class="sx-stk-alerte-q">${this._stkNombre(q)}${d.seuil > 0 ? ' / ' + this._stkNombre(d.seuil) : ''}${q < 0 ? ' · négatif' : q === 0 && this._stkEpuisee(d) ? ' · épuisée' : ''}</span></button>`;
   },
 
   _stkHtmlOpLigne(op) {
@@ -298,7 +301,7 @@ Object.assign(App, {
     const bas = this._stkSousSeuil(d);
     const max = Math.max(q || 0, (d.seuil || 0) * 2, 1);
     const sem = a.avgPerWeek > 0 && q !== null ? q / a.avgPerWeek : null;
-    const statut = q === null ? ['Stock inconnu', ''] : q < 0 ? ['Stock négatif — entrée manquante ?', 'sx-stk-chip-bas'] : bas ? ['Sous le seuil', 'sx-stk-chip-bas'] : d.seuil > 0 ? ['OK · au-dessus du seuil', 'sx-stk-chip-ok'] : ['Pas de seuil', ''];
+    const statut = q === null ? ['Stock inconnu', ''] : q < 0 ? ['Stock négatif — entrée manquante ?', 'sx-stk-chip-bas'] : this._stkEpuisee(d) ? ['Épuisée — sorties récentes', 'sx-stk-chip-bas'] : bas ? ['Sous le seuil', 'sx-stk-chip-bas'] : d.seuil > 0 ? ['OK · au-dessus du seuil', 'sx-stk-chip-ok'] : ['Pas de seuil', ''];
 
     el.innerHTML = `<div class="sx-ecran">${entete}
       <main class="sx-contenu">
