@@ -135,15 +135,14 @@ Object.assign(App, {
       const liv = d.livraisonPrevue ? new Date(d.livraisonPrevue) : null;
       const retard = !parti && liv && !isNaN(liv) && liv < auj;
       const fin = d.fin ? new Date(d.fin) : null;
-      // OT attendue : module terminé AVEC une agence (ou parti depuis la mise en service des fiches) sans fiche
-      // validée. Terminé sans agence (LIBRE) : « en attente d'agence », pas d'OT (2026-11-19).
+      // OT attendue : module terminé (ou parti depuis la mise en service des fiches) sans fiche validée — avec ou
+      // sans agence (2026-11-19 : la validation avertit si le module est encore LIBRE).
       const deCote = !parti && !!(d.status && d.status.deCote);
-      const attenteAgence = !parti && ['termine', 'pret'].includes(etape) && !d.ag;
-      const otAttendue = (['termine', 'pret'].includes(etape) && !attenteAgence) || (parti && fin && fin >= debutOt);
+      const otAttendue = ['termine', 'pret'].includes(etape) || (parti && fin && fin >= debutOt);
       const sansOt = !f && this._otSansOtDe ? this._otSansOtDe(code, d) : null;   // pas d'OT (marqué ou vente)
       const otExcel = !f && this._otExcelDe ? this._otExcelDe(code) : '';          // OT déjà fait dans l'Excel
       const otAFaire = !sansOt && !otExcel && otAttendue && (!f || f.statut === 'brouillon' || f.statut === 'a_valider');
-      return { d, idx, parti, code, etape, fiche: f, retard, fin, otAFaire, sansOt, otExcel, deCote, attenteAgence,
+      return { d, idx, parti, code, etape, fiche: f, retard, fin, otAFaire, sansOt, otExcel, deCote,
         otAEnvoyer: !!f && f.statut === 'validee' };
     };
     const actifs = (S.deps || []).map((d, i) => ligne(d, i, false));
@@ -1156,9 +1155,7 @@ Object.assign(App, {
         ? `<span class="pb-ot pb-ot-sans" title="${t}">Pas d'OT</span>`
         : `<button type="button" class="pb-ot pb-ot-sans" onclick="App.otRemettreAFaire('${code}')" title="${t} — cliquer pour remettre à faire">Pas d'OT</button>`;
     }
-    const etat = l.otAFaire ? '<span class="pb-ot pb-ot-afaire">OT à faire</span>'
-      : l.attenteAgence ? '<span class="pb-gris" title="Terminé mais pas encore d’agence (LIBRE) : l’OT se fera quand la destination sera connue">en attente d’agence</span>'
-      : (gris ? '<span class="pb-gris">Pas de fiche</span>' : '');
+    const etat = l.otAFaire ? '<span class="pb-ot pb-ot-afaire">OT à faire</span>' : (gris ? '<span class="pb-gris">Pas de fiche</span>' : '');
     // Petite croix rouge (demande de Hugo) : plus léger, et on ne lit pas « pas d'OT » comme « rien à faire »
     return etat + (this._otAutorise() && l.code ? ` <button type="button" class="pb-sans-btn" onclick="App.otPasDOt('${code}')" title="Marquer : ce module n'aura pas d'OT (vente en l'état, épave…)" aria-label="Marquer ${code} sans OT"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>` : '');
   },

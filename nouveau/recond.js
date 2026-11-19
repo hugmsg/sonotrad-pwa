@@ -247,8 +247,8 @@ Object.assign(App, {
       if (this._otSansOtDe(m.code, m)) return false;          // pas d'OT (marqué, ou vente RBSA / BCBJ / DRCB)
       if (this._otExcelDe(m.code)) return false;               // OT déjà fait dans la matrice Excel
       if (m.parti) { const fin = m.fin ? new Date(m.fin) : null; return !!fin && !isNaN(fin) && fin >= debut; }
-      // Terminé avec une agence, de côté compris (2026-11-19 : la fiche peut se faire en avance) ; LIBRE = pas encore
-      return !!(m.status && m.status.termine && m.ag);
+      // Terminé, de côté compris (2026-11-19 : la fiche peut se faire en avance) ; sans agence : averti à la validation
+      return !!(m.status && m.status.termine);
     }).sort((a, b) => (a.parti - b.parti) || String(a.fin || '').localeCompare(String(b.fin || '')));
   },
 
@@ -897,6 +897,16 @@ Object.assign(App, {
                     : 'Un numéro d\'OT est attribué, les prix sont figés, les pièces sont sorties du stock (ce que la 🔧 n\'a pas déjà sorti) et les documents (Excel LOXAM, Excel SONOTRAD, PDF) sont créés.'), 'Valider'],
     };
     const t = textes[statut];
+    // Module encore LIBRE au Planning (2026-11-19) : les documents prennent l'agence du Planning à la validation
+    if (statut === 'validee') {
+      const code = String(f.code_planning || '').toUpperCase();
+      const m = [...(S.deps || []), ...(S.ot.modules || [])].find(x => String(x.code || '').toUpperCase() === code);
+      if (m && !m.ag) {
+        t[0] = 'Module sans agence';
+        t[1] = `Au Planning, ${f.code_planning} n'a pas encore d'agence (LIBRE) : l'OT sera validé SANS agence — documents et dossier sans destination. ` + t[1];
+        t[2] = 'Valider sans agence';
+      }
+    }
     if (t && !(await this._otConfirmer({ titre: t[0], texte: t[1], ok: t[2] }))) return;
     if (statut === 'validee') this.toast('⏳ Validation et création des documents…', 20000);
     try {
