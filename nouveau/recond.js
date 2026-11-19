@@ -247,7 +247,8 @@ Object.assign(App, {
       if (this._otSansOtDe(m.code, m)) return false;          // pas d'OT (marqué, ou vente RBSA / BCBJ / DRCB)
       if (this._otExcelDe(m.code)) return false;               // OT déjà fait dans la matrice Excel
       if (m.parti) { const fin = m.fin ? new Date(m.fin) : null; return !!fin && !isNaN(fin) && fin >= debut; }
-      return !!(m.status && m.status.termine && !m.status.deCote);
+      // Terminé avec une agence, de côté compris (2026-11-19 : la fiche peut se faire en avance) ; LIBRE = pas encore
+      return !!(m.status && m.status.termine && m.ag);
     }).sort((a, b) => (a.parti - b.parti) || String(a.fin || '').localeCompare(String(b.fin || '')));
   },
 
@@ -364,7 +365,11 @@ Object.assign(App, {
   _otStatutModule(m) {
     const s = m.status || {};
     if (m.parti)        return { texte: 'Parti',       classe: 'envoyee' };
-    if (s.deCote)       return { texte: 'De côté',     classe: 'envoyee' };
+    const st = this._otStatutEtape(s);           // « de côté » = étiquette sur l'étape réelle (2026-11-19)
+    if (s.deCote) st.texte += ' · de côté';
+    return st;
+  },
+  _otStatutEtape(s) {
     if (s.termine)      return { texte: 'Terminé',     classe: 'validee' };
     if (s.aControler)   return { texte: 'À contrôler', classe: 'a_valider' };
     if (s.enCours)      return { texte: 'En cours',    classe: 'encours', avertir: true };

@@ -102,7 +102,8 @@ Object.assign(App, {
   _pbEtape(d, parti) {
     if (parti) return 'parti';
     const s = d.status || {};
-    if (s.deCote) return 'decote';
+    // « De côté » (colonne S) n'est plus une étape (2026-11-19) : une étiquette posée sur l'étape réelle
+    // (l.deCote) ; elle bloque seulement le mail de dispo, comme dans le Sheet. 'decote' reste un onglet-filtre.
     if (s.termine) return (d.lv || d.commande) ? 'pret' : 'termine';
     if (s.aControler) return 'controle';
     if (s.enCours) return 'atelier';
@@ -134,12 +135,15 @@ Object.assign(App, {
       const liv = d.livraisonPrevue ? new Date(d.livraisonPrevue) : null;
       const retard = !parti && liv && !isNaN(liv) && liv < auj;
       const fin = d.fin ? new Date(d.fin) : null;
-      // OT attendue : module terminé (ou parti depuis la mise en service des fiches) sans fiche validée
-      const otAttendue = ['termine', 'pret'].includes(etape) || (parti && fin && fin >= debutOt);
+      // OT attendue : module terminé AVEC une agence (ou parti depuis la mise en service des fiches) sans fiche
+      // validée. Terminé sans agence (LIBRE) : « en attente d'agence », pas d'OT (2026-11-19).
+      const deCote = !parti && !!(d.status && d.status.deCote);
+      const attenteAgence = !parti && ['termine', 'pret'].includes(etape) && !d.ag;
+      const otAttendue = (['termine', 'pret'].includes(etape) && !attenteAgence) || (parti && fin && fin >= debutOt);
       const sansOt = !f && this._otSansOtDe ? this._otSansOtDe(code, d) : null;   // pas d'OT (marqué ou vente)
       const otExcel = !f && this._otExcelDe ? this._otExcelDe(code) : '';          // OT déjà fait dans l'Excel
       const otAFaire = !sansOt && !otExcel && otAttendue && (!f || f.statut === 'brouillon' || f.statut === 'a_valider');
-      return { d, idx, parti, code, etape, fiche: f, retard, fin, otAFaire, sansOt, otExcel,
+      return { d, idx, parti, code, etape, fiche: f, retard, fin, otAFaire, sansOt, otExcel, deCote, attenteAgence,
         otAEnvoyer: !!f && f.statut === 'validee' };
     };
     const actifs = (S.deps || []).map((d, i) => ligne(d, i, false));
@@ -230,7 +234,7 @@ Object.assign(App, {
     const pret = S.depsLoaded;
     const lignes = pret ? this._pbLignes() : [];
     const base = lignes.filter(l => this._pbCorrespond(l));
-    const nb = cle => base.filter(l => l.etape === cle).length;
+    const nb = cle => base.filter(l => cle === 'decote' ? l.deCote : l.etape === cle).length;
     const surParc = lignes.filter(l => !l.parti).length;
     const admin = this._otAdmin();
     const fichesOk = Array.isArray(P.fiches);
@@ -302,11 +306,11 @@ Object.assign(App, {
     else if (P.filtre === 'otAEnvoyer') lignes = lignes.filter(l => l.otAEnvoyer);
     else if (P.filtre === 'partisSansOt') lignes = lignes.filter(l => l.otAFaire && l.parti);
     else if (P.filtre === 'annoncer') lignes = lignes.filter(l => this._pbAAnnoncer(l));
-    else if ((P.etapes || []).length) lignes = lignes.filter(l => P.etapes.includes(l.etape));
+    else if ((P.etapes || []).length) lignes = lignes.filter(l => P.etapes.includes(l.etape) || (l.deCote && P.etapes.includes('decote')));
     // « Tous » : le parc, plus les partis encore sans OT (départs précipités) pour ne pas les perdre de vue
     else lignes = lignes.filter(l => !l.parti || l.otAFaire);
 
-    const ordre = ['demarrer', 'atelier', 'controle', 'termine', 'pret', 'decote', 'parti'];
+    const ordre = ['demarrer', 'atelier', 'controle', 'termine', 'pret', 'parti'];   // de côté : étiquette, pas un groupe
     const groupes = ordre.map(cle => {
       const e = PB_ETAPES.find(x => x.cle === cle);
       let titre = e.nom;
@@ -344,7 +348,7 @@ Object.assign(App, {
     const d = l.d, f = l.fiche;
     const rang = (PB_ETAPES.find(e => e.cle === l.etape) || {}).rang || 0;
     const barre = [1, 2, 3, 4, 5, 6].map(i => `<span class="pb-seg${i <= rang ? ' pb-seg-' + rang : ''}"></span>`).join('');
-    const nomEtape = l.etape === 'decote' ? 'De côté' : (PB_ETAPES.find(e => e.cle === l.etape) || {}).nom;
+    const nomEtape = ((PB_ETAPES.find(e => e.cle === l.etape) || {}).nom || '') + (l.deCote ? ' · de côté' : '');
     const duree = l.parti ? 'fini le ' + _fmtDateShort(d.fin) : _duration(d.debut, null);
     const liv = d.livraisonPrevue ? _fmtDateShort(d.livraisonPrevue) : '—';
     let ot = '<span class="pb-gris">—</span>';
@@ -361,7 +365,7 @@ Object.assign(App, {
     })() : '';
     const code = _otEsc(d.code || '');
     return `<div class="pb-grille pb-ligne-module${l.retard ? ' pb-retard' : ''}${l.parti ? ' pb-parti' : ''}">
-      <span class="pb-code-cell">${this._pbHtmlCase(l)}<button type="button" class="pb-code" onclick="App.prodDossier('${code}', ${l.parti})" title="Ouvrir le dossier du module (photos, papiers d'arrivée et de départ)">${_PB_SVG_DOSSIER}${code}</button></span>
+      <span class="pb-code-cell">${this._pbHtmlCase(l)}<button type="button" class="pb-code" onclick="App.prodDossier('${code}', ${l.parti})" title="Ouvrir le dossier du module (photos, papiers d'arrivée et de départ)">${_PB_SVG_DOSSIER}${code}</button>${l.deCote ? ' <span class="pb-decote" title="De côté au Planning (colonne S) : pas de mail de dispo">de côté</span>' : ''}</span>
       <button type="button" class="pb-numero" onclick="App.prodOuvrirModule(${l.parti}, ${l.idx})" title="Ouvrir la fiche du module">${_otEsc(d.codeModule || '—')}</button>
       <span class="pb-type">${_otEsc(d.module || '')}</span>
       ${this._pbHtmlAgence(l, `${_otEsc(d.chantier || '')}${d.status && d.status.grutage ? ' <span class="pb-grutage">grutage</span>' : ''}`)}
@@ -915,7 +919,7 @@ Object.assign(App, {
     const d = l.d, f = l.fiche;
     const rang = (PB_ETAPES.find(e => e.cle === l.etape) || {}).rang || 0;
     const barre = [1, 2, 3, 4, 5, 6].map(i => `<span class="pb-seg${i <= rang ? ' pb-seg-' + rang : ''}"></span>`).join('');
-    const nomEtape = (PB_ETAPES.find(e => e.cle === l.etape) || {}).nom || '';
+    const nomEtape = ((PB_ETAPES.find(e => e.cle === l.etape) || {}).nom || '') + (l.deCote ? ' · de côté' : '');
     const code = _otEsc(d.code || '');
     const duree = l.parti ? 'fini le ' + _fmtDateShort(d.fin) : _duration(d.debut, null);
     let ot = '';
@@ -1150,7 +1154,9 @@ Object.assign(App, {
         ? `<span class="pb-ot pb-ot-sans" title="${t}">Pas d'OT</span>`
         : `<button type="button" class="pb-ot pb-ot-sans" onclick="App.otRemettreAFaire('${code}')" title="${t} — cliquer pour remettre à faire">Pas d'OT</button>`;
     }
-    const etat = l.otAFaire ? '<span class="pb-ot pb-ot-afaire">OT à faire</span>' : (gris ? '<span class="pb-gris">Pas de fiche</span>' : '');
+    const etat = l.otAFaire ? '<span class="pb-ot pb-ot-afaire">OT à faire</span>'
+      : l.attenteAgence ? '<span class="pb-gris" title="Terminé mais pas encore d’agence (LIBRE) : l’OT se fera quand la destination sera connue">en attente d’agence</span>'
+      : (gris ? '<span class="pb-gris">Pas de fiche</span>' : '');
     // Petite croix rouge (demande de Hugo) : plus léger, et on ne lit pas « pas d'OT » comme « rien à faire »
     return etat + (this._otAutorise() && l.code ? ` <button type="button" class="pb-sans-btn" onclick="App.otPasDOt('${code}')" title="Marquer : ce module n'aura pas d'OT (vente en l'état, épave…)" aria-label="Marquer ${code} sans OT"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>` : '');
   },
@@ -1252,7 +1258,7 @@ Object.assign(App, {
 const _PB_SVG_MAIL = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>';
 
 Object.assign(App, {
-  _pbAAnnoncer(l) { return !l.parti && l.etape === 'termine' && !(l.d.status && l.d.status.mail); },
+  _pbAAnnoncer(l) { return !l.parti && !l.deCote && l.etape === 'termine' && !(l.d.status && l.d.status.mail); },
 
   _pbHtmlAnnonce(l) {
     if (l.parti || !(l.d.status && l.d.status.mail) || !['termine', 'pret'].includes(l.etape)) return '';
@@ -1263,7 +1269,7 @@ Object.assign(App, {
   async prodSelMailDispo() {
     if (!this._otAdmin()) return;
     const lignes = this._pbLignes().filter(l => S.pb.sel.has(l.code));
-    const ok = lignes.filter(l => !l.parti && l.etape !== 'decote');
+    const ok = lignes.filter(l => !l.parti && !l.deCote);
     const ignores = lignes.length - ok.length;
     if (!ok.length) { this.toast('Aucun module à annoncer dans la sélection (partis ou de côté)', 5000); return; }
     const choisis = await new Promise(resolve => {
