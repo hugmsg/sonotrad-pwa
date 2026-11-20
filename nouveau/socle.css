@@ -784,3 +784,37 @@ span.pb-ot-sans { cursor: default; }
 .pb-decote-vide:hover, .pb-decote-vide:focus-visible { opacity: 1; }
 .pb-annonce-btn { border: 0; background: none; padding: 2px; margin: -2px; border-radius: 4px; cursor: pointer; }
 .pb-annonce-btn:hover, .pb-annonce-btn:focus-visible { background: #E3F4EA; }
+
+/* ── Commandes LOXAM (commandes.js, 2026-11-20) ─────────────────────────── */
+.cd-importer { cursor: pointer; }
+.cd-tableau-cadre { overflow-x: auto; }
+.cd-tableau { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cd-tableau th { text-align: left; font-size: 12px; font-weight: 600; color: var(--sx-gris); padding: 8px 10px; border-bottom: 1px solid var(--sx-bord); white-space: nowrap; background: var(--sx-carte); position: sticky; top: 0; }
+.cd-tableau td { padding: 8px 10px; border-bottom: 1px solid var(--sx-separateur); vertical-align: top; color: var(--sx-texte); }
+.cd-tableau .cd-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cd-tableau .cd-case { width: 28px; }
+.cd-tableau .cd-fin { white-space: nowrap; text-align: right; }
+.cd-annulee td { color: var(--sx-gris); text-decoration: line-through; }
+.cd-annulee td.cd-fin, .cd-annulee td:nth-child(8) { text-decoration: none; }
+.cd-ligne-bloquee { background: var(--sx-rouge-fond); }
+.cd-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: var(--sx-attention-fond); color: var(--sx-attention); border: 1px solid #F3D8A8; }
+.cd-ok { color: var(--sx-vert); font-weight: 600; }
+.cd-ecart, .cd-bloque { color: var(--sx-rouge); font-weight: 600; }
+.cd-aexporter { color: var(--sx-bleu); font-weight: 600; }
+.cd-alertes div { font-size: 12px; line-height: 1.35; }
+.cd-al-bloque { color: var(--sx-rouge); font-weight: 600; }
+.cd-al-attention { color: var(--sx-attention); }
+.cd-al-info { color: var(--sx-gris); }
+.cd-al-attention ul { margin: 4px 0 0 18px; padding: 0; }
+.cd-lien { border: 0; background: none; padding: 2px 4px; color: var(--sx-bleu); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: underline; }
+.cd-lien:disabled { color: var(--sx-gris); cursor: default; }
+.cd-resume { font-size: 14px; }
+.cd-espace { flex: 1; }
+.cd-aide { margin: 4px 0 0; }
+.cd-progression { font-size: 14px; color: var(--sx-texte); }
+.cd-ignorees { margin-top: 10px; padding: 10px 14px; font-size: 13px; }
+.cd-ignorees summary { cursor: pointer; color: var(--sx-gris); }
+.cd-ignorees ul { margin: 8px 0 0 18px; padding: 0; }
+.cd-fenetre { max-width: 480px; }
+.cd-champ { display: flex; flex-direction: column; gap: 3px; margin: 8px 0; font-size: 13px; font-weight: 600; color: var(--sx-texte); }
+.cd-champ .sx-aide { font-weight: 400; }
