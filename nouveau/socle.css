@@ -766,7 +766,7 @@ span.pb-ot-sans { cursor: default; }
 .pb-annonce { display: inline-flex; vertical-align: -2px; color: #14532D; }
 .pb-duree { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; }
 .pb-annonce-place { flex: 0 0 14px; display: inline-flex; }   /* place fixe : durées alignées, enveloppe ou pas */
-.pb-action-mail { color: #0B3A7A; }
+.pb-action-mail, .pb-action-etape { color: #0B3A7A; }
 .pb-md-liste { display: flex; flex-direction: column; gap: 4px; max-height: 50vh; overflow-y: auto; margin: 8px 0; }
 .pb-md-ligne { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--sx-bord); border-radius: 10px; font-size: 14px; cursor: pointer; }
 .pb-md-ligne input { width: 20px; height: 20px; margin-top: 1px; flex-shrink: 0; }

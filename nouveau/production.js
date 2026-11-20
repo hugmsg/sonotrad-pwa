@@ -1214,6 +1214,7 @@ Object.assign(App, {
     if (!n) { bar.innerHTML = ''; return; }
     bar.innerHTML = `<div class="pb-actions-in">
       <b>${n} module${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''}</b>
+      ${this._pbPeutEtape() ? `<button type="button" class="pb-action pb-action-etape" onclick="App.prodSelEtape()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg> Changer d'étape…</button>` : ''}
       <button type="button" class="pb-action" onclick="App.prodSelPasDOt()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg> Pas d'OT…</button>
       ${this._otAdmin() ? `<button type="button" class="pb-action pb-action-mail" onclick="App.prodSelMailDispo()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg> Mail de dispo…</button>` : ''}
       <button type="button" class="pb-action pb-action-discret" onclick="App.prodSelVider()">Tout désélectionner</button>
@@ -1243,6 +1244,75 @@ Object.assign(App, {
     }
     this.toast('✓ ' + faits + ' module' + (faits > 1 ? 's' : '') + ' sans OT' + (echecs.length ? ' — échec : ' + echecs.join(', ') : ''), echecs.length ? 8000 : 3500);
     this._pbRendre();
+  },
+
+  /* Changement d'étape groupé (2026-11-20) : même action `planning_etape` que la fenêtre d'un module, appelée
+     module par module (le verrou du Planning est pris à chaque appel). Partis exclus ; ceux déjà à l'étape
+     choisie ne sont pas réécrits. « De côté » n'est pas touché (icône ⏸ ou fenêtre d'un module). */
+  async prodSelEtape() {
+    if (!this._pbPeutEtape()) return;
+    const lignes = this._pbLignes().filter(l => S.pb.sel.has(l.code));
+    // m.d = objet du Planning en mémoire (mis à jour après l'appel), m.sel = clé de la sélection (code en majuscules)
+    const mods = lignes.filter(l => !l.parti).map(l => ({ d: (S.deps || []).find(x => x.code === l.d.code) || l.d, sel: l.code }));
+    const partis = lignes.length - mods.length;
+    if (!mods.length) { this.toast('Aucun module modifiable dans la sélection (tous partis)', 5000); return; }
+    const compte = {};
+    mods.forEach(m => { const c = this._pbEtapePlanning(m.d); compte[c] = (compte[c] || 0) + 1; });
+    const resume = PB_ETAPES_PLANNING.filter(e => compte[e.cle]).map(e => compte[e.cle] + ' ' + e.nom.toLowerCase()).join(', ');
+    const choix = await new Promise(resolve => {
+      const voile = document.createElement('div');
+      voile.className = 'sx-voile';
+      voile.innerHTML = `<div class="sx-fenetre pb-fenetre pb-fen-etape" role="dialog" aria-modal="true" aria-labelledby="pb-ets-titre">
+        <h3 id="pb-ets-titre">Étape de ${mods.length} module${mods.length > 1 ? 's' : ''}</h3>
+        <p class="sx-aide">Actuellement : ${_otEsc(resume)}${partis ? ' — ' + partis + ' parti' + (partis > 1 ? 's' : '') + ' ignoré' + (partis > 1 ? 's' : '') : ''}.</p>
+        <p class="sx-aide pb-ets-codes">${_otEsc(mods.map(m => m.d.code).join(', '))}</p>
+        <div class="pb-et-choix" role="group" aria-label="Nouvelle étape">${PB_ETAPES_PLANNING.map(e => `
+          <button type="button" class="pb-et-btn pb-g-${e.cle}" data-etape="${e.cle}" aria-pressed="false">
+            <b>${_otEsc(e.nom)}</b><span>${compte[e.cle] === mods.length ? 'étape actuelle de tous' : _otEsc(e.aide)}</span></button>`).join('')}
+        </div>
+        <p class="sx-aide">Le Planning Google est mis à jour module par module (mêmes cases et mêmes dates que dans le Sheet). « De côté » n’est pas modifié.</p>
+        <div class="sx-fenetre-boutons">
+          <button type="button" class="sx-btn sx-btn-discret" data-r="0">Annuler</button>
+          <button type="button" class="sx-btn sx-btn-principal" data-r="1" disabled>Choisir une étape</button>
+        </div></div>`;
+      let etape = null;
+      const ok = voile.querySelector('[data-r="1"]');
+      const fermer = v => { voile.remove(); resolve(v); };
+      voile.addEventListener('click', e => {
+        if (e.target === voile) return fermer(null);
+        const b = e.target.closest('[data-etape]');
+        if (b) {
+          etape = b.dataset.etape;
+          voile.querySelectorAll('[data-etape]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+          const n = mods.length - (compte[etape] || 0);
+          ok.disabled = !n;
+          ok.textContent = n ? 'Passer ' + n + ' en « ' + PB_ETAPES_PLANNING.find(x => x.cle === etape).nom + ' »' : 'Déjà tous à cette étape';
+          return;
+        }
+        const r = e.target.closest('[data-r]');
+        if (r) fermer(r.dataset.r === '1' ? etape : null);
+      });
+      document.body.appendChild(voile);
+      voile.querySelector('[data-etape]').focus();
+    });
+    if (!choix) return;
+    mods.filter(m => this._pbEtapePlanning(m.d) === choix).forEach(m => S.pb.sel.delete(m.sel));   // déjà à cette étape
+    const aFaire = mods.filter(m => this._pbEtapePlanning(m.d) !== choix);
+    const nom = PB_ETAPES_PLANNING.find(x => x.cle === choix).nom;
+    let faits = 0; const echecs = [];
+    for (const { d, sel } of aFaire) {
+      this.toast('⏳ ' + (faits + echecs.length + 1) + ' / ' + aFaire.length + ' — ' + d.code + '…', 60000);
+      try {
+        const res = await this._otPost({ action: 'planning_etape', code: d.code, etape: choix }, 60000);
+        d.status = Object.assign({}, d.status, { enCours: res.enCours, aControler: res.aControler, termine: res.termine, deCote: res.deCote });
+        d.debut = res.debut; d.fin = res.fin;
+        S.pb.sel.delete(sel);
+        faits++;
+      } catch (e) { echecs.push(d.code + ' (' + e.message + ')'); }
+    }
+    this.toast('✓ ' + faits + ' module' + (faits > 1 ? 's' : '') + ' en « ' + nom + ' » — Planning mis à jour'
+      + (echecs.length ? ' — échec : ' + echecs.join(', ') : ''), echecs.length ? 10000 : 4000);
+    this._pbApresEtape();
   },
 });
 
