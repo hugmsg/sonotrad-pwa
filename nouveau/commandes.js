@@ -6,8 +6,9 @@
    2. Contrôle : module retrouvé au Planning par son n° (Commentaires), agence, montant comparé à l'OT
       (fiche validée, sinon historique des OT), doublon, commande déjà au Planning. Rien n'est deviné : un champ
       illisible bloque la ligne, « Vérifier / corriger » (PDF à côté des champs) permet de le saisir.
-   3. Enregistrement (cde_enregistrer) : Supabase commandes_loxam + PDF sur Drive + n° dans le Planning (U)
-      et Demandes (N) quand la case est vide.
+   3. Enregistrement (cde_enregistrer) : Supabase commandes_loxam + PDF sur Drive. Rien n'est écrit au Planning :
+      ses colonnes U (et N de Demandes) portent le n° de l'ORDRE D'EXPÉDITION (celui de la LV), pas celui-ci.
+      Un ordre d'expédition (même mise en page, fournisseur MESNAGER TRANSPORTS) est reconnu et bloqué ici.
    4. Export EBP : même fichier que le lecteur de commandes (format v6 : CSV Windows-1252 « ; », plus un .xlsx).
    Bibliothèques chargées à la demande (cdnjs, versions figées) : pdf.js 3.11.174, pdf-lib 1.17.1.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -100,6 +101,8 @@ function _cdeAnalyser(texte) {
   d.adresse = ie >= 0 && id > ie
     ? lignes.slice(ie + 1, id).filter(l => l !== '.').map(l => l.replace(/\s+/g, ' ').trim()).join(' | ') : '';
   d.date_souhaitee = _cdeDate(g(/Date\s+souhait[ée]e\s+de\s+livraison\s*:?\s*(\d{2}\/\d{2}\/\d{2,4})/i));
+  // Même mise en page pour les ordres d'expédition : seul le fournisseur les distingue (MESNAGER TRANSPORTS)
+  d.expedition = /MESNAGER\s+TRANSPORTS|Fourn\s*:?\s*130519023/i.test(t);
   return d;
 }
 
@@ -439,6 +442,7 @@ Object.assign(App, {
     const d = it.d, a = [];
     const bloque = t => a.push({ niv: 'bloque', texte: t }), attention = t => a.push({ niv: 'attention', texte: t }), info = t => a.push({ niv: 'info', texte: t });
     if (it.erreurOcr) bloque('OCR impossible : ' + it.erreurOcr);
+    if (d.expedition) bloque('Ordre d’expédition (fournisseur MESNAGER TRANSPORTS), pas une commande de reconditionnement');
     if (!d.numero || !/^[0-9A-Za-z-]{4,20}$/.test(d.numero)) bloque('N° de commande illisible');
     if (d.total_ht == null) bloque('Montant HT illisible');
     if (!d.ref_module) attention('N° du module illisible (Commentaires)');
@@ -460,7 +464,6 @@ Object.assign(App, {
       if (ot.statut === 'a_valider') info('OT comparé : fiche pas encore validée');
     } else if (it.code) attention('Aucun OT trouvé pour ce module');
     if (it.ver && it.ver.autres && it.ver.autres.length) attention('Autre commande sur ce module : ' + it.ver.autres.join(', '));
-    if (m && m.d.commande && String(m.d.commande).trim() !== d.numero) attention('Le Planning a déjà la commande ' + m.d.commande);
     if (m && m.parti) info('Module parti');
     else if (m && !(m.d.status && m.d.status.termine)) info('Module pas encore terminé');
     if (it.source === 'ocr') attention('Lu par OCR : vérifier les valeurs');
@@ -681,7 +684,7 @@ Object.assign(App, {
       voile.className = 'sx-voile';
       voile.innerHTML = `<div class="sx-fenetre pb-fenetre" role="dialog" aria-modal="true" aria-labelledby="cd-an-titre">
         <h3 id="cd-an-titre">Annuler la commande ${_otEsc(c.numero)} ?</h3>
-        <p class="sx-aide">La ligne reste visible (« Annulées ») et le n° peut être réimporté. Le n° est retiré du Planning s’il y est encore et qu’aucune LV n’est faite.</p>
+        <p class="sx-aide">La ligne reste visible (« Annulées ») et le n° peut être réimporté. Le Planning n’est pas modifié.</p>
         <label class="cd-champ"><span>Motif</span><input class="sx-champ" id="cd-an-motif" placeholder="ex. erreur de lecture, commande remplacée…"></label>
         <div class="sx-fenetre-boutons">
           <button type="button" class="sx-btn sx-btn-discret" data-r="0">Retour</button>
