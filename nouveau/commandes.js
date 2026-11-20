@@ -1,5 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   Bons de commande LOXAM (2026-11-20) — vue « Commandes » de Production (admins).
+   Bons de commande LOXAM de RECONDITIONNEMENT (2026-11-20) — vue « ot-commandes » de Reconditionnement
+   (admins, bouton « Commandes » sous la liste des fiches ; d'abord dans Production, déménagée en v74).
+   Les ordres d'expédition (commandes de transport, n° de la LV) se géreront dans Production, à part.
    1. Import : un ou plusieurs PDF (une commande, ou un fichier fusionné par l'outil Outlook → PDF). Lecture
       dans le navigateur par pdf.js (texte exact) ; une page sans texte (scan) part à l'OCR de Google Drive
       (action cde_ocr). Chaque commande est découpée en son propre PDF (pdf-lib) pour être rangée sur Drive.
@@ -174,6 +176,11 @@ Object.assign(App, {
 
   _cdePeut() { return this._otAdmin(); },
 
+  otOuvrirCommandes() {
+    if (!this._cdePeut()) { this.toast('⛔ Réservé aux administrateurs'); return; }
+    this.go('ot-commandes');
+  },
+
   /* ─ Données ─ */
 
   async _cdeCharger(force = false) {
@@ -215,7 +222,7 @@ Object.assign(App, {
   /* ─ Écran ─ */
 
   _cdeRendre() {
-    const el = document.getElementById('prod-bureau-root');
+    const el = document.getElementById('ot-commandes-root');
     if (!el) return;
     S.cde = S.cde || { liste: null, chargement: false, filtre: 'aexporter', q: '', sel: new Set(), imp: null };
     const C = S.cde;
@@ -225,8 +232,8 @@ Object.assign(App, {
     const sous = imp ? (imp.etat === 'lecture' ? 'lecture des PDF…' : imp.items.length + ' bon' + (imp.items.length > 1 ? 's' : '') + ' lu' + (imp.items.length > 1 ? 's' : ''))
       : (C.liste ? nbAExporter + ' à exporter dans EBP' : 'chargement…');
     el.innerHTML = `<div class="sx-ecran pb-ecran">
-      ${this._otEntete({ retour: { texte: 'LOXAM', action: 'App.go(\'loxam-menu\')' }, titre: 'Production',
-        sousTitre: 'Commandes · ' + sous, large: true, bandeau: this._pbNav('cde') })}
+      ${this._otEntete({ retour: { texte: 'Fiches', action: 'App.go(\'ot-liste\')' }, titre: 'Commandes',
+        sousTitre: 'Reconditionnement · ' + sous, large: true })}
       <div class="pb-barre"><div class="pb-barre-in">${imp ? this._cdeHtmlBarreImport() : this._cdeHtmlBarreListe(nbAExporter)}</div></div>
       <main class="pb-contenu" id="pb-corps">${imp ? this._cdeHtmlImport() : this._cdeHtmlListe()}</main>
       <div class="pb-actions" id="cde-actions" ${!imp && C.sel.size ? '' : 'hidden'}>${!imp ? this._cdeHtmlActions() : ''}</div>

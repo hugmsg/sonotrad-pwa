@@ -497,8 +497,8 @@ body.socle { background: var(--sx-fond); }
    et la colonne Code y restent visibles (sticky dans le tableau lui-même). */
 body.pb-plein .app { max-width: none; }
 body.pb-plein .main-content { overflow: hidden; display: flex; flex-direction: column; }
-body.pb-plein #view-prod-bureau.active { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-#prod-bureau-root { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+body.pb-plein #view-prod-bureau.active, body.pb-plein #view-ot-commandes.active { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#prod-bureau-root, #ot-commandes-root { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .pb-ecran { flex: 1; min-height: 0; }
 .pb-ecran .sx-entete { position: static; flex-shrink: 0; }
 .pb-barre { flex-shrink: 0; background: var(--sx-fond); border-bottom: 1px solid var(--sx-bord); }

@@ -233,7 +233,6 @@ Object.assign(App, {
     S.pb.sel = S.pb.sel || new Set();
     if (S.pb.desc === undefined) S.pb.desc = (() => { try { return localStorage.getItem('snt_pb_travaux') !== '0'; } catch (e) { return true; } })();
     if (S.pb.vue === 'arr') return this._pbArrRendre();
-    if (S.pb.vue === 'cde') return this._cdeRendre();
     const P = S.pb;
     const pret = S.depsLoaded;
     const lignes = pret ? this._pbLignes() : [];
@@ -403,14 +402,13 @@ Object.assign(App, {
 
   _pbNav(actif) {
     const b = (cle, texte) => `<button type="button" class="pb-nav-btn" aria-pressed="${actif === cle}" onclick="App.prodVue('${cle}')">${texte}</button>`;
-    return `<nav class="pb-nav" aria-label="Vues">${b('prod', 'Production')}${b('arr', 'Arrivées (historique)')}${this._cdePeut && this._cdePeut() ? b('cde', 'Commandes') : ''}</nav>`;
+    return `<nav class="pb-nav" aria-label="Vues">${b('prod', 'Production')}${b('arr', 'Arrivées (historique)')}</nav>`;
   },
 
   prodVue(v) {
     S.pb.vue = v;
     this._pbRendre();
     if (v === 'arr') this._pbArrCharger();
-    else if (v === 'cde') this._cdeCharger();
     else this.prodBureauInit();
   },
 
