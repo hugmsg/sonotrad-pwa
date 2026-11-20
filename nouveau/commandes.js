@@ -5,7 +5,7 @@
       (action cde_ocr). Chaque commande est découpée en son propre PDF (pdf-lib) pour être rangée sur Drive.
    2. Contrôle : module retrouvé au Planning par son n° (Commentaires), agence, montant comparé à l'OT
       (fiche validée, sinon historique des OT), doublon, commande déjà au Planning. Rien n'est deviné : un champ
-      illisible bloque la ligne, « Corriger » permet de le saisir.
+      illisible bloque la ligne, « Vérifier / corriger » (PDF à côté des champs) permet de le saisir.
    3. Enregistrement (cde_enregistrer) : Supabase commandes_loxam + PDF sur Drive + n° dans le Planning (U)
       et Demandes (N) quand la case est vide.
    4. Export EBP : même fichier que le lecteur de commandes (format v6 : CSV Windows-1252 « ; », plus un .xlsx).
@@ -445,7 +445,7 @@ Object.assign(App, {
     if (it.ver && it.ver.deja) bloque('Déjà enregistrée' + (it.ver.deja.code ? ' (' + it.ver.deja.code + ')' : '') + ' le ' + new Date(it.ver.deja.le).toLocaleDateString('fr-FR'));
     const m = it.code ? this._cdeModuleParCode(it.code) : null;
     it.module = m;
-    if (!it.code) bloque('Module introuvable au Planning et dans les OT : choisir le code (Corriger)');
+    if (!it.code) bloque('Module introuvable au Planning et dans les OT : choisir le code (Vérifier / corriger)');
     else if (it.codeParOt) attention('Module absent du Planning — code trouvé par l’historique des OT');
     if (it.candidats && it.candidats.length > 1 && !it.codeChoisi) attention(it.candidats.length + ' passages de ce module au Planning : vérifier le code');
     // Agence : celle de la commande, sinon celle du Planning
@@ -507,8 +507,7 @@ Object.assign(App, {
           <td class="cd-num">${ot ? _cdeEuros(ot.total) + `<div class="sx-aide">${_otEsc(ot.numero || '')}</div>` : '—'}</td>
           <td class="cd-alertes">${it.alertes.length ? it.alertes.map(x => `<div class="${niv[x.niv]}">${_otEsc(x.texte)}</div>`).join('') : '<span class="cd-ok">✓ Conforme</span>'}
             ${it.erreurEnr ? `<div class="cd-al-bloque">Enregistrement : ${_otEsc(it.erreurEnr)}</div>` : ''}</td>
-          <td class="cd-fin"><button type="button" class="cd-lien" onclick="App.cdeVoirPdf(${it.id})">PDF</button>
-            <button type="button" class="cd-lien" ${imp.enCours ? 'disabled' : ''} onclick="App.cdeCorriger(${it.id})">Corriger…</button></td>
+          <td class="cd-fin"><button type="button" class="cd-lien" ${imp.enCours ? 'disabled' : ''} onclick="App.cdeCorriger(${it.id})">Vérifier / corriger…</button></td>
         </tr>`;
       }).join('')}</tbody></table></div>${this._cdeHtmlIgnorees()}`;
   },
@@ -544,7 +543,32 @@ Object.assign(App, {
     this._cdeRendre();
   },
 
-  // Fenêtre de correction : n° de commande, n° du module, code SONOTRAD, montant, agence.
+  // Aperçu du bon dans la fenêtre de correction : pages dessinées par pdf.js (déjà chargé pour la lecture),
+  // ce qui marche aussi sur téléphone, où un PDF dans un cadre ne s'affiche pas toujours.
+  async _cdeApercu(it, cadre) {
+    try {
+      await this._cdeLibs();
+      const doc = await window.pdfjsLib.getDocument({ data: _cdeOctets(it.b64), verbosity: 0 }).promise;
+      cadre.innerHTML = '';
+      const largeur = Math.max(320, cadre.clientWidth - 2);
+      for (let p = 1; p <= doc.numPages; p++) {
+        if (!cadre.isConnected) return;
+        const page = await doc.getPage(p);
+        const base = page.getViewport({ scale: 1 });
+        const ech = largeur / base.width * Math.min(2, window.devicePixelRatio || 1);
+        const vue = page.getViewport({ scale: ech });
+        const toile = document.createElement('canvas');
+        toile.width = Math.round(vue.width); toile.height = Math.round(vue.height);
+        toile.className = 'cd-apercu-page';
+        cadre.appendChild(toile);
+        await page.render({ canvasContext: toile.getContext('2d'), viewport: vue }).promise;
+      }
+    } catch (e) {
+      cadre.innerHTML = '<div class="sx-vide">Aperçu impossible — « Ouvrir le PDF » pour le voir dans un onglet.</div>';
+    }
+  },
+
+  // Fenêtre de vérification / correction : le PDF à gauche (au-dessus sur téléphone), les champs à droite.
   async cdeCorriger(id) {
     const it = S.cde.imp.items.find(x => x.id === id);
     if (!it) return;
@@ -556,7 +580,10 @@ Object.assign(App, {
     const voile = document.createElement('div');
     voile.className = 'sx-voile';
     voile.innerHTML = `<div class="sx-fenetre pb-fenetre cd-fenetre" role="dialog" aria-modal="true" aria-labelledby="cd-cor-titre">
-      <h3 id="cd-cor-titre">Corriger la commande ${_otEsc(d.numero || '')}</h3>
+      <div class="cd-fenetre-pdf"><div class="cd-apercu" aria-label="Aperçu du bon de commande"><div class="sx-chargement">Aperçu du PDF…</div></div>
+        <button type="button" class="cd-lien" data-pdf="1">Ouvrir le PDF dans un onglet</button></div>
+      <div class="cd-fenetre-champs">
+      <h3 id="cd-cor-titre">Vérifier la commande ${_otEsc(d.numero || '')}</h3>
       <p class="sx-aide">${_otEsc(it.fichier)} · page ${_otEsc(it.pages.join(', '))} · lu ${it.source === 'ocr' ? 'par OCR' : 'dans le texte du PDF'}</p>
       ${champ('numero', 'N° de commande', d.numero, lu.numero && lu.numero !== d.numero ? 'lu : ' + lu.numero : '')}
       ${champ('ref_module', 'N° du module (Commentaires)', d.ref_module, lu.ref_module && lu.ref_module !== d.ref_module ? 'lu : ' + lu.ref_module : '')}
@@ -571,11 +598,12 @@ Object.assign(App, {
       <div class="sx-fenetre-boutons">
         <button type="button" class="sx-btn sx-btn-discret" data-r="0">Annuler</button>
         <button type="button" class="sx-btn sx-btn-principal" data-r="1">Appliquer et recontrôler</button>
-      </div></div>`;
+      </div></div></div>`;
     const choix = await new Promise(resolve => {
       const fin = v => { voile.remove(); resolve(v); };
       voile.addEventListener('click', e => {
         if (e.target === voile) return fin(null);
+        if (e.target.closest('[data-pdf]')) return this.cdeVoirPdf(id);
         const r = e.target.closest('[data-r]');
         if (!r) return;
         if (r.dataset.r === '0') return fin(null);
@@ -587,7 +615,8 @@ Object.assign(App, {
         if (e.target.dataset.c === 'choix') voile.querySelector('[data-c="code"]').value = e.target.value;
       });
       document.body.appendChild(voile);
-      voile.querySelector('[data-c="numero"]').focus();
+      voile.querySelector('[data-c="numero"]').focus({ preventScroll: true });
+      this._cdeApercu(it, voile.querySelector('.cd-apercu'));
     });
     if (!choix) return;
     d.numero = choix.numero.replace(/\s+/g, '');

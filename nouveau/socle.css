@@ -815,6 +815,18 @@ span.pb-ot-sans { cursor: default; }
 .cd-ignorees { margin-top: 10px; padding: 10px 14px; font-size: 13px; }
 .cd-ignorees summary { cursor: pointer; color: var(--sx-gris); }
 .cd-ignorees ul { margin: 8px 0 0 18px; padding: 0; }
-.cd-fenetre { max-width: 480px; }
+/* Vérifier / corriger : PDF au-dessus (téléphone) ou à gauche (grand écran), champs à côté */
+.cd-fenetre { max-width: 1180px; }
+.cd-fenetre-champs { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.cd-fenetre-pdf { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cd-apercu { max-height: 45dvh; overflow: auto; background: #E9EDF1; border: 1px solid var(--sx-ligne, #D5DCE3); border-radius: 10px; padding: 6px; }
+.cd-apercu-page { display: block; width: 100%; height: auto; background: #FFFFFF; box-shadow: 0 1px 3px rgba(20, 36, 51, .2); }
+.cd-apercu-page + .cd-apercu-page { margin-top: 8px; }
+@media (min-width: 900px) {
+  .cd-fenetre { flex-direction: row; align-items: stretch; gap: 18px; overflow: hidden; height: calc(100dvh - 32px); }
+  .cd-fenetre-pdf { flex: 1 1 62%; }
+  .cd-apercu { flex: 1; max-height: none; }
+  .cd-fenetre-champs { flex: 0 0 340px; overflow-y: auto; padding-right: 4px; }
+}
 .cd-champ { display: flex; flex-direction: column; gap: 3px; margin: 8px 0; font-size: 13px; font-weight: 600; color: var(--sx-texte); }
 .cd-champ .sx-aide { font-weight: 400; }
