@@ -972,6 +972,15 @@ Object.assign(App, {
     const refEl = document.getElementById('lvcancel-modal-ref');
     if (refEl) refEl.textContent = `${row.type||'LV'} N° ${row.numero} — ${row.destinataire||''}`;
     document.getElementById('lvcancel-modal-motif').value = '';
+    // Commande de la LV (ordre d'expédition) : gardée au Planning par défaut, annulée aussi si la case est cochée
+    const cde = String(row.commande || '').trim();
+    const cdeEl = document.getElementById('lvcancel-modal-cde');
+    if (cdeEl) {
+      cdeEl.style.display = cde ? 'flex' : 'none';
+      document.getElementById('lvcancel-modal-cde-num').textContent = cde;
+      document.getElementById('lvcancel-modal-cde-check').checked = false;
+    }
+    S._lvCancelCommande = cde;
     document.getElementById('lvcancel-modal').style.display = 'flex';
   },
 
@@ -990,14 +999,16 @@ Object.assign(App, {
     try {
       const r = await _fetchWithTimeout(S.apiUrl, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'lv_cancel', numero, motif })
+        body: JSON.stringify({ action: 'lv_cancel', numero, motif, commande: S._lvCancelCommande || '',
+          commande_annulee: !!(S._lvCancelCommande && document.getElementById('lvcancel-modal-cde-check')?.checked) })
       }, 40000);
       const d = await r.json();
       if (d.status !== 'ok') throw new Error(d.error || 'erreur inconnue');
       S.bcbEnlevements.forEach(e => { if (e.cmrNumero === numero) { e.cmrNumero = ''; e.cmrUrl = ''; } });
       if (S.bcbCurEnlevement?.cmrNumero === numero) { S.bcbCurEnlevement.cmrNumero = ''; S.bcbCurEnlevement.cmrUrl = ''; }
       const lib = (d.liberes || []).length ? ` — module(s) libéré(s) : ${d.liberes.join(', ')}` : '';
-      this.toast(`LV N° ${numero} annulée${lib}${d.portail_ok === false ? ' (portail non synchronisé)' : ''}`, 5000);
+      this.toast(`LV N° ${numero} annulée${lib}${d.commande_annulee ? ` — commande ${d.commande_annulee} annulée` : ''}${d.portail_ok === false ? ' (portail non synchronisé)' : ''}`, 5000);
+      if (S.exp) S.exp.liste = null;   // Expéditions : à relire
       this.closeLvCancelModal();
       this.lvuLoadHistory();
     } catch (e) {

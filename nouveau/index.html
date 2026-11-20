@@ -1910,6 +1910,7 @@
 <script src="container.js"></script>
 <script src="production.js"></script>
 <script src="commandes.js"></script>
+<script src="expeditions.js"></script>
 <script src="stock_socle.js"></script>
 
 <!-- ── MODAL : SAISIE RAPIDE ──────────────────────────────────────────── -->
@@ -2062,6 +2063,10 @@
     <label style="font-size:12px;color:#64748B;font-weight:600;display:block;margin-bottom:6px;">Motif (obligatoire)</label>
     <input id="lvcancel-modal-motif" placeholder="ex : changement de module de dernière minute"
       style="width:100%;box-sizing:border-box;border:1.5px solid #CBD5E1;border-radius:10px;padding:10px;font-size:14px;outline:none;margin-bottom:8px;">
+    <label id="lvcancel-modal-cde" style="display:none;align-items:flex-start;gap:8px;font-size:12px;color:#1E293B;margin:0 0 10px;cursor:pointer;">
+      <input type="checkbox" id="lvcancel-modal-cde-check" style="margin-top:2px;">
+      <span>La commande n° <b id="lvcancel-modal-cde-num"></b> est aussi annulée ou modifiée<br><span style="color:#64748B;">Sinon elle reste au Planning pour la nouvelle LV.</span></span>
+    </label>
     <p style="font-size:11px;color:#64748B;margin:0 0 16px;">La LV qui la remplace s'y relie à sa création (champ « Remplace la LV annulée »), ou après coup avec 🔗 dans l'historique.</p>
     <button onclick="App.saveLvCancelModal()" id="lvcancel-modal-btn"
       style="width:100%;padding:13px;border:none;background:#B91C1C;color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">

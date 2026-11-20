@@ -830,3 +830,7 @@ span.pb-ot-sans { cursor: default; }
 }
 .cd-champ { display: flex; flex-direction: column; gap: 3px; margin: 8px 0; font-size: 13px; font-weight: 600; color: var(--sx-texte); }
 .cd-champ .sx-aide { font-weight: 400; }
+
+/* Ordres d'expédition (expeditions.js) : zones de saisie à plusieurs lignes (modules, adresse) */
+.cd-zone { min-height: 0; height: auto; padding: 8px 10px; font-family: inherit; font-size: 14px; line-height: 1.4; resize: vertical; }
+textarea.cd-zone[data-c="modules"] { font-family: ui-monospace, Consolas, monospace; }
