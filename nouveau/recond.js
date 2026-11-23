@@ -22,7 +22,6 @@ S.ot = {
   // Saisie rapide au clavier (PC) : choix mémorisé par appareil ; rgIdx = lignes affichées par tableau
   rapide: (() => { try { return localStorage.getItem('snt_ot_rapide') !== '0'; } catch { return true; } })(),
   rgIdx: { p: [], s: [], t: [] }, rgSugg: [], rgSel: -1,
-  mail: null,       // brouillon du mail LOXAM préparé : { blob (URL locale du .eml), url (copie Drive), nom, ids, modules }
   essai: null,      // mode donné par le serveur (ot_liste) : true / false ; null = pas encore connu (traité comme essai)
 };
 
@@ -1602,72 +1601,72 @@ Object.assign(App, {
 
   /* ─ Mail groupé à LOXAM (liste des fiches) ─ */
 
+  // Depuis le 2026-11-23 : comme le mail de dispo — aperçu dans la PWA puis envoi direct par masterfile, qui passe
+  // les fiches « envoyée » (plus de brouillon .eml à ouvrir dans Outlook ni de « Marquer envoyées »).
   _otHtmlMail() {
     const prets = S.ot.liste.filter(f => f.statut === 'validee' && f.documents);
     const sans = S.ot.liste.filter(f => f.statut === 'validee' && !f.documents);
-    const m = S.ot.mail;
-    if (!prets.length && !sans.length && !m) return '';
-    let h = `<section class="sx-carte sx-carte-pad" style="display:flex;flex-direction:column;gap:8px;">
-      <span class="sx-h2" style="font-size:16px;">Mail à LOXAM</span>`;
-    if (m) {
-      h += `<span class="sx-aide">Brouillon téléchargé pour ${m.ids.length} OT : ${_otEsc(m.modules.join(' ; '))}.
-          Ouvrez le fichier .eml (il s'ouvre dans Outlook), relisez, envoyez, puis marquez les fiches envoyées.
-          Une copie est gardée <a href="${_otEsc(m.url)}" target="_blank" rel="noopener">dans le Drive</a>.</span>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button type="button" class="sx-btn sx-btn-principal" onclick="App._otTelechargerMail()">Télécharger à nouveau (.eml)</button>
-          <button type="button" class="sx-btn sx-btn-second" onclick="App.otMarquerEnvoyees()">Mail envoyé : marquer ${m.ids.length} fiche${m.ids.length > 1 ? 's' : ''} envoyée${m.ids.length > 1 ? 's' : ''}</button>
-          <button type="button" class="sx-btn sx-btn-discret" onclick="S.ot.mail=null;App._otRendreListe()">Fermer</button>
-        </div>`;
-    } else {
-      h += `<span class="sx-aide">${prets.length} OT validé${prets.length > 1 ? 's' : ''} pas encore envoyé${prets.length > 1 ? 's' : ''} : un seul mail
-          (Nathalie Jadeau, copie Aurélien Lavello et Nicolas Siblas, copie cachée Hugo) avec les Excel LOXAM en pièces jointes.</span>
-        ${sans.length ? `<span class="sx-aide" style="color:var(--sx-attention);">${sans.length} fiche${sans.length > 1 ? 's' : ''} validée${sans.length > 1 ? 's' : ''} sans documents : ouvrez-la et « Créer les documents ».</span>` : ''}
-        ${prets.length ? `<button type="button" class="sx-btn sx-btn-principal" id="ot-mail-btn" onclick="App.otPreparerMail()">Préparer le mail (${prets.length} OT)</button>` : ''}`;
-    }
-    return h + '</section>';
+    if (!prets.length && !sans.length) return '';
+    return `<section class="sx-carte sx-carte-pad" style="display:flex;flex-direction:column;gap:8px;">
+      <span class="sx-h2" style="font-size:16px;">Mail à LOXAM</span>
+      <span class="sx-aide">${prets.length} OT validé${prets.length > 1 ? 's' : ''} pas encore envoyé${prets.length > 1 ? 's' : ''} : un seul mail
+          avec les Excel LOXAM en pièces jointes ; l’aperçu s’affiche avant l’envoi.</span>
+      ${sans.length ? `<span class="sx-aide" style="color:var(--sx-attention);">${sans.length} fiche${sans.length > 1 ? 's' : ''} validée${sans.length > 1 ? 's' : ''} sans documents : ouvrez-la et « Créer les documents ».</span>` : ''}
+      ${prets.length ? `<button type="button" class="sx-btn sx-btn-principal" id="ot-mail-btn" onclick="App.otPreparerMail()">Préparer le mail (${prets.length} OT)</button>` : ''}
+    </section>`;
   },
 
   async otPreparerMail() {
     const b = document.getElementById('ot-mail-btn');
-    if (b) { b.disabled = true; b.textContent = 'Préparation…'; }
+    const remettre = () => { if (b) { b.disabled = false; b.textContent = b.dataset.texte || b.textContent; } };
+    if (b) { b.dataset.texte = b.textContent; b.disabled = true; b.textContent = 'Préparation de l’aperçu…'; }
+    let ap;
+    try { ap = await this._otPost({ action: 'ot_mail', etape: 'apercu' }, 60000); }
+    catch (e) { this.toast('Aperçu impossible : ' + e.message, 6000); remettre(); return; }
+    remettre();
+    const n = (ap.ids || []).length;
+    const envoyer = await new Promise(resolve => {
+      const voile = document.createElement('div');
+      voile.className = 'sx-voile';
+      voile.innerHTML = `<div class="sx-fenetre pb-fenetre pb-md-apercu" role="dialog" aria-modal="true" aria-labelledby="ot-mail-titre">
+        <h3 id="ot-mail-titre">Envoyer les OT à LOXAM ?</h3>
+        <div class="pb-md-entetes">
+          <label for="ot-mail-a">À</label><input id="ot-mail-a" class="sx-champ" type="text" value="${_otEsc((ap.a || []).join(', '))}">
+          <label for="ot-mail-cc">Cc</label><input id="ot-mail-cc" class="sx-champ" type="text" value="${_otEsc((ap.cc || []).join(', '))}">
+          <label for="ot-mail-cci">Cci</label><input id="ot-mail-cci" class="sx-champ" type="text" value="${_otEsc((ap.cci || []).join(', '))}">
+          <span>Objet</span><b>${_otEsc(ap.sujet || '')}</b>
+          <span title="Pièces jointes">PJ</span><div>${(ap.pieces || []).map(x => _otEsc(x)).join('<br>')}</div>
+        </div>
+        <span class="sx-aide">Adresses séparées par des virgules ; modifiées pour ce mail seulement.<br>
+          Envoyé au nom de <b>${_otEsc(ap.expediteur || '')}</b>${ap.reponse ? ' · réponses à ' + _otEsc(ap.reponse) : ' · réponses au compte SONOTRAD'} (signature : Réglages › Ma signature).</span>
+        <iframe class="pb-md-cadre" sandbox="" title="Aperçu du mail"></iframe>
+        ${(ap.sans_documents || []).length ? `<p class="sx-aide" style="color:var(--sx-attention);">Pas dans ce mail (sans documents) : ${_otEsc(ap.sans_documents.join(', '))}</p>` : ''}
+        <p class="sx-aide">Le mail part tout de suite depuis le compte Google de SONOTRAD, puis ${n > 1 ? 'les ' + n + ' fiches passent' : 'la fiche passe'} « Envoyée ».</p>
+        <div class="sx-fenetre-boutons">
+          <button type="button" class="sx-btn sx-btn-discret" data-r="0">Annuler</button>
+          <button type="button" class="sx-btn sx-btn-principal" data-r="1">Envoyer le mail</button>
+        </div></div>`;
+      voile.querySelector('.pb-md-cadre').srcdoc = ap.html || '';
+      const fin = r => { voile.remove(); resolve(r); };
+      voile.addEventListener('click', e => {
+        if (e.target === voile) return fin(false);
+        const bt = e.target.closest('[data-r]');
+        if (!bt) return;
+        if (bt.dataset.r !== '1') return fin(false);
+        fin({ a: voile.querySelector('#ot-mail-a').value, cc: voile.querySelector('#ot-mail-cc').value, cci: voile.querySelector('#ot-mail-cci').value });
+      });
+      document.body.appendChild(voile);
+    });
+    if (!envoyer) return;
+    this.toast('⏳ Envoi du mail…', 60000);
     try {
-      const d = await this._otPost({ action: 'ot_mail' });
-      // Téléchargement direct du .eml (le lien Drive affiche un avertissement « analyse antivirus impossible »).
-      const octets = Uint8Array.from(atob(d.eml || ''), c => c.charCodeAt(0));
-      if (S.ot.mail?.blob) URL.revokeObjectURL(S.ot.mail.blob);
-      const blob = URL.createObjectURL(new Blob([octets], { type: 'message/rfc822' }));
-      S.ot.mail = { blob, url: d.url, nom: d.nom, ids: d.ids || [], modules: d.modules || [] };
-      this._otRendreListe();
-      this._otTelechargerMail();
-      return;
+      const d = await this._otPost({ action: 'ot_mail', etape: 'envoyer', ids: ap.ids, a: envoyer.a, cc: envoyer.cc, cci: envoyer.cci }, 120000);
+      this.toast(`✓ Mail envoyé — ${d.faites} fiche${d.faites > 1 ? 's' : ''} envoyée${d.faites > 1 ? 's' : ''}`
+        + (d.erreurs?.length ? ' — statut non changé : ' + d.erreurs.join(' ; ') : ''), d.erreurs?.length ? 8000 : 4000);
     } catch (e) {
-      this.toast('Mail impossible : ' + e.message, 5000);
+      this.toast('Envoi impossible : ' + e.message, 8000);
     }
-    this._otRendreListe();
-  },
-
-  _otTelechargerMail() {
-    const m = S.ot.mail;
-    if (!m?.blob) return;
-    const a = document.createElement('a');
-    a.href = m.blob; a.download = m.nom || 'OT sur modules.eml';
-    document.body.appendChild(a); a.click(); a.remove();
-  },
-
-  async otMarquerEnvoyees() {
-    const m = S.ot.mail;
-    if (!m) return;
-    const ok = await this._otConfirmer({ titre: 'Mail envoyé à LOXAM ?', ok: 'Marquer envoyées',
-      texte: `Les ${m.ids.length} fiche(s) du brouillon passent « Envoyée ». À faire seulement une fois le mail réellement parti.` });
-    if (!ok) return;
-    try {
-      const d = await this._otPost({ action: 'ot_envoyees', ids: m.ids });
-      this.toast(`✓ ${d.faites} fiche${d.faites > 1 ? 's' : ''} envoyée${d.faites > 1 ? 's' : ''}` + (d.erreurs?.length ? ' — ' + d.erreurs.join(' ; ') : ''), 4000);
-      S.ot.mail = null;
-      this.otChargerListe(true);
-    } catch (e) {
-      this.toast('Changement impossible : ' + e.message, 5000);
-    }
+    this.otChargerListe(true);
   },
 
   // Sections du contrôle = celles de la saisie (1. Pièces… 2. Sanitaire 3. Temps passé), lignes dans l'ordre de saisie.
