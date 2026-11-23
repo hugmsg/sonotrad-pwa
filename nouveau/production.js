@@ -1219,8 +1219,32 @@ Object.assign(App, {
       ${this._pbPeutEtape() ? `<button type="button" class="pb-action pb-action-etape" onclick="App.prodSelEtape()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg> Changer d'étape…</button>` : ''}
       <button type="button" class="pb-action" onclick="App.prodSelPasDOt()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg> Pas d'OT…</button>
       ${this._otAdmin() ? `<button type="button" class="pb-action pb-action-mail" onclick="App.prodSelMailDispo()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg> Mail de dispo…</button>` : ''}
+      ${this._otAdmin() ? `<button type="button" class="pb-action pb-action-mail" onclick="App.prodSelEnvoyerOt()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg> Envoyer les OT…</button>` : ''}
       <button type="button" class="pb-action pb-action-discret" onclick="App.prodSelVider()">Tout désélectionner</button>
     </div>`;
+  },
+
+  // Envoi des OT à LOXAM pour les modules cochés (2026-11-23) : mêmes aperçu et envoi direct que Reconditionnement
+  // (otPreparerMail, action ot_mail), limités aux fiches « validée » qui ont leurs documents.
+  async prodSelEnvoyerOt() {
+    if (!this._otAdmin()) return;
+    const lignes = this._pbLignes().filter(l => S.pb.sel.has(l.code));
+    const ok = lignes.filter(l => l.fiche && l.fiche.statut === 'validee' && l.fiche.documents);
+    const raisons = {};
+    lignes.filter(l => !ok.includes(l)).forEach(l => {
+      const f = l.fiche;
+      const r = !f ? 'sans fiche' : f.statut === 'envoyee' ? 'déjà envoyé' : f.statut === 'validee' ? 'sans documents' : 'fiche pas encore validée';
+      raisons[r] = (raisons[r] || 0) + 1;
+    });
+    const note = Object.keys(raisons).length
+      ? 'Modules cochés laissés de côté : ' + Object.entries(raisons).map(([r, n]) => n + ' ' + r).join(', ') + '.' : '';
+    if (!ok.length) { this.toast('Aucun OT à envoyer dans la sélection — ' + (note || 'il faut une fiche validée avec ses documents'), 6000); return; }
+    const envoye = await this.otPreparerMail(ok.map(l => l.fiche.id), note);
+    if (!envoye) return;
+    ok.forEach(l => S.pb.sel.delete(l.code));
+    S.pb.fiches = null;                              // statuts « envoyée » à relire
+    await this._pbChargerFiches();
+    this._pbRendre();
   },
 
   async prodSelPasDOt() {

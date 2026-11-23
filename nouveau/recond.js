@@ -1616,12 +1616,14 @@ Object.assign(App, {
     </section>`;
   },
 
-  async otPreparerMail() {
-    const b = document.getElementById('ot-mail-btn');
+  // ids : fiches choisies (barre de sélection de Production), sinon toutes les validées ; note : ligne d'info de l'aperçu
+  async otPreparerMail(ids = null, note = '') {
+    const b = ids ? null : document.getElementById('ot-mail-btn');
     const remettre = () => { if (b) { b.disabled = false; b.textContent = b.dataset.texte || b.textContent; } };
     if (b) { b.dataset.texte = b.textContent; b.disabled = true; b.textContent = 'Préparation de l’aperçu…'; }
     let ap;
-    try { ap = await this._otPost({ action: 'ot_mail', etape: 'apercu' }, 60000); }
+    if (ids) this.toast('⏳ Préparation de l’aperçu…', 30000);
+    try { ap = await this._otPost(ids ? { action: 'ot_mail', etape: 'apercu', ids } : { action: 'ot_mail', etape: 'apercu' }, 60000); }
     catch (e) { this.toast('Aperçu impossible : ' + e.message, 6000); remettre(); return; }
     remettre();
     const n = (ap.ids || []).length;
@@ -1640,6 +1642,7 @@ Object.assign(App, {
         <span class="sx-aide">Adresses séparées par des virgules ; modifiées pour ce mail seulement.<br>
           Envoyé au nom de <b>${_otEsc(ap.expediteur || '')}</b>${ap.reponse ? ' · réponses à ' + _otEsc(ap.reponse) : ' · réponses au compte SONOTRAD'} (signature : Réglages › Ma signature).</span>
         <iframe class="pb-md-cadre" sandbox="" title="Aperçu du mail"></iframe>
+        ${note ? `<p class="sx-aide" style="color:var(--sx-attention);">${_otEsc(note)}</p>` : ''}
         ${(ap.sans_documents || []).length ? `<p class="sx-aide" style="color:var(--sx-attention);">Pas dans ce mail (sans documents) : ${_otEsc(ap.sans_documents.join(', '))}</p>` : ''}
         <p class="sx-aide">Le mail part tout de suite depuis le compte Google de SONOTRAD, puis ${n > 1 ? 'les ' + n + ' fiches passent' : 'la fiche passe'} « Envoyée ».</p>
         <div class="sx-fenetre-boutons">
@@ -1657,7 +1660,8 @@ Object.assign(App, {
       });
       document.body.appendChild(voile);
     });
-    if (!envoyer) return;
+    if (ids) this.toast('', 1);
+    if (!envoyer) return false;
     this.toast('⏳ Envoi du mail…', 60000);
     try {
       const d = await this._otPost({ action: 'ot_mail', etape: 'envoyer', ids: ap.ids, a: envoyer.a, cc: envoyer.cc, cci: envoyer.cci }, 120000);
@@ -1666,7 +1670,9 @@ Object.assign(App, {
     } catch (e) {
       this.toast('Envoi impossible : ' + e.message, 8000);
     }
-    this.otChargerListe(true);
+    S.ot.listeChargee = false;                     // liste des fiches à relire (Reconditionnement)
+    if (!ids) this.otChargerListe(true);
+    return true;
   },
 
   // Sections du contrôle = celles de la saisie (1. Pièces… 2. Sanitaire 3. Temps passé), lignes dans l'ordre de saisie.
