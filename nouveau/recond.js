@@ -283,9 +283,8 @@ Object.assign(App, {
       const st = m ? this._otStatutModule(m) : null;
       return `<button type="button" class="sx-item" onclick="App.otOuvrirFiche(${Number(f.id)})">
         <div class="sx-item-texte">
-          <span class="sx-item-titre">${_otEsc([f.type_module, f.numero_module].filter(Boolean).join(' ') || f.code_planning)}
-            · <span class="sx-ref">${_otEsc(f.code_planning)}</span></span>
-          <span class="sx-item-detail">${st ? `<span class="sx-tag-planning sx-tp-${_otEsc(st.classe)}" title="Étape au Planning">${_otEsc(st.texte)}</span> ` : ''}${_otEsc([m && m.chantier ? m.chantier : f.agence, f.numero_ot, f.saisi_par, _otDate(f.modifie_le)].filter(Boolean).join(' · '))}</span>
+          <span class="sx-item-titre"><span class="sx-ref">${_otEsc(f.code_planning)}</span>${_otEsc([f.numero_module, m && m.chantier ? m.chantier : f.agence].filter(Boolean).map(x => ' · ' + x).join(''))}</span>
+          <span class="sx-item-detail">${st ? `<span class="sx-tag-planning sx-tp-${_otEsc(st.classe)}" title="Étape au Planning">${_otEsc(st.texte)}</span> ` : ''}${_otEsc([f.type_module, f.numero_ot, f.saisi_par, _otDate(f.modifie_le)].filter(Boolean).join(' · '))}</span>
         </div>
         <span class="sx-item-stock">${f.stock_le ? `<span class="sx-tag-planning sx-tag-stock" title="Fournitures sorties du stock le ${_otEsc(new Date(f.stock_le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}">stock sorti</span>` : ''}</span>
         ${admin && f.total_ht !== undefined ? `<span class="sx-montant">${_otEuros(f.total_ht)}</span>` : ''}
@@ -298,8 +297,8 @@ Object.assign(App, {
       const vente = this._otVente(m) === 'proposee';
       return `<div class="sx-item sx-item-a-ouvrir">
         <button type="button" class="sx-item-texte sx-item-btn" onclick="${ouvrir}">
-          <span class="sx-item-titre">${_otEsc([m.module, m.codeModule].filter(Boolean).join(' ') || '—')} · <span class="sx-ref">${_otEsc(m.code)}</span></span>
-          <span class="sx-item-detail">${(st => `<span class="sx-tag-planning sx-tp-${_otEsc(st.classe)}" title="Étape au Planning">${_otEsc(st.texte)}</span> `)(this._otStatutModule(m))}${_otEsc(m.chantier || m.ag || '')}${m.parti ? ' · sans OT' : ''}${vente ? ' · <b>vente probable ?</b>' : ''}</span>
+          <span class="sx-item-titre"><span class="sx-ref">${_otEsc(m.code)}</span>${_otEsc([m.codeModule, m.chantier || m.ag].filter(Boolean).map(x => ' · ' + x).join(''))}</span>
+          <span class="sx-item-detail">${(st => `<span class="sx-tag-planning sx-tp-${_otEsc(st.classe)}" title="Étape au Planning">${_otEsc(st.texte)}</span> `)(this._otStatutModule(m))}${_otEsc(m.module || '')}${m.parti ? ' · sans OT' : ''}${vente ? ' · <b>vente probable ?</b>' : ''}</span>
         </button>
         <button type="button" class="sx-btn sx-btn-discret sx-item-ouvrir" onclick="App.otPasDOt('${_otEsc(m.code)}')">Pas d'OT</button>
         <button type="button" class="sx-btn sx-btn-second sx-item-ouvrir" onclick="${ouvrir}">Ouvrir la fiche</button>
@@ -324,11 +323,11 @@ Object.assign(App, {
     // Modules marqués « pas d'OT » (les ventes reconnues d'office n'y figurent pas) : repliés, annulables
     const sansOt = S.ot.sansOt ? [...S.ot.sansOt.values()] : [];
     if (sansOt.length) {
-      const nomDe = code => { const m = (S.ot.modules || []).find(x => String(x.code || '').toUpperCase() === code); return m ? [m.module, m.codeModule].filter(Boolean).join(' ') : ''; };
+      const modDe = code => (S.ot.modules || []).find(x => String(x.code || '').toUpperCase() === code) || {};
       corps += `<details class="sx-section sx-so-groupe"><summary class="sx-statut sx-statut-groupe"><span class="sx-statut-nom">Sans OT</span><span class="sx-statut-texte">${sansOt.length} module${sansOt.length > 1 ? 's' : ''}</span></summary>
         <div class="sx-carte">${sansOt.map(x => `<div class="sx-item">
-          <div class="sx-item-texte"><span class="sx-item-titre">${_otEsc(nomDe(x.code_planning) || '—')} · <span class="sx-ref">${_otEsc(x.code_planning)}</span></span>
-            <span class="sx-item-detail">${_otEsc(this._otTexteSansOt(x) + ' · ' + [x.par, _otDate(x.le)].filter(Boolean).join(' · '))}</span></div>
+          <div class="sx-item-texte"><span class="sx-item-titre"><span class="sx-ref">${_otEsc(x.code_planning)}</span>${(m => _otEsc([m.codeModule, m.chantier || m.ag].filter(Boolean).map(v => ' · ' + v).join('')))(modDe(x.code_planning))}</span>
+            <span class="sx-item-detail">${_otEsc([modDe(x.code_planning).module, this._otTexteSansOt(x), x.par, _otDate(x.le)].filter(Boolean).join(' · '))}</span></div>
           <button type="button" class="sx-btn sx-btn-discret sx-item-ouvrir" onclick="App.otRemettreAFaire('${_otEsc(x.code_planning)}')">Remettre à faire</button>
         </div>`).join('')}</div></details>`;
     }
