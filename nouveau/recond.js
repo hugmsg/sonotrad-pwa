@@ -140,6 +140,18 @@ Object.assign(App, {
     </div></header>`;
   },
 
+  // Vues de Reconditionnement en haut à droite de l'en-tête, comme les vues de Production (2026-11-23).
+  // Réservé aux admins (seuls à voir Commandes / Tarifs / Tableau de bord) : sinon rien.
+  _otNav(actif) {
+    if (!this._otAdmin()) return '';
+    const b = (cle, texte, action) => `<button type="button" class="pb-nav-btn" aria-pressed="${actif === cle}" onclick="${actif === cle ? '' : action}">${texte}</button>`;
+    return `<nav class="pb-nav" aria-label="Vues">${b('fiches', 'Fiches', "App.go('ot-liste')")}${b('cde', 'Commandes', 'App.otOuvrirCommandes()')}${b('tarifs', 'Tarifs', 'App.otOuvrirTarifs()')}${b('bord', 'Tableau de bord', 'App.otOuvrirBord()')}</nav>`;
+  },
+  // Retour commun aux vues de Reconditionnement : là d'où l'on est venu (menu LOXAM ou accueil)
+  _otRetourListe() {
+    return S.ot.retour === 'loxam' ? { texte: 'LOXAM', action: 'App.go(\'loxam-menu\')' } : { texte: 'Accueil', action: 'App.goHome()' };
+  },
+
   _otConfirmer({ titre, texte, ok = 'Continuer', annuler = 'Annuler' }) {
     return new Promise(resolve => {
       const voile = document.createElement('div');
@@ -321,19 +333,19 @@ Object.assign(App, {
         </div>`).join('')}</div></details>`;
     }
 
-    el.innerHTML = `<div class="sx-ecran">
-      ${this._otEntete({ retour: S.ot.retour === 'loxam' ? { texte: 'LOXAM', action: 'App.go(\'loxam-menu\')' } : { texte: 'Accueil', action: 'App.goHome()' }, titre: 'Fiches d\'opérations', sousTitre: 'Reconditionnement' + (this._otEssai() ? ' · essai' : '') })}
+    // Vues (Fiches · Commandes · Tarifs · Tableau de bord) dans l'en-tête et « Actualiser » à côté de
+    // « Nouvelle fiche » : tout en haut, plus en bas d'une longue liste (demande de Hugo, 2026-11-23).
+    const nav = this._otNav('fiches');
+    el.innerHTML = `<div class="sx-ecran${nav ? ' ot-nav-ecran' : ''}">
+      ${this._otEntete({ retour: this._otRetourListe(), titre: 'Fiches d\'opérations', sousTitre: 'Reconditionnement' + (this._otEssai() ? ' · essai' : ''), large: !!nav, bandeau: nav })}
       <main class="sx-contenu">
         ${this._otEssai() ? '<div class="sx-bandeau sx-bandeau-info">Essai : la fiche ne sort rien du stock (la 🔧 reste la vraie sortie) et la matrice Excel garde les vrais numéros d\'OT.</div>' : ''}
-        <button type="button" class="sx-btn sx-btn-principal sx-btn-plein" onclick="App.otNouvelle()">+ Nouvelle fiche</button>
+        <div class="sx-ligne-champs">
+          <button type="button" class="sx-btn sx-btn-principal" style="flex:3 1 200px;" onclick="App.otNouvelle()">+ Nouvelle fiche</button>
+          <button type="button" class="sx-btn sx-btn-discret" style="flex:1 1 110px;" onclick="App.otChargerListe(true)">Actualiser</button>
+        </div>
         ${admin && S.ot.listeChargee ? this._otHtmlMail() : ''}
         ${corps}
-        <div class="sx-ligne-champs">
-          <button type="button" class="sx-btn sx-btn-discret" style="flex:1 1 140px;" onclick="App.otChargerListe(true)">Actualiser</button>
-          ${admin ? '<button type="button" class="sx-btn sx-btn-second" style="flex:1 1 140px;" onclick="App.otOuvrirBord()">Tableau de bord</button>' : ''}
-          ${admin ? '<button type="button" class="sx-btn sx-btn-second" style="flex:1 1 140px;" onclick="App.otOuvrirCommandes()">Commandes</button>' : ''}
-          ${admin ? '<button type="button" class="sx-btn sx-btn-second" style="flex:1 1 140px;" onclick="App.otOuvrirTarifs()">Tarifs</button>' : ''}
-        </div>
       </main></div>`;
   },
 
@@ -1891,9 +1903,9 @@ Object.assign(App, {
     const el = document.getElementById('ot-tarifs-root');
     if (!el) return;
     const t = S.ot.tarifs;
-    const entete = this._otEntete({ retour: { texte: 'Fiches', action: "App.go('ot-liste')" }, titre: 'Tarifs',
-      sousTitre: 'Main-d\'œuvre facturée à LOXAM · tout part du taux horaire', large: true });
-    if (!t) { el.innerHTML = `<div class="sx-ecran">${entete}<main class="sx-contenu sx-large"><div class="sx-chargement">Chargement des tarifs…</div></main></div>`; return; }
+    const entete = this._otEntete({ retour: this._otRetourListe(), titre: 'Tarifs',
+      sousTitre: 'Main-d\'œuvre facturée à LOXAM · tout part du taux horaire', large: true, bandeau: this._otNav('tarifs') });
+    if (!t) { el.innerHTML = `<div class="sx-ecran ot-nav-ecran">${entete}<main class="sx-contenu sx-large"><div class="sx-chargement">Chargement des tarifs…</div></main></div>`; return; }
     const p = t.parametres;
     const refs = t.references || [];
     const n = m => refs.filter(r => (r.mode || null) === m).length;
@@ -1910,7 +1922,7 @@ Object.assign(App, {
       { cle: 'aucun',  nom: `Sans MO · ${n(null)}` },
       { cle: 'tout',   nom: `Toutes · ${refs.length}` },
     ];
-    el.innerHTML = `<div class="sx-ecran">${entete}
+    el.innerHTML = `<div class="sx-ecran ot-nav-ecran">${entete}
       <main class="sx-contenu sx-large">
 
         <section class="sx-section" aria-labelledby="ot-t-meca">
@@ -2420,10 +2432,10 @@ Object.assign(App, {
     const el = document.getElementById('ot-bord-root');
     if (!el) return;
     const B = S.ot.bord, d = B.donnees;
-    const entete = this._otEntete({ retour: { texte: 'Fiches', action: "App.go('ot-liste')" },
-      titre: 'Tableau de bord', sousTitre: 'OT réalisés par mois', large: true });
+    const entete = this._otEntete({ retour: this._otRetourListe(),
+      titre: 'Tableau de bord', sousTitre: 'OT réalisés par mois', large: true, bandeau: this._otNav('bord') });
     if (!d) {
-      el.innerHTML = `<div class="sx-ecran">${entete}<main class="sx-contenu sx-large"><div class="sx-chargement">Chargement…</div></main></div>`;
+      el.innerHTML = `<div class="sx-ecran ot-nav-ecran">${entete}<main class="sx-contenu sx-large"><div class="sx-chargement">Chargement…</div></main></div>`;
       return;
     }
     const idx = this._otBordIndex();
@@ -2463,7 +2475,7 @@ Object.assign(App, {
         style="min-width:64px;" onclick="S.ot.bord.annee=${y};App._otRendreBord()">${y}</button>`).join('');
     const imp = d.import;
     const reporter = B.reporter?.lignes || [];
-    el.innerHTML = `<div class="sx-ecran">${entete}
+    el.innerHTML = `<div class="sx-ecran ot-nav-ecran">${entete}
       <main class="sx-contenu sx-large">
         <div style="display:flex;gap:6px;flex-wrap:wrap;">${choix}</div>
         ${table}

@@ -232,8 +232,8 @@ Object.assign(App, {
     const sous = imp ? (imp.etat === 'lecture' ? 'lecture des PDF…' : imp.items.length + ' bon' + (imp.items.length > 1 ? 's' : '') + ' lu' + (imp.items.length > 1 ? 's' : ''))
       : (C.liste ? nbAExporter + ' à exporter dans EBP' : 'chargement…');
     el.innerHTML = `<div class="sx-ecran pb-ecran">
-      ${this._otEntete({ retour: { texte: 'Fiches', action: 'App.go(\'ot-liste\')' }, titre: 'Commandes',
-        sousTitre: 'Reconditionnement · ' + sous, large: true })}
+      ${this._otEntete({ retour: this._otRetourListe(), titre: 'Commandes',
+        sousTitre: 'Reconditionnement · ' + sous, large: true, bandeau: this._otNav('cde') })}
       <div class="pb-barre"><div class="pb-barre-in">${imp ? this._cdeHtmlBarreImport() : this._cdeHtmlBarreListe(nbAExporter)}</div></div>
       <main class="pb-contenu" id="pb-corps">${imp ? this._cdeHtmlImport() : this._cdeHtmlListe()}</main>
       <div class="pb-actions" id="cde-actions" ${!imp && C.sel.size ? '' : 'hidden'}>${!imp ? this._cdeHtmlActions() : ''}</div>

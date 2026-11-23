@@ -581,18 +581,19 @@ body.pb-plein #view-prod-bureau.active, body.pb-plein #view-ot-commandes.active 
   .pb-contenu { padding: 8px 8px 8px; }
 }
 /* Production : bascule Production / Arrivées (dans l'en-tête) et onglet Arrivées */
-.pb-nav { display: flex; gap: 4px; margin-top: 4px; }
+.pb-nav { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 /* Grand écran (2026-11-19) : en-tête de Production sur UNE rangée (retour · titre · vues à droite) et filtres
    Étapes + « À traiter » côte à côte quand la largeur le permet — le tableau commence plus haut. */
 .pb-filtres { display: flex; flex-direction: column; gap: 6px; }
 @media (min-width: 900px) {
-  .pb-ecran .sx-entete { padding: 6px 16px 8px; }
-  .pb-ecran .sx-entete-in { flex-direction: row; align-items: center; gap: 18px; }
-  .pb-ecran .sx-retour { align-self: center; min-height: 32px; }
-  .pb-ecran .sx-titre-ligne { flex: 0 1 auto; min-width: 0; }
-  .pb-ecran .sx-logo { width: 30px; height: 30px; }
-  .pb-ecran .sx-titre { font-size: 19px; }
-  .pb-ecran .pb-nav { margin: 0 0 0 auto; }
+  /* .ot-nav-ecran : vues de Reconditionnement (Fiches, Tarifs, Tableau de bord), même en-tête (2026-11-23) */
+  .pb-ecran .sx-entete, .ot-nav-ecran .sx-entete { padding: 6px 16px 8px; }
+  .pb-ecran .sx-entete-in, .ot-nav-ecran .sx-entete-in { flex-direction: row; align-items: center; gap: 18px; }
+  .pb-ecran .sx-retour, .ot-nav-ecran .sx-retour { align-self: center; min-height: 32px; }
+  .pb-ecran .sx-titre-ligne, .ot-nav-ecran .sx-titre-ligne { flex: 0 1 auto; min-width: 0; }
+  .pb-ecran .sx-logo, .ot-nav-ecran .sx-logo { width: 30px; height: 30px; }
+  .pb-ecran .sx-titre, .ot-nav-ecran .sx-titre { font-size: 19px; }
+  .pb-ecran .pb-nav, .ot-nav-ecran .pb-nav { margin: 0 0 0 auto; flex-wrap: nowrap; }
   .pb-barre-in { padding: 8px 16px; gap: 6px; }
   .pb-filtres { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px 22px; }
 }
