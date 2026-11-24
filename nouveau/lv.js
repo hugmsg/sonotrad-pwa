@@ -167,17 +167,11 @@ Object.assign(App, {
       if (fn && !fn.value.includes('GRUTAGE'))
         fn.value = '!!! GRUTAGE A LA LIVRAISON !!!' + (fn.value ? '\n' + fn.value : '');
     }
-    // Pré-remplir la date de livraison prévue si connue en Production LOXAM
-    const livPrevue = [...S.lvu.selectedItems]
+    // Consigne de livraison du Planning (note de K) ou, à défaut, sa date (« le … ») — 2026-11-24
+    const itemLiv = [...S.lvu.selectedItems]
       .map(key => S.lvu.loxamItems.find(i => (i.code || i.codeModule || i.module || '') === key))
-      .find(i => i && i.livraisonPrevue)?.livraisonPrevue;
-    const cbLiv = document.getElementById('lvu-f-livraison-check');
-    const dateLiv = document.getElementById('lvu-f-livraison-date');
-    if (livPrevue && cbLiv && dateLiv) {
-      cbLiv.checked = true;
-      dateLiv.value = _toIsoDateInput(livPrevue);
-      dateLiv.style.display = 'block';
-    }
+      .find(i => i && (i.livraisonConsigne || i.livraisonPrevue));
+    if (itemLiv) this._lvuLivPoser(_livNorm(itemLiv.livraisonConsigne, itemLiv.livraisonPrevue));
     document.getElementById('lvu-loxam-picker').style.display = 'none';
     this.toast(`${rows.length} module(s) importé(s)${anyGrutage ? ' — ⚠️ Grutage' : ''}`);
   },
@@ -363,7 +357,8 @@ Object.assign(App, {
       commande:     v('lvu-f-commande'),
       remplace:     v('lvu-f-remplace'),
       note:         v('lvu-f-note'),
-      livraisonPrevue: (document.getElementById('lvu-f-livraison-check')?.checked && v('lvu-f-livraison-date')) ? v('lvu-f-livraison-date') : '',
+      livraison:    this._livLire('lvu-liv'),     // consigne { type, min, max } ; null = rien ; false = incomplète
+      livraisonPrevue: _livReference(this._livLire('lvu-liv') || null),
       convoi:       document.getElementById('lvu-convoi-oui')?.checked || false,
       source:       S.lvu.source || 'manual',
     };
@@ -384,6 +379,7 @@ Object.assign(App, {
       }
       if (S.lvu.modif) S.lvu.enregistree = null;   // LV refaite : on peut renvoyer la modification
       const data = this._lvuCollectFormData();
+      if (data.livraison === false) { this.toast('Consigne de livraison incomplète : choisissez la date (ou « Pas de consigne »)', 5000); return; }
       const doc  = _generateLvu(data);
       S.lvu.lastDoc  = doc;
       S.lvu.lastData = data;
@@ -435,6 +431,7 @@ Object.assign(App, {
         doc_annexe: d.doc_annexe || '', commande: d.commande || '',
         note: d.note || '', convoi: d.convoi ? 'Oui' : 'Non',
         livraison_prevue: d.livraisonPrevue || '',
+        livraison: d.livraison || null,   // consigne → Archive S/X, Planning K (+ note), Supabase voyage_livraison
         poids: (d.marchandises || []).reduce((s, r) => s + (parseFloat(r.poids) || 0), 0).toFixed(3),
         ml: parseFloat(d.total?.ml) || '',
         source: d.source || 'manual',
@@ -747,15 +744,12 @@ Object.assign(App, {
     ['lvu-f-conducteur','lvu-f-immat-moteur','lvu-f-immat-semi','lvu-f-donneur',
      'lvu-f-exp-nom','lvu-f-exp-adresse','lvu-f-exp-ville','lvu-f-exp-pays',
      'lvu-f-dest-nom','lvu-f-dest-adresse','lvu-f-dest-ville','lvu-f-dest-pays',
-     'lvu-f-doc','lvu-f-commande','lvu-f-remplace','lvu-f-note','lvu-f-livraison-date'].forEach(id => {
+     'lvu-f-doc','lvu-f-commande','lvu-f-remplace','lvu-f-note'].forEach(id => {
       const el = document.getElementById(id); if (el) el.value = '';
     });
     const nonEl = document.getElementById('lvu-convoi-non');
     if (nonEl) nonEl.checked = true;
-    const livCb = document.getElementById('lvu-f-livraison-check');
-    if (livCb) livCb.checked = false;
-    const livDate = document.getElementById('lvu-f-livraison-date');
-    if (livDate) livDate.style.display = 'none';
+    this._lvuLivPoser(null);
     this._lvuRenderMarchandises();
     const v = document.getElementById('view-lvu-form'); if (v) v.scrollTop = 0;
   },
@@ -1044,8 +1038,8 @@ Object.assign(App, {
     if (ta) { ta.value = commentaire; }
     const cb = document.getElementById('lvnote-modal-grutage');
     if (cb) cb.checked = grutage;
-    const dateEl = document.getElementById('lvnote-modal-livraison');
-    if (dateEl) dateEl.value = _toIsoDateInput(row.livraison_prevue);
+    const zone = document.getElementById('lvnote-liv-zone');
+    if (zone) zone.innerHTML = this._livWidget('lvnote-liv', this._lvuConsigneLigne(row));
     const modal = document.getElementById('lvnote-modal');
     if (modal) modal.style.display = 'flex';
   },
@@ -1061,13 +1055,15 @@ Object.assign(App, {
     if (!numero) return;
     const commentaire = document.getElementById('lvnote-modal-textarea')?.value.trim() || '';
     const grutage     = document.getElementById('lvnote-modal-grutage')?.checked === true;
-    const livraisonPrevue = document.getElementById('lvnote-modal-livraison')?.value || '';
+    const consigne = this._livLire('lvnote-liv');
+    if (consigne === false) { this.toast('Consigne de livraison incomplète'); return; }
+    const livraisonPrevue = _livReference(consigne);
     const btn = document.getElementById('lvnote-modal-btn');
     if (btn) { btn.disabled = true; btn.textContent = '…'; }
     try {
       const r = await _fetchWithTimeout(S.apiUrl, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'lv_update_note', numero, commentaire, grutage, livraison_prevue: livraisonPrevue })
+        body: JSON.stringify({ action: 'lv_update_note', numero, commentaire, grutage, livraison_prevue: livraisonPrevue, livraison: consigne })
       }, 20000);
       const d = await r.json();
       if (d.status !== 'ok') throw new Error(d.error || 'erreur inconnue (tableur)');
@@ -1217,6 +1213,21 @@ Object.assign(App, {
     const v = document.getElementById('view-lvu-form'); if (v) v.scrollTop = 0;
   },
 
+  // Consigne de livraison du formulaire (sélecteur de livraison.js, préfixe lvu-liv)
+  _lvuLivPoser(c) {
+    const zone = document.getElementById('lvu-liv-zone');
+    if (zone) zone.innerHTML = this._livWidget('lvu-liv', c);
+  },
+  _lvuLivInit() {
+    const zone = document.getElementById('lvu-liv-zone');
+    if (zone && !zone.firstElementChild) this._lvuLivPoser(null);
+  },
+  // Consigne d'une ligne d'historique (Supabase) ; une simple date = « le … »
+  _lvuConsigneLigne(row) {
+    return _livNorm(row && row.livraison_type ? { type: row.livraison_type, min: row.livraison_min, max: row.livraison_max } : null,
+      row ? _livIso(row.livraison_prevue) : '');
+  },
+
   _lvuPoser(id, val) { const el = document.getElementById(id); if (el && val !== undefined && val !== null) el.value = String(val); },
 
   _lvuRemplirDepuis(D) {
@@ -1237,8 +1248,7 @@ Object.assign(App, {
     p('lvu-f-exp-nom', e.nom); p('lvu-f-exp-adresse', e.adresse); p('lvu-f-exp-ville', e.ville); p('lvu-f-exp-pays', e.pays);
     p('lvu-f-dest-nom', de.nom); p('lvu-f-dest-adresse', de.adresse); p('lvu-f-dest-ville', de.ville); p('lvu-f-dest-pays', de.pays);
     p('lvu-f-doc', D.doc_annexe); p('lvu-f-commande', D.commande); p('lvu-f-note', D.note);
-    const cb = document.getElementById('lvu-f-livraison-check'), dt = document.getElementById('lvu-f-livraison-date');
-    if (cb && dt) { cb.checked = !!D.livraisonPrevue; dt.value = D.livraisonPrevue || ''; dt.style.display = D.livraisonPrevue ? 'block' : 'none'; }
+    this._lvuLivPoser(_livNorm(D.livraison, D.livraisonPrevue));
     const oui = document.getElementById('lvu-convoi-oui'), non = document.getElementById('lvu-convoi-non');
     if (oui && non) { oui.checked = !!D.convoi; non.checked = !D.convoi; }
     S.lvu.marchandises = (D.marchandises || []).map(m => ({ qte: m.qte, description: m.description, poids: m.poids, note: m.note || '', ml: m.ml || '' }));
@@ -1263,8 +1273,7 @@ Object.assign(App, {
     if (nomExp && !nomExp.value) p('lvu-f-exp-nom', lv.expediteur);
     p('lvu-f-conducteur', lv.conducteur); p('lvu-f-immat-moteur', lv.immat_moteur); p('lvu-f-immat-semi', lv.immat_semi);
     p('lvu-f-doc', lv.doc_annexe); p('lvu-f-commande', lv.commande); p('lvu-f-note', lv.note);
-    const cb = document.getElementById('lvu-f-livraison-check'), dt = document.getElementById('lvu-f-livraison-date');
-    if (cb && dt && lv.livraison_prevue) { cb.checked = true; dt.value = _toIsoDateInput(lv.livraison_prevue); dt.style.display = 'block'; }
+    if (lv.livraison || lv.livraison_prevue) this._lvuLivPoser(_livNorm(lv.livraison, lv.livraison_prevue));
     const oui = document.getElementById('lvu-convoi-oui'), non = document.getElementById('lvu-convoi-non');
     if (oui && non) { const c = /^oui$/i.test(lv.convoi); oui.checked = c; non.checked = !c; }
   },
@@ -1608,11 +1617,14 @@ function _lvuRecto(doc, d, isCMR, band) {
   const cmdStr = d.commande ? 'Cde : ' + d.commande : '';
   if (docStr) tx(docStr, x0 + LV.CELL_PAD_X, y + 7.0);
   if (cmdStr) tx(cmdStr, x0 + LV.CELL_PAD_X, y + (docStr ? 9.5 : 7.0));
-  if (d.livraisonPrevue) tx('Livraison prévue le ' + _fmtDateFR(d.livraisonPrevue), x0 + CW / 2 + LV.CELL_PAD_X, y + 7.0);
+  const livStr = d.livraison && d.livraison.type && d.livraison.type !== 'aucune'
+    ? 'Livraison : ' + _livTexte(d.livraison).replace(/[\u2013\u2014]/g, '-').replace(/^./, x => x.toLowerCase())
+    : (d.livraisonPrevue ? 'Livraison prévue le ' + _fmtDateFR(d.livraisonPrevue) : '');
+  if (livStr) tx(livStr, x0 + CW / 2 + LV.CELL_PAD_X, y + 7.0);
   if (d.note) {
     const noteStr = String(d.note);
     const isGrutage = noteStr.startsWith('!!!');
-    const noteY = d.livraisonPrevue ? y + 9.5 : y + 7.0;
+    const noteY = livStr ? y + 9.5 : y + 7.0;
     if (isGrutage) {
       doc.setFillColor(255, 230, 0);
       doc.rect(x0 + CW / 2 + 0.5, noteY - 2.5, CW / 2 - 1, 5.5, 'F');

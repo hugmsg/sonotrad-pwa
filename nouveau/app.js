@@ -210,7 +210,7 @@ const App = {
     if (view === 'bcb-consignes') this.bcbInitLangGrid();
     if (view === 'bcb-depart')      this.bcbDepartInit();
     if (view === 'bcb-enlevements') this.bcbEnlevementsLoad();
-    if (view === 'lvu-form')      { this._lvuRenderMarchandises(); this._lvuChargerAnnulees(); }
+    if (view === 'lvu-form')      { this._lvuRenderMarchandises(); this._lvuChargerAnnulees(); this._lvuLivInit(); }
     if (view === 'lvu-history')   { this.lvuLoadHistory(); this._lvuSubscribeHistoryRealtime(); }
     if (view === 'annuaire')      this.annuaireLoad();
     if (view === 'ot-liste')      this.otChargerListe();

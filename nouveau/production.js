@@ -133,8 +133,9 @@ Object.assign(App, {
       const code = String(d.code || '').toUpperCase();
       const etape = this._pbEtape(d, parti);
       const f = fiches[code] || null;
-      const liv = d.livraisonPrevue ? new Date(d.livraisonPrevue) : null;
-      const retard = !parti && liv && !isNaN(liv) && liv < auj;
+      // Consigne de livraison (note de K) ou simple date ; en retard = date au plus tard dépassée (2026-11-24)
+      const liv = _livNorm(d.livraisonConsigne, d.livraisonPrevue);
+      const retard = !parti && _livEtat(liv) === 'retard';
       const fin = d.fin ? new Date(d.fin) : null;
       // OT attendue : module terminé (ou parti depuis la mise en service des fiches) sans fiche validée — avec ou
       // sans agence (2026-11-19 : la validation avertit si le module est encore LIBRE).
@@ -146,7 +147,7 @@ Object.assign(App, {
       // Filtres (2026-11-19) : « OT à faire » = SANS fiche seulement ; « fiches à valider » à part ; en cours : aucun.
       const otManquant = !sansOt && !otExcel && otAttendue && (!f || f.statut === 'brouillon' || f.statut === 'a_valider');
       const otAFaire = otManquant && !f;
-      return { d, idx, parti, code, etape, fiche: f, retard, fin, otAFaire, otManquant, sansOt, otExcel, deCote,
+      return { d, idx, parti, code, etape, fiche: f, retard, liv, fin, otAFaire, otManquant, sansOt, otExcel, deCote,
         otAValider: !!f && f.statut === 'a_valider',
         otAEnvoyer: !!f && f.statut === 'validee' };
     };
@@ -363,7 +364,7 @@ Object.assign(App, {
     const barre = [1, 2, 3, 4, 5, 6].map(i => `<span class="pb-seg${i <= rang ? ' pb-seg-' + rang : ''}"></span>`).join('');
     const nomEtape = ((PB_ETAPES.find(e => e.cle === l.etape) || {}).nom || '') + (l.deCote ? ' · de côté' : '');
     const duree = l.parti ? 'fini le ' + _fmtDateShort(d.fin) : _duration(d.debut, null);
-    const liv = d.livraisonPrevue ? _fmtDateShort(d.livraisonPrevue) : '—';
+    const liv = this._pbHtmlLivraison(l);
     let ot = '<span class="pb-gris">—</span>';
     if (Array.isArray(S.pb.fiches)) {
       if (f) {
@@ -385,7 +386,7 @@ Object.assign(App, {
       ${S.pb.desc ? `<button type="button" class="pb-texte pb-desc" onclick="App.prodOuvrirModule(${l.parti}, ${l.idx})" title="${_otEsc(d.description || '')}">${d.description ? _otEsc(d.description) : '<span class="pb-gris">—</span>'}</button>` : ''}
       ${this._pbHtmlEtape(l, admin, barre, nomEtape)}
       <span class="pb-gris2 pb-duree">${_otEsc(duree)}</span>
-      <span class="${l.retard ? 'pb-rouge' : (d.livraisonPrevue ? '' : 'pb-gris')}">${_otEsc(liv)}</span>
+      <span>${liv}</span>
       <span class="pb-ot-cell">${ot}</span>
       <span>${this._pbHtmlStock(f)}</span>
       <span class="pb-droite pb-montant">${admin && f && f.total_ht !== undefined && f.total_ht !== null && f.statut !== 'brouillon' ? _otEuros(f.total_ht) : ''}</span>
@@ -917,6 +918,19 @@ Object.assign(App, {
 
   _pbEtroit() { return window.matchMedia('(max-width: 759px)').matches; },
 
+  // Livraison d'un module : consigne courte (26/11, av. 27/11, dès 02/12, S49), couleur selon l'urgence ;
+  // clic (admins + LOXAM, module sur parc sans LV) = régler la consigne ; avec une LV = la LV.
+  _pbHtmlLivraison(l, carte = false) {
+    const c = l.liv, d = l.d;
+    const etat = l.parti ? '' : _livEtat(c);
+    const texte = c ? _livTexte(c, true) : '—';
+    const cls = `pb-liv${etat ? ' pb-liv-' + etat : ''}${c ? '' : ' pb-gris'}`;
+    const titre = c ? _livTexte(c) : 'Pas de date de livraison';
+    const contenu = (carte ? 'livr. ' : '') + _otEsc(texte);
+    if (!l.parti && !d.lv && this._pbPeutEtape()) return `<button type="button" class="${cls} pb-liv-btn" onclick="App.prodLivraison(${l.parti}, ${l.idx})" title="${_otEsc(titre)} — cliquer pour régler la consigne">${contenu}</button>`;
+    return `<span class="${cls}" title="${_otEsc(titre)}${d.lv ? ' (LV ' + _otEsc(d.lv) + ')' : ''}">${contenu}</span>`;
+  },
+
   /* Largeur des colonnes réglable (2026-11-24) : poignée au bord droit de chaque en-tête, glisser pour
      élargir / rétrécir, double-clic = largeurs d'origine. Mémorisé sur l'appareil (localStorage snt_pb_cols),
      par tableau : planning, planning avec « Travaux », arrivées. Les colonnes jamais touchées gardent leur
@@ -1023,7 +1037,7 @@ Object.assign(App, {
         <span class="pb-carte-etape">${_otEsc(nomEtape)}</span>
         <span class="pb-gris2">${_otEsc(duree || '')}</span>
         ${this._pbHtmlPlace(l, true)}
-        ${!l.parti ? `<span class="${l.retard ? 'pb-rouge' : 'pb-gris'}">livr. ${_otEsc(d.livraisonPrevue ? _fmtDateShort(d.livraisonPrevue) : '—')}</span>` : ''}
+        ${!l.parti ? this._pbHtmlLivraison(l, true) : ''}
         ${ot}
         ${f && f.stock_le ? this._pbHtmlStock(f, true) : ''}
         ${pdf && pdf.url ? `<a class="pb-doc" href="${_otEsc(pdf.url)}" target="_blank" rel="noopener">PDF</a>` : ''}

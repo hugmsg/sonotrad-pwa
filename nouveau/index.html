@@ -1751,10 +1751,8 @@
           <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Note de livraison</label>
           <textarea id="lvu-f-note" rows="3"
             style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;resize:vertical;font-family:inherit;margin-bottom:10px;"></textarea>
-          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin-bottom:8px;">
-            <input type="checkbox" id="lvu-f-livraison-check" onchange="App.lvuToggleLivraisonPrevue()"> Livraison prévue
-          </label>
-          <input id="lvu-f-livraison-date" type="date" style="display:none;width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:10px;">
+          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:6px;">Consigne de livraison</label>
+          <div id="lvu-liv-zone" style="margin-bottom:12px;"></div>
           <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:8px;">Convoi exceptionnel</label>
           <div style="display:flex;gap:10px;">
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
@@ -1906,6 +1904,7 @@
 <script src="loxam.js"></script>
 <script src="bcb.js"></script>
 <script src="lv.js"></script>
+<script src="livraison.js"></script>
 <script src="annuaire.js"></script>
 <script src="recond.js"></script>
 <script src="container.js"></script>
@@ -2041,9 +2040,8 @@
       <input type="checkbox" id="lvnote-modal-grutage" style="width:18px;height:18px;">
       Grutage à la livraison
     </label>
-    <label style="font-size:12px;color:#64748B;font-weight:600;display:block;margin-bottom:6px;">Livraison prévue</label>
-    <input id="lvnote-modal-livraison" type="date"
-      style="width:100%;box-sizing:border-box;border:1.5px solid #CBD5E1;border-radius:10px;padding:10px;font-size:14px;outline:none;margin-bottom:16px;">
+    <label style="font-size:12px;color:#64748B;font-weight:600;display:block;margin-bottom:6px;">Consigne de livraison</label>
+    <div id="lvnote-liv-zone" style="margin-bottom:16px;"></div>
     <button onclick="App.saveLvNoteModal()" id="lvnote-modal-btn"
       style="width:100%;padding:13px;border:none;background:var(--brand);color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
       ✓ Enregistrer

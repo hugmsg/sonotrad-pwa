@@ -65,7 +65,11 @@ Object.assign(App, {
      Une ligne par LV, chiffres « à partir » en tête (LV, modules, destinations, poids, ml), LV de BCB écartées
      (elles se voient dans l'activité LV / CMR). Clic sur le n° = PDF. */
   _lvpEtat() {
-    S.lvp = S.lvp || { liste: null, chargement: false, erreur: '', filtre: 'apartir', q: '' };
+    if (!S.lvp) {
+      let vue = 'liste';
+      try { vue = localStorage.getItem('snt_lvp_vue') === 'frise' ? 'frise' : 'liste'; } catch (e) { /* liste */ }
+      S.lvp = { liste: null, chargement: false, erreur: '', filtre: 'apartir', q: '', vue, decalage: 0 };
+    }
     return S.lvp;
   },
 
@@ -118,6 +122,102 @@ Object.assign(App, {
   },
 
   lvpFiltre(f) { this._lvpEtat().filtre = f; this._lvpRendre(); },
+  lvpVue(v) {
+    const L = this._lvpEtat();
+    L.vue = v;
+    try { localStorage.setItem('snt_lvp_vue', v); } catch (e) { /* choix pour cette fois */ }
+    this._lvpRendre();
+  },
+  lvpFriseDecaler(n) { const L = this._lvpEtat(); L.decalage = n === 0 ? 0 : (L.decalage || 0) + n; this._lvpRendreCorps(); },
+
+  /* ─ Frise des livraisons (2026-11-24, maquette validée par Hugo) : 4 semaines du lundi au vendredi, une ligne
+     par LV, sa fenêtre de livraison en bande. Colonne de gauche en 3 colonnes alignées : n°, destination, consigne. */
+  _lvpHtmlFrise(lignes) {
+    const L = this._lvpEtat();
+    const NB_SEM = 4, NB = NB_SEM * 5;
+    const auj = new Date(); auj.setHours(0, 0, 0, 0);
+    const lundi = new Date(auj); lundi.setDate(auj.getDate() - ((auj.getDay() || 7) - 1) + 7 * (L.decalage || 0));
+    const jours = [];
+    for (let s = 0; s < NB_SEM; s++) for (let j = 0; j < 5; j++) { const d = new Date(lundi); d.setDate(lundi.getDate() + s * 7 + j); jours.push(d); }
+    const fin = jours[NB - 1];
+    // Indice (0..NB-1) d'une date ouvrée ; week-end → vendredi d'avant (borne de fin) ou lundi d'après (borne de début)
+    const indice = (iso, versLaFin) => {
+      const d = _livDate(iso); if (!d) return null;
+      const x = new Date(d), dow = x.getDay();
+      if (dow === 6) x.setDate(x.getDate() + (versLaFin ? -1 : 2));
+      if (dow === 0) x.setDate(x.getDate() + (versLaFin ? -2 : 1));
+      const sem = Math.floor((x - lundi) / (7 * 86400000));
+      return sem * 5 + ((x.getDay() || 7) - 1);
+    };
+    const col = i => Math.max(0, Math.min(NB - 1, i)) + 2;
+    const iAuj = indice(_livIso(auj), false);
+    const fmt = d => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const NOMS = ['lu', 'ma', 'me', 'je', 've'];
+    const semaines = Array.from({ length: NB_SEM }, (_, s) => { const sd = _livSemaineDe(_livIso(jours[s * 5])); return `<div class="lvf-sem">Semaine ${sd ? sd.no : ''} <span>${fmt(jours[s * 5])} – ${fmt(jours[s * 5 + 4])}</span></div>`; }).join('');
+    const tetes = jours.map((d, i) => `<div class="lvf-jour${i % 5 === 0 ? ' lvf-lundi' : ''}${i === iAuj ? ' lvf-auj' : ''}">${NOMS[i % 5]} ${d.getDate()}</div>`).join('');
+    const fond = Array.from({ length: NB_SEM }, (_, s) => `<div class="lvf-fond-sem${s % 2 ? ' lvf-fond-alt' : ''}" style="grid-column: ${2 + s * 5} / span 5"></div>`).join('')
+      + (iAuj !== null && iAuj >= 0 && iAuj < NB ? `<div class="lvf-fond-auj" style="grid-column: ${iAuj + 2} / span 1"></div>` : '');
+
+    const bandes = l => {
+      const c = l.liv;
+      if (l.statut !== 'apartir' || !c || c.type === 'aucune') return '';
+      const etat = _livEtat(c);
+      const iMin = c.min ? indice(c.min, false) : null, iMax = c.max ? indice(c.max, true) : null;
+      if (etat === 'retard') {
+        const i = iMax;
+        const avant = i < 0;
+        return `<div class="lvf-b lvf-b-retard" style="grid-column: ${col(i)} / span 1" title="Limite dépassée : ${_otEsc(_livTexte(c))}">${avant ? '◂ ' + _otEsc(_livJJMM(c.max)) : 'limite'}</div>`;
+      }
+      if (c.type === 'le') {
+        if (iMin < 0 || iMin >= NB) return '';
+        return `<div class="lvf-b lvf-b-le${etat === 'proche' ? ' lvf-b-proche' : ''}" style="grid-column: ${col(iMin)} / span 1"></div>`;
+      }
+      if (c.type === 'semaine') {
+        if (iMax < 0 || iMin >= NB) return '';
+        const a = Math.max(0, iMin), b = Math.min(NB - 1, iMax), s = _livSemaineDe(c.min);
+        return `<div class="lvf-b lvf-b-semaine" style="grid-column: ${col(a)} / ${col(b) + 1}">S${s ? s.no : ''}</div>`;
+      }
+      if (c.type === 'avant') {
+        if (iMax < 0) return '';
+        const a = Math.max(0, iAuj || 0), b = Math.min(NB - 1, iMax);
+        return `<div class="lvf-b lvf-b-avant" style="grid-column: ${col(a)} / ${col(b) + 1}"></div>`
+          + (iMax < NB ? `<div class="lvf-limite" style="grid-column: ${col(iMax)} / span 1" title="Limite : ${_otEsc(_livJour(c.max))}"></div>` : '');
+      }
+      if (c.type === 'apartir') {
+        let h = '';
+        const a0 = Math.max(0, iAuj || 0);
+        if (iMin > a0) h += `<div class="lvf-b lvf-b-pasencore" style="grid-column: ${col(a0)} / ${col(Math.min(NB - 1, iMin - 1)) + 1}">pas encore</div>`;
+        if (iMin < NB) h += `<div class="lvf-b lvf-b-apartir" style="grid-column: ${col(Math.max(0, iMin))} / ${NB + 2}">possible dès le ${_otEsc(_livJJMM(c.min))} →</div>`;
+        return h;
+      }
+      return '';
+    };
+
+    const ligne = l => {
+      const r = l.row, etat = l.statut === 'apartir' ? _livEtat(l.liv) : '';
+      const nbMods = l.mods.length;
+      const consigne = l.liv ? _livTexte(l.liv) : 'Pas de consigne';
+      return `<div class="lvf-ligne${l.statut !== 'apartir' ? ' lvf-ligne-off' : ''}">
+        <div class="lvf-gauche">
+          <span class="lvf-num">${r.pdfUrl ? `<a href="${_otEsc(r.pdfUrl)}" target="_blank" rel="noopener" title="Ouvrir le PDF">${_otEsc(r.numero)}</a>` : _otEsc(r.numero)}</span>
+          <span class="lvf-dest" title="${_otEsc([r.destinataire, l.mods.map(m => m.d.code).join(', ')].filter(Boolean).join(' — '))}">${_otEsc(r.destinataire || '—')}<small>${nbMods ? nbMods + ' module' + (nbMods > 1 ? 's' : '') : _otEsc(r.marchandises_desc || '')}</small></span>
+          <span class="lvf-consigne${etat ? ' pb-liv-' + etat : ''}${l.liv ? '' : ' pb-gris'}">${_otEsc(consigne)}${etat === 'retard' ? '<small>en retard</small>' : etat === 'pasencore' ? '<small>pas encore livrable</small>' : etat === 'proche' ? '<small>bientôt</small>' : ''}</span>
+        </div>
+        ${bandes(l)}
+      </div>`;
+    };
+
+    return `<div class="lvf-nav">
+        <button type="button" class="pb-bouton" onclick="App.lvpFriseDecaler(-1)" aria-label="Semaine précédente">‹</button>
+        <button type="button" class="pb-bouton" onclick="App.lvpFriseDecaler(0)">Cette semaine</button>
+        <button type="button" class="pb-bouton" onclick="App.lvpFriseDecaler(1)" aria-label="Semaine suivante">›</button>
+        <span class="lvf-legende"><i class="lvf-l-le"></i>le … <i class="lvf-l-sem"></i>semaine <i class="lvf-l-avant"></i>avant le … <i class="lvf-l-apartir"></i>à partir du … <i class="lvf-l-retard"></i>limite dépassée</span>
+      </div>
+      <div class="pb-tableau"><div class="lvf">
+        <div class="lvf-tete"><div class="lvf-tete-g"><span>LV</span><span>Destination</span><span>Consigne</span></div>${semaines}${tetes}</div>
+        <div class="lvf-corps"><div class="lvf-fond" aria-hidden="true"><div></div>${fond}</div>${lignes.map(ligne).join('')}</div>
+      </div></div>`;
+  },
   lvpRecherche(q) {
     this._lvpEtat().q = q;
     clearTimeout(this._lvpMinuteur);
@@ -148,7 +248,7 @@ Object.assign(App, {
     return (L.liste || []).filter(r => !this._lvpEstBcb(r)).map(row => {
       const mods = idx[this._lvpNum(row.numero)] || [];
       const statut = row.annulee ? 'annulee' : (row.parti || mods.some(m => m.parti)) ? 'partie' : 'apartir';
-      return { row, mods, statut, liv: this._lvpDate(row.livraison_prevue) };
+      return { row, mods, statut, liv: this._lvuConsigneLigne(row) };   // consigne de livraison (livraison.js)
     });
   },
 
@@ -172,8 +272,12 @@ Object.assign(App, {
           <button type="button" class="pb-bouton" onclick="App._lvpCharger(true)">${L.chargement ? 'Chargement…' : 'Actualiser'}</button>
         </div>
         ${bcb ? `<div class="pb-ligne"><span class="lvp-masquees">${bcb} LV de BCB non affichées (activité LV / CMR)</span></div>` : ''}
-        <div class="pb-ligne pb-defile" role="group" aria-label="Filtre">
-          ${f('apartir', 'À partir', n('apartir'))}${f('partie', 'Parties', n('partie'))}${f('annulee', 'Annulées', n('annulee'))}${f('toutes', 'Toutes')}
+        <div class="pb-ligne pb-defile">
+          <div class="pb-ligne" role="group" aria-label="Filtre">${f('apartir', 'À partir', n('apartir'))}${f('partie', 'Parties', n('partie'))}${f('annulee', 'Annulées', n('annulee'))}${f('toutes', 'Toutes')}</div>
+          <div class="lvp-vues" role="group" aria-label="Affichage">
+            <button type="button" class="pb-onglet" aria-pressed="${L.vue !== 'frise'}" onclick="App.lvpVue('liste')">Liste</button>
+            <button type="button" class="pb-onglet" aria-pressed="${L.vue === 'frise'}" onclick="App.lvpVue('frise')">Frise des livraisons</button>
+          </div>
         </div>
       </div></div>
       <main class="pb-contenu" id="lvp-corps"></main>
@@ -198,9 +302,11 @@ Object.assign(App, {
         ...l.mods.map(m => m.d.code), ...l.mods.map(m => m.d.codeModule), ...l.mods.map(m => m.d.chantier)]
         .some(v => String(v || '').toLowerCase().includes(q));
     });
-    // À partir : par date de livraison prévue (les plus proches d'abord, sans date à la fin) ; sinon les plus récentes d'abord
-    if (L.filtre === 'apartir') lignes = lignes.slice().sort((a, b) => (a.liv ? a.liv.getTime() : 9e15) - (b.liv ? b.liv.getTime() : 9e15) || Number(b.row.numero) - Number(a.row.numero));
+    // À partir (et frise) : par urgence de livraison — retard, au plus tard le plus proche, « à partir du », sans consigne ;
+    // sinon les plus récentes d'abord
+    if (L.filtre === 'apartir' || L.vue === 'frise') lignes = lignes.slice().sort((a, b) => _livCleTri(a.liv) - _livCleTri(b.liv) || Number(b.row.numero) - Number(a.row.numero));
     if (!lignes.length) { el.innerHTML = '<div class="sx-carte"><div class="sx-vide">Aucune LV ne correspond.</div></div>'; return; }
+    if (L.vue === 'frise') { el.innerHTML = this._lvpHtmlFrise(lignes); return; }
     const entete = `<div class="pb-grille-lv pb-tete"><span>LV</span><span>Créée</span><span>Destination</span><span>Modules</span>
       <span>Commande · BT</span><span>Poids · ml</span><span>Livraison</span><span>Statut</span><span>Actions</span></div>`;
     el.innerHTML = `<div class="pb-tableau"><div class="pb-interieur pb-interieur-lv">${entete}${lignes.map(l => this._lvpHtmlLigne(l)).join('')}</div></div>`;
@@ -212,7 +318,7 @@ Object.assign(App, {
     const { grutage, commentaire } = this._lvuParseNote(r.note);
     const court = d => { const x = this._lvpDate(d); return x ? x.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : ''; };
     const auj = new Date(); auj.setHours(0, 0, 0, 0);
-    const retard = l.statut === 'apartir' && l.liv && l.liv < auj;
+    const etatLiv = l.statut === 'apartir' ? _livEtat(l.liv) : '';
     const statut = {
       annulee: `<span class="pb-ot lvp-st-annulee" title="${_otEsc('Annulée le ' + (r.annulee_le || '?') + (r.annulee_par ? ' par ' + r.annulee_par : '') + ' : ' + (r.annulation_motif || '') + (r.remplacee_par ? ' — remplacée par n° ' + r.remplacee_par : ''))}">Annulée${r.remplacee_par ? ' → ' + _otEsc(r.remplacee_par) : ''}</span>`,
       partie: `<span class="pb-ot lvp-st-partie">Partie${r.parti_le ? ' ' + _otEsc(r.parti_le.slice(0, 5)) : ''}</span>`,
@@ -238,7 +344,7 @@ Object.assign(App, {
       <span class="lvp-mods" title="${_otEsc(titreMods)}">${mods}</span>
       <span class="pb-gris2" title="${_otEsc(cde)}">${_otEsc(cde)}</span>
       <span class="pb-gris2">${_otEsc(pm)}</span>
-      <span class="${retard ? 'lvp-retard' : 'pb-gris2'}"${retard ? ' title="Date de livraison dépassée"' : ''}>${_otEsc(court(r.livraison_prevue))}</span>
+      <span class="pb-liv${etatLiv ? ' pb-liv-' + etatLiv : ''}${l.liv ? '' : ' pb-gris'}" title="${_otEsc(l.liv ? _livTexte(l.liv) : 'Pas de consigne')}">${_otEsc(l.liv ? _livTexte(l.liv, true) : '—')}</span>
       <span>${statut}</span>
       <span class="lvp-actions">${actions}</span>
     </div>`;

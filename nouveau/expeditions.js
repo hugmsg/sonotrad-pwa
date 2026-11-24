@@ -628,6 +628,7 @@ Object.assign(App, {
     this.lvuApplyLoxam();
     const pose = (idc, val) => { const el = document.getElementById(idc); if (el && val) el.value = val; };
     pose('lvu-f-commande', x.numero);
+    if (x.a_partir_du && _livIso(x.a_partir_du)) this._lvuLivPoser({ type: 'apartir', min: _livIso(x.a_partir_du), max: '' });   // « A PARTIR DU » de l'ordre
     pose('lvu-f-doc', x.bt ? 'BT ' + x.bt : '');
     // Agence absente de l'annuaire : destinataire repris de l'adresse imprimée sur l'ordre
     const nomDest = document.getElementById('lvu-f-dest-nom');

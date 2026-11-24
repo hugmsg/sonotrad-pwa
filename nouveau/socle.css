@@ -886,3 +886,62 @@ button.pb-doc { border: 0; font-family: inherit; cursor: pointer; }
 .lvu-modif-bandeau button { flex-shrink: 0; border: 1px solid #D9B85C; background: #FFFFFF; color: #5C3D00; border-radius: 8px; padding: 6px 10px; font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; }
 .lvp-lien { color: inherit; text-decoration: none; }
 .lvp-lien:hover { text-decoration: underline; }
+
+/* Consigne de livraison (2026-11-24, livraison.js) : sélecteur, colonne Livraison, frise de l'onglet LV / CMR */
+.liv-widget { display: flex; flex-direction: column; gap: 10px; }
+.liv-choix-rang { display: flex; flex-wrap: wrap; gap: 6px; }
+.liv-choix { min-height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--sx-bord-champ); background: #FFFFFF; color: var(--sx-texte); font-family: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+.liv-choix[aria-pressed="true"] { background: var(--sx-bleu); border-color: var(--sx-bleu); color: #FFFFFF; font-weight: 800; }
+.liv-saisie { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.liv-champ { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: var(--sx-gris); }
+.liv-champ input { height: 40px; border: 1px solid var(--sx-bord-champ); border-radius: 8px; padding: 0 10px; font-family: inherit; font-size: 14px; color: var(--sx-texte); background: #FFFFFF; }
+.liv-apercu { flex: 1 1 200px; min-height: 40px; display: flex; align-items: center; padding: 0 12px; border-radius: 8px; background: var(--sx-bleu-clair); color: var(--sx-bleu-fonce); font-weight: 800; font-size: 13.5px; }
+.liv-apercu-vide { background: var(--sx-attention-fond); color: var(--sx-attention); }
+.liv-fenetre { max-width: 560px; }
+.liv-note { font-size: 12px; color: var(--sx-gris); }
+.pb-liv { font-size: 12.5px; white-space: nowrap; }
+.pb-liv-btn { border: 0; background: none; padding: 2px 4px; margin: -2px -4px; border-radius: 5px; font-family: inherit; color: inherit; cursor: pointer; text-align: left; }
+.pb-liv-btn:hover, .pb-liv-btn:focus-visible { background: #E7EEF9; }
+.pb-liv-retard { color: var(--sx-rouge); font-weight: 800; }
+.pb-liv-proche { color: var(--sx-orange); font-weight: 800; }
+.pb-liv-pasencore { color: var(--sx-gris); font-style: italic; }
+.lvp-vues { display: flex; gap: 6px; margin-left: auto; }
+.lvf-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; flex-shrink: 0; }
+.lvf-legende { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-left: auto; font-size: 12px; color: #3D4B5C; }
+.lvf-legende i { display: inline-block; width: 18px; height: 10px; border-radius: 3px; margin-left: 6px; }
+.lvf-l-le { background: #C2410C; } .lvf-l-sem { background: var(--sx-bleu); }
+.lvf-l-avant { background: #E6EEFA; border: 1px solid #9DB7E0; border-right: 4px solid var(--sx-bleu-fonce); }
+.lvf-l-apartir { background: linear-gradient(90deg, #1F6F43, rgba(31, 111, 67, .25)); }
+.lvf-l-retard { background: #FDECEA; border: 2px solid var(--sx-rouge); }
+.lvf { min-width: 1180px; font-size: 13px; }
+.lvf-tete { display: grid; grid-template-columns: 360px repeat(20, minmax(0, 1fr)); grid-template-rows: auto auto; background: #EEF1F5; position: sticky; top: 0; z-index: 3; font-size: 11px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; color: #3D4B5C; }
+.lvf-tete-g { grid-row: span 2; display: grid; grid-template-columns: 64px minmax(0, 1fr) 150px; gap: 10px; align-items: end; padding: 8px 12px; }
+.lvf-sem { grid-column: span 5; padding: 7px 8px 2px; border-left: 2px solid #C9D3DC; white-space: nowrap; }
+.lvf-sem span { font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--sx-gris); }
+.lvf-jour { padding: 2px 0 7px; text-align: center; text-transform: none; }
+.lvf-lundi { border-left: 2px solid #C9D3DC; }
+.lvf-auj { background: var(--sx-bleu); color: #FFFFFF; border-radius: 6px 6px 0 0; }
+.lvf-corps { position: relative; }
+.lvf-fond { position: absolute; inset: 0; display: grid; grid-template-columns: 360px repeat(20, minmax(0, 1fr)); pointer-events: none; }
+.lvf-fond > * { grid-row: 1; }
+.lvf-fond-sem { border-left: 2px solid #E3E8EE; }
+.lvf-fond-alt { background: #FAFBFD; }
+.lvf-fond-auj { background: rgba(15, 77, 162, .07); border-left: 2px solid var(--sx-bleu); }
+.lvf-ligne { position: relative; display: grid; grid-template-columns: 360px repeat(20, minmax(0, 1fr)); align-items: center; min-height: 54px; border-top: 1px solid var(--sx-separateur); }
+.lvf-ligne > * { grid-row: 1; }
+.lvf-ligne-off { opacity: .55; }
+.lvf-gauche { grid-column: 1; display: grid; grid-template-columns: 64px minmax(0, 1fr) 150px; gap: 10px; align-items: center; padding: 6px 12px; background: #FFFFFF; align-self: stretch; }
+.lvf-num { font-size: 14px; font-weight: 800; color: #1F3A5F; }
+.lvf-num a { color: inherit; text-decoration: none; } .lvf-num a:hover { text-decoration: underline; }
+.lvf-dest { font-weight: 700; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lvf-dest small, .lvf-consigne small { display: block; font-size: 11.5px; font-weight: 600; color: var(--sx-gris); font-style: normal; }
+.lvf-consigne { font-size: 12.5px; font-weight: 700; color: var(--sx-bleu-fonce); line-height: 1.3; }
+.lvf-b { height: 24px; margin: 0 3px; border-radius: 6px; display: flex; align-items: center; padding: 0 8px; font-size: 11px; font-weight: 800; letter-spacing: .3px; white-space: nowrap; overflow: hidden; z-index: 1; }
+.lvf-b-le { background: var(--sx-bleu-fonce); }
+.lvf-b-proche { background: #C2410C; }
+.lvf-b-semaine { background: var(--sx-bleu); color: #FFFFFF; }
+.lvf-b-avant { background: #E6EEFA; border: 1px solid #9DB7E0; border-right: 0; border-radius: 6px 0 0 6px; margin-right: 0; }
+.lvf-limite { justify-self: end; width: 6px; height: 36px; border-radius: 3px; background: var(--sx-bleu-fonce); margin-right: 3px; z-index: 2; }
+.lvf-b-apartir { background: linear-gradient(90deg, #1F6F43 0%, #1F6F43 25%, rgba(31, 111, 67, .25) 100%); color: #FFFFFF; border-radius: 6px 0 0 6px; margin-right: 0; }
+.lvf-b-pasencore { background: repeating-linear-gradient(135deg, #EEF1F5 0 6px, #FFFFFF 6px 12px); border: 1px dashed #C9D3DC; color: var(--sx-gris); justify-content: center; font-weight: 700; }
+.lvf-b-retard { background: #FDECEA; border: 2px solid var(--sx-rouge); color: var(--sx-rouge); justify-content: center; text-transform: uppercase; }
