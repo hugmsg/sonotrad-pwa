@@ -849,7 +849,7 @@ textarea.cd-zone[data-c="modules"] { font-family: ui-monospace, Consolas, monosp
 .pb-redim, .pb-redim * { cursor: col-resize !important; user-select: none; }
 /* Colonne « Poses » retirée du tableau (2026-11-24) : « OT à faire » / « + Fiche » dans la colonne OT ouvrent la fiche */
 button.pb-ot-afaire:hover { background: #FFE9A8; }
-.pb-ot-creer { background: none; color: var(--sx-bleu); font-weight: 600; }
-.pb-ot-creer:hover, .pb-ot-creer:focus-visible { background: #E7EEF9; }
+.pb-ot-creer { background: #E7EEF9; color: #0B3A7A; }   /* même étiquette que les autres statuts (2026-11-24) */
+.pb-ot-creer:hover, .pb-ot-creer:focus-visible { background: #D3E0F5; }
 .pb-grille-arr .pb-ot-creer { opacity: 0; }
 .pb-grille-arr.pb-ligne-module:hover .pb-ot-creer, .pb-grille-arr .pb-ot-creer:focus-visible { opacity: 1; }
