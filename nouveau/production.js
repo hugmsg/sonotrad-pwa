@@ -351,6 +351,8 @@ Object.assign(App, {
         ${_PB_SVG_CHEVRON}<span>${_otEsc(g.titre)}</span><span class="pb-groupe-n">${g.ls.length} module${g.ls.length > 1 ? 's' : ''}</span>
       </button>
       ${P.replies[g.cle] ? '' : g.ls.map(l => this._pbHtmlLigne(l, admin)).join('')}`).join('')}</div></div>`;
+
+    this._pbColsInit(el);
   },
 
   _pbHtmlLigne(l, admin) {
@@ -594,6 +596,7 @@ Object.assign(App, {
       ${S.pb.replies['m' + g.cle] ? '' : g.ls.map(l => this._pbArrHtmlLigne(l, admin)).join('')}`).join('')}
       ${groupes.length > visibles.length ? `<button type="button" class="pb-plus" onclick="App.prodArrPlus()">Afficher les mois précédents (${groupes.length - visibles.length} de plus)</button>` : ''}
     </div></div>`;
+    this._pbColsInit(el);
   },
 
   _pbArrHtmlLigne(l, admin) {
@@ -913,6 +916,68 @@ const PB_ETAPES_PLANNING = [
 Object.assign(App, {
 
   _pbEtroit() { return window.matchMedia('(max-width: 759px)').matches; },
+
+  /* Largeur des colonnes réglable (2026-11-24) : poignée au bord droit de chaque en-tête, glisser pour
+     élargir / rétrécir, double-clic = largeurs d'origine. Mémorisé sur l'appareil (localStorage snt_pb_cols),
+     par tableau : planning, planning avec « Travaux », arrivées. Les colonnes jamais touchées gardent leur
+     réglage d'origine (les colonnes souples absorbent la place restante). */
+  _PB_COLS_DEFAUT: {
+    prod: ['146px', '100px', '84px', 'minmax(162px, 1fr)', '120px', '84px', '74px', '130px', '56px', '92px', '120px', '74px'],
+    prod_desc: ['146px', '92px', '76px', 'minmax(102px, .8fr)', 'minmax(150px, 1.4fr)', '106px', '58px', '56px', '120px', '54px', '80px', '104px', '62px'],
+    arr: ['112px', '100px', '84px', '76px', 'minmax(150px, .8fr)', '170px', '74px', 'minmax(160px, 1fr)', '128px', '136px', '74px'],
+  },
+  _pbColsLire() { try { return JSON.parse(localStorage.getItem('snt_pb_cols') || '{}') || {}; } catch (e) { return {}; } },
+  _pbColsEcrire(t) { try { localStorage.setItem('snt_pb_cols', JSON.stringify(t)); } catch (e) { /* stockage indisponible : réglage pour cette fois */ } },
+  _pbColsCle(tab) { return tab.querySelector('.pb-grille-arr') ? 'arr' : (tab.classList.contains('pb-avec-desc') ? 'prod_desc' : 'prod'); },
+
+  _pbColsAppliquer(tab, cle, perso) {
+    const inter = tab.querySelector('.pb-interieur');
+    const def = this._PB_COLS_DEFAUT[cle];
+    if (!inter || !def) return;
+    const cols = def.map((d, i) => perso[i] ? perso[i] + 'px' : d);
+    if (!Object.keys(perso).length) { inter.style.removeProperty('--pb-cols'); inter.style.minWidth = ''; delete inter.dataset.cols; return; }
+    const larg = cols.reduce((t, c) => t + parseFloat(c.replace('minmax(', '')), 0) + (cols.length - 1) * 10 + 24;
+    inter.style.setProperty('--pb-cols', cols.join(' '));
+    inter.style.minWidth = Math.round(larg) + 'px';
+    inter.dataset.cols = '1';
+  },
+
+  _pbColsInit(el) {
+    const tab = el && el.querySelector('.pb-tableau');
+    const tete = tab && tab.querySelector('.pb-tete');
+    if (!tete) return;
+    const cle = this._pbColsCle(tab);
+    const tout = this._pbColsLire();
+    const perso = tout[cle] || {};
+    this._pbColsAppliquer(tab, cle, perso);
+    [...tete.children].forEach((cell, i) => {
+      const p = document.createElement('span');
+      p.className = 'pb-poignee';
+      p.title = 'Glisser pour régler la largeur · double-clic : largeurs d’origine';
+      p.addEventListener('pointerdown', ev => {
+        ev.preventDefault(); ev.stopPropagation();
+        const pistes = getComputedStyle(tete).gridTemplateColumns.split(' ').map(parseFloat);
+        const x0 = ev.clientX, w0 = pistes[i] || cell.getBoundingClientRect().width;
+        p.setPointerCapture(ev.pointerId);
+        tab.classList.add('pb-redim');
+        const bouger = e => { perso[i] = Math.max(36, Math.round(w0 + e.clientX - x0)); this._pbColsAppliquer(tab, cle, perso); };
+        const finir = () => {
+          p.removeEventListener('pointermove', bouger); p.removeEventListener('pointerup', finir); p.removeEventListener('pointercancel', finir);
+          tab.classList.remove('pb-redim');
+          const t = this._pbColsLire(); t[cle] = perso; this._pbColsEcrire(t);
+        };
+        p.addEventListener('pointermove', bouger); p.addEventListener('pointerup', finir); p.addEventListener('pointercancel', finir);
+      });
+      p.addEventListener('click', ev => ev.stopPropagation());
+      p.addEventListener('dblclick', ev => {
+        ev.stopPropagation();
+        Object.keys(perso).forEach(k => delete perso[k]);
+        const t = this._pbColsLire(); delete t[cle]; this._pbColsEcrire(t);
+        this._pbColsAppliquer(tab, cle, perso);
+      });
+      cell.appendChild(p);
+    });
+  },
 
   // Étape « Planning » (les 4 cases) d'un module, sans tenir compte de « de côté » ni de « prêt »
   _pbEtapePlanning(d) {

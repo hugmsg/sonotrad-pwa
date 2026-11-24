@@ -836,3 +836,14 @@ span.pb-ot-sans { cursor: default; }
 /* Ordres d'expédition (expeditions.js) : zones de saisie à plusieurs lignes (modules, adresse) */
 .cd-zone { min-height: 0; height: auto; padding: 8px 10px; font-family: inherit; font-size: 14px; line-height: 1.4; resize: vertical; }
 textarea.cd-zone[data-c="modules"] { font-family: ui-monospace, Consolas, monospace; }
+
+/* Production / Arrivées : largeur des colonnes réglable depuis l'en-tête (2026-11-24, production.js _pbColsInit) */
+.pb-interieur[data-cols] .pb-grille, .pb-interieur[data-cols] .pb-grille-arr { grid-template-columns: var(--pb-cols); }
+.pb-tete > span { align-self: stretch; display: flex; align-items: center; min-width: 0; }
+.pb-tete > span:not(:first-child) { position: relative; }
+.pb-tete > .pb-droite { justify-content: flex-end; }
+.pb-poignee { position: absolute; top: 4px; bottom: 4px; right: -11px; width: 12px; cursor: col-resize; z-index: 2; touch-action: none; }
+.pb-poignee::after { content: ''; position: absolute; top: 3px; bottom: 3px; left: 5px; width: 2px; border-radius: 1px; background: #C9D1DC; opacity: 0; transition: opacity .15s; }
+.pb-tete:hover .pb-poignee::after { opacity: 1; }
+.pb-poignee:hover::after, .pb-redim .pb-poignee::after { background: var(--sx-bleu); opacity: 1; }
+.pb-redim, .pb-redim * { cursor: col-resize !important; user-select: none; }
