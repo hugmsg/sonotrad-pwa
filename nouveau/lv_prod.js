@@ -61,10 +61,29 @@ Object.assign(App, {
     this._lvuMajBoutonsResultat();
   },
 
-  /* ─ Vue « LV / CMR » ─ */
+  /* ─ Vue « LV / CMR » (refaite le 2026-11-24 sur le modèle du portail transporteur) ─
+     Une ligne par LV, chiffres « à partir » en tête (LV, modules, destinations, poids, ml), LV de BCB écartées
+     (elles se voient dans l'activité LV / CMR). Clic sur le n° = PDF. */
   _lvpEtat() {
     S.lvp = S.lvp || { liste: null, chargement: false, erreur: '', filtre: 'apartir', q: '' };
     return S.lvp;
+  },
+
+  // LV de BCB (CMR faite au départ d'un enlèvement) : expéditeur BCB ou doc annexe « Enl. … »
+  _lvpEstBcb(r) { return /\bBCB\b/i.test(r.expediteur || '') || /^\s*Enl\./i.test(r.doc_annexe || ''); },
+
+  _lvpTrouver(lv) {
+    const n = this._lvpNum(lv);
+    return n ? ((S.lvp && S.lvp.liste) || []).find(r => this._lvpNum(r.numero) === n) : null;
+  },
+
+  // Étiquette LV de la colonne Documents de Production : ouvre le PDF ; sans lien connu, la LV dans la vue LV / CMR
+  _lvpHtmlDocLv(lv) {
+    if (!lv) return '';
+    const r = this._lvpTrouver(lv), t = _otEsc(lv);
+    if (r && r.pdfUrl) return `<a class="pb-doc pb-doc-lv" href="${_otEsc(r.pdfUrl)}" target="_blank" rel="noopener" title="PDF de la ${_otEsc(r.type || 'LV')} ${t}${r.annulee ? ' (ANNULÉE)' : ''}">${_otEsc(r.type || 'LV')} ${t}</a>`;
+    return this._lvpPeut() ? `<button type="button" class="pb-doc pb-doc-lv" onclick="App.lvpOuvrir('${t}')" title="LV ${t} : voir dans l'onglet LV / CMR">LV ${t}</button>`
+      : `<span class="pb-doc pb-doc-lv">LV ${t}</span>`;
   },
 
   lvpOuvrir(lv) {
@@ -73,23 +92,28 @@ Object.assign(App, {
     this.prodVue('lv');
   },
 
-  async _lvpCharger(force = false) {
+  async _lvpChargerListe() {
     const L = this._lvpEtat();
-    if (L.chargement || (L.liste && !force)) { this._lvpRendre(); return; }
     L.chargement = true; L.erreur = '';
-    this._lvpRendre();
-    const attentes = [];
-    if (!S.depsLoaded && !S.depsLoading) attentes.push(this._pbChargerProduction());
-    if (!S.archiveLoaded) attentes.push(this._pbChargerArchive());
-    attentes.push((async () => {
-      const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_history_supabase&limit=300', {}, 30000);
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_history_supabase&limit=400', {}, 30000);
       const d = await r.json();
       if (d.status !== 'ok') throw new Error(d.error || 'erreur inconnue');
       L.liste = d.history || [];
       S.lvuHistoryRows = L.liste;               // fenêtres d'annulation de lv.js
-    })().catch(e => { L.erreur = e.message; }));
+    } catch (e) { L.erreur = e.message; }
+    finally { L.chargement = false; }
+  },
+
+  async _lvpCharger(force = false) {
+    const L = this._lvpEtat();
+    if (L.chargement || (L.liste && !force)) { this._lvpRendre(); return; }
+    L.chargement = true;
+    this._lvpRendre();
+    const attentes = [this._lvpChargerListe()];
+    if (!S.depsLoaded && !S.depsLoading) attentes.push(this._pbChargerProduction());
+    if (!S.archiveLoaded) attentes.push(this._pbChargerArchive());
     await Promise.allSettled(attentes);
-    L.chargement = false;
     this._lvpRendre();
   },
 
@@ -111,13 +135,20 @@ Object.assign(App, {
     return idx;
   },
 
+  _lvpDate(s) {   // « dd/mm/yyyy » ou « yyyy-mm-dd » → Date (minuit) ou null
+    const t = String(s || '').trim();
+    let m = t.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
+    m = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+  },
+
   _lvpLignes() {
     const L = this._lvpEtat(), idx = this._lvpModules();
-    return (L.liste || []).map(row => {
+    return (L.liste || []).filter(r => !this._lvpEstBcb(r)).map(row => {
       const mods = idx[this._lvpNum(row.numero)] || [];
-      const partiMod = mods.some(m => m.parti);
-      const statut = row.annulee ? 'annulee' : (row.parti || partiMod) ? 'partie' : 'apartir';
-      return { row, mods, statut };
+      const statut = row.annulee ? 'annulee' : (row.parti || mods.some(m => m.parti)) ? 'partie' : 'apartir';
+      return { row, mods, statut, liv: this._lvpDate(row.livraison_prevue) };
     });
   },
 
@@ -127,19 +158,29 @@ Object.assign(App, {
     const L = this._lvpEtat();
     const lignes = this._lvpLignes();
     const n = s => lignes.filter(l => l.statut === s).length;
+    const ap = lignes.filter(l => l.statut === 'apartir');
+    const nbMods = ap.reduce((t, l) => t + (l.mods.length || 0), 0);
+    const dests = new Set(ap.map(l => String(l.row.destinataire || '').trim().toUpperCase()).filter(Boolean)).size;
+    const somme = k => ap.reduce((t, l) => t + (parseFloat(l.row[k]) || 0), 0);
+    const nombre = (x, dec) => x.toLocaleString('fr-FR', { maximumFractionDigits: dec });
+    const bcb = (L.liste || []).filter(r => this._lvpEstBcb(r)).length;
     const f = (cle, nom, nb) => `<button type="button" class="pb-onglet" aria-pressed="${L.filtre === cle}" onclick="App.lvpFiltre('${cle}')">${nom}${nb !== undefined ? ' <b>' + nb + '</b>' : ''}</button>`;
-    const sous = L.chargement && !L.liste ? 'chargement…' : n('apartir') + ' à partir';
+    const stat = (v, t) => `<span class="lvp-stat"><b>${v}</b>${t}</span>`;
     el.innerHTML = `<div class="sx-ecran pb-ecran">
       ${this._otEntete({ retour: { texte: 'LOXAM', action: 'App.go(\'loxam-menu\')' }, titre: 'Production',
-        sousTitre: 'LV / CMR · ' + sous, large: true, bandeau: this._pbNav('lv') })}
+        sousTitre: 'LV / CMR · ' + (L.liste ? n('apartir') + ' à partir' : 'chargement…'), large: true, bandeau: this._pbNav('lv') })}
       <div class="pb-barre"><div class="pb-barre-in">
         <div class="pb-ligne">
           <div class="sx-recherche pb-recherche">${_OT_SVG_LOUPE}
             <label for="lvp-q" class="sx-sr">Rechercher</label>
-            <input id="lvp-q" type="search" placeholder="N° de LV, code, n° module, destinataire, commande…" value="${_otEsc(L.q)}" oninput="App.lvpRecherche(this.value)">
+            <input id="lvp-q" type="search" placeholder="N° de LV, code, n° module, destination, commande, BT…" value="${_otEsc(L.q)}" oninput="App.lvpRecherche(this.value)">
           </div>
           <button type="button" class="pb-bouton" onclick="App._lvpCharger(true)">${L.chargement ? 'Chargement…' : 'Actualiser'}</button>
         </div>
+        ${L.liste ? `<div class="pb-ligne lvp-stats" aria-label="LV à partir">
+          ${stat(ap.length, ' LV à partir')}${stat(nbMods, ' modules')}${stat(dests, ' destinations')}${stat(nombre(somme('poids'), 1), ' t')}${stat(nombre(somme('ml'), 1), ' ml')}
+          ${bcb ? `<span class="lvp-masquees">${bcb} LV de BCB non affichées (activité LV / CMR)</span>` : ''}
+        </div>` : ''}
         <div class="pb-ligne pb-defile" role="group" aria-label="Filtre">
           ${f('apartir', 'À partir', n('apartir'))}${f('partie', 'Parties', n('partie'))}${f('annulee', 'Annulées', n('annulee'))}${f('toutes', 'Toutes')}
         </div>
@@ -156,19 +197,21 @@ Object.assign(App, {
     if (L.erreur && !L.liste) { el.innerHTML = `<div class="sx-carte"><div class="sx-vide">Historique des LV illisible : ${_otEsc(L.erreur)}</div></div>`; return; }
     if (!L.liste) { el.innerHTML = '<div class="sx-chargement">Chargement des LV…</div>'; return; }
     const q = String(L.q || '').trim().toLowerCase();
-    const qn = this._lvpNum(q);
-    const lignes = this._lvpLignes().filter(l => {
+    const qn = /^\d+$/.test(q) ? this._lvpNum(q) : '';
+    let lignes = this._lvpLignes().filter(l => {
       if (L.filtre !== 'toutes' && l.statut !== L.filtre) return false;
       if (!q) return true;
       if (qn && this._lvpNum(l.row.numero) === qn) return true;
       const r = l.row;
-      return [r.numero, r.destinataire, r.commande, r.marchandises_desc, r.conducteur, r.immat_moteur,
+      return [r.numero, r.destinataire, r.commande, r.doc_annexe, r.marchandises_desc, r.conducteur, r.immat_moteur,
         ...l.mods.map(m => m.d.code), ...l.mods.map(m => m.d.codeModule), ...l.mods.map(m => m.d.chantier)]
         .some(v => String(v || '').toLowerCase().includes(q));
     });
+    // À partir : par date de livraison prévue (les plus proches d'abord, sans date à la fin) ; sinon les plus récentes d'abord
+    if (L.filtre === 'apartir') lignes = lignes.slice().sort((a, b) => (a.liv ? a.liv.getTime() : 9e15) - (b.liv ? b.liv.getTime() : 9e15) || Number(b.row.numero) - Number(a.row.numero));
     if (!lignes.length) { el.innerHTML = '<div class="sx-carte"><div class="sx-vide">Aucune LV ne correspond.</div></div>'; return; }
-    const entete = `<div class="pb-grille-lv pb-tete"><span>LV</span><span>Créée le</span><span>Destinataire</span><span>Modules</span>
-      <span>Commande</span><span>Transport</span><span>Livraison</span><span>Statut</span><span>Actions</span></div>`;
+    const entete = `<div class="pb-grille-lv pb-tete"><span>LV</span><span>Créée</span><span>Destination</span><span>Modules</span>
+      <span>Commande · BT</span><span>Poids · ml</span><span>Livraison</span><span>Statut</span><span>Actions</span></div>`;
     el.innerHTML = `<div class="pb-tableau"><div class="pb-interieur pb-interieur-lv">${entete}${lignes.map(l => this._lvpHtmlLigne(l)).join('')}</div></div>`;
     this._pbColsInit(el);
   },
@@ -176,27 +219,35 @@ Object.assign(App, {
   _lvpHtmlLigne(l) {
     const r = l.row, num = _otEsc(r.numero || '');
     const { grutage, commentaire } = this._lvuParseNote(r.note);
+    const court = d => { const x = this._lvpDate(d); return x ? x.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : ''; };
+    const auj = new Date(); auj.setHours(0, 0, 0, 0);
+    const retard = l.statut === 'apartir' && l.liv && l.liv < auj;
     const statut = {
-      annulee: `<span class="pb-ot lvp-st-annulee" title="${_otEsc((r.annulation_motif || '') + (r.remplacee_par ? ' — remplacée par n° ' + r.remplacee_par : ''))}">Annulée</span>`,
-      partie: '<span class="pb-ot lvp-st-partie">Partie</span>',
+      annulee: `<span class="pb-ot lvp-st-annulee" title="${_otEsc('Annulée le ' + (r.annulee_le || '?') + (r.annulee_par ? ' par ' + r.annulee_par : '') + ' : ' + (r.annulation_motif || '') + (r.remplacee_par ? ' — remplacée par n° ' + r.remplacee_par : ''))}">Annulée${r.remplacee_par ? ' → ' + _otEsc(r.remplacee_par) : ''}</span>`,
+      partie: `<span class="pb-ot lvp-st-partie">Partie${r.parti_le ? ' ' + _otEsc(r.parti_le.slice(0, 5)) : ''}</span>`,
       apartir: '<span class="pb-ot lvp-st-apartir">À partir</span>',
     }[l.statut];
+    const titreMods = l.mods.map(m => [m.d.code, m.d.codeModule, m.d.module].filter(Boolean).join(' · ') + (m.parti ? ' (parti)' : '')).join('\n');
     const mods = l.mods.length
-      ? l.mods.map(m => `<span class="lvp-mod${m.parti ? ' lvp-mod-parti' : ''}" title="${_otEsc([m.d.codeModule, m.d.module, m.d.chantier].filter(Boolean).join(' · '))}">${_otEsc(m.d.code)}</span>`).join('')
-      : `<span class="pb-gris" title="${_otEsc(r.marchandises_desc || '')}">${_otEsc(r.marchandises_desc || '—')}</span>`;
+      ? l.mods.map(m => `<span class="lvp-mod${m.parti ? ' lvp-mod-parti' : ''}">${_otEsc(m.d.code)}</span>`).join('')
+      : `<span class="pb-gris">${_otEsc(r.marchandises_desc || '—')}</span>`;
+    const cde = [r.commande, r.doc_annexe].filter(Boolean).join(' · ');
+    const pm = [r.poids ? String(r.poids).replace('.', ',') + ' t' : '', r.ml ? String(r.ml).replace('.', ',') + ' ml' : ''].filter(Boolean).join(' · ');
+    const titreDest = [r.destinataire, r.destination_adresse, commentaire ? 'Note : ' + commentaire : '', r.conducteur ? 'Chauffeur : ' + [r.conducteur, r.immat_moteur, r.immat_semi].filter(Boolean).join(' · ') : '', r.remplace ? 'Remplace la LV ' + r.remplace : ''].filter(Boolean).join('\n');
     const actions = [
-      r.pdfUrl ? `<a class="pb-doc" href="${_otEsc(r.pdfUrl)}" target="_blank" rel="noopener">PDF</a>` : '',
-      l.statut === 'apartir' ? `<button type="button" class="lvp-btn" onclick="App.lvuModifier('${num}', 'prod')" title="Modifier la LV (même numéro) : modules, destinataire, transporteur, note…">Modifier</button>` : '',
-      l.statut === 'apartir' ? `<button type="button" class="lvp-btn lvp-btn-rouge" onclick="App.openLvCancelModal('${num}')" title="Annuler la LV (reste dans l'historique, modules libérés)">Annuler…</button>` : '',
+      r.pdfUrl ? `<a class="pb-doc pb-doc-lv" href="${_otEsc(r.pdfUrl)}" target="_blank" rel="noopener" title="Ouvrir le PDF">PDF</a>` : '',
+      l.statut === 'apartir' ? `<button type="button" class="lvp-btn" onclick="App.lvuModifier('${num}', 'prod')" title="Modifier la LV sous le même numéro : modules, destinataire, transporteur, note…">Modifier</button>` : '',
+      l.statut === 'apartir' ? `<button type="button" class="lvp-btn lvp-btn-rouge" onclick="App.openLvCancelModal('${num}')" title="Annuler la LV (reste dans l'historique, modules libérés)" aria-label="Annuler la LV ${num}">Annuler</button>` : '',
     ].join('');
+    const lienNum = r.pdfUrl ? `<a href="${_otEsc(r.pdfUrl)}" target="_blank" rel="noopener" class="lvp-lien" title="Ouvrir le PDF"><b>${num}</b></a>` : `<b>${num}</b>`;
     return `<div class="pb-grille-lv pb-ligne-module${l.statut !== 'apartir' ? ' pb-parti' : ''}">
-      <span class="lvp-num"><b>${num}</b> <span class="lvp-type">${_otEsc(r.type || 'LV')}</span>${r.remplace ? `<small>remplace ${_otEsc(r.remplace)}</small>` : ''}</span>
-      <span class="pb-gris2">${_otEsc(String(r.date || '').slice(0, 10))}</span>
-      <span class="pb-texte" title="${_otEsc(r.destinataire || '')}">${_otEsc(r.destinataire || '—')}${commentaire || grutage ? `<small class="lvp-note" title="${_otEsc(commentaire)}">${grutage ? '<b>grutage</b> ' : ''}${_otEsc(commentaire)}</small>` : ''}</span>
-      <span class="lvp-mods">${mods}</span>
-      <span class="pb-gris2">${_otEsc(r.commande || '')}</span>
-      <span class="pb-texte pb-gris2" title="${_otEsc([r.conducteur, r.immat_moteur].filter(Boolean).join(' · '))}">${_otEsc([r.conducteur, r.immat_moteur].filter(Boolean).join(' · ') || '')}</span>
-      <span class="pb-gris2">${_otEsc(r.livraison_prevue || '')}</span>
+      <span class="lvp-num">${lienNum} <span class="lvp-type">${_otEsc(r.type || 'LV')}</span></span>
+      <span class="pb-gris2">${_otEsc(court(r.date))}</span>
+      <span title="${_otEsc(titreDest)}">${_otEsc(r.destinataire || '—')}${grutage ? '<span class="lvp-grutage">grutage</span>' : ''}${commentaire ? ' <span class="pb-gris2">· ' + _otEsc(commentaire) + '</span>' : ''}</span>
+      <span class="lvp-mods" title="${_otEsc(titreMods)}">${mods}</span>
+      <span class="pb-gris2" title="${_otEsc(cde)}">${_otEsc(cde)}</span>
+      <span class="pb-gris2">${_otEsc(pm)}</span>
+      <span class="${retard ? 'lvp-retard' : 'pb-gris2'}"${retard ? ' title="Date de livraison dépassée"' : ''}>${_otEsc(court(r.livraison_prevue))}</span>
       <span>${statut}</span>
       <span class="lvp-actions">${actions}</span>
     </div>`;

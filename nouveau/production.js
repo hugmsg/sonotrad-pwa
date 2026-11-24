@@ -53,6 +53,7 @@ Object.assign(App, {
     if (!S.depsLoaded && !S.depsLoading) attentes.push(this._pbChargerProduction());
     if (!S.archiveLoaded) attentes.push(this._pbChargerArchive());
     if (S.pb.fiches === null && !S.pb.fichesChargement && this._otAutorise()) attentes.push(this._pbChargerFiches());
+    if (this._lvpPeut() && !(S.lvp && (S.lvp.liste || S.lvp.chargement))) attentes.push(this._lvpChargerListe());
     if (!attentes.length) return;
     await Promise.allSettled(attentes);
     this._pbRendre();
@@ -346,7 +347,7 @@ Object.assign(App, {
 
     const sel = this._pbPeutSel();
     const entete = `<div class="pb-grille pb-tete"><span class="pb-code-cell">${sel ? `<input type="checkbox" class="pb-sel" id="pb-sel-tout" aria-label="Tout sélectionner (lignes affichées)" onclick="App.prodSelTout(this.checked)">` : ''}Code</span><span>N° module</span><span>Type</span><span>Agence · chantier</span>${P.desc ? '<span>Travaux</span>' : ''}
-      <span>Étape</span><span>Durée</span><span>Livraison</span><span title="N° de LV / CMR (clic : la LV dans la vue LV / CMR)">LV</span><span>OT</span><span title="Fournitures sorties du stock">Stock</span><span class="pb-droite">${admin ? 'Montant' : ''}</span><span>${admin ? 'Documents' : ''}</span></div>`;
+      <span>Étape</span><span>Durée</span><span>Livraison</span><span>OT</span><span title="Fournitures sorties du stock">Stock</span><span class="pb-droite">${admin ? 'Montant' : ''}</span><span>${admin || this._lvpPeut() ? 'Documents' : ''}</span></div>`;
     el.innerHTML = `<div class="pb-tableau${P.desc ? ' pb-avec-desc' : ''}"><div class="pb-interieur">${entete}${groupes.map(g => `
       <button type="button" class="pb-groupe pb-g-${g.cle}" aria-expanded="${!P.replies[g.cle]}" onclick="App.prodReplier('${g.cle}')">
         ${_PB_SVG_CHEVRON}<span>${_otEsc(g.titre)}</span><span class="pb-groupe-n">${g.ls.length} module${g.ls.length > 1 ? 's' : ''}</span>
@@ -370,11 +371,11 @@ Object.assign(App, {
         ot = `<button type="button" class="pb-ot pb-ot-${_otEsc(f.statut)}" onclick="App.prodOuvrirFiche(${Number(f.id)})" title="Ouvrir la fiche d'opérations">${_otEsc(lib || f.numero_ot || 'Validée')}${f.statut === 'validee' ? ' · à envoyer' : ''}</button>`;
       } else ot = this._pbHtmlOtSansFiche(l, true, `App.prodPoses(${l.parti}, ${l.idx})`);
     }
-    const docs = (admin && f && f.documents) ? (() => {
+    const docs = this._lvpHtmlDocLv(d.lv) + ((admin && f && f.documents) ? (() => {
       const pdf = (f.documents.fichiers || []).find(x => x.type === 'pdf');
-      return `${pdf && pdf.url ? `<a class="pb-doc" href="${_otEsc(pdf.url)}" target="_blank" rel="noopener">PDF</a>` : ''}
+      return `${pdf && pdf.url ? `<a class="pb-doc" href="${_otEsc(pdf.url)}" target="_blank" rel="noopener" title="PDF de l'OT">OT</a>` : ''}
         ${f.documents.dossier ? `<a class="pb-doc" href="${_otEsc(f.documents.dossier)}" target="_blank" rel="noopener">Dossier OT</a>` : ''}`;
-    })() : '';
+    })() : '');
     const code = _otEsc(d.code || '');
     return `<div class="pb-grille pb-ligne-module${l.retard ? ' pb-retard' : ''}${l.parti ? ' pb-parti' : ''}${l.deCote ? ' pb-pause' : ''}">
       <span class="pb-code-cell">${this._pbHtmlCase(l)}<button type="button" class="pb-code" onclick="App.prodDossier('${code}', ${l.parti})" title="Ouvrir le dossier du module (photos, papiers d'arrivée et de départ)">${_PB_SVG_DOSSIER}${code}</button><span class="pb-icones">${this._pbHtmlPlace(l, false)}</span></span>
@@ -385,7 +386,6 @@ Object.assign(App, {
       ${this._pbHtmlEtape(l, admin, barre, nomEtape)}
       <span class="pb-gris2 pb-duree">${_otEsc(duree)}</span>
       <span class="${l.retard ? 'pb-rouge' : (d.livraisonPrevue ? '' : 'pb-gris')}">${_otEsc(liv)}</span>
-      <span>${d.lv ? `<button type="button" class="pb-lv" onclick="App.lvpOuvrir('${_otEsc(d.lv)}')" title="Voir la LV ${_otEsc(d.lv)}${d.commande ? ' (commande ' + _otEsc(d.commande) + ')' : ''}">${_otEsc(d.lv)}</button>` : '<span class="pb-gris">—</span>'}</span>
       <span class="pb-ot-cell">${ot}</span>
       <span>${this._pbHtmlStock(f)}</span>
       <span class="pb-droite pb-montant">${admin && f && f.total_ht !== undefined && f.total_ht !== null && f.statut !== 'brouillon' ? _otEuros(f.total_ht) : ''}</span>
@@ -922,16 +922,16 @@ Object.assign(App, {
      par tableau : planning, planning avec « Travaux », arrivées. Les colonnes jamais touchées gardent leur
      réglage d'origine (les colonnes souples absorbent la place restante). */
   _PB_COLS_DEFAUT: {
-    prod2: ['146px', '100px', '84px', 'minmax(162px, 1fr)', '120px', '84px', '74px', '62px', '130px', '56px', '92px', '120px'],
-    prod_desc2: ['146px', '92px', '76px', 'minmax(102px, .8fr)', 'minmax(150px, 1.4fr)', '106px', '58px', '56px', '62px', '120px', '54px', '80px', '104px'],
-    lv: ['112px', '86px', 'minmax(170px, 1.2fr)', 'minmax(150px, 1fr)', '100px', 'minmax(120px, .7fr)', '84px', '84px', '170px'],
+    prod: ['146px', '100px', '84px', 'minmax(162px, 1fr)', '120px', '84px', '74px', '130px', '56px', '92px', '160px'],
+    prod_desc: ['146px', '92px', '76px', 'minmax(102px, .8fr)', 'minmax(150px, 1.4fr)', '106px', '58px', '56px', '120px', '54px', '80px', '150px'],
+    lv: ['104px', '70px', 'minmax(170px, 1.3fr)', 'minmax(140px, 1fr)', '150px', '96px', '84px', '104px', '178px'],
     arr: ['112px', '100px', '84px', '76px', 'minmax(150px, .8fr)', '170px', '74px', 'minmax(160px, 1fr)', '128px', '136px'],
   },
   _pbColsLire() { try { return JSON.parse(localStorage.getItem('snt_pb_cols') || '{}') || {}; } catch (e) { return {}; } },
   _pbColsEcrire(t) { try { localStorage.setItem('snt_pb_cols', JSON.stringify(t)); } catch (e) { /* stockage indisponible : réglage pour cette fois */ } },
   _pbColsCle(tab) {
     if (tab.querySelector('.pb-grille-lv')) return 'lv';
-    return tab.querySelector('.pb-grille-arr') ? 'arr' : (tab.classList.contains('pb-avec-desc') ? 'prod_desc2' : 'prod2');
+    return tab.querySelector('.pb-grille-arr') ? 'arr' : (tab.classList.contains('pb-avec-desc') ? 'prod_desc' : 'prod');
   },
 
   _pbColsAppliquer(tab, cle, perso) {
