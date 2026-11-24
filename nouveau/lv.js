@@ -1221,6 +1221,7 @@ Object.assign(App, {
   _lvuLivPoser(c) {
     const zone = document.getElementById('lvu-liv-zone');
     if (zone) zone.innerHTML = this._livWidget('lvu-liv', c);
+    if (this._lvuRecap) this._lvuRecap();
   },
   _lvuLivInit() {
     const zone = document.getElementById('lvu-liv-zone');

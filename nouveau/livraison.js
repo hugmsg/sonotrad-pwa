@@ -124,7 +124,10 @@ Object.assign(App, {
       ${t && t !== 'aucune' ? `<div class="liv-saisie">${saisie}<div class="liv-apercu${n ? '' : ' liv-apercu-vide'}">${_otEsc(apercu)}</div></div>` : ''}`;
   },
 
-  _livRedessiner(pfx) { const el = document.getElementById(pfx); if (el) el.innerHTML = this._livWidgetInterieur(pfx); },
+  _livRedessiner(pfx) {
+    const el = document.getElementById(pfx); if (el) el.innerHTML = this._livWidgetInterieur(pfx);
+    if (pfx === 'lvu-liv' && this._lvuRecap) this._lvuRecap();   // récapitulatif du formulaire LV
+  },
 
   livChoisir(pfx, type) {
     const c = S.liv[pfx] || {};
