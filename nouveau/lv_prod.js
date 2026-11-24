@@ -66,9 +66,9 @@ Object.assign(App, {
      (elles se voient dans l'activité LV / CMR). Clic sur le n° = PDF. */
   _lvpEtat() {
     if (!S.lvp) {
-      let vue = 'liste';
-      try { vue = localStorage.getItem('snt_lvp_vue') === 'frise' ? 'frise' : 'liste'; } catch (e) { /* liste */ }
-      S.lvp = { liste: null, chargement: false, erreur: '', filtre: 'apartir', q: '', vue, decalage: 0 };
+      let cal = true;
+      try { cal = localStorage.getItem('snt_lvp_cal') !== '0'; } catch (e) { /* affiché */ }
+      S.lvp = { liste: null, chargement: false, erreur: '', filtre: 'apartir', q: '', cal, mois: 0, jour: '', sel: '' };
     }
     return S.lvp;
   },
@@ -121,103 +121,108 @@ Object.assign(App, {
     this._lvpRendre();
   },
 
-  lvpFiltre(f) { this._lvpEtat().filtre = f; this._lvpRendre(); },
-  lvpVue(v) {
+  lvpFiltre(f) { const L = this._lvpEtat(); L.filtre = f; L.jour = ''; L.sel = ''; this._lvpRendre(); },
+
+  /* ─ Calendrier des livraisons (2026-11-24, maquette validée par Hugo, remplace la frise) : 3 mois comme le portail
+     transporteur, au-dessus de la liste « À partir ». Repères : « le » = jour bleu (foncé si plusieurs), « avant le » =
+     barre orange en bas du dernier jour, « à partir du » = barre verte en haut du premier jour, « semaine n° » = n° de
+     semaine en bleu foncé + lundi → vendredi bleu clair. Clic sur un jour = LV qui peuvent partir ce jour-là ; clic sur la
+     livraison d'une LV = sa fenêtre en jaune. Samedi et dimanche ne se cliquent pas. */
+  lvpCalendrier() {
     const L = this._lvpEtat();
-    L.vue = v;
-    try { localStorage.setItem('snt_lvp_vue', v); } catch (e) { /* choix pour cette fois */ }
+    L.cal = !L.cal; L.jour = ''; L.sel = '';
+    try { localStorage.setItem('snt_lvp_cal', L.cal ? '1' : '0'); } catch (e) { /* choix pour cette fois */ }
     this._lvpRendre();
   },
-  lvpFriseDecaler(n) { const L = this._lvpEtat(); L.decalage = n === 0 ? 0 : (L.decalage || 0) + n; this._lvpRendreCorps(); },
+  lvpCalMois(n) { const L = this._lvpEtat(); L.mois = n === 0 ? 0 : (L.mois || 0) + n; this._lvpRendreCorps(); },
+  lvpCalJour(iso) { const L = this._lvpEtat(); L.jour = L.jour === iso ? '' : iso; L.sel = ''; this._lvpRendreCorps(); },
+  lvpCalLv(num) { const L = this._lvpEtat(); L.sel = L.sel === num ? '' : num; L.jour = ''; this._lvpRendreCorps(); },
+  lvpCalToutVoir() { const L = this._lvpEtat(); L.jour = ''; L.sel = ''; this._lvpRendreCorps(); },
 
-  /* ─ Frise des livraisons (2026-11-24, maquette validée par Hugo) : 4 semaines du lundi au vendredi, une ligne
-     par LV, sa fenêtre de livraison en bande. Colonne de gauche en 3 colonnes alignées : n°, destination, consigne. */
-  _lvpHtmlFrise(lignes) {
-    const L = this._lvpEtat();
-    const NB_SEM = 4, NB = NB_SEM * 5;
-    const auj = new Date(); auj.setHours(0, 0, 0, 0);
-    const lundi = new Date(auj); lundi.setDate(auj.getDate() - ((auj.getDay() || 7) - 1) + 7 * (L.decalage || 0));
-    const jours = [];
-    for (let s = 0; s < NB_SEM; s++) for (let j = 0; j < 5; j++) { const d = new Date(lundi); d.setDate(lundi.getDate() + s * 7 + j); jours.push(d); }
-    const fin = jours[NB - 1];
-    // Indice (0..NB-1) d'une date ouvrée ; week-end → vendredi d'avant (borne de fin) ou lundi d'après (borne de début)
-    const indice = (iso, versLaFin) => {
-      const d = _livDate(iso); if (!d) return null;
-      const x = new Date(d), dow = x.getDay();
-      if (dow === 6) x.setDate(x.getDate() + (versLaFin ? -1 : 2));
-      if (dow === 0) x.setDate(x.getDate() + (versLaFin ? -2 : 1));
-      const sem = Math.floor((x - lundi) / (7 * 86400000));
-      return sem * 5 + ((x.getDay() || 7) - 1);
-    };
-    const col = i => Math.max(0, Math.min(NB - 1, i)) + 2;
-    const iAuj = indice(_livIso(auj), false);
-    const fmt = d => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-    const NOMS = ['lu', 'ma', 'me', 'je', 've'];
-    const semaines = Array.from({ length: NB_SEM }, (_, s) => { const sd = _livSemaineDe(_livIso(jours[s * 5])); return `<div class="lvf-sem">Semaine ${sd ? sd.no : ''} <span>${fmt(jours[s * 5])} – ${fmt(jours[s * 5 + 4])}</span></div>`; }).join('');
-    const tetes = jours.map((d, i) => `<div class="lvf-jour${i % 5 === 0 ? ' lvf-lundi' : ''}${i === iAuj ? ' lvf-auj' : ''}">${NOMS[i % 5]} ${d.getDate()}</div>`).join('');
-    const fond = Array.from({ length: NB_SEM }, (_, s) => `<div class="lvf-fond-sem${s % 2 ? ' lvf-fond-alt' : ''}" style="grid-column: ${2 + s * 5} / span 5"></div>`).join('')
-      + (iAuj !== null && iAuj >= 0 && iAuj < NB ? `<div class="lvf-fond-auj" style="grid-column: ${iAuj + 2} / span 1"></div>` : '');
-
-    const bandes = l => {
-      const c = l.liv;
-      if (l.statut !== 'apartir' || !c || c.type === 'aucune') return '';
-      const etat = _livEtat(c);
-      const iMin = c.min ? indice(c.min, false) : null, iMax = c.max ? indice(c.max, true) : null;
-      if (etat === 'retard') {
-        const i = iMax;
-        const avant = i < 0;
-        return `<div class="lvf-b lvf-b-retard" style="grid-column: ${col(i)} / span 1" title="Limite dépassée : ${_otEsc(_livTexte(c))}">${avant ? '◂ ' + _otEsc(_livJJMM(c.max)) : 'limite'}</div>`;
-      }
-      if (c.type === 'le') {
-        if (iMin < 0 || iMin >= NB) return '';
-        return `<div class="lvf-b lvf-b-le${etat === 'proche' ? ' lvf-b-proche' : ''}" style="grid-column: ${col(iMin)} / span 1"></div>`;
-      }
-      if (c.type === 'semaine') {
-        if (iMax < 0 || iMin >= NB) return '';
-        const a = Math.max(0, iMin), b = Math.min(NB - 1, iMax), s = _livSemaineDe(c.min);
-        return `<div class="lvf-b lvf-b-semaine" style="grid-column: ${col(a)} / ${col(b) + 1}">S${s ? s.no : ''}</div>`;
-      }
-      if (c.type === 'avant') {
-        if (iMax < 0) return '';
-        const a = Math.max(0, iAuj || 0), b = Math.min(NB - 1, iMax);
-        return `<div class="lvf-b lvf-b-avant" style="grid-column: ${col(a)} / ${col(b) + 1}"></div>`
-          + (iMax < NB ? `<div class="lvf-limite" style="grid-column: ${col(iMax)} / span 1" title="Limite : ${_otEsc(_livJour(c.max))}"></div>` : '');
-      }
-      if (c.type === 'apartir') {
-        let h = '';
-        const a0 = Math.max(0, iAuj || 0);
-        if (iMin > a0) h += `<div class="lvf-b lvf-b-pasencore" style="grid-column: ${col(a0)} / ${col(Math.min(NB - 1, iMin - 1)) + 1}">pas encore</div>`;
-        if (iMin < NB) h += `<div class="lvf-b lvf-b-apartir" style="grid-column: ${col(Math.max(0, iMin))} / ${NB + 2}">possible dès le ${_otEsc(_livJJMM(c.min))} →</div>`;
-        return h;
-      }
-      return '';
-    };
-
-    const ligne = l => {
-      const r = l.row, etat = l.statut === 'apartir' ? _livEtat(l.liv) : '';
-      const nbMods = l.mods.length;
-      const consigne = l.liv ? _livTexte(l.liv) : 'Pas de consigne';
-      return `<div class="lvf-ligne${l.statut !== 'apartir' ? ' lvf-ligne-off' : ''}">
-        <div class="lvf-gauche">
-          <span class="lvf-num">${r.pdfUrl ? `<a href="${_otEsc(r.pdfUrl)}" target="_blank" rel="noopener" title="Ouvrir le PDF">${_otEsc(r.numero)}</a>` : _otEsc(r.numero)}</span>
-          <span class="lvf-dest" title="${_otEsc([r.destinataire, l.mods.map(m => m.d.code).join(', ')].filter(Boolean).join(' — '))}">${_otEsc(r.destinataire || '—')}<small>${nbMods ? nbMods + ' module' + (nbMods > 1 ? 's' : '') : _otEsc(r.marchandises_desc || '')}</small></span>
-          <span class="lvf-consigne${etat ? ' pb-liv-' + etat : ''}${l.liv ? '' : ' pb-gris'}">${_otEsc(consigne)}${etat === 'retard' ? '<small>en retard</small>' : etat === 'pasencore' ? '<small>pas encore livrable</small>' : etat === 'proche' ? '<small>bientôt</small>' : ''}</span>
-        </div>
-        ${bandes(l)}
-      </div>`;
-    };
-
-    return `<div class="lvf-nav">
-        <button type="button" class="pb-bouton" onclick="App.lvpFriseDecaler(-1)" aria-label="Semaine précédente">‹</button>
-        <button type="button" class="pb-bouton" onclick="App.lvpFriseDecaler(0)">Cette semaine</button>
-        <button type="button" class="pb-bouton" onclick="App.lvpFriseDecaler(1)" aria-label="Semaine suivante">›</button>
-        <span class="lvf-legende"><i class="lvf-l-le"></i>le … <i class="lvf-l-sem"></i>semaine <i class="lvf-l-avant"></i>avant le … <i class="lvf-l-apartir"></i>à partir du … <i class="lvf-l-retard"></i>limite dépassée</span>
-      </div>
-      <div class="pb-tableau"><div class="lvf">
-        <div class="lvf-tete"><div class="lvf-tete-g"><span>LV</span><span>Destination</span><span>Consigne</span></div>${semaines}${tetes}</div>
-        <div class="lvf-corps"><div class="lvf-fond" aria-hidden="true"><div></div>${fond}</div>${lignes.map(ligne).join('')}</div>
-      </div></div>`;
+  // Jours où la LV peut partir, à partir d'aujourd'hui (fenêtre surlignée en jaune)
+  _lvpDansFenetre(c, k, auj) {
+    if (!c) return false;
+    if (c.type === 'le') return k === c.min;
+    if (c.type === 'avant') return k >= auj && k <= c.max;
+    if (c.type === 'apartir') return k >= c.min;
+    if (c.type === 'semaine') return k >= c.min && k <= c.max;
+    return false;
   },
+
+  // Jour cliqué : la LV peut-elle partir ce jour-là, et pourquoi (les LV en retard restent dans « Tout voir »)
+  _lvpRaisonJour(c, k) {
+    const non = { ok: false };
+    if (!c || c.type === 'aucune') return { ok: true, t: 'Sans consigne', fort: false };
+    if (_livEtat(c) === 'retard') return non;
+    if (c.type === 'le') return k === c.min ? { ok: true, t: 'À livrer ce jour', fort: true } : non;
+    if (c.type === 'avant') return k > c.max ? non : k === c.max ? { ok: true, t: 'Dernier jour', fort: true } : { ok: true, t: 'Possible, au plus tard le ' + _livJJMM(c.max), fort: false };
+    if (c.type === 'apartir') return k < c.min ? non : k === c.min ? { ok: true, t: 'Premier jour possible', fort: true } : { ok: true, t: 'Possible', fort: false };
+    if (c.type === 'semaine') return k >= c.min && k <= c.max ? { ok: true, t: 'Dans sa semaine', fort: false } : non;
+    return non;
+  },
+
+  _lvpHtmlCalendrier(lignes) {
+    const L = this._lvpEtat();
+    const auj = _livIso(new Date());
+    const items = lignes.filter(l => l.statut === 'apartir' && l.liv && l.liv.type !== 'aucune');
+    const sel = L.sel ? items.find(l => this._lvpNum(l.row.numero) === L.sel) : null;
+    const nom = l => `${l.row.numero} ${l.row.destinataire || ''}`.trim();
+    const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+    const base = new Date(); base.setHours(12, 0, 0, 0); base.setDate(1);
+    let mois = '';
+    for (let m = 0; m < 3; m++) {
+      const premier = new Date(base.getFullYear(), base.getMonth() + (L.mois || 0) + m, 1, 12);
+      const debut = new Date(premier); debut.setDate(1 - ((premier.getDay() + 6) % 7));
+      let cases = '<span class="lvc-tete">Sem.</span>' + ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(j => `<span class="lvc-tete">${j}</span>`).join('');
+      for (let w = 0; w < 6; w++) {
+        const lundi = new Date(debut); lundi.setDate(debut.getDate() + w * 7);
+        const kL = _livIso(lundi), s = _livSemaineDe(kL);
+        const sems = items.filter(l => l.liv.type === 'semaine' && l.liv.min === kL);
+        cases += sems.length
+          ? `<span class="lvc-sem lvc-sem-oui" title="${_otEsc('Semaine ' + s.no + ' : ' + sems.map(nom).join(', '))}">${s.no}</span>`
+          : `<span class="lvc-sem">${s ? s.no : ''}</span>`;
+        for (let j = 0; j < 7; j++) {
+          const d = new Date(lundi); d.setDate(lundi.getDate() + j);
+          const k = _livIso(d), we = j >= 5;
+          const le = items.filter(l => l.liv.type === 'le' && l.liv.min === k);
+          const av = items.filter(l => l.liv.type === 'avant' && l.liv.max === k);
+          const ap = items.filter(l => l.liv.type === 'apartir' && l.liv.min === k);
+          const se = we ? [] : items.filter(l => l.liv.type === 'semaine' && k >= l.liv.min && k <= l.liv.max);
+          const cls = ['lvc-j'];
+          if (d.getMonth() !== premier.getMonth()) cls.push('lvc-hors');
+          if (we) cls.push('lvc-we');
+          if (se.length) cls.push('lvc-sembande');
+          if (sel && !we && this._lvpDansFenetre(sel.liv, k, auj)) cls.push('lvc-fen');
+          if (le.length) cls.push(le.length > 1 ? 'lvc-le2' : 'lvc-le');
+          if (k === auj) cls.push('lvc-auj');
+          if (L.jour === k) cls.push('lvc-choisi');
+          const quoi = [...le.map(l => nom(l) + ' — le'), ...av.map(l => nom(l) + ' — dernier jour (avant le)'),
+            ...ap.map(l => nom(l) + ' — premier jour (à partir du)'), ...se.map(l => nom(l) + ' — semaine')];
+          const titre = _livJour(k) + (quoi.length ? '\n' + quoi.join('\n') : '');
+          cases += `<button type="button" class="${cls.join(' ')}"${we ? ' disabled' : ` onclick="App.lvpCalJour('${k}')"`} title="${_otEsc(titre)}" aria-label="${_otEsc(_livJour(k) + (quoi.length ? ', ' + quoi.length + ' LV' : ''))}">`
+            + (ap.length ? '<i class="lvc-ap" aria-hidden="true"></i>' : '') + d.getDate() + (av.length ? '<i class="lvc-av" aria-hidden="true"></i>' : '') + '</button>';
+        }
+      }
+      mois += `<div class="lvc-mois"><div class="lvc-mois-nom">${MOIS[premier.getMonth()]} ${premier.getFullYear()}</div><div class="lvc-grille">${cases}</div></div>`;
+    }
+    return `<section class="sx-carte lvc" aria-label="Calendrier des livraisons">
+      <div class="lvc-nav">
+        <button type="button" class="pb-bouton" onclick="App.lvpCalMois(-1)" aria-label="Mois précédent">‹</button>
+        <button type="button" class="pb-bouton" onclick="App.lvpCalMois(0)">Aujourd’hui</button>
+        <button type="button" class="pb-bouton" onclick="App.lvpCalMois(1)" aria-label="Mois suivant">›</button>
+        <span class="lvc-aide">Cliquez un jour pour voir ce qui peut partir ce jour-là, ou la livraison d’une LV pour voir sa fenêtre.</span>
+      </div>
+      <div class="lvc-mois-liste">${mois}</div>
+      <div class="lvc-legende">
+        <span><i class="lvc-l lvc-l-le"></i>Livraison <b>le</b> (plus foncé = plusieurs)</span>
+        <span><i class="lvc-l lvc-l-av"></i><b>Avant le</b> : dernier jour</span>
+        <span><i class="lvc-l lvc-l-ap"></i><b>À partir du</b> : premier jour</span>
+        <span><i class="lvc-l-no">49</i><i class="lvc-l lvc-l-sem"></i><b>Semaine n°</b> : lundi → vendredi</span>
+        <span><i class="lvc-l lvc-l-fen"></i>Fenêtre de la LV choisie</span>
+      </div>
+    </section>`;
+  },
+
   lvpRecherche(q) {
     this._lvpEtat().q = q;
     clearTimeout(this._lvpMinuteur);
@@ -274,10 +279,7 @@ Object.assign(App, {
         ${bcb ? `<div class="pb-ligne"><span class="lvp-masquees">${bcb} LV de BCB non affichées (activité LV / CMR)</span></div>` : ''}
         <div class="pb-ligne pb-defile">
           <div class="pb-ligne" role="group" aria-label="Filtre">${f('apartir', 'À partir', n('apartir'))}${f('partie', 'Parties', n('partie'))}${f('annulee', 'Annulées', n('annulee'))}${f('toutes', 'Toutes')}</div>
-          <div class="lvp-vues" role="group" aria-label="Affichage">
-            <button type="button" class="pb-onglet" aria-pressed="${L.vue !== 'frise'}" onclick="App.lvpVue('liste')">Liste</button>
-            <button type="button" class="pb-onglet" aria-pressed="${L.vue === 'frise'}" onclick="App.lvpVue('frise')">Frise des livraisons</button>
-          </div>
+          ${L.filtre === 'apartir' ? `<button type="button" class="pb-onglet lvp-cal-btn" aria-pressed="${!!L.cal}" onclick="App.lvpCalendrier()">Calendrier</button>` : ''}
         </div>
       </div></div>
       <main class="pb-contenu" id="lvp-corps"></main>
@@ -302,14 +304,25 @@ Object.assign(App, {
         ...l.mods.map(m => m.d.code), ...l.mods.map(m => m.d.codeModule), ...l.mods.map(m => m.d.chantier)]
         .some(v => String(v || '').toLowerCase().includes(q));
     });
-    // À partir (et frise) : par urgence de livraison — retard, au plus tard le plus proche, « à partir du », sans consigne ;
+    // À partir : par urgence de livraison — retard, au plus tard le plus proche, « à partir du », sans consigne ;
     // sinon les plus récentes d'abord
-    if (L.filtre === 'apartir' || L.vue === 'frise') lignes = lignes.slice().sort((a, b) => _livCleTri(a.liv) - _livCleTri(b.liv) || Number(b.row.numero) - Number(a.row.numero));
-    if (!lignes.length) { el.innerHTML = '<div class="sx-carte"><div class="sx-vide">Aucune LV ne correspond.</div></div>'; return; }
-    if (L.vue === 'frise') { el.innerHTML = this._lvpHtmlFrise(lignes); return; }
+    if (L.filtre === 'apartir') lignes = lignes.slice().sort((a, b) => _livCleTri(a.liv) - _livCleTri(b.liv) || Number(b.row.numero) - Number(a.row.numero));
+    const avecCal = L.filtre === 'apartir' && L.cal;
+    const cal = avecCal ? this._lvpHtmlCalendrier(lignes) : '';
+    let bandeau = '';
+    lignes.forEach(l => { l.raison = null; });
+    if (avecCal && L.jour) {
+      lignes = lignes.filter(l => { const r = this._lvpRaisonJour(l.liv, L.jour); l.raison = r; return r.ok; });
+      bandeau = `<b>Peuvent partir le ${_otEsc(_livJour(L.jour))}</b> — ${lignes.length} LV, selon la consigne de chaque LV`;
+    } else if (avecCal && L.sel) {
+      const s = lignes.find(l => this._lvpNum(l.row.numero) === L.sel);
+      if (s) bandeau = `<b>LV ${_otEsc(s.row.numero)} · ${_otEsc(s.row.destinataire || '')}</b> — ${_otEsc(s.liv ? _livTexte(s.liv) : 'Pas de consigne')} : fenêtre surlignée en jaune`;
+    }
+    if (bandeau) bandeau = `<div class="lvc-bandeau"><span>${bandeau}</span><button type="button" class="pb-bouton" onclick="App.lvpCalToutVoir()">Tout voir</button></div>`;
+    if (!lignes.length) { el.innerHTML = cal + bandeau + `<div class="sx-carte"><div class="sx-vide">${L.jour ? 'Aucune LV ne peut partir ce jour-là.' : 'Aucune LV ne correspond.'}</div></div>`; return; }
     const entete = `<div class="pb-grille-lv pb-tete"><span>LV</span><span>Créée</span><span>Destination</span><span>Modules</span>
-      <span>Commande · BT</span><span>Poids · ml</span><span>Livraison</span><span>Statut</span><span>Actions</span></div>`;
-    el.innerHTML = `<div class="pb-tableau"><div class="pb-interieur pb-interieur-lv">${entete}${lignes.map(l => this._lvpHtmlLigne(l)).join('')}</div></div>`;
+      <span>Commande · BT</span><span>Poids · ml</span><span>Livraison</span><span>${avecCal && L.jour ? 'Ce jour-là' : 'Statut'}</span><span>Actions</span></div>`;
+    el.innerHTML = cal + bandeau + `<div class="pb-tableau"><div class="pb-interieur pb-interieur-lv">${entete}${lignes.map(l => this._lvpHtmlLigne(l)).join('')}</div></div>`;
     this._pbColsInit(el);
   },
 
@@ -318,7 +331,9 @@ Object.assign(App, {
     const { grutage, commentaire } = this._lvuParseNote(r.note);
     const court = d => { const x = this._lvpDate(d); return x ? x.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : ''; };
     const auj = new Date(); auj.setHours(0, 0, 0, 0);
-    const etatLiv = l.statut === 'apartir' ? _livEtat(l.liv) : '';
+    const etatLiv = l.statut === 'apartir' && _livEtat(l.liv) === 'retard' ? 'retard' : '';   // seul le retard est coloré
+    const L = this._lvpEtat(), nn = this._lvpNum(r.numero);
+    const cliquable = L.cal && L.filtre === 'apartir' && l.statut === 'apartir' && l.liv && l.liv.type !== 'aucune';
     const statut = {
       annulee: `<span class="pb-ot lvp-st-annulee" title="${_otEsc('Annulée le ' + (r.annulee_le || '?') + (r.annulee_par ? ' par ' + r.annulee_par : '') + ' : ' + (r.annulation_motif || '') + (r.remplacee_par ? ' — remplacée par n° ' + r.remplacee_par : ''))}">Annulée${r.remplacee_par ? ' → ' + _otEsc(r.remplacee_par) : ''}</span>`,
       partie: `<span class="pb-ot lvp-st-partie">Partie${r.parti_le ? ' ' + _otEsc(r.parti_le.slice(0, 5)) : ''}</span>`,
@@ -337,15 +352,17 @@ Object.assign(App, {
       l.statut === 'apartir' ? `<button type="button" class="lvp-btn lvp-btn-rouge" onclick="App.openLvCancelModal('${num}')" title="Annuler la LV (reste dans l'historique, modules libérés)" aria-label="Annuler la LV ${num}">Annuler</button>` : '',
     ].join('');
     const lienNum = r.pdfUrl ? `<a href="${_otEsc(r.pdfUrl)}" target="_blank" rel="noopener" class="lvp-lien" title="Ouvrir le PDF"><b>${num}</b></a>` : `<b>${num}</b>`;
-    return `<div class="pb-grille-lv pb-ligne-module${l.statut !== 'apartir' ? ' pb-parti' : ''}">
+    return `<div class="pb-grille-lv pb-ligne-module${l.statut !== 'apartir' ? ' pb-parti' : ''}${L.sel && L.sel === nn ? ' lvc-ligne-sel' : ''}">
       <span class="lvp-num">${lienNum} <span class="lvp-type">${_otEsc(r.type || 'LV')}</span></span>
       <span class="pb-gris2">${_otEsc(court(r.date))}</span>
       <span title="${_otEsc(titreDest)}">${_otEsc(r.destinataire || '—')}${grutage ? '<span class="lvp-grutage">grutage</span>' : ''}${commentaire ? ' <span class="pb-gris2">· ' + _otEsc(commentaire) + '</span>' : ''}</span>
       <span class="lvp-mods" title="${_otEsc(titreMods)}">${mods}</span>
       <span class="pb-gris2" title="${_otEsc(cde)}">${_otEsc(cde)}</span>
       <span class="pb-gris2">${_otEsc(pm)}</span>
-      <span class="pb-liv${etatLiv ? ' pb-liv-' + etatLiv : ''}${l.liv ? '' : ' pb-gris'}" title="${_otEsc(l.liv ? _livTexte(l.liv) : 'Pas de consigne')}">${_otEsc(l.liv ? _livTexte(l.liv, true) : '—')}</span>
-      <span>${statut}</span>
+      <span class="pb-liv${etatLiv ? ' pb-liv-' + etatLiv : ''}${l.liv ? '' : ' pb-gris'}" title="${_otEsc(l.liv ? _livTexte(l.liv) : 'Pas de consigne')}">${cliquable
+        ? `<button type="button" class="pb-liv-btn" onclick="App.lvpCalLv('${_otEsc(nn)}')" aria-pressed="${L.sel === nn}" title="${_otEsc(_livTexte(l.liv))} : voir sur le calendrier">${_otEsc(_livTexte(l.liv, true))}</button>`
+        : _otEsc(l.liv ? _livTexte(l.liv, true) : '—')}</span>
+      <span>${l.raison ? `<span class="lvc-raison${l.raison.fort ? ' lvc-fort' : ''}">${_otEsc(l.raison.t)}</span>` : statut}</span>
       <span class="lvp-actions">${actions}</span>
     </div>`;
   },
