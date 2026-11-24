@@ -158,14 +158,8 @@ Object.assign(App, {
     const L = this._lvpEtat();
     const lignes = this._lvpLignes();
     const n = s => lignes.filter(l => l.statut === s).length;
-    const ap = lignes.filter(l => l.statut === 'apartir');
-    const nbMods = ap.reduce((t, l) => t + (l.mods.length || 0), 0);
-    const dests = new Set(ap.map(l => String(l.row.destinataire || '').trim().toUpperCase()).filter(Boolean)).size;
-    const somme = k => ap.reduce((t, l) => t + (parseFloat(l.row[k]) || 0), 0);
-    const nombre = (x, dec) => x.toLocaleString('fr-FR', { maximumFractionDigits: dec });
     const bcb = (L.liste || []).filter(r => this._lvpEstBcb(r)).length;
     const f = (cle, nom, nb) => `<button type="button" class="pb-onglet" aria-pressed="${L.filtre === cle}" onclick="App.lvpFiltre('${cle}')">${nom}${nb !== undefined ? ' <b>' + nb + '</b>' : ''}</button>`;
-    const stat = (v, t) => `<span class="lvp-stat"><b>${v}</b>${t}</span>`;
     el.innerHTML = `<div class="sx-ecran pb-ecran">
       ${this._otEntete({ retour: { texte: 'LOXAM', action: 'App.go(\'loxam-menu\')' }, titre: 'Production',
         sousTitre: 'LV / CMR · ' + (L.liste ? n('apartir') + ' à partir' : 'chargement…'), large: true, bandeau: this._pbNav('lv') })}
@@ -177,10 +171,7 @@ Object.assign(App, {
           </div>
           <button type="button" class="pb-bouton" onclick="App._lvpCharger(true)">${L.chargement ? 'Chargement…' : 'Actualiser'}</button>
         </div>
-        ${L.liste ? `<div class="pb-ligne lvp-stats" aria-label="LV à partir">
-          ${stat(ap.length, ' LV à partir')}${stat(nbMods, ' modules')}${stat(dests, ' destinations')}${stat(nombre(somme('poids'), 1), ' t')}${stat(nombre(somme('ml'), 1), ' ml')}
-          ${bcb ? `<span class="lvp-masquees">${bcb} LV de BCB non affichées (activité LV / CMR)</span>` : ''}
-        </div>` : ''}
+        ${bcb ? `<div class="pb-ligne"><span class="lvp-masquees">${bcb} LV de BCB non affichées (activité LV / CMR)</span></div>` : ''}
         <div class="pb-ligne pb-defile" role="group" aria-label="Filtre">
           ${f('apartir', 'À partir', n('apartir'))}${f('partie', 'Parties', n('partie'))}${f('annulee', 'Annulées', n('annulee'))}${f('toutes', 'Toutes')}
         </div>
