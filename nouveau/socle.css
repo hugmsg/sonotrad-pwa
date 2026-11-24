@@ -524,12 +524,12 @@ body.pb-plein #view-prod-bureau.active, body.pb-plein #view-ot-commandes.active 
 .pb-contenu { flex: 1; min-height: 0; width: 100%; max-width: none; margin: 0 auto; padding: 10px 16px 12px; box-sizing: border-box; display: flex; flex-direction: column; }
 .pb-contenu > .sx-carte, .pb-contenu > .sx-chargement { flex-shrink: 0; }
 .pb-tableau { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; background: #FFFFFF; border: 1px solid var(--sx-bord); border-radius: 12px; }
-.pb-interieur { min-width: 1380px; font-size: 13px; }
+.pb-interieur { min-width: 1296px; font-size: 13px; }
 .pb-tete { position: sticky; top: 0; z-index: 3; }
 .pb-groupe { position: sticky; top: 34px; z-index: 2; }
 .pb-tete > :first-child, .pb-code, .pb-code-cell { position: sticky; left: 0; z-index: 1; background: inherit; align-self: stretch; display: flex; align-items: center; margin-left: -12px; padding-left: 12px; }
 .pb-groupe > span, .pb-groupe > svg { position: sticky; left: 12px; }
-.pb-grille { display: grid; grid-template-columns: 146px 100px 84px minmax(162px, 1fr) 120px 84px 74px 130px 56px 92px 120px 74px; align-items: center; column-gap: 10px; padding: 0 12px; }
+.pb-grille { display: grid; grid-template-columns: 146px 100px 84px minmax(162px, 1fr) 120px 84px 74px 130px 56px 92px 120px; align-items: center; column-gap: 10px; padding: 0 12px; }
 .pb-tete { height: 34px; background: #EEF1F5; font-size: 11px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; color: #3D4B5C; }
 .pb-groupe { display: flex; width: 100%; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border: 0; border-top: 1px solid var(--sx-bord); font-family: inherit; font-size: 12px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; cursor: pointer; text-align: left; }
 .pb-groupe[aria-expanded="false"] svg { transform: rotate(-90deg); }
@@ -600,7 +600,7 @@ body.pb-plein #view-prod-bureau.active, body.pb-plein #view-ot-commandes.active 
 }
 .pb-nav-btn { height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,.35); background: transparent; color: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .pb-nav-btn[aria-pressed="true"] { background: #FFFFFF; color: var(--sx-bleu); border-color: #FFFFFF; font-weight: 700; }
-.pb-grille-arr { display: grid; grid-template-columns: 112px 100px 84px 76px minmax(150px, .8fr) 170px 74px minmax(160px, 1fr) 128px 136px 74px; align-items: center; column-gap: 10px; padding: 0 12px; }
+.pb-grille-arr { display: grid; grid-template-columns: 112px 100px 84px 76px minmax(150px, .8fr) 170px 74px minmax(160px, 1fr) 128px 136px; align-items: center; column-gap: 10px; padding: 0 12px; }
 .pb-statut { font-size: 12px; font-weight: 700; border-radius: 5px; padding: 2px 7px; white-space: nowrap; }
 .pb-statut-parc { background: #DCE8FA; color: #0B3A7A; }
 .pb-statut-parti { background: #EEF1F5; color: #3D4B5C; font-weight: 600; }
@@ -736,8 +736,8 @@ span.pb-ot-sans { cursor: default; }
 .pb-sans-btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin: -4px 0 -4px 2px; vertical-align: middle; border: 0; border-radius: 6px; background: none; color: #C62828; cursor: pointer; }
 .pb-sans-btn:hover, .pb-sans-btn:focus-visible { background: #FDECEC; }
 /* Production : colonne « Travaux » (description du Planning), masquable (2026-11-18) */
-.pb-avec-desc .pb-interieur { min-width: 1380px; }
-.pb-avec-desc .pb-grille { grid-template-columns: 146px 92px 76px minmax(102px, .8fr) minmax(150px, 1.4fr) 106px 58px 56px 120px 54px 80px 104px 62px; }
+.pb-avec-desc .pb-interieur { min-width: 1316px; }
+.pb-avec-desc .pb-grille { grid-template-columns: 146px 92px 76px minmax(102px, .8fr) minmax(150px, 1.4fr) 106px 58px 56px 120px 54px 80px 104px; }
 .pb-desc { display: block; width: 100%; min-width: 0; border: 0; background: none; padding: 0; font-family: inherit; font-size: 12.5px; color: #3D4B5C; text-align: left; cursor: pointer; }
 .pb-desc:hover { text-decoration: underline; }
 .pb-bouton[aria-pressed="true"] { background: var(--sx-bleu-clair); border-color: var(--sx-bleu); color: var(--sx-bleu); }
@@ -847,3 +847,9 @@ textarea.cd-zone[data-c="modules"] { font-family: ui-monospace, Consolas, monosp
 .pb-tete:hover .pb-poignee::after { opacity: 1; }
 .pb-poignee:hover::after, .pb-redim .pb-poignee::after { background: var(--sx-bleu); opacity: 1; }
 .pb-redim, .pb-redim * { cursor: col-resize !important; user-select: none; }
+/* Colonne « Poses » retirée du tableau (2026-11-24) : « OT à faire » / « + Fiche » dans la colonne OT ouvrent la fiche */
+button.pb-ot-afaire:hover { background: #FFE9A8; }
+.pb-ot-creer { background: none; color: var(--sx-bleu); font-weight: 600; }
+.pb-ot-creer:hover, .pb-ot-creer:focus-visible { background: #E7EEF9; }
+.pb-grille-arr .pb-ot-creer { opacity: 0; }
+.pb-grille-arr.pb-ligne-module:hover .pb-ot-creer, .pb-grille-arr .pb-ot-creer:focus-visible { opacity: 1; }

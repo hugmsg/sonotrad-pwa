@@ -345,7 +345,7 @@ Object.assign(App, {
 
     const sel = this._pbPeutSel();
     const entete = `<div class="pb-grille pb-tete"><span class="pb-code-cell">${sel ? `<input type="checkbox" class="pb-sel" id="pb-sel-tout" aria-label="Tout sélectionner (lignes affichées)" onclick="App.prodSelTout(this.checked)">` : ''}Code</span><span>N° module</span><span>Type</span><span>Agence · chantier</span>${P.desc ? '<span>Travaux</span>' : ''}
-      <span>Étape</span><span>Durée</span><span>Livraison</span><span>OT</span><span title="Fournitures sorties du stock">Stock</span><span class="pb-droite">${admin ? 'Montant' : ''}</span><span>${admin ? 'Documents' : ''}</span><span>Fiche</span></div>`;
+      <span>Étape</span><span>Durée</span><span>Livraison</span><span>OT</span><span title="Fournitures sorties du stock">Stock</span><span class="pb-droite">${admin ? 'Montant' : ''}</span><span>${admin ? 'Documents' : ''}</span></div>`;
     el.innerHTML = `<div class="pb-tableau${P.desc ? ' pb-avec-desc' : ''}"><div class="pb-interieur">${entete}${groupes.map(g => `
       <button type="button" class="pb-groupe pb-g-${g.cle}" aria-expanded="${!P.replies[g.cle]}" onclick="App.prodReplier('${g.cle}')">
         ${_PB_SVG_CHEVRON}<span>${_otEsc(g.titre)}</span><span class="pb-groupe-n">${g.ls.length} module${g.ls.length > 1 ? 's' : ''}</span>
@@ -367,7 +367,7 @@ Object.assign(App, {
       if (f) {
         const lib = { brouillon: 'Fiche en cours', a_valider: 'Fiche à valider' }[f.statut];
         ot = `<button type="button" class="pb-ot pb-ot-${_otEsc(f.statut)}" onclick="App.prodOuvrirFiche(${Number(f.id)})" title="Ouvrir la fiche d'opérations">${_otEsc(lib || f.numero_ot || 'Validée')}${f.statut === 'validee' ? ' · à envoyer' : ''}</button>`;
-      } else ot = this._pbHtmlOtSansFiche(l, true);
+      } else ot = this._pbHtmlOtSansFiche(l, true, `App.prodPoses(${l.parti}, ${l.idx})`);
     }
     const docs = (admin && f && f.documents) ? (() => {
       const pdf = (f.documents.fichiers || []).find(x => x.type === 'pdf');
@@ -388,7 +388,6 @@ Object.assign(App, {
       <span>${this._pbHtmlStock(f)}</span>
       <span class="pb-droite pb-montant">${admin && f && f.total_ht !== undefined && f.total_ht !== null && f.statut !== 'brouillon' ? _otEuros(f.total_ht) : ''}</span>
       <span class="pb-docs">${docs}</span>
-      <button type="button" class="pb-poses${l.sansOt ? ' pb-poses-off' : ''}" onclick="App.prodPoses(${l.parti}, ${l.idx})" title="${l.sansOt ? 'Module sans OT : ouvrir une fiche demande confirmation' : 'Fiche d’opérations : saisir les poses'}">${_PB_SVG_CLE}Poses</button>
     </div>`;
   },
 });
@@ -588,7 +587,7 @@ Object.assign(App, {
     const visibles = groupes.slice(0, A.mois);
     const admin = this._otAdmin();
     const entete = `<div class="pb-grille-arr pb-tete"><span>Code</span><span>N° module</span><span>Type</span><span>Arrivée</span><span>Provenance</span>
-      <span>Statut</span><span>LV départ</span><span>Chantier · destination</span><span>OT</span><span>${admin ? 'Documents' : ''}</span><span>Fiche</span></div>`;
+      <span>Statut</span><span>LV départ</span><span>Chantier · destination</span><span>OT</span><span>${admin ? 'Documents' : ''}</span></div>`;
     el.innerHTML = `<div class="pb-tableau"><div class="pb-interieur">${entete}${visibles.map(g => `
       <button type="button" class="pb-groupe pb-g-demarrer" aria-expanded="${!S.pb.replies['m' + g.cle]}" onclick="App.prodReplier('m${g.cle}')">
         ${_PB_SVG_CHEVRON}<span>${_otEsc(g.titre)}</span><span class="pb-groupe-n">${g.ls.length} arrivée${g.ls.length > 1 ? 's' : ''}</span>
@@ -606,7 +605,7 @@ Object.assign(App, {
       if (f) {
         const lib = { brouillon: 'Fiche en cours', a_valider: 'Fiche à valider' }[f.statut];
         ot = `<button type="button" class="pb-ot pb-ot-${_otEsc(f.statut)}" onclick="App.prodOuvrirFiche(${Number(f.id)})" title="Ouvrir la fiche d'opérations">${_otEsc(lib || f.numero_ot || 'Validée')}</button>`;
-      } else ot = this._pbHtmlOtSansFiche(l, false);
+      } else ot = this._pbHtmlOtSansFiche(l, false, `App.prodPosesCode('${_otEsc(a.code || '')}', '${_otEsc(a.numModule || '')}')`);
     }
     const docs = (admin && f && f.documents) ? (() => {
       const pdf = (f.documents.fichiers || []).find(x => x.type === 'pdf');
@@ -618,7 +617,6 @@ Object.assign(App, {
     const numero = pl
       ? `<button type="button" class="pb-numero" onclick="App.prodOuvrirModule(${l.pl === null ? false : !!(S.archive || []).includes(pl)}, ${l.pl.i})" title="Ouvrir la fiche du module">${_otEsc(a.numModule || pl.codeModule || '—')}</button>`
       : `<span class="pb-numero">${_otEsc(a.numModule || '—')}</span>`;
-    const poses = `<button type="button" class="pb-poses" onclick="App.prodPosesCode('${code}', '${_otEsc(a.numModule || '')}')" title="Fiche d'opérations : saisir les poses">${_PB_SVG_CLE}Poses</button>`;
     return `<div class="pb-grille-arr pb-ligne-module${l.parti ? ' pb-parti' : ''}">
       <button type="button" class="pb-code" onclick="App.prodDossierArrivee('${code}')" title="Ouvrir le dossier du module (photos, papiers d'arrivée et de départ)">${_PB_SVG_DOSSIER}${code}</button>
       ${numero}
@@ -630,7 +628,6 @@ Object.assign(App, {
       <span class="pb-texte" title="${_otEsc(dest)}">${_otEsc(dest)}</span>
       <span>${ot}</span>
       <span class="pb-docs">${docs}</span>
-      ${poses}
     </div>`;
   },
 
@@ -922,9 +919,9 @@ Object.assign(App, {
      par tableau : planning, planning avec « Travaux », arrivées. Les colonnes jamais touchées gardent leur
      réglage d'origine (les colonnes souples absorbent la place restante). */
   _PB_COLS_DEFAUT: {
-    prod: ['146px', '100px', '84px', 'minmax(162px, 1fr)', '120px', '84px', '74px', '130px', '56px', '92px', '120px', '74px'],
-    prod_desc: ['146px', '92px', '76px', 'minmax(102px, .8fr)', 'minmax(150px, 1.4fr)', '106px', '58px', '56px', '120px', '54px', '80px', '104px', '62px'],
-    arr: ['112px', '100px', '84px', '76px', 'minmax(150px, .8fr)', '170px', '74px', 'minmax(160px, 1fr)', '128px', '136px', '74px'],
+    prod: ['146px', '100px', '84px', 'minmax(162px, 1fr)', '120px', '84px', '74px', '130px', '56px', '92px', '120px'],
+    prod_desc: ['146px', '92px', '76px', 'minmax(102px, .8fr)', 'minmax(150px, 1.4fr)', '106px', '58px', '56px', '120px', '54px', '80px', '104px'],
+    arr: ['112px', '100px', '84px', '76px', 'minmax(150px, .8fr)', '170px', '74px', 'minmax(160px, 1fr)', '128px', '136px'],
   },
   _pbColsLire() { try { return JSON.parse(localStorage.getItem('snt_pb_cols') || '{}') || {}; } catch (e) { return {}; } },
   _pbColsEcrire(t) { try { localStorage.setItem('snt_pb_cols', JSON.stringify(t)); } catch (e) { /* stockage indisponible : réglage pour cette fois */ } },
@@ -1220,7 +1217,9 @@ Object.assign(App, {
 
 /* Colonne OT d'un module sans fiche (2026-11-18) : « OT à faire » + bouton « Pas d'OT », ou le marquage. */
 Object.assign(App, {
-  _pbHtmlOtSansFiche(l, gris) {
+  // ouvrir (2026-11-24) : appel qui crée / ouvre la fiche — remplace la colonne « Poses » du tableau (doublon) ;
+  // les cartes (téléphone) gardent leur bouton Poses et n'envoient pas ce paramètre.
+  _pbHtmlOtSansFiche(l, gris, ouvrir) {
     const code = _otEsc(l.code || '');
     if (l.otExcel) return `<span class="pb-ot pb-ot-envoyee" title="OT fait dans la matrice Excel">${_otEsc(l.otExcel)}</span>`;
     if (l.sansOt) {
@@ -1229,7 +1228,11 @@ Object.assign(App, {
         ? `<span class="pb-ot pb-ot-sans" title="${t}">Pas d'OT</span>`
         : `<button type="button" class="pb-ot pb-ot-sans" onclick="App.otRemettreAFaire('${code}')" title="${t} — cliquer pour remettre à faire">Pas d'OT</button>`;
     }
-    const etat = l.otAFaire ? '<span class="pb-ot pb-ot-afaire">OT à faire</span>' : (gris ? '<span class="pb-gris">Pas de fiche</span>' : '');
+    const peut = ouvrir && this._otAutorise();
+    const etat = l.otAFaire
+      ? (peut ? `<button type="button" class="pb-ot pb-ot-afaire" onclick="${ouvrir}" title="Créer la fiche d’opérations du module">OT à faire</button>` : '<span class="pb-ot pb-ot-afaire">OT à faire</span>')
+      : (peut ? `<button type="button" class="pb-ot pb-ot-creer" onclick="${ouvrir}" title="Créer la fiche d’opérations du module (poses en cours…)">+ Fiche</button>`
+        : (gris ? '<span class="pb-gris">Pas de fiche</span>' : ''));
     // Petite croix rouge (demande de Hugo) : plus léger, et on ne lit pas « pas d'OT » comme « rien à faire »
     return etat + (this._otAutorise() && l.code ? ` <button type="button" class="pb-sans-btn" onclick="App.otPasDOt('${code}')" title="Marquer : ce module n'aura pas d'OT (vente en l'état, épave…)" aria-label="Marquer ${code} sans OT"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>` : '');
   },
