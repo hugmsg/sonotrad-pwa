@@ -20,25 +20,21 @@ Object.assign(App, {
 
   lvuSetType(type) {
     S.lvu.type = type;
-    document.getElementById('lvu-btn-lv').style.cssText  += `;background:${type==='LV' ?'#1D4ED8':'white'};color:${type==='LV'?'white':'#64748B'};border-color:${type==='LV'?'#1D4ED8':'#E2E8F0'}`;
-    document.getElementById('lvu-btn-cmr').style.cssText += `;background:${type==='CMR'?'#1D4ED8':'white'};color:${type==='CMR'?'white':'#64748B'};border-color:${type==='CMR'?'#1D4ED8':'#E2E8F0'}`;
+    document.getElementById('lvu-btn-lv')?.setAttribute('aria-pressed', String(type === 'LV'));
+    document.getElementById('lvu-btn-cmr')?.setAttribute('aria-pressed', String(type === 'CMR'));
+    if (this._lvuRecap) this._lvuRecap();
   },
 
   lvuSetSource(src) {
     S.lvu.source = src;
-    ['manual','loxam','bcb','stock'].forEach(s => {
-      const btn = document.getElementById('lvu-src-' + s);
-      if (!btn) return;
-      btn.style.borderColor = s === src ? '#1D4ED8' : '#E2E8F0';
-      btn.style.background  = s === src ? '#EFF6FF' : 'white';
-      btn.style.color       = s === src ? '#1D4ED8' : '#64748B';
-    });
+    this._lvuMajSources();
     document.getElementById('lvu-loxam-picker').style.display = src === 'loxam' ? '' : 'none';
     document.getElementById('lvu-bcb-picker').style.display   = src === 'bcb'   ? '' : 'none';
     document.getElementById('lvu-stock-picker').style.display = src === 'stock' ? '' : 'none';
     if (src === 'loxam') { this.lvuLoadLoxam(); this.lvuLoadAgencies(); }
     if (src === 'bcb'   && S.lvu.bcbArrivals.length === 0) this.lvuLoadBcb();
     if (src === 'stock') this._lvuRenderStockList();
+    if (this._lvuRenderChips) this._lvuRenderChips();
   },
 
   lvuLoadLoxam() {
@@ -113,6 +109,12 @@ Object.assign(App, {
   lvuApplyLoxam() {
     const rows = [];
     let firstAgence = null;
+    // Formulaire refondu (2026-11-24) : les lignes hors modules (palettes…) et les poids déjà saisis sont gardés
+    this._lvuSyncFromDom();
+    const clesLoxam = new Set(S.lvu.loxamItems.map(i => i.code || i.codeModule || i.module || ''));
+    const avant = {};
+    (S.lvu.marchandises || []).forEach(r => { if (r.note) avant[r.note] = r; });
+    const autres = (S.lvu.marchandises || []).filter(r => (String(r.description || '').trim() || String(r.qte || '').trim()) && !(r.note && clesLoxam.has(r.note)));
     S.lvu.loxamItems.forEach(i => {
       const key = i.code || i.codeModule || i.module || '';
       if (!S.lvu.selectedItems.has(key)) return;
@@ -122,13 +124,14 @@ Object.assign(App, {
       const desc = isContainer
         ? `Container n° ${numM || key}`
         : (numM ? `Module N° ${numM}` : (i.description || modele || key));
-      rows.push({ qte: 1, description: desc, poids: '2.5', note: key, ml: i.ml || '' });
+      const deja = avant[key];
+      rows.push(deja ? Object.assign({}, deja, { ml: deja.ml || i.ml || '' }) : { qte: 1, description: desc, poids: '2.5', note: key, ml: i.ml || '' });
       // Code agence : col "ag" (D) du Planning, sinon parse depuis "1043 - 72 ARNAGE Cedex"
       const agCode = i.ag || ((i.chantier || '').match(/^(\d{3,6})/)||[])[1] || '';
       if (agCode && !firstAgence) firstAgence = agCode;
     });
-    if (rows.length) {
-      S.lvu.marchandises = rows;
+    if (rows.length || autres.length) {
+      S.lvu.marchandises = rows.concat(autres);
       this._lvuRenderMarchandises();
       // Expéditeur : SONOTRAD (toujours pour source loxam)
       const fExpN = document.getElementById('lvu-f-exp-nom');
@@ -365,10 +368,10 @@ Object.assign(App, {
   },
 
   async lvuGenerate() {
-    if (S.lvu.generating) return;
+    if (S.lvu.generating) return false;
     S.lvu.generating = true;
     const btnText = document.getElementById('lvu-btn-generate-text');
-    if (btnText) btnText.textContent = '⏳ Génération…';
+    if (btnText) btnText.textContent = 'Préparation du PDF…';
     try {
       if (!S.lvu.numero && !S.lvu.modif && S.apiUrl) {
         try {
@@ -379,7 +382,7 @@ Object.assign(App, {
       }
       if (S.lvu.modif) S.lvu.enregistree = null;   // LV refaite : on peut renvoyer la modification
       const data = this._lvuCollectFormData();
-      if (data.livraison === false) { this.toast('Consigne de livraison incomplète : choisissez la date (ou « Pas de consigne »)', 5000); return; }
+      if (data.livraison === false) { this.toast('Consigne de livraison incomplète : choisissez la date (ou « Pas de consigne »)', 5000); return false; }
       const doc  = _generateLvu(data);
       S.lvu.lastDoc  = doc;
       S.lvu.lastData = data;
@@ -391,12 +394,13 @@ Object.assign(App, {
       if (info)  info.textContent  = `${data.date} · ${data.destinataire?.nom || '—'} · ${data.marchandises?.length || 0} ligne(s)`;
       this._lvuMajBoutonsResultat();
       if (document.getElementById('lvu-save-status')) document.getElementById('lvu-save-status').textContent = '';
-      res?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return true;
     } catch (e) {
       this.toast('Erreur génération : ' + e.message);
+      return false;
     } finally {
       S.lvu.generating = false;
-      if (btnText) btnText.textContent = '📄 Générer la lettre de voiture';
+      if (btnText) btnText.textContent = 'Aperçu du PDF';
     }
   },
 
@@ -1142,7 +1146,7 @@ Object.assign(App, {
       el = document.createElement('div');
       el.id = 'lvu-modif-bandeau';
       el.className = 'lvu-modif-bandeau';
-      const cont = vue.firstElementChild || vue;
+      const cont = document.getElementById('lvu-principal') || vue.firstElementChild || vue;
       cont.insertBefore(el, cont.firstChild);
     }
     const M = S.lvu.modif;
@@ -1235,13 +1239,7 @@ Object.assign(App, {
     this.lvuSetType(D.type === 'CMR' ? 'CMR' : 'LV');
     if (D.transporteur) { S.lvu.transporteur = Object.assign({}, D.transporteur); this._lvuRenderTransporteurUI(); }
     S.lvu.source = D.source || 'manual';
-    ['manual','loxam','bcb','stock'].forEach(s => {
-      const btn = document.getElementById('lvu-src-' + s);
-      if (!btn) return;
-      btn.style.borderColor = s === S.lvu.source ? '#1D4ED8' : '#E2E8F0';
-      btn.style.background  = s === S.lvu.source ? '#EFF6FF' : 'white';
-      btn.style.color       = s === S.lvu.source ? '#1D4ED8' : '#64748B';
-    });
+    this._lvuMajSources();
     p('lvu-f-conducteur', D.conducteur); p('lvu-f-immat-moteur', D.immat_moteur); p('lvu-f-immat-semi', D.immat_semi);
     p('lvu-f-donneur', D.donneur_ordre);
     const e = D.expediteur || {}, de = D.destinataire || {};

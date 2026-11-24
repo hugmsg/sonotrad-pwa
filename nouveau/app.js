@@ -210,7 +210,7 @@ const App = {
     if (view === 'bcb-consignes') this.bcbInitLangGrid();
     if (view === 'bcb-depart')      this.bcbDepartInit();
     if (view === 'bcb-enlevements') this.bcbEnlevementsLoad();
-    if (view === 'lvu-form')      { this._lvuRenderMarchandises(); this._lvuChargerAnnulees(); this._lvuLivInit(); }
+    if (view === 'lvu-form')      { this._lvuRenderMarchandises(); this._lvuChargerAnnulees(); this._lvuLivInit(); this._lvuMajSources(); this.lvuSetType(S.lvu.type || 'LV'); this._lvuRenderTransporteurUI(); }
     if (view === 'lvu-history')   { this.lvuLoadHistory(); this._lvuSubscribeHistoryRealtime(); }
     if (view === 'annuaire')      this.annuaireLoad();
     if (view === 'ot-liste')      this.otChargerListe();
@@ -274,7 +274,7 @@ const App = {
     const v      = S.view;
     const onHome = v === 'home';
     // Écrans du socle commun (socle.css) : ils portent leur propre en-tête.
-    document.body.classList.toggle('socle', v.startsWith('ot-') || v.startsWith('stk-') || v.startsWith('prod-'));
+    document.body.classList.toggle('socle', v.startsWith('ot-') || v.startsWith('stk-') || v.startsWith('prod-') || v === 'lvu-form');
     document.body.classList.toggle('pb-plein', v === 'prod-bureau' || v === 'ot-commandes');   // tableau Production : pleine largeur, seul le tableau défile
 
     // ── Nav : cachée sur l'accueil, tabs selon activité ─────────────────

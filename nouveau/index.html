@@ -1560,240 +1560,153 @@
 
     <!-- ── VIEW : LVU — FORMULAIRE ──────────────────────────────────────── -->
     <div class="view" id="view-lvu-form">
-      <div style="padding:16px;">
-
-        <!-- Type LV / CMR -->
-        <div class="card" style="margin-bottom:12px;">
-          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Type de document</p>
-          <div style="display:flex;gap:10px;">
-            <button id="lvu-btn-lv" onclick="App.lvuSetType('LV')"
-              style="flex:1;padding:10px;border-radius:10px;border:2px solid #1D4ED8;background:#1D4ED8;color:white;font-size:14px;font-weight:700;cursor:pointer;">
-              LV Nationale
-            </button>
-            <button id="lvu-btn-cmr" onclick="App.lvuSetType('CMR')"
-              style="flex:1;padding:10px;border-radius:10px;border:2px solid #E2E8F0;background:white;color:#64748B;font-size:14px;font-weight:700;cursor:pointer;">
-              CMR Internationale
-            </button>
-          </div>
-        </div>
-
-        <!-- Source -->
-        <div class="card" style="margin-bottom:12px;">
-          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Source de données</p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button id="lvu-src-manual" onclick="App.lvuSetSource('manual')"
-              style="flex:1;min-width:80px;padding:8px;border-radius:8px;border:2px solid #1D4ED8;background:#EFF6FF;color:#1D4ED8;font-size:13px;font-weight:600;cursor:pointer;">
-              Manuel
-            </button>
-            <button id="lvu-src-loxam" onclick="App.lvuSetSource('loxam')"
-              style="flex:1;min-width:80px;padding:8px;border-radius:8px;border:2px solid #E2E8F0;background:white;color:#64748B;font-size:13px;font-weight:600;cursor:pointer;">
-              LOXAM
-            </button>
-            <button id="lvu-src-bcb" onclick="App.lvuSetSource('bcb')"
-              style="flex:1;min-width:80px;padding:8px;border-radius:8px;border:2px solid #E2E8F0;background:white;color:#64748B;font-size:13px;font-weight:600;cursor:pointer;">
-              BCB
-            </button>
-            <button id="lvu-src-stock" onclick="App.lvuSetSource('stock')"
-              style="flex:1;min-width:80px;padding:8px;border-radius:8px;border:2px solid #E2E8F0;background:white;color:#64748B;font-size:13px;font-weight:600;cursor:pointer;">
-              Fournitures
-            </button>
-          </div>
-
-          <!-- Sélecteur LOXAM -->
-          <div id="lvu-loxam-picker" style="display:none;margin-top:12px;">
-            <div style="display:flex;gap:8px;margin-bottom:8px;">
-              <input id="lvu-loxam-search" type="text" placeholder="Rechercher..." autocapitalize="none"
-                oninput="App._lvuRenderLoxamList()"
-                style="flex:1;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
-              <button onclick="App.lvuApplyLoxam()"
-                style="background:#1D4ED8;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">
-                ✓ Appliquer
-              </button>
+      <!-- Formulaire LV / CMR refondu (2026-11-24, maquette validée) : socle SONOTRAD, 5 blocs, récapitulatif à droite,
+           un seul bouton « Enregistrer la LV ». Les id des champs sont ceux de l'ancien formulaire (lv.js inchangé dessous). -->
+      <div class="sx-ecran">
+        <header class="sx-entete"><div class="sx-entete-in sx-large">
+          <button type="button" class="sx-retour" onclick="App.lvuQuitter()"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg><span id="lvu-retour-texte">Accueil</span></button>
+          <div class="sx-titre-ligne lvu-titre-ligne">
+            <div class="sx-titres">
+              <h1 class="sx-titre" id="lvu-titre">Nouvelle lettre de voiture</h1>
+              <span class="sx-sous-titre" id="lvu-sous-titre">N° attribué à l’enregistrement</span>
             </div>
-            <div id="lvu-loxam-list" style="max-height:180px;overflow-y:auto;border:1px solid #E2E8F0;border-radius:8px;"></div>
-          </div>
-
-          <!-- Sélecteur BCB -->
-          <div id="lvu-bcb-picker" style="display:none;margin-top:12px;">
-            <div id="lvu-bcb-list" style="max-height:180px;overflow-y:auto;border:1px solid #E2E8F0;border-radius:8px;"></div>
-            <button onclick="App.lvuApplyBcb()"
-              style="margin-top:8px;background:#1D4ED8;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">
-              ✓ Appliquer
-            </button>
-          </div>
-
-          <!-- Sélecteur Stock / Fournitures -->
-          <div id="lvu-stock-picker" style="display:none;margin-top:12px;">
-            <div style="display:flex;gap:8px;margin-bottom:8px;">
-              <input id="lvu-stock-search" type="text" placeholder="Réf., désignation…" autocapitalize="none"
-                oninput="App._lvuRenderStockList()"
-                style="flex:1;border:1.5px solid #E2E8F0;border-radius:8px;padding:8px 10px;font-size:13px;outline:none;">
-              <button onclick="App.lvuApplyStock()"
-                style="background:#1D4ED8;color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">
-                ✓ Appliquer
-              </button>
+            <div class="lvu-type" role="group" aria-label="Type de document">
+              <button type="button" id="lvu-btn-lv" aria-pressed="true" onclick="App.lvuSetType('LV')">LV nationale</button>
+              <button type="button" id="lvu-btn-cmr" aria-pressed="false" onclick="App.lvuSetType('CMR')">CMR internationale</button>
             </div>
-            <div id="lvu-stock-list" style="max-height:180px;overflow-y:auto;border:1px solid #E2E8F0;border-radius:8px;"></div>
+            <button type="button" class="pb-nav-btn lvu-hist-btn" onclick="App.go('lvu-history')">Historique</button>
           </div>
+        </div></header>
+
+        <div class="lvu-page" oninput="App._lvuRecapPlus()" onchange="App._lvuRecapPlus()">
+          <main class="lvu-principal" id="lvu-principal">
+
+            <!-- 1 · Marchandises -->
+            <section class="lvu-bloc" aria-labelledby="lvu-h-1">
+              <div class="lvu-bloc-tete"><h2 id="lvu-h-1">1 · Marchandises</h2>
+                <div class="lvu-sources" role="group" aria-label="Source">
+                  <button type="button" id="lvu-src-manual" onclick="App.lvuSetSource('manual')">Saisie libre</button>
+                  <button type="button" id="lvu-src-loxam" onclick="App.lvuSetSource('loxam')">Modules LOXAM</button>
+                  <button type="button" id="lvu-src-bcb" onclick="App.lvuSetSource('bcb')">BCB</button>
+                  <button type="button" id="lvu-src-stock" onclick="App.lvuSetSource('stock')">Fournitures</button>
+                </div>
+              </div>
+              <div id="lvu-modules-chips" class="lvu-chips"></div>
+
+              <div id="lvu-loxam-picker" class="lvu-picker" style="display:none;">
+                <div class="lvu-picker-tete">
+                  <input id="lvu-loxam-search" class="sx-champ" type="search" placeholder="Code, n° module, agence…" autocapitalize="none" oninput="App._lvuRenderLoxamList()">
+                  <button type="button" class="sx-btn sx-btn-principal" onclick="App.lvuApplyLoxam()">Appliquer</button>
+                </div>
+                <div id="lvu-loxam-list" class="lvu-picker-liste"></div>
+              </div>
+              <div id="lvu-bcb-picker" class="lvu-picker" style="display:none;">
+                <div id="lvu-bcb-list" class="lvu-picker-liste"></div>
+                <button type="button" class="sx-btn sx-btn-principal" onclick="App.lvuApplyBcb()">Appliquer</button>
+              </div>
+              <div id="lvu-stock-picker" class="lvu-picker" style="display:none;">
+                <div class="lvu-picker-tete">
+                  <input id="lvu-stock-search" class="sx-champ" type="search" placeholder="Réf., désignation…" autocapitalize="none" oninput="App._lvuRenderStockList()">
+                  <button type="button" class="sx-btn sx-btn-principal" onclick="App.lvuApplyStock()">Appliquer</button>
+                </div>
+                <div id="lvu-stock-list" class="lvu-picker-liste"></div>
+              </div>
+
+              <div class="lvu-table-boite">
+                <table class="lvu-table">
+                  <thead><tr><th style="width:76px;">Nombre</th><th>Nature de la marchandise</th><th style="width:110px;">Poids (t)</th><th style="width:44px;"><span class="sx-sr">Retirer</span></th></tr></thead>
+                  <tbody id="lvu-marchandises-body"></tbody>
+                </table>
+                <div class="lvu-table-pied">
+                  <button type="button" class="lvu-lien" onclick="App.lvuAddRow()">+ Autre ligne (palette, pièces…)</button>
+                  <b id="lvu-total"></b>
+                </div>
+              </div>
+            </section>
+
+            <!-- 2 · Destination -->
+            <section class="lvu-bloc" aria-labelledby="lvu-h-2">
+              <div class="lvu-bloc-tete"><h2 id="lvu-h-2">2 · Destination</h2></div>
+              <label class="lvu-etiquette" for="lvu-dest-search">Destinataire : chercher dans l’annuaire</label>
+              <div class="lvu-dest-recherche">
+                <input id="lvu-dest-search" class="sx-champ" type="search" autocomplete="nope" placeholder="Code agence, nom ou ville…"
+                  oninput="App.lvuDestSearch(this.value)" onkeydown="App._lvuDestKeyDown && App._lvuDestKeyDown(event)">
+                <div id="lvu-dest-results" class="dest-search-results"></div>
+              </div>
+              <div class="lvu-grille lvu-adresse">
+                <label class="lvu-champ lvu-large">Nom / société<input id="lvu-f-dest-nom" class="sx-champ" type="text" autocapitalize="words" autocomplete="nope"></label>
+                <label class="lvu-champ lvu-large">Adresse<input id="lvu-f-dest-adresse" class="sx-champ" type="text" autocapitalize="words" autocomplete="nope"></label>
+                <label class="lvu-champ">CP et ville<input id="lvu-f-dest-ville" class="sx-champ" type="text" autocapitalize="words" autocomplete="nope"></label>
+                <label class="lvu-champ">Pays<input id="lvu-f-dest-pays" class="sx-champ" type="text" placeholder="FR - France" list="ann-pays-list" autocomplete="nope" onblur="App.annPaysNormalize(this.id)"></label>
+              </div>
+              <details class="lvu-details" id="lvu-exp-details">
+                <summary><span id="lvu-exp-resume">Expéditeur et donneur d’ordre</span> <span class="lvu-lien">modifier</span></summary>
+                <div class="lvu-grille">
+                  <label class="lvu-champ lvu-large">Expéditeur : nom / société<input id="lvu-f-exp-nom" class="sx-champ" type="text" autocapitalize="words" autocomplete="nope"></label>
+                  <label class="lvu-champ lvu-large">Adresse<input id="lvu-f-exp-adresse" class="sx-champ" type="text" autocapitalize="words" autocomplete="nope"></label>
+                  <label class="lvu-champ">CP et ville<input id="lvu-f-exp-ville" class="sx-champ" type="text" autocapitalize="words" autocomplete="nope"></label>
+                  <label class="lvu-champ">Pays<input id="lvu-f-exp-pays" class="sx-champ" type="text" placeholder="FR - France" list="ann-pays-list" autocomplete="nope" onblur="App.annPaysNormalize(this.id)"></label>
+                  <label class="lvu-champ lvu-large">Donneur d’ordre<input id="lvu-f-donneur" class="sx-champ" type="text" autocapitalize="words" autocomplete="nope" placeholder="Société / nom"></label>
+                </div>
+              </details>
+            </section>
+
+            <!-- 3 · Livraison -->
+            <section class="lvu-bloc" aria-labelledby="lvu-h-3">
+              <div class="lvu-bloc-tete"><h2 id="lvu-h-3">3 · Livraison</h2></div>
+              <span class="lvu-etiquette">Consigne de livraison</span>
+              <div id="lvu-liv-zone"></div>
+              <label class="lvu-champ">Note pour le transporteur <span class="sx-aide">(grutage, contact, horaires… — imprimée sur la LV)</span>
+                <textarea id="lvu-f-note" class="sx-textarea" rows="2"></textarea></label>
+            </section>
+
+            <!-- 4 · Transport -->
+            <section class="lvu-bloc" aria-labelledby="lvu-h-4">
+              <div class="lvu-bloc-tete"><h2 id="lvu-h-4">4 · Transport</h2></div>
+              <div id="lvu-transporteur-btns" class="lvu-transporteurs"></div>
+              <div class="lvu-grille lvu-grille-3">
+                <label class="lvu-champ">Conducteur(s)<input id="lvu-f-conducteur" class="sx-champ" type="text" autocapitalize="words" autocomplete="nope" placeholder="Nom Prénom"></label>
+                <label class="lvu-champ">Immat. tracteur<input id="lvu-f-immat-moteur" class="sx-champ lvu-maj" type="text" placeholder="AB-123-CD" autocapitalize="characters" autocomplete="nope"></label>
+                <label class="lvu-champ">Immat. semi<input id="lvu-f-immat-semi" class="sx-champ lvu-maj" type="text" placeholder="XY-456-EF" autocapitalize="characters" autocomplete="nope"></label>
+              </div>
+              <fieldset class="lvu-convoi"><legend>Convoi exceptionnel</legend>
+                <label><input type="radio" name="lvu-convoi" id="lvu-convoi-non" value="non" checked> Non</label>
+                <label><input type="radio" name="lvu-convoi" id="lvu-convoi-oui" value="oui"> Oui</label>
+              </fieldset>
+            </section>
+
+            <!-- 5 · Références -->
+            <section class="lvu-bloc" aria-labelledby="lvu-h-5">
+              <div class="lvu-bloc-tete"><h2 id="lvu-h-5">5 · Références</h2></div>
+              <div class="lvu-grille lvu-grille-3">
+                <label class="lvu-champ">Commande n°<input id="lvu-f-commande" class="sx-champ" type="text"><span class="lvu-info" id="lvu-cde-info"></span></label>
+                <label class="lvu-champ">Documents annexes<input id="lvu-f-doc" class="sx-champ" type="text" placeholder="BT …"></label>
+                <label class="lvu-champ">Remplace une LV annulée<select id="lvu-f-remplace" class="sx-select"><option value="">— Aucune —</option></select></label>
+              </div>
+            </section>
+          </main>
+
+          <!-- Récapitulatif -->
+          <aside class="lvu-cote">
+            <section class="lvu-bloc lvu-recap" aria-labelledby="lvu-h-recap">
+              <h2 id="lvu-h-recap" class="lvu-recap-titre">Récapitulatif</h2>
+              <div id="lvu-recap"></div>
+              <button type="button" class="sx-btn sx-btn-principal sx-btn-plein" id="lvu-btn-enregistrer" onclick="App.lvuEnregistrer()">Enregistrer la LV</button>
+              <button type="button" class="sx-btn sx-btn-discret sx-btn-plein" onclick="App.lvuApercu()"><span id="lvu-btn-generate-text">Aperçu du PDF</span></button>
+              <p class="sx-aide" id="lvu-recap-aide">Un seul bouton : le PDF est fait avec le bon numéro, mis sur Drive, puis Planning, Départs, Demandes et portail transporteur sont mis à jour.</p>
+
+              <div id="lvu-result" style="display:none;" class="lvu-resultat">
+                <div class="lvu-resultat-titre" id="lvu-result-title"></div>
+                <div class="sx-aide" id="lvu-result-info"></div>
+                <div id="lvu-save-status" class="lvu-statut"></div>
+                <button type="button" class="sx-btn sx-btn-discret sx-btn-plein" onclick="App.lvuPrint()">Imprimer / télécharger le PDF</button>
+                <button type="button" id="lvu-btn-save" onclick="App.lvuSaveToDrive()" style="display:none;">Enregistrer</button>
+                <button type="button" id="lvu-btn-retour" class="sx-btn sx-btn-second sx-btn-plein" onclick="App.lvuRetour()" style="display:none;">← Retour au Planning</button>
+                <button type="button" class="sx-btn sx-btn-discret sx-btn-plein" onclick="App.lvuNew()">+ Nouvelle lettre de voiture</button>
+              </div>
+            </section>
+          </aside>
         </div>
-
-        <!-- Transporteur -->
-        <div class="card" style="margin-bottom:12px;">
-          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Transporteur</p>
-          <div id="lvu-transporteur-btns"></div>
-        </div>
-
-        <!-- Conducteur / Véhicule -->
-        <div class="card" style="margin-bottom:12px;">
-          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Conducteur &amp; Véhicule</p>
-          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Conducteur(s)</label>
-          <input id="lvu-f-conducteur" type="text" autocapitalize="words" autocomplete="nope" placeholder="Nom Prénom"
-            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:10px;">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-            <div>
-              <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Immat. moteur</label>
-              <input id="lvu-f-immat-moteur" type="text" placeholder="AB-123-CD" autocapitalize="characters" autocomplete="nope"
-                style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;text-transform:uppercase;">
-            </div>
-            <div>
-              <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Immat. semi</label>
-              <input id="lvu-f-immat-semi" type="text" placeholder="XY-456-EF" autocapitalize="characters" autocomplete="nope"
-                style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;text-transform:uppercase;">
-            </div>
-          </div>
-        </div>
-
-        <!-- Donneur d'ordre -->
-        <div class="card" style="margin-bottom:12px;">
-          <label style="font-size:13px;font-weight:700;color:#1E293B;display:block;margin-bottom:8px;">Donneur d'ordre</label>
-          <input id="lvu-f-donneur" type="text" autocapitalize="words" autocomplete="nope" placeholder="Société / Nom"
-            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
-        </div>
-
-        <!-- Expéditeur -->
-        <div class="card" style="margin-bottom:12px;">
-          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Expéditeur (chargement)</p>
-          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Nom / Société</label>
-          <input id="lvu-f-exp-nom" type="text" autocapitalize="words" autocomplete="nope"
-            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
-          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Adresse</label>
-          <input id="lvu-f-exp-adresse" type="text" autocapitalize="words" autocomplete="nope"
-            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
-          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Ville / CP</label>
-          <input id="lvu-f-exp-ville" type="text" autocapitalize="words" autocomplete="nope"
-            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
-          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Pays</label>
-          <input id="lvu-f-exp-pays" type="text" placeholder="ex : FR - France" list="ann-pays-list" autocomplete="nope"
-            onblur="App.annPaysNormalize(this.id)"
-            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
-        </div>
-
-        <!-- Destinataire -->
-        <div class="card" style="margin-bottom:12px;">
-          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Destinataire (livraison)</p>
-          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Rechercher une agence (code, ville, nom…)</label>
-          <input id="lvu-dest-search" type="text" autocomplete="nope" placeholder="ex : 72 · ARNAGE · LOXAM…"
-            oninput="App.lvuDestSearch(this.value)" onkeydown="App._lvuDestKeyDown(event)"
-            style="width:100%;box-sizing:border-box;border:1.5px solid #BFDBFE;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:4px;background:#F8FBFF;">
-          <div id="lvu-dest-results" class="dest-search-results"></div>
-          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Nom / Société</label>
-          <input id="lvu-f-dest-nom" type="text" autocapitalize="words" autocomplete="nope"
-            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
-          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Adresse</label>
-          <input id="lvu-f-dest-adresse" type="text" autocapitalize="words" autocomplete="nope"
-            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
-          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Ville / CP</label>
-          <input id="lvu-f-dest-ville" type="text" autocapitalize="words" autocomplete="nope"
-            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:8px;">
-          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Pays</label>
-          <input id="lvu-f-dest-pays" type="text" placeholder="ex : FR - France" list="ann-pays-list" autocomplete="nope"
-            onblur="App.annPaysNormalize(this.id)"
-            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;">
-        </div>
-
-        <!-- Marchandises -->
-        <div class="card" style="margin-bottom:12px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-            <p style="font-size:13px;font-weight:700;color:#1E293B;margin:0;">Marchandises</p>
-            <button onclick="App.lvuAddRow()"
-              style="background:#EFF6FF;color:#1D4ED8;border:1.5px solid #BFDBFE;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;">
-              + Ligne
-            </button>
-          </div>
-          <div style="overflow-x:auto;">
-            <table style="width:100%;border-collapse:collapse;font-size:12px;">
-              <thead>
-                <tr style="background:#F8FAFC;">
-                  <th style="padding:6px 4px;text-align:left;color:#64748B;font-weight:600;width:12%;">Qté</th>
-                  <th style="padding:6px 4px;text-align:left;color:#64748B;font-weight:600;">Description</th>
-                  <th style="padding:6px 4px;text-align:left;color:#64748B;font-weight:600;width:15%;">Poids (t)</th>
-                  <th style="padding:6px 4px;width:8%;"></th>
-                </tr>
-              </thead>
-              <tbody id="lvu-marchandises-body"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Informations complémentaires -->
-        <div class="card" style="margin-bottom:12px;">
-          <p style="font-size:13px;font-weight:700;color:#1E293B;margin-bottom:10px;">Informations complémentaires</p>
-          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Documents annexes</label>
-          <input id="lvu-f-doc" type="text"
-            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:10px;">
-          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">N° de commande</label>
-          <input id="lvu-f-commande" type="text"
-            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:10px;">
-          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Remplace la LV annulée (facultatif)</label>
-          <select id="lvu-f-remplace" style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;margin-bottom:10px;background:white;">
-            <option value="">— Aucune —</option>
-          </select>
-          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:4px;">Note de livraison</label>
-          <textarea id="lvu-f-note" rows="3"
-            style="width:100%;box-sizing:border-box;border:1.5px solid #E2E8F0;border-radius:8px;padding:9px 10px;font-size:13px;outline:none;resize:vertical;font-family:inherit;margin-bottom:10px;"></textarea>
-          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:6px;">Consigne de livraison</label>
-          <div id="lvu-liv-zone" style="margin-bottom:12px;"></div>
-          <label style="font-size:11px;font-weight:600;color:#64748B;display:block;margin-bottom:8px;">Convoi exceptionnel</label>
-          <div style="display:flex;gap:10px;">
-            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
-              <input type="radio" name="lvu-convoi" id="lvu-convoi-non" value="non" checked> Non
-            </label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
-              <input type="radio" name="lvu-convoi" id="lvu-convoi-oui" value="oui"> Oui
-            </label>
-          </div>
-        </div>
-
-        <!-- Bouton générer -->
-        <button onclick="App.lvuGenerate()"
-          style="width:100%;background:#1D4ED8;color:white;border:none;border-radius:12px;padding:15px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:16px;">
-          <span id="lvu-btn-generate-text">📄 Générer la lettre de voiture</span>
-        </button>
-
-        <!-- Zone résultat -->
-        <div id="lvu-result" style="display:none;">
-          <div class="card" style="margin-bottom:12px;background:#F0FDF4;border:1.5px solid #86EFAC;">
-            <div style="font-size:16px;font-weight:700;color:#065F46;margin-bottom:6px;" id="lvu-result-title">✅ LV N° 01446 générée</div>
-            <div style="font-size:13px;color:#1E293B;margin-bottom:14px;" id="lvu-result-info"></div>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;">
-              <button onclick="App.lvuPrint()"
-                style="flex:1;min-width:120px;background:#1D4ED8;color:white;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;">
-                🖨️ Imprimer / PDF
-              </button>
-              <button id="lvu-btn-save" onclick="App.lvuSaveToDrive()"
-                style="flex:1;min-width:120px;background:white;color:#1D4ED8;border:2px solid #1D4ED8;border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;">
-                ☁️ Enregistrer Drive
-              </button>
-            </div>
-            <div id="lvu-save-status" style="margin-top:10px;font-size:12px;color:#64748B;"></div>
-            <button id="lvu-btn-retour" onclick="App.lvuRetour()" style="display:none;margin-top:10px;width:100%;background:#1F3A5F;color:white;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;">← Retour au Planning (Production)</button>
-          </div>
-          <button onclick="App.lvuNew()"
-            style="width:100%;background:#E2E8F0;color:#1E293B;border:none;border-radius:10px;padding:12px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px;">
-            + Nouvelle lettre de voiture
-          </button>
-        </div>
-
       </div>
     </div>
 
@@ -1905,6 +1818,7 @@
 <script src="bcb.js"></script>
 <script src="lv.js"></script>
 <script src="livraison.js"></script>
+<script src="lv_form.js"></script>
 <script src="annuaire.js"></script>
 <script src="recond.js"></script>
 <script src="container.js"></script>
