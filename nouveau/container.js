@@ -128,7 +128,7 @@ Object.assign(App, {
 
     el.innerHTML = `<div class="sx-ecran sx-ot sx-ot-${_otEsc(f.statut)}">
       ${this._otEntete({ retour: { texte: 'Fiches', action: 'App.otQuitterFiche()' }, titre: 'Fiche container', large: true,
-          sousTitre: [f.type_module, f.numero_module, f.agence, f.code_planning].filter(Boolean).join(' · '), etat: S.ot.etat,
+          sousTitre: [f.type_module, f.numero_module, this._otDestination(f), f.code_planning].filter(Boolean).join(' · '), etat: S.ot.etat,
           bandeau: this._otBandeauStatut(f, this._otVueControle() ? '<button type="button" class="sx-btn sx-btn-discret" onclick="App.otCtVueTableau(true)">Vue tableau</button>' : '') })}
       <main class="sx-contenu sx-large sx-ct-page">
         <div class="sx-ct-col">

@@ -58,7 +58,7 @@ const OT_STATUTS = {
   brouillon: 'Brouillon', a_valider: 'À valider', validee: 'Validée', envoyee: 'Envoyée', annulee: 'Annulée',
 };
 const OT_LOGO_LOXAM = 'Logo%20Loxam.png';
-// Validation / « Refaire les documents » : Apps Script crée 3 fichiers (Excel LOXAM, PDF, Excel SONOTRAD) → délai long
+// Validation / « Refaire les documents » : Apps Script crée l'Excel LOXAM et le PDF (Excel SONOTRAD sur demande) → délai long
 const OT_DELAI_DOCUMENTS = 150000;
 
 function _otEsc(v) {
@@ -149,6 +149,16 @@ Object.assign(App, {
   // Retour commun aux vues de Reconditionnement : là d'où l'on est venu (menu LOXAM ou accueil)
   _otRetourListe() {
     return S.ot.retour === 'loxam' ? { texte: 'LOXAM', action: 'App.go(\'loxam-menu\')' } : { texte: 'Accueil', action: 'App.goHome()' };
+  },
+
+  // Destination d'une fiche (2026-11-24, demande de Hugo) : libellé du Planning (« 0457 - 64 MOUGUERRE »), sinon celui
+  // des documents, sinon le code agence de la fiche. Affichée en clair dans l'en-tête de la fiche.
+  _otDestination(f) {
+    const code = String(f.code_planning || '').toUpperCase();
+    const m = [...(S.deps || []), ...(S.archive || []), ...(S.ot.modules || [])].find(x => String(x.code || '').toUpperCase() === code);
+    const ch = m && String(m.chantier || '').trim();
+    const dest = (ch && ch.toUpperCase() !== 'LIBRE' ? ch : '') || (f.documents && f.documents.agence) || (ch ? 'LIBRE' : '') || f.agence || '';
+    return dest ? '→ ' + (dest === 'LIBRE' ? 'LIBRE (pas encore de destination)' : dest) : '→ destination inconnue';
   },
 
   _otConfirmer({ titre, texte, ok = 'Continuer', annuler = 'Annuler' }) {
@@ -584,7 +594,7 @@ Object.assign(App, {
 
     el.innerHTML = `<div class="sx-ecran sx-ot sx-ot-${_otEsc(f.statut)}">
       ${this._otEntete({ retour: { texte: 'Fiches', action: 'App.otQuitterFiche()' }, titre: 'Fiche d\'opérations',
-          sousTitre: [titreModule, f.agence, f.code_planning].filter(Boolean).join(' · '), etat: S.ot.etat,
+          sousTitre: [titreModule, this._otDestination(f), f.code_planning].filter(Boolean).join(' · '), etat: S.ot.etat,
           bandeau: this._otBandeauStatut(f, this._otRapideDispo() ? '<button type="button" class="sx-btn sx-btn-discret" onclick="App.otBasculerSaisie()">Saisie rapide (clavier)</button>' : '') })}
       <div class="sx-onglets" role="tablist" aria-label="Blocs de la fiche">
         ${onglets.map(o => `<button type="button" class="sx-onglet" role="tab" aria-selected="${S.ot.onglet === o.cle}"
@@ -937,8 +947,8 @@ Object.assign(App, {
         : ['Envoyer à valider ?', 'La fiche passe au bureau pour contrôle. Vous ne pourrez plus la modifier, sauf en la reprenant en brouillon.', 'Envoyer'],
       brouillon: ['Reprendre en brouillon ?', 'La fiche redevient modifiable à l\'atelier.', 'Reprendre'],
       validee:   ['Valider la fiche ?', `Total ${_otEuros(S.ot.fiche.totaux?.total)} HT. ` + (this._otEssai()
-                    ? 'Un numéro ESSAI-… est attribué, les prix sont figés et les documents (Excel LOXAM, Excel SONOTRAD, PDF) sont créés.'
-                    : 'Un numéro d\'OT est attribué, les prix sont figés, les pièces sont sorties du stock (ce que la 🔧 n\'a pas déjà sorti) et les documents (Excel LOXAM, Excel SONOTRAD, PDF) sont créés.'), 'Valider'],
+                    ? 'Un numéro ESSAI-… est attribué, les prix sont figés et les documents (Excel LOXAM et PDF) sont créés.'
+                    : 'Un numéro d\'OT est attribué, les prix sont figés, les pièces sont sorties du stock (ce que la 🔧 n\'a pas déjà sorti) et les documents (Excel LOXAM et PDF) sont créés.'), 'Valider'],
     };
     const t = textes[statut];
     // Module encore LIBRE au Planning (2026-11-19) : les documents prennent l'agence du Planning à la validation
@@ -999,7 +1009,7 @@ Object.assign(App, {
     const ctrl = this._otVueControle();
     el.innerHTML = `<div class="sx-ecran sx-ot sx-ot-${_otEsc(f.statut)}">
       ${this._otEntete({ retour: { texte: 'Fiches', action: 'App.otQuitterFiche()' }, titre: 'Fiche d\'opérations', large: true,
-          sousTitre: [titreModule, f.agence, f.code_planning, ctrl && f.saisi_par ? 'saisi par ' + f.saisi_par : ''].filter(Boolean).join(' · '), etat: S.ot.etat,
+          sousTitre: [titreModule, this._otDestination(f), f.code_planning, ctrl && f.saisi_par ? 'saisi par ' + f.saisi_par : ''].filter(Boolean).join(' · '), etat: S.ot.etat,
           bandeau: this._otBandeauStatut(f, `<button type="button" class="sx-btn sx-btn-discret" onclick="App.otBasculerSaisie()">${ctrl ? 'Vue tableau' : 'Saisie tactile'}</button>`) })}
       <main class="sx-contenu sx-large sx-rg-page">
         <div class="sx-rg-col">
@@ -1498,7 +1508,7 @@ Object.assign(App, {
     el.innerHTML = `<div class="sx-ecran sx-ot sx-ot-${_otEsc(f.statut)}">
       ${this._otEntete({ retour: { texte: 'Fiches', action: 'App.otQuitterFiche()' },
           titre: [f.numero_ot || 'Contrôle', titreModule].filter(Boolean).join(' · '),
-          sousTitre: [f.agence, 'code ' + f.code_planning, f.saisi_par ? 'saisi par ' + f.saisi_par : ''].filter(Boolean).join(' · '),
+          sousTitre: [this._otDestination(f), 'code ' + f.code_planning, f.saisi_par ? 'saisi par ' + f.saisi_par : ''].filter(Boolean).join(' · '),
           etat: S.ot.etat, large: true,
           bandeau: this._otBandeauStatut(f, this._otRapideDispo() ? '<button type="button" class="sx-btn sx-btn-discret" onclick="App.otBasculerSaisie()">Vue tableur</button>' : '') })}
       <main class="sx-contenu sx-large">
@@ -1556,7 +1566,7 @@ Object.assign(App, {
       <span>1. ${essai ? 'attribuer un numéro ESSAI-… (la matrice garde les vrais)' : 'attribuer le numéro d\'OT suivant (à la suite de la matrice Excel)'} ;</span>
       <span>2. figer les prix de chaque ligne ;</span>
       ${essai ? '' : '<span>3. sortir du stock les pièces de la fiche, sauf ce que la 🔧 a déjà sorti pour ce module ;</span>'}
-      <span>${essai ? '3' : '4'}. créer les documents : Excel LOXAM, Excel SONOTRAD et PDF${complet ? ' (quelques secondes)' : ''}.</span>
+      <span>${essai ? '3' : '4'}. créer les documents : Excel LOXAM et PDF${complet ? ' (quelques secondes)' : ''} — l'Excel SONOTRAD se crée ensuite sur demande.</span>
       ${complet ? `<span>Le mail à LOXAM se prépare ensuite depuis la liste des fiches.${essai ? ' Aucune sortie de stock pendant l\'essai.' : ''}</span>` : ''}
     </section>`;
   },
@@ -1603,6 +1613,8 @@ Object.assign(App, {
   _otHtmlDocuments(f) {
     const d = f.documents;
     const noms = { loxam: 'Excel LOXAM', sonotrad: 'Excel SONOTRAD', pdf: 'PDF (version LOXAM)' };
+    const nb = d && d.fichiers ? d.fichiers.length : 0;
+    const aSono = !!(d && d.fichiers && d.fichiers.some(x => x.type === 'sonotrad'));
     const liens = d && d.fichiers ? d.fichiers.map(x => `<a class="sx-btn sx-btn-second" href="${_otEsc(x.url)}" target="_blank" rel="noopener"
         title="${_otEsc(x.nom)}">${_otEsc(noms[x.type] || x.nom)}</a>`).join('') : '';
     return `<section class="sx-carte sx-carte-pad" style="display:flex;flex-direction:column;gap:8px;">
@@ -1610,13 +1622,31 @@ Object.assign(App, {
       ${d ? `<span class="sx-aide">Créés le ${_otEsc(new Date(d.genere_le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }))}
           · date de fin ${_otEsc(d.date_fin ? d.date_fin.split('-').reverse().join('/') : '—')}</span>
         <button type="button" class="sx-btn sx-btn-principal" id="ot-doc-telecharger" style="align-self:flex-start;"
-          onclick="App.otTelechargerDocuments()">Télécharger les 3 fichiers</button>
+          onclick="App.otTelechargerDocuments()">Télécharger les ${nb} fichiers</button>
         <span class="sx-aide">Inutile de les télécharger pour la matrice : son bouton « Reporter les OT PWA » les enregistre dans le dossier du module. Une copie reste aussi sur le Drive :</span>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">${liens}
-          <a class="sx-btn sx-btn-discret" href="${_otEsc(d.dossier)}" target="_blank" rel="noopener">Dossier</a></div>`
+          <a class="sx-btn sx-btn-discret" href="${_otEsc(d.dossier)}" target="_blank" rel="noopener">Dossier</a></div>
+        <button type="button" class="sx-btn sx-btn-second" id="ot-doc-sono" style="align-self:flex-start;" onclick="App.otCreerExcelSonotrad()"
+          title="Version interne complète : toutes les lignes, occasion, prix pièce, code OP, fournitures SON">${aSono ? 'Refaire l’Excel SONOTRAD' : 'Créer l’Excel SONOTRAD (interne)'}</button>`
         : '<div class="sx-bandeau sx-bandeau-info">Pas encore de documents pour cette fiche.</div>'}
       <button type="button" class="sx-btn sx-btn-discret" id="ot-doc-refaire" onclick="App.otRefaireDocuments()">${d ? 'Refaire les documents' : 'Créer les documents'}</button>
     </section>`;
+  },
+
+  // Excel SONOTRAD sur demande (2026-11-24) : ajouté aux documents déjà créés.
+  async otCreerExcelSonotrad() {
+    const f = S.ot.fiche;
+    if (!f) return;
+    const b = document.getElementById('ot-doc-sono');
+    if (b) { b.disabled = true; b.textContent = 'Création en cours…'; }
+    try {
+      const d = await this._otPost({ action: 'ot_documents', id: f.id, sonotrad: true }, OT_DELAI_DOCUMENTS);
+      S.ot.fiche = { ...S.ot.fiche, documents: d.documents };
+      this.toast('✓ Excel SONOTRAD créé');
+    } catch (e) {
+      this.toast('Excel SONOTRAD impossible : ' + e.message, 5000);
+    }
+    if (S.view === 'ot-fiche') this._otRendreFiche();
   },
 
   async otRefaireDocuments() {
@@ -2538,7 +2568,7 @@ Object.assign(App, {
           <span class="sx-h2" style="font-size:16px;">À reporter dans l'Excel (${reporter.length})</span>
           ${reporter.length ? `<span class="sx-aide">OT validés dans la PWA qui ne sont pas encore dans l'Excel. Dans la matrice, un clic sur
               « Reporter les OT PWA » suffit : la macro les récupère, remplit « Historique OT » et l'onglet PLANNING
-              (n° Evt, montant, liens pdf et dossier), enregistre les 3 fichiers dans le dossier du module, puis vide cette liste.</span>
+              (n° Evt, montant, liens pdf et dossier), enregistre les documents dans le dossier du module, puis vide cette liste.</span>
             <div class="sx-carte sx-table-boite"><table class="sx-table sx-serre" style="min-width:520px;">
               <tr><th>N° OT</th><th>Module</th><th>Agence</th><th>Date</th><th style="text-align:right;">Total HT</th></tr>
               ${reporter.map(r => `<tr><td>${_otEsc(r.numero)}</td><td>${_otEsc(r.module)} · <span class="sx-ref">${_otEsc(r.code)}</span></td>
@@ -2648,11 +2678,11 @@ Object.assign(App, {
         setTimeout(() => URL.revokeObjectURL(url), 60000);
         await new Promise(r => setTimeout(r, 400));        // un fichier après l'autre
       }
-      this.toast(`✓ ${(d.fichiers || []).length} fichiers téléchargés`);
+      this.toast(`✓ ${(d.fichiers || []).length} fichier${(d.fichiers || []).length > 1 ? 's' : ''} téléchargé${(d.fichiers || []).length > 1 ? 's' : ''}`);
     } catch (e) {
       this.toast('Téléchargement impossible : ' + e.message, 5000);
     }
-    if (b) { b.disabled = false; b.textContent = 'Télécharger les 3 fichiers'; }
+    if (b) { b.disabled = false; b.textContent = 'Télécharger les fichiers'; }
   },
 });
 
