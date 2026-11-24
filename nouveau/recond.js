@@ -452,6 +452,14 @@ Object.assign(App, {
     }
     const cle = String(code || '').toUpperCase();
     const m = [...(S.deps || []), ...(S.archive || [])].find(x => String(x.code || '').toUpperCase() === cle) || {};
+    // Module marqué « Pas d'OT » (2026-11-24) : ouvrir une fiche créerait un OT à faire par erreur — on prévient d'abord,
+    // sauf si une fiche existe déjà (elle est alors simplement rouverte).
+    const fiches = [...((S.pb && S.pb.fiches) || []), ...(S.ot.liste || [])];
+    const dejaFiche = fiches.some(f => String(f.code_planning || '').toUpperCase() === cle && f.statut !== 'annulee');
+    const so = !dejaFiche && this._otSansOtDe(cle, m);
+    if (so && !(await this._otConfirmer({ titre: 'Module sans OT', ok: 'Ouvrir une fiche quand même', annuler: 'Ne rien faire',
+        texte: `${cle} est marqué « ${this._otTexteSansOt(so)} ». Ouvrir une fiche d'opérations crée un OT à faire pour ce module. `
+          + `Si le module doit finalement avoir un OT, « Remettre à faire » dans Reconditionnement est préférable.` }))) return;
     this.toast('⏳ Ouverture de la fiche d\'opérations…');
     try {
       const d = await this._otPost({ action: 'ot_ouvrir', code: m.code || code, module: {
@@ -693,6 +701,9 @@ Object.assign(App, {
     else if (f.statut === 'a_valider') boutons = `<button type="button" class="sx-btn sx-btn-discret" onclick="App.otChangerStatut('brouillon')">Reprendre en brouillon</button>`
       + (admin ? `<button type="button" class="sx-btn sx-btn-principal" onclick="App.otChangerStatut('validee')">Valider</button>` : '');
     else if (f.statut === 'validee' && admin) boutons = `<button type="button" class="sx-btn sx-btn-discret" onclick="App.otChangerStatut('a_valider')">Rouvrir</button>`;
+    // Annuler une fiche (admins, 2026-11-24) : fiche ouverte par erreur, module finalement sans OT…
+    if (admin && ['brouillon', 'a_valider', 'validee'].includes(f.statut))
+      boutons = `<button type="button" class="sx-btn sx-btn-discret" onclick="App.otAnnulerFiche()" title="Fiche ouverte par erreur, module sans OT…">Annuler la fiche</button>` + boutons;
     return texte + boutons;
   },
 
@@ -876,6 +887,28 @@ Object.assign(App, {
       return false;
     } finally {
       S.ot.enCours = null;
+    }
+  },
+
+  // Annulation d'une fiche (admins, 2026-11-24 — avant : impossible depuis la PWA). ot_fiche_statut l'accepte depuis
+  // brouillon / à valider / validée (pas envoyée). Rien n'est remis en stock ; le numéro d'OT n'est pas repris.
+  async otAnnulerFiche() {
+    const f = S.ot.fiche;
+    if (!f || !this._otAdmin()) return;
+    const sansOt = this._otSansOtDe(f.code_planning, {});
+    const texte = 'La fiche passe « Annulée » : elle sort des listes et le module redevient sans fiche'
+      + (sansOt ? ' (il reste « ' + this._otTexteSansOt(sansOt) + ' »)' : ' (il réapparaîtra dans « OT à faire » s’il est terminé)') + '.'
+      + (f.numero_ot ? ' Le numéro ' + f.numero_ot + ' ne sera pas réutilisé.' : '')
+      + (f.stock_le ? ' Attention : les pièces déjà sorties du stock n’y sont PAS remises (à corriger dans le Stock si besoin).' : '');
+    if (!(await this._otConfirmer({ titre: 'Annuler la fiche ?', texte, ok: 'Annuler la fiche', annuler: 'Garder la fiche' }))) return;
+    try {
+      await this._otPost({ action: 'ot_statut', id: f.id, statut: 'annulee' });
+      this.toast('✓ Fiche annulée');
+      S.ot.rev = S.ot.revEnvoyee;                 // rien à enregistrer en quittant
+      if (S.pb) S.pb.fiches = null;
+      this.otQuitterFiche();
+    } catch (e) {
+      this.toast('Annulation impossible : ' + e.message, 5000);
     }
   },
 
@@ -1456,8 +1489,10 @@ Object.assign(App, {
     const actions = {
       a_valider: `<button type="button" class="sx-btn sx-btn-discret" style="flex:1 1 140px;" onclick="App.otChangerStatut('brouillon')">Renvoyer à l'atelier</button>
                   <button type="button" class="sx-btn sx-btn-principal" style="flex:2 1 180px;" onclick="App.otChangerStatut('validee')">Valider</button>`,
-      validee:   `<button type="button" class="sx-btn sx-btn-discret sx-btn-plein" onclick="App.otChangerStatut('a_valider')">Rouvrir pour corriger</button>`,
+      validee:   `<button type="button" class="sx-btn sx-btn-discret" style="flex:2 1 180px;" onclick="App.otChangerStatut('a_valider')">Rouvrir pour corriger</button>`,
     }[f.statut] || '';
+    const annuler = ['a_valider', 'validee'].includes(f.statut)
+      ? `<button type="button" class="sx-btn sx-btn-discret" style="flex:1 1 140px;" onclick="App.otAnnulerFiche()">Annuler la fiche</button>` : '';
 
     // Même découpage que la saisie (1. Pièces… 2. Sanitaire 3. Temps passé), demande de Hugo du 2026-11-13.
     el.innerHTML = `<div class="sx-ecran sx-ot sx-ot-${_otEsc(f.statut)}">
@@ -1503,7 +1538,7 @@ Object.assign(App, {
             ${f.statut === 'a_valider' ? this._otHtmlEnValidant(true) : ''}
             ${['validee', 'envoyee'].includes(f.statut) ? this._otHtmlDocuments(f) : ''}
             ${this._otHtmlStock(f)}
-            <div style="display:flex;gap:10px;flex-wrap:wrap;">${actions}</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">${annuler}${actions}</div>
           </aside>
         </div>
       </main></div>`;

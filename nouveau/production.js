@@ -386,7 +386,7 @@ Object.assign(App, {
       <span>${this._pbHtmlStock(f)}</span>
       <span class="pb-droite pb-montant">${admin && f && f.total_ht !== undefined && f.total_ht !== null && f.statut !== 'brouillon' ? _otEuros(f.total_ht) : ''}</span>
       <span class="pb-docs">${docs}</span>
-      <button type="button" class="pb-poses" onclick="App.prodPoses(${l.parti}, ${l.idx})" title="Fiche d'opérations : saisir les poses">${_PB_SVG_CLE}Poses</button>
+      <button type="button" class="pb-poses${l.sansOt ? ' pb-poses-off' : ''}" onclick="App.prodPoses(${l.parti}, ${l.idx})" title="${l.sansOt ? 'Module sans OT : ouvrir une fiche demande confirmation' : 'Fiche d’opérations : saisir les poses'}">${_PB_SVG_CLE}Poses</button>
     </div>`;
   },
 });
@@ -959,7 +959,7 @@ Object.assign(App, {
         ${f && f.stock_le ? this._pbHtmlStock(f, true) : ''}
         ${pdf && pdf.url ? `<a class="pb-doc" href="${_otEsc(pdf.url)}" target="_blank" rel="noopener">PDF</a>` : ''}
         ${admin && f && f.documents && f.documents.dossier ? `<a class="pb-doc" href="${_otEsc(f.documents.dossier)}" target="_blank" rel="noopener">Dossier OT</a>` : ''}
-        <button type="button" class="pb-poses" onclick="App.prodPoses(${l.parti}, ${l.idx})">${_PB_SVG_CLE}Poses</button>
+        <button type="button" class="pb-poses${l.sansOt ? ' pb-poses-off' : ''}" onclick="App.prodPoses(${l.parti}, ${l.idx})">${_PB_SVG_CLE}Poses</button>
       </div>
     </div>`;
   },

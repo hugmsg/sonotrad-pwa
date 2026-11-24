@@ -572,6 +572,7 @@ body.pb-plein #view-prod-bureau.active, body.pb-plein #view-ot-commandes.active 
 .pb-doc { font-size: 11px; font-weight: 700; color: #0B3A7A; background: #E7EEF9; border-radius: 5px; padding: 2px 7px; text-decoration: none; white-space: nowrap; }
 .pb-doc:hover { background: #D3E0F5; }
 .pb-poses { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--sx-bleu); }
+.pb-poses.pb-poses-off { color: #9AA6B5; font-weight: 600; }   /* module « Pas d'OT » sans fiche (2026-11-24) */
 /* Tablette / téléphone : étapes et « À traiter » sur une ligne qui défile, pour laisser la place au tableau */
 @media (max-width: 899px) {
   .pb-defile { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
