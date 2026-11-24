@@ -1782,12 +1782,13 @@
                 style="flex:1;min-width:120px;background:#1D4ED8;color:white;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;">
                 🖨️ Imprimer / PDF
               </button>
-              <button onclick="App.lvuSaveToDrive()"
+              <button id="lvu-btn-save" onclick="App.lvuSaveToDrive()"
                 style="flex:1;min-width:120px;background:white;color:#1D4ED8;border:2px solid #1D4ED8;border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;">
                 ☁️ Enregistrer Drive
               </button>
             </div>
             <div id="lvu-save-status" style="margin-top:10px;font-size:12px;color:#64748B;"></div>
+            <button id="lvu-btn-retour" onclick="App.lvuRetour()" style="display:none;margin-top:10px;width:100%;background:#1F3A5F;color:white;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;">← Retour au Planning (Production)</button>
           </div>
           <button onclick="App.lvuNew()"
             style="width:100%;background:#E2E8F0;color:#1E293B;border:none;border-radius:10px;padding:12px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px;">
@@ -1911,6 +1912,7 @@
 <script src="production.js"></script>
 <script src="commandes.js"></script>
 <script src="expeditions.js"></script>
+<script src="lv_prod.js"></script>
 <script src="stock_socle.js"></script>
 
 <!-- ── MODAL : SAISIE RAPIDE ──────────────────────────────────────────── -->

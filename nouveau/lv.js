@@ -345,10 +345,11 @@ Object.assign(App, {
     const total = {};
     if (totalPoidsNum > 0) total.poids = parseFloat(totalPoidsNum.toFixed(2)) + ' t';
     if (totalML > 0) total.ml = parseFloat(totalML.toFixed(2)) + ' ml';
+    const M = S.lvu.modif;   // modification d'une LV existante (2026-11-24) : même numéro, date d'origine
     return {
       type:         S.lvu.type || 'LV',
-      display:      S.lvu.display || '00000',
-      date:         dateStr,
+      display:      M ? M.numero : (S.lvu.display || '00000'),
+      date:         M && M.date ? M.date : dateStr,
       conducteur:   v('lvu-f-conducteur'),
       immat_moteur: v('lvu-f-immat-moteur').toUpperCase(),
       immat_semi:   v('lvu-f-immat-semi').toUpperCase(),
@@ -374,13 +375,14 @@ Object.assign(App, {
     const btnText = document.getElementById('lvu-btn-generate-text');
     if (btnText) btnText.textContent = '⏳ Génération…';
     try {
-      if (!S.lvu.numero && S.apiUrl) {
+      if (!S.lvu.numero && !S.lvu.modif && S.apiUrl) {
         try {
           const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_next_number', {}, 10000);
           const d = await r.json();
           if (d.status === 'ok') { S.lvu.numero = d.numero; S.lvu.display = d.display; }
         } catch (_) {}
       }
+      if (S.lvu.modif) S.lvu.enregistree = null;   // LV refaite : on peut renvoyer la modification
       const data = this._lvuCollectFormData();
       const doc  = _generateLvu(data);
       S.lvu.lastDoc  = doc;
@@ -389,8 +391,9 @@ Object.assign(App, {
       const title = document.getElementById('lvu-result-title');
       const info  = document.getElementById('lvu-result-info');
       if (res)   res.style.display = '';
-      if (title) title.textContent = `✅ ${data.type} N° ${data.display} générée`;
+      if (title) title.textContent = S.lvu.modif ? `✅ ${data.type} N° ${data.display} refaite — pas encore enregistrée` : `✅ ${data.type} N° ${data.display} générée`;
       if (info)  info.textContent  = `${data.date} · ${data.destinataire?.nom || '—'} · ${data.marchandises?.length || 0} ligne(s)`;
+      this._lvuMajBoutonsResultat();
       if (document.getElementById('lvu-save-status')) document.getElementById('lvu-save-status').textContent = '';
       res?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (e) {
@@ -440,7 +443,9 @@ Object.assign(App, {
         marchandises_desc: (d.marchandises || []).map(m => m.description).filter(Boolean).join(', '),
         grutage: this._lvuCalcGrutage(d),
         remplace: d.remplace || '', // LV annulée que celle-ci remplace (lien posé par le serveur)
+        donnees: this._lvuDonnees(d), // formulaire complet (Archive col W) : pour rouvrir la LV dans « Modifier »
       };
+      if (S.lvu.modif) return this._lvuSaveModif(d, payload);
       // 60s (pas 30s) : _saveLv fait Drive + 2 sheets + Planning multi-fichiers + verrou
       // LockService — dépasse régulièrement 30s, ce qui abortait le fetch côté client
       // AVANT que la réponse 'ok' n'arrive (incident LV 01714, 2026-09-03 : sauvegarde
@@ -727,6 +732,9 @@ Object.assign(App, {
 
   lvuNew() {
     S.lvu.lastDoc = null; S.lvu.lastData = null;
+    if (S.lvu.modif) { S.lvu.modif = null; S.lvu.numero = null; S.lvu.display = null; }
+    S.lvu.enregistree = null;
+    this._lvuBandeauModif();
     S.lvu.marchandises = [];
     S.lvu.fromOpKey = null; S.lvu.fromOpNote = '';
     S.lvu.enlevementNumero = null;
@@ -753,6 +761,11 @@ Object.assign(App, {
   },
 
   async lvuLoadHistory() {
+    if (!document.getElementById('lvu-history-list') || S.view !== 'lvu-history') {
+      // Annulation / parti faits depuis Production › LV / CMR (2026-11-24) : c'est cette vue qu'on relit
+      if (S.view === 'prod-bureau' && S.pb && S.pb.vue === 'lv' && this._lvpCharger) this._lvpCharger(true);
+      return;
+    }
     if (!S.apiUrl) {
       document.getElementById('lvu-history-list').innerHTML =
         '<div style="padding:20px;color:#94A3B8;text-align:center;">URL API non configurée</div>';
@@ -871,6 +884,7 @@ Object.assign(App, {
                 <div style="display:flex;align-items:center;gap:6px;">
                   ${row.pdfUrl?`<a href="${row.pdfUrl}" target="_blank" rel="noopener" title="PDF" class="lvu-hist-action pdf">📄</a>`:''}
                   ${row.annulee ? (row.remplacee_par ? '' : `<button onclick="App.openLvLinkModal('${row.numero}')" title="Lier à la LV qui la remplace" class="lvu-hist-action">🔗</button>`) : `
+                  ${row.parti ? '' : `<button onclick="App.lvuModifier('${row.numero}')" title="Modifier la LV (même numéro, tant que le départ n'est pas fait)" class="lvu-hist-action">🛠</button>`}
                   <button onclick="App.openLvNoteModal('${row.numero}')" title="Éditer note/grutage" class="lvu-hist-action">✏️</button>
                   <button onclick="App.lvuTogglePartiHistory('${row.numero}', ${row.parti===true}, this)" title="${row.parti?'Remettre disponible':'Marquer parti'}" class="lvu-hist-action">${row.parti?'↩':'🚚'}</button>
                   <button onclick="App.openLvCancelModal('${row.numero}')" title="Annuler (reste dans l'historique)" class="lvu-hist-action delete">⊘</button>
@@ -1099,6 +1113,186 @@ Object.assign(App, {
       this.toast('Erreur : ' + e.message);
     } finally {
       if (btn && btn.isConnected) { btn.disabled = false; btn.style.opacity = ''; btn.innerHTML = btnHtml; }
+    }
+  },
+
+  /* ═══ Modifier une LV tant que le départ n'est pas fait (2026-11-24) ═══════════════════════════════════
+     Même numéro, date d'origine. Le formulaire est rouvert depuis les données enregistrées avec la LV
+     (Archive col W, LV créées depuis le 24/11) ; pour les plus anciennes, il est reconstruit depuis
+     l'Archive et les modules du Planning (destinataire repris de l'annuaire — à vérifier).
+     Enregistrement : action lv_modifier (PDF remplacé dans le même fichier Drive, Archive, Planning,
+     Départs, Demandes, portail transporteur). */
+  _lvuDonnees(d) {
+    try {
+      const x = Object.assign({}, d);
+      delete x.display; delete x.remplace;
+      return JSON.stringify(x);
+    } catch (e) { return ''; }
+  },
+
+  _lvuMajBoutonsResultat() {
+    const b = document.getElementById('lvu-btn-save');
+    if (b) b.textContent = S.lvu.modif ? '☁️ Enregistrer les modifications' : '☁️ Enregistrer Drive';
+    const r = document.getElementById('lvu-btn-retour');
+    if (r) r.style.display = S.lvu.retour ? '' : 'none';
+  },
+
+  _lvuBandeauModif() {
+    const vue = document.getElementById('view-lvu-form');
+    if (!vue) return;
+    let el = document.getElementById('lvu-modif-bandeau');
+    if (!S.lvu.modif) { if (el) el.remove(); this._lvuMajBoutonsResultat(); return; }
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'lvu-modif-bandeau';
+      el.className = 'lvu-modif-bandeau';
+      const cont = vue.firstElementChild || vue;
+      cont.insertBefore(el, cont.firstChild);
+    }
+    const M = S.lvu.modif;
+    el.innerHTML = `<div><b>Modification de la ${this._escHtml(M.type || 'LV')} n° ${this._escHtml(M.numero)}</b> — même numéro, date du ${this._escHtml(M.date || '')}.
+      ${M.reconstruite ? '<br><span>LV créée avant le 24/11 : formulaire reconstruit depuis l’Archive et le Planning, <b>vérifiez le destinataire et les marchandises</b>.</span>' : ''}
+      <br><span>Générez puis « Enregistrer les modifications » : PDF, Archive, Planning, Départs et portail transporteur sont remis à jour.</span></div>
+      <button type="button" onclick="App.lvuAbandonnerModif()">Abandonner</button>`;
+    this._lvuMajBoutonsResultat();
+  },
+
+  lvuAbandonnerModif() {
+    const retour = S.lvu.retour;
+    this.lvuNew();
+    if (retour) return this.lvuRetour();
+    this.toast('Modification abandonnée : rien n’a changé');
+  },
+
+  // Retour à Production après une LV faite depuis le Planning (action groupée, vue LV / CMR)
+  lvuRetour() {
+    S.lvu.retour = null;
+    S.depsLoaded = false; S.archiveLoaded = false;      // Planning modifié (Q/U/V) : à relire
+    if (S.lvp) S.lvp.liste = null;
+    this._lvuMajBoutonsResultat();
+    S.activity = 'loxam';
+    this.prodOuvrir();
+  },
+
+  async lvuModifier(numero, retour) {
+    if (!S.apiUrl) return;
+    this.toast('⏳ Ouverture de la LV ' + numero + '…');
+    let lv;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl + '?action=lv_detail&numero=' + encodeURIComponent(numero), {}, 30000);
+      const d = await r.json();
+      if (d.status !== 'ok') throw new Error(d.error || 'erreur inconnue');
+      lv = d.lv;
+    } catch (e) { this.toast('Ouverture impossible : ' + e.message, 5000); return; }
+    if (lv.annulee) return this.toast('LV ' + lv.numero + ' annulée : elle ne se modifie plus', 5000);
+    const partis = (lv.modules || []).filter(m => m.parti).map(m => m.code);
+    if (lv.parti || partis.length) return this.toast('LV ' + lv.numero + ' déjà partie' + (partis.length ? ' (' + partis.join(', ') + ')' : '') + ' : elle ne se modifie plus', 5000);
+
+    // Modules du Planning (pour le choix LOXAM et le grutage) : chargés s'ils ne le sont pas encore
+    if (!S.depsLoaded && this._pbChargerProduction) { try { await this._pbChargerProduction(); } catch (e) { /* formulaire sans liste */ } }
+    if (retour) S.lvu.retour = retour;
+    S.activity = 'lvu';
+    if (S.view === 'lvu-form') this.lvuNew();
+    S.lvu.lastDoc = null; S.lvu.lastData = null; S.lvu.marchandises = [];
+    S.lvu.modif = { numero: lv.numero, date: String(lv.date || '').slice(0, 10), type: lv.type || 'LV', reconstruite: !lv.donnees };
+    S.lvu.numero = Number(lv.numero); S.lvu.display = lv.numero; S.lvu.enregistree = null;
+    await this.lvuInit();
+    this.lvuNew();                                        // formulaire vidé…
+    S.lvu.modif = { numero: lv.numero, date: String(lv.date || '').slice(0, 10), type: lv.type || 'LV', reconstruite: !lv.donnees };
+    S.lvu.numero = Number(lv.numero); S.lvu.display = lv.numero;   // …mais on reste en modification
+    await this.lvuLoadAgencies();
+
+    // Modules proposés dans le choix LOXAM : ceux de la LV + les modules encore sur parc
+    const codes = (lv.modules || []).map(m => m.code);
+    const tous = [...(S.deps || []), ...(S.archive || [])];
+    const mods = codes.map(c => tous.find(x => String(x.code || '').toUpperCase() === c)).filter(Boolean);
+    S.lvu.loxamItems = S.depsLoaded ? (S.deps || []).filter(x => !x.lv || codes.includes(String(x.code || '').toUpperCase())) : mods;
+    S.lvu.selectedItems = new Set(mods.map(x => x.code));
+
+    const D = lv.donnees;
+    if (D) this._lvuRemplirDepuis(D);
+    else this._lvuReconstruire(lv, mods);
+    ['lvu-loxam-picker', 'lvu-bcb-picker', 'lvu-stock-picker'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+    this._lvuBandeauModif();
+    const v = document.getElementById('view-lvu-form'); if (v) v.scrollTop = 0;
+  },
+
+  _lvuPoser(id, val) { const el = document.getElementById(id); if (el && val !== undefined && val !== null) el.value = String(val); },
+
+  _lvuRemplirDepuis(D) {
+    const p = (id, v) => this._lvuPoser(id, v);
+    this.lvuSetType(D.type === 'CMR' ? 'CMR' : 'LV');
+    if (D.transporteur) { S.lvu.transporteur = Object.assign({}, D.transporteur); this._lvuRenderTransporteurUI(); }
+    S.lvu.source = D.source || 'manual';
+    ['manual','loxam','bcb','stock'].forEach(s => {
+      const btn = document.getElementById('lvu-src-' + s);
+      if (!btn) return;
+      btn.style.borderColor = s === S.lvu.source ? '#1D4ED8' : '#E2E8F0';
+      btn.style.background  = s === S.lvu.source ? '#EFF6FF' : 'white';
+      btn.style.color       = s === S.lvu.source ? '#1D4ED8' : '#64748B';
+    });
+    p('lvu-f-conducteur', D.conducteur); p('lvu-f-immat-moteur', D.immat_moteur); p('lvu-f-immat-semi', D.immat_semi);
+    p('lvu-f-donneur', D.donneur_ordre);
+    const e = D.expediteur || {}, de = D.destinataire || {};
+    p('lvu-f-exp-nom', e.nom); p('lvu-f-exp-adresse', e.adresse); p('lvu-f-exp-ville', e.ville); p('lvu-f-exp-pays', e.pays);
+    p('lvu-f-dest-nom', de.nom); p('lvu-f-dest-adresse', de.adresse); p('lvu-f-dest-ville', de.ville); p('lvu-f-dest-pays', de.pays);
+    p('lvu-f-doc', D.doc_annexe); p('lvu-f-commande', D.commande); p('lvu-f-note', D.note);
+    const cb = document.getElementById('lvu-f-livraison-check'), dt = document.getElementById('lvu-f-livraison-date');
+    if (cb && dt) { cb.checked = !!D.livraisonPrevue; dt.value = D.livraisonPrevue || ''; dt.style.display = D.livraisonPrevue ? 'block' : 'none'; }
+    const oui = document.getElementById('lvu-convoi-oui'), non = document.getElementById('lvu-convoi-non');
+    if (oui && non) { oui.checked = !!D.convoi; non.checked = !D.convoi; }
+    S.lvu.marchandises = (D.marchandises || []).map(m => ({ qte: m.qte, description: m.description, poids: m.poids, note: m.note || '', ml: m.ml || '' }));
+    this._lvuRenderMarchandises();
+  },
+
+  // LV d'avant le 24/11 (pas de formulaire enregistré) : modules du Planning + champs de l'Archive.
+  _lvuReconstruire(lv, mods) {
+    const p = (id, v) => this._lvuPoser(id, v);
+    this.lvuSetType(String(lv.type).toUpperCase() === 'CMR' ? 'CMR' : 'LV');
+    if (mods.length) {
+      this.lvuSetSource('loxam');
+      this.lvuApplyLoxam();                 // marchandises, expéditeur, donneur d'ordre, destinataire de l'agence
+    } else if (lv.marchandises_desc) {
+      S.lvu.marchandises = lv.marchandises_desc.split(',').map(x => x.trim()).filter(Boolean).slice(0, 10)
+        .map(x => ({ qte: 1, description: x, poids: '', note: '' }));
+      this._lvuRenderMarchandises();
+    }
+    const nomDest = document.getElementById('lvu-f-dest-nom');
+    if (nomDest && !nomDest.value) p('lvu-f-dest-nom', lv.destinataire);
+    const nomExp = document.getElementById('lvu-f-exp-nom');
+    if (nomExp && !nomExp.value) p('lvu-f-exp-nom', lv.expediteur);
+    p('lvu-f-conducteur', lv.conducteur); p('lvu-f-immat-moteur', lv.immat_moteur); p('lvu-f-immat-semi', lv.immat_semi);
+    p('lvu-f-doc', lv.doc_annexe); p('lvu-f-commande', lv.commande); p('lvu-f-note', lv.note);
+    const cb = document.getElementById('lvu-f-livraison-check'), dt = document.getElementById('lvu-f-livraison-date');
+    if (cb && dt && lv.livraison_prevue) { cb.checked = true; dt.value = _toIsoDateInput(lv.livraison_prevue); dt.style.display = 'block'; }
+    const oui = document.getElementById('lvu-convoi-oui'), non = document.getElementById('lvu-convoi-non');
+    if (oui && non) { const c = /^oui$/i.test(lv.convoi); oui.checked = c; non.checked = !c; }
+  },
+
+  async _lvuSaveModif(d, payload) {
+    const statusEl = document.getElementById('lvu-save-status');
+    const M = S.lvu.modif;
+    const corps = Object.assign({}, payload, { action: 'lv_modifier', numero: M.numero });
+    delete corps.numero_attendu; delete corps.remplace;
+    try {
+      const r = await _fetchWithTimeout(S.apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corps) }, 90000);
+      const res = await r.json();
+      if (res.status !== 'ok') {
+        if (statusEl) statusEl.textContent = '❌ ' + (res.error || 'erreur inconnue') + ' — rien n’a été modifié.';
+        return;
+      }
+      const chg = [(res.ajoutes || []).length ? 'ajouté(s) : ' + res.ajoutes.join(', ') : '', (res.retires || []).length ? 'retiré(s) : ' + res.retires.join(', ') : ''].filter(Boolean).join(' · ');
+      if (statusEl) statusEl.textContent = `✅ ${d.type} N° ${res.numero} modifiée${chg ? ' — modules ' + chg : ''}${res.meme_fichier === false ? ' (nouveau PDF sur Drive)' : ''}`;
+      const t = document.getElementById('lvu-result-title');
+      if (t) t.textContent = `✅ ${d.type} N° ${res.numero} modifiée`;
+      this.toast(`${d.type} N° ${res.numero} modifiée`);
+      S.lvu.enregistree = d.display;                  // un second clic ne renvoie pas
+      this._syncVoyageSupabase(d, res.numero, res.pdfUrl);
+      S.depsLoaded = false; S.archiveLoaded = false;
+      if (S.lvp) S.lvp.liste = null;
+      if (S.exp) S.exp.liste = null;
+    } catch (e) {
+      if (statusEl) statusEl.textContent = '⚠️ Pas de réponse du serveur (' + e.message + '). Regardez la LV dans l’historique avant de réessayer.';
     }
   },
 });

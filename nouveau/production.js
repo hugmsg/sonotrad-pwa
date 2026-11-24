@@ -234,6 +234,7 @@ Object.assign(App, {
     if (S.pb.desc === undefined) S.pb.desc = (() => { try { return localStorage.getItem('snt_pb_travaux') !== '0'; } catch (e) { return true; } })();
     if (S.pb.vue === 'arr') return this._pbArrRendre();
     if (S.pb.vue === 'exp') return this._expRendre();
+    if (S.pb.vue === 'lv') return this._lvpRendre();
     const P = S.pb;
     const pret = S.depsLoaded;
     const lignes = pret ? this._pbLignes() : [];
@@ -345,7 +346,7 @@ Object.assign(App, {
 
     const sel = this._pbPeutSel();
     const entete = `<div class="pb-grille pb-tete"><span class="pb-code-cell">${sel ? `<input type="checkbox" class="pb-sel" id="pb-sel-tout" aria-label="Tout sélectionner (lignes affichées)" onclick="App.prodSelTout(this.checked)">` : ''}Code</span><span>N° module</span><span>Type</span><span>Agence · chantier</span>${P.desc ? '<span>Travaux</span>' : ''}
-      <span>Étape</span><span>Durée</span><span>Livraison</span><span>OT</span><span title="Fournitures sorties du stock">Stock</span><span class="pb-droite">${admin ? 'Montant' : ''}</span><span>${admin ? 'Documents' : ''}</span></div>`;
+      <span>Étape</span><span>Durée</span><span>Livraison</span><span title="N° de LV / CMR (clic : la LV dans la vue LV / CMR)">LV</span><span>OT</span><span title="Fournitures sorties du stock">Stock</span><span class="pb-droite">${admin ? 'Montant' : ''}</span><span>${admin ? 'Documents' : ''}</span></div>`;
     el.innerHTML = `<div class="pb-tableau${P.desc ? ' pb-avec-desc' : ''}"><div class="pb-interieur">${entete}${groupes.map(g => `
       <button type="button" class="pb-groupe pb-g-${g.cle}" aria-expanded="${!P.replies[g.cle]}" onclick="App.prodReplier('${g.cle}')">
         ${_PB_SVG_CHEVRON}<span>${_otEsc(g.titre)}</span><span class="pb-groupe-n">${g.ls.length} module${g.ls.length > 1 ? 's' : ''}</span>
@@ -384,6 +385,7 @@ Object.assign(App, {
       ${this._pbHtmlEtape(l, admin, barre, nomEtape)}
       <span class="pb-gris2 pb-duree">${_otEsc(duree)}</span>
       <span class="${l.retard ? 'pb-rouge' : (d.livraisonPrevue ? '' : 'pb-gris')}">${_otEsc(liv)}</span>
+      <span>${d.lv ? `<button type="button" class="pb-lv" onclick="App.lvpOuvrir('${_otEsc(d.lv)}')" title="Voir la LV ${_otEsc(d.lv)}${d.commande ? ' (commande ' + _otEsc(d.commande) + ')' : ''}">${_otEsc(d.lv)}</button>` : '<span class="pb-gris">—</span>'}</span>
       <span class="pb-ot-cell">${ot}</span>
       <span>${this._pbHtmlStock(f)}</span>
       <span class="pb-droite pb-montant">${admin && f && f.total_ht !== undefined && f.total_ht !== null && f.statut !== 'brouillon' ? _otEuros(f.total_ht) : ''}</span>
@@ -404,7 +406,7 @@ Object.assign(App, {
 
   _pbNav(actif) {
     const b = (cle, texte) => `<button type="button" class="pb-nav-btn" aria-pressed="${actif === cle}" onclick="App.prodVue('${cle}')">${texte}</button>`;
-    return `<nav class="pb-nav" aria-label="Vues">${b('prod', 'Production')}${b('arr', 'Arrivées (historique)')}${this._expPeut && this._expPeut() ? b('exp', 'Expéditions') : ''}</nav>`;
+    return `<nav class="pb-nav" aria-label="Vues">${b('prod', 'Production')}${b('arr', 'Arrivées (historique)')}${this._expPeut && this._expPeut() ? b('exp', 'Expéditions') : ''}${this._lvpPeut && this._lvpPeut() ? b('lv', 'LV / CMR') : ''}</nav>`;
   },
 
   prodVue(v) {
@@ -412,6 +414,7 @@ Object.assign(App, {
     this._pbRendre();
     if (v === 'arr') this._pbArrCharger();
     else if (v === 'exp') this._expCharger();
+    else if (v === 'lv') this._lvpCharger();
     else this.prodBureauInit();
   },
 
@@ -919,13 +922,17 @@ Object.assign(App, {
      par tableau : planning, planning avec « Travaux », arrivées. Les colonnes jamais touchées gardent leur
      réglage d'origine (les colonnes souples absorbent la place restante). */
   _PB_COLS_DEFAUT: {
-    prod: ['146px', '100px', '84px', 'minmax(162px, 1fr)', '120px', '84px', '74px', '130px', '56px', '92px', '120px'],
-    prod_desc: ['146px', '92px', '76px', 'minmax(102px, .8fr)', 'minmax(150px, 1.4fr)', '106px', '58px', '56px', '120px', '54px', '80px', '104px'],
+    prod2: ['146px', '100px', '84px', 'minmax(162px, 1fr)', '120px', '84px', '74px', '62px', '130px', '56px', '92px', '120px'],
+    prod_desc2: ['146px', '92px', '76px', 'minmax(102px, .8fr)', 'minmax(150px, 1.4fr)', '106px', '58px', '56px', '62px', '120px', '54px', '80px', '104px'],
+    lv: ['112px', '86px', 'minmax(170px, 1.2fr)', 'minmax(150px, 1fr)', '100px', 'minmax(120px, .7fr)', '84px', '84px', '170px'],
     arr: ['112px', '100px', '84px', '76px', 'minmax(150px, .8fr)', '170px', '74px', 'minmax(160px, 1fr)', '128px', '136px'],
   },
   _pbColsLire() { try { return JSON.parse(localStorage.getItem('snt_pb_cols') || '{}') || {}; } catch (e) { return {}; } },
   _pbColsEcrire(t) { try { localStorage.setItem('snt_pb_cols', JSON.stringify(t)); } catch (e) { /* stockage indisponible : réglage pour cette fois */ } },
-  _pbColsCle(tab) { return tab.querySelector('.pb-grille-arr') ? 'arr' : (tab.classList.contains('pb-avec-desc') ? 'prod_desc' : 'prod'); },
+  _pbColsCle(tab) {
+    if (tab.querySelector('.pb-grille-lv')) return 'lv';
+    return tab.querySelector('.pb-grille-arr') ? 'arr' : (tab.classList.contains('pb-avec-desc') ? 'prod_desc2' : 'prod2');
+  },
 
   _pbColsAppliquer(tab, cle, perso) {
     const inter = tab.querySelector('.pb-interieur');
@@ -1286,6 +1293,7 @@ Object.assign(App, {
       <b>${n} module${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''}</b>
       ${this._pbPeutEtape() ? `<button type="button" class="pb-action pb-action-etape" onclick="App.prodSelEtape()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg> Changer d'étape…</button>` : ''}
       <button type="button" class="pb-action" onclick="App.prodSelPasDOt()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg> Pas d'OT…</button>
+      ${this._lvpPeut && this._lvpPeut() ? `<button type="button" class="pb-action pb-action-lv" onclick="App.prodSelCreerLv()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/></svg> Créer la LV…</button>` : ''}
       ${this._otAdmin() ? `<button type="button" class="pb-action pb-action-mail" onclick="App.prodSelMailDispo()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg> Mail de dispo…</button>` : ''}
       ${this._otAdmin() ? `<button type="button" class="pb-action pb-action-mail" onclick="App.prodSelEnvoyerOt()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg> Envoyer les OT…</button>` : ''}
       <button type="button" class="pb-action pb-action-discret" onclick="App.prodSelVider()">Tout désélectionner</button>
