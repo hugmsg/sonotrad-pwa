@@ -10,6 +10,45 @@
    Accès : admins et activité « lvu » (comme le formulaire LV).
    ═══════════════════════════════════════════════════════════════════════════ */
 
+// Villes reconnues dans le nom du destinataire quand la LV n'a pas de coordonnées (copie de portail-transporteur.html :
+// [mot-clé, ville affichée, lat, lon], les plus précis d'abord).
+const _LVC_VILLES = [
+  ['SAINT BRIEUC', 'Saint-Brieuc', 48.51, -2.77], ['LORIENT', 'Lorient', 47.75, -3.37],
+  ['DIEPPE', 'Dieppe', 49.92, 1.08], ['VANNES', 'Vannes', 47.66, -2.76],
+  ['MORLAIX', 'Morlaix', 48.58, -3.83], ['SAINT AUBIN SUR GAILLON', 'St-Aubin-sur-Gaillon', 49.17, 1.32],
+  ['RITCHIE BROS', 'St-Aubin-sur-Gaillon', 49.17, 1.32], ['SAINT PATERNE', 'Saint-Paterne (Alençon)', 48.43, 0.09],
+  ['ALENÇON', 'Alençon', 48.43, 0.09], ['ALENCON', 'Alençon', 48.43, 0.09],
+  ['BORDEAUX', 'Bordeaux', 44.84, -0.58], ['DINARD', 'Dinard', 48.63, -2.07],
+  ['MANDELIEU', 'Mandelieu-la-Napoule', 43.55, 6.94], ['SAINT MALO', 'Saint-Malo', 48.65, -2.03],
+  ['CLERMONT FERRAND', 'Clermont-Ferrand', 45.78, 3.09], ['PERPIGNAN', 'Perpignan', 42.70, 2.90],
+  ['AMIENS', 'Amiens', 49.89, 2.30], ['TOULON', 'Toulon', 43.12, 5.93],
+  ['BOURGES', 'Bourges', 47.08, 2.40], ['BLOIS', 'Blois', 47.59, 1.33],
+  ['AUXERRE', 'Auxerre', 47.80, 3.57], ['METZ', 'Metz', 49.12, 6.18],
+  ['MONTLUÇON', 'Montluçon', 46.34, 2.61], ['MONTLUCON', 'Montluçon', 46.34, 2.61],
+  ['LIMOGES', 'Limoges', 45.83, 1.26], ['SAINT FLOUR', 'Saint-Flour', 45.03, 3.09],
+  ['MOULINS', 'Moulins', 46.57, 3.33], ['LANNION', 'Lannion', 48.73, -3.46],
+  ['SAINT JACQUES DE LA LANDE', 'St-Jacques-de-la-Lande', 48.08, -1.72], ['RENNES', 'Rennes', 48.11, -1.68],
+  ['ARNAGE', 'Le Mans (Arnage)', 48.00, 0.20], ['LE MANS', 'Le Mans', 48.00, 0.20],
+  ['VAL DE REUIL', 'Val-de-Reuil', 49.27, 1.23], ['ORLEANS', 'Orléans', 47.90, 1.90], ['ORLÉANS', 'Orléans', 47.90, 1.90],
+  ['AVRANCHES', 'Avranches', 48.68, -1.36], ['CARHAIX', 'Carhaix', 48.28, -3.58],
+  ['LE HAVRE', 'Le Havre', 49.49, 0.11], ['LAVAL', 'Laval', 48.07, -0.77],
+  ['LA ROCHE', 'La Roche-sur-Yon', 46.67, -1.43], ['ROANNE', 'Roanne', 46.03, 4.07],
+  ['GRENOBLE', 'Grenoble', 45.19, 5.72], ['MULHOUSE', 'Mulhouse', 47.75, 7.34],
+  ['NEVERS', 'Nevers', 46.99, 3.16], ['AGEN', 'Agen', 44.20, 0.62],
+  ['NANCY', 'Nancy', 48.69, 6.18], ['PERIGUEUX', 'Périgueux', 45.18, 0.72], ['PÉRIGUEUX', 'Périgueux', 45.18, 0.72],
+  ['CHALON', 'Chalon-sur-Saône', 46.78, 4.85], ['LAMBALLE', 'Lamballe', 48.47, -2.52],
+  ['LONS LE SAUNIER', 'Lons-le-Saunier', 46.67, 5.55], ['LA HAGUE', 'La Hague', 49.65, -1.64],
+  ['PONTIVY', 'Pontivy', 48.07, -2.97], ['ROCHEFORT', 'Rochefort', 45.94, -0.96],
+  ['TOURS', 'Tours', 47.39, 0.69], ['GOUSSAINVILLE', 'Goussainville', 49.02, 2.47],
+  ['AULNAY', 'Aulnay-sous-Bois', 48.94, 2.49], ['GENNEVILLIERS', 'Gennevilliers', 48.93, 2.30],
+  ['SAINT JEAN DE VEDAS', 'St-Jean-de-Védas', 43.58, 3.83], ['REDON', 'Redon', 47.65, -2.08],
+  ['SAINT MEMMIE', 'Châlons-en-Champagne', 48.96, 4.37], ['BERGERAC', 'Bergerac', 44.85, 0.48],
+  ['CALAIS', 'Calais', 50.95, 1.86], ['GRANVILLE', 'Granville', 48.84, -1.60],
+  ['COLMAR', 'Colmar', 48.08, 7.36], ['MEAUX', 'Meaux', 48.96, 2.88],
+  ['RODEZ', 'Rodez', 44.35, 2.57], ['VARENNES VAUZELLES', 'Varennes-Vauzelles', 46.99, 3.13],
+  ['JAVRON', 'Javron-les-Chapelles', 48.44, -0.42],
+];
+
 Object.assign(App, {
   _lvpPeut() {
     const u = S.currentUser;
@@ -104,6 +143,7 @@ Object.assign(App, {
       const d = await r.json();
       if (d.status !== 'ok') throw new Error(d.error || 'erreur inconnue');
       L.liste = d.history || [];
+      S.lvpCoords = null;                        // carte : coordonnées relues avec la liste
       S.lvuHistoryRows = L.liste;               // fenêtres d'annulation de lv.js
     } catch (e) { L.erreur = e.message; }
     finally { L.chargement = false; }
@@ -167,6 +207,7 @@ Object.assign(App, {
     const items = lignes.filter(l => l.statut === 'apartir' && l.liv && l.liv.type !== 'aucune');
     const sel = L.sel ? items.find(l => this._lvpNum(l.row.numero) === L.sel) : null;
     const nom = l => `${l.row.numero} ${l.row.destinataire || ''}`.trim();
+    const nums = arr => arr.map(l => this._lvpNum(l.row.numero)).join(',');
     const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
     const base = new Date(); base.setHours(12, 0, 0, 0); base.setDate(1);
     let mois = '';
@@ -177,9 +218,10 @@ Object.assign(App, {
       for (let w = 0; w < 6; w++) {
         const lundi = new Date(debut); lundi.setDate(debut.getDate() + w * 7);
         const kL = _livIso(lundi), s = _livSemaineDe(kL);
+        // « semaine n° » : le n° de semaine est coloré ; au survol, les cases du lundi au vendredi sont entourées
         const sems = items.filter(l => l.liv.type === 'semaine' && l.liv.min === kL);
         cases += sems.length
-          ? `<span class="lvc-sem lvc-sem-oui" title="${_otEsc('Semaine ' + s.no + ' : ' + sems.map(nom).join(', '))}">${s.no}</span>`
+          ? `<span class="lvc-sem lvc-sem-oui" data-lv="${nums(sems)}" title="${_otEsc('Livraison semaine ' + s.no + ' : ' + sems.map(nom).join(', '))}">${s.no}</span>`
           : `<span class="lvc-sem">${s ? s.no : ''}</span>`;
         for (let j = 0; j < 7; j++) {
           const d = new Date(lundi); d.setDate(lundi.getDate() + j);
@@ -190,16 +232,15 @@ Object.assign(App, {
           const se = we ? [] : items.filter(l => l.liv.type === 'semaine' && k >= l.liv.min && k <= l.liv.max);
           const cls = ['lvc-j'];
           if (d.getMonth() !== premier.getMonth()) cls.push('lvc-hors');
-          if (we) cls.push('lvc-we');
-          if (se.length) cls.push('lvc-sembande');
           if (sel && !we && this._lvpDansFenetre(sel.liv, k, auj)) cls.push('lvc-fen');
-          if (le.length) cls.push(le.length > 1 ? 'lvc-le2' : 'lvc-le');
+          if (le.length) cls.push('lvc-le' + Math.min(le.length, 3));
           if (k === auj) cls.push('lvc-auj');
           if (L.jour === k) cls.push('lvc-choisi');
           const quoi = [...le.map(l => nom(l) + ' — le'), ...av.map(l => nom(l) + ' — dernier jour (avant le)'),
-            ...ap.map(l => nom(l) + ' — premier jour (à partir du)'), ...se.map(l => nom(l) + ' — semaine')];
+            ...ap.map(l => nom(l) + ' — premier jour (à partir du)'), ...se.map(l => nom(l) + ' — semaine ' + (s ? s.no : ''))];
           const titre = _livJour(k) + (quoi.length ? '\n' + quoi.join('\n') : '');
-          cases += `<button type="button" class="${cls.join(' ')}"${we ? ' disabled' : ` onclick="App.lvpCalJour('${k}')"`} title="${_otEsc(titre)}" aria-label="${_otEsc(_livJour(k) + (quoi.length ? ', ' + quoi.length + ' LV' : ''))}">`
+          const lv = nums([...le, ...av, ...ap, ...se]);
+          cases += `<button type="button" class="${cls.join(' ')}"${lv ? ` data-lv="${lv}"` : ''}${we ? ' disabled' : ` onclick="App.lvpCalJour('${k}')"`} title="${_otEsc(titre)}" aria-label="${_otEsc(_livJour(k) + (quoi.length ? ', ' + quoi.length + ' LV' : ''))}">`
             + (ap.length ? '<i class="lvc-ap" aria-hidden="true"></i>' : '') + d.getDate() + (av.length ? '<i class="lvc-av" aria-hidden="true"></i>' : '') + '</button>';
         }
       }
@@ -210,17 +251,137 @@ Object.assign(App, {
         <button type="button" class="pb-bouton" onclick="App.lvpCalMois(-1)" aria-label="Mois précédent">‹</button>
         <button type="button" class="pb-bouton" onclick="App.lvpCalMois(0)">Aujourd’hui</button>
         <button type="button" class="pb-bouton" onclick="App.lvpCalMois(1)" aria-label="Mois suivant">›</button>
-        <span class="lvc-aide">Cliquez un jour pour voir ce qui peut partir ce jour-là, ou la livraison d’une LV pour voir sa fenêtre.</span>
+        <span class="lvc-aide">Survolez une LV, un jour ou un point de la carte : ce qui va ensemble ressort. Cliquez un jour pour voir ce qui peut partir ce jour-là, ou la livraison d’une LV pour voir sa fenêtre.</span>
       </div>
-      <div class="lvc-mois-liste">${mois}</div>
+      <div class="lvc-haut">
+        <div class="lvc-mois-liste">${mois}</div>
+        <div id="lvc-carte" class="lvc-carte" aria-label="Carte des destinations"></div>
+      </div>
       <div class="lvc-legende">
-        <span><i class="lvc-l lvc-l-le"></i>Livraison <b>le</b> (plus foncé = plusieurs)</span>
+        <span><i class="lvc-l lvc-le1"></i><i class="lvc-l lvc-le2"></i><i class="lvc-l lvc-le3"></i>Livraison <b>le</b> : 1, 2, 3 LV et plus</span>
         <span><i class="lvc-l lvc-l-av"></i><b>Avant le</b> : dernier jour</span>
         <span><i class="lvc-l lvc-l-ap"></i><b>À partir du</b> : premier jour</span>
-        <span><i class="lvc-l-no">49</i><i class="lvc-l lvc-l-sem"></i><b>Semaine n°</b> : lundi → vendredi</span>
+        <span><i class="lvc-l-no">49</i><b>Semaine n°</b> : survolez pour voir le lundi → vendredi</span>
         <span><i class="lvc-l lvc-l-fen"></i>Fenêtre de la LV choisie</span>
       </div>
     </section>`;
+  },
+
+  /* ─ Survol croisé (comme le portail transporteur) : tout élément porteur de data-lv (ligne, case du calendrier,
+     n° de semaine, point de la carte) fait ressortir les autres éléments des mêmes LV. */
+  _lvpSurvolInit(el) {
+    if (el._lvcSurvol) return;
+    el._lvcSurvol = true;
+    el.addEventListener('mouseover', e => {
+      const t = e.target.closest && e.target.closest('[data-lv]');
+      this._lvpSurligner(t ? t.dataset.lv : '');
+    });
+    el.addEventListener('mouseleave', () => this._lvpSurligner(''));
+    el.addEventListener('click', e => {   // point de la carte : amène à la première LV de la liste
+      const m = e.target.closest && e.target.closest('.lvc-marq');
+      if (!m) return;
+      const n = m.dataset.lv.split(',')[0];
+      const ligne = el.querySelector(`.pb-grille-lv[data-lv="${n}"]`);
+      if (ligne) ligne.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  },
+  _lvpSurligner(lv) {
+    if (this._lvpHiCle === lv) return;
+    this._lvpHiCle = lv;
+    const set = new Set(String(lv || '').split(',').filter(Boolean));
+    document.querySelectorAll('#lvp-corps [data-lv]').forEach(x => {
+      x.classList.toggle('lvc-hi', set.size > 0 && x.dataset.lv.split(',').some(n => set.has(n)));
+    });
+  },
+
+  /* ─ Carte des destinations (Leaflet + OpenStreetMap, comme le portail) : coordonnées géocodées à la création
+     (Supabase voyages.destination_lat / _lon), sinon la ville reconnue dans le nom du destinataire. */
+  _lvpLeaflet() {
+    if (window.L && window.L.map) return Promise.resolve();
+    if (this._lvpLeafletP) return this._lvpLeafletP;
+    this._lvpLeafletP = new Promise((ok, ko) => {
+      const css = document.createElement('link');
+      css.rel = 'stylesheet'; css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      css.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY='; css.crossOrigin = '';
+      document.head.appendChild(css);
+      const s = document.createElement('script');
+      s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      s.integrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo='; s.crossOrigin = '';
+      s.onload = () => ok();
+      s.onerror = () => { this._lvpLeafletP = null; ko(new Error('Leaflet indisponible')); };
+      document.head.appendChild(s);
+    });
+    return this._lvpLeafletP;
+  },
+
+  async _lvpCoordonnees() {
+    if (S.lvpCoords) return S.lvpCoords;
+    if (this._lvpCoordsP) return this._lvpCoordsP;
+    this._lvpCoordsP = (async () => {
+      const idx = {};
+      try {
+        if (window.SupabaseDB) {
+          const { data, error } = await window.SupabaseDB.from('voyages').select('numero_lv, destination_lat, destination_lon').eq('parti', false);
+          if (error) throw error;
+          (data || []).forEach(v => {
+            if (v.destination_lat != null && v.destination_lon != null) idx[this._lvpNum(v.numero_lv)] = { lat: Number(v.destination_lat), lon: Number(v.destination_lon) };
+          });
+        }
+      } catch (e) { console.warn('[LV] coordonnées', e); }
+      S.lvpCoords = idx;
+      this._lvpCoordsP = null;
+      return idx;
+    })();
+    return this._lvpCoordsP;
+  },
+
+  _lvpPosition(l, coords) {
+    const r = l.row, n = this._lvpNum(r.numero), c = coords[n];
+    if (c && isFinite(c.lat) && isFinite(c.lon)) return { cle: c.lat.toFixed(3) + ',' + c.lon.toFixed(3), lat: c.lat, lon: c.lon, nom: r.destinataire || '' };
+    const up = [r.destinataire, r.destination_adresse].join(' ').toUpperCase();
+    const v = _LVC_VILLES.find(x => up.includes(x[0]));
+    return v ? { cle: v[1], lat: v[2], lon: v[3], nom: v[1] } : null;
+  },
+
+  async _lvpCarte(lignes) {
+    const box = document.getElementById('lvc-carte');
+    if (!box) return;
+    const items = lignes.filter(l => l.statut === 'apartir');
+    try { await this._lvpLeaflet(); } catch (e) { box.innerHTML = '<div class="lvc-carte-vide">Carte indisponible (pas de réseau ?)</div>'; return; }
+    const coords = await this._lvpCoordonnees();
+    if (!document.body.contains(box)) return;
+    const LF = window.L;
+    let vue = null;
+    if (S._lvpMap) { try { vue = { c: S._lvpMap.getCenter(), z: S._lvpMap.getZoom() }; S._lvpMap.remove(); } catch (e) { /* carte déjà retirée */ } }
+    const carte = LF.map(box, { scrollWheelZoom: false, attributionControl: true });
+    S._lvpMap = carte;
+    LF.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 18 }).addTo(carte);
+    const groupes = {};
+    let sansLieu = 0;
+    items.forEach(l => {
+      const p = this._lvpPosition(l, coords);
+      if (!p) { sansLieu++; return; }
+      const g = groupes[p.cle] = groupes[p.cle] || Object.assign({ lvs: [] }, p);
+      g.lvs.push(l);
+    });
+    const points = Object.values(groupes);
+    points.forEach(g => {
+      const n = g.lvs.length, taille = 22 + Math.min(n, 6) * 6;
+      const nums = g.lvs.map(l => this._lvpNum(l.row.numero)).join(',');
+      const titre = g.nom + ' — ' + g.lvs.map(l => l.row.numero + (l.liv ? ' (' + _livTexte(l.liv, true) + ')' : '')).join(', ');
+      LF.marker([g.lat, g.lon], {
+        icon: LF.divIcon({ className: 'lvc-marq-icone', iconSize: [taille, taille], iconAnchor: [taille / 2, taille / 2],
+          html: `<div class="lvc-marq" data-lv="${nums}" title="${_otEsc(titre)}">${n}</div>` })
+      }).addTo(carte);
+    });
+    if (vue) carte.setView(vue.c, vue.z);
+    else if (points.length) carte.fitBounds(points.map(g => [g.lat, g.lon]), { padding: [24, 24], maxZoom: 8 });
+    else carte.setView([47.3, 0.5], 6);
+    if (sansLieu) {
+      const info = LF.control({ position: 'bottomleft' });
+      info.onAdd = () => { const d = LF.DomUtil.create('div', 'lvc-carte-info'); d.textContent = sansLieu + ' LV sans lieu connu'; return d; };
+      info.addTo(carte);
+    }
   },
 
   lvpRecherche(q) {
@@ -309,6 +470,7 @@ Object.assign(App, {
     if (L.filtre === 'apartir') lignes = lignes.slice().sort((a, b) => _livCleTri(a.liv) - _livCleTri(b.liv) || Number(b.row.numero) - Number(a.row.numero));
     const avecCal = L.filtre === 'apartir' && L.cal;
     const cal = avecCal ? this._lvpHtmlCalendrier(lignes) : '';
+    const toutes = lignes;   // pour la carte : toutes les LV à partir, même quand un jour est choisi
     let bandeau = '';
     lignes.forEach(l => { l.raison = null; });
     if (avecCal && L.jour) {
@@ -319,11 +481,19 @@ Object.assign(App, {
       if (s) bandeau = `<b>LV ${_otEsc(s.row.numero)} · ${_otEsc(s.row.destinataire || '')}</b> — ${_otEsc(s.liv ? _livTexte(s.liv) : 'Pas de consigne')} : fenêtre surlignée en jaune`;
     }
     if (bandeau) bandeau = `<div class="lvc-bandeau"><span>${bandeau}</span><button type="button" class="pb-bouton" onclick="App.lvpCalToutVoir()">Tout voir</button></div>`;
-    if (!lignes.length) { el.innerHTML = cal + bandeau + `<div class="sx-carte"><div class="sx-vide">${L.jour ? 'Aucune LV ne peut partir ce jour-là.' : 'Aucune LV ne correspond.'}</div></div>`; return; }
+    if (!lignes.length) { el.innerHTML = cal + bandeau + `<div class="sx-carte"><div class="sx-vide">${L.jour ? 'Aucune LV ne peut partir ce jour-là.' : 'Aucune LV ne correspond.'}</div></div>`; this._lvpApresRendu(el, avecCal, toutes); return; }
     const entete = `<div class="pb-grille-lv pb-tete"><span>LV</span><span>Créée</span><span>Destination</span><span>Modules</span>
       <span>Commande · BT</span><span>Poids · ml</span><span>Livraison</span><span>${avecCal && L.jour ? 'Ce jour-là' : 'Statut'}</span><span>Actions</span></div>`;
     el.innerHTML = cal + bandeau + `<div class="pb-tableau"><div class="pb-interieur pb-interieur-lv">${entete}${lignes.map(l => this._lvpHtmlLigne(l)).join('')}</div></div>`;
     this._pbColsInit(el);
+    this._lvpApresRendu(el, avecCal, toutes);
+  },
+
+  _lvpApresRendu(el, avecCal, lignes) {
+    this._lvpHiCle = null;
+    this._lvpSurvolInit(el);
+    if (avecCal) this._lvpCarte(lignes);
+    else if (S._lvpMap) { try { S._lvpMap.remove(); } catch (e) { /* déjà retirée */ } S._lvpMap = null; }
   },
 
   _lvpHtmlLigne(l) {
@@ -352,7 +522,7 @@ Object.assign(App, {
       l.statut === 'apartir' ? `<button type="button" class="lvp-btn lvp-btn-rouge" onclick="App.openLvCancelModal('${num}')" title="Annuler la LV (reste dans l'historique, modules libérés)" aria-label="Annuler la LV ${num}">Annuler</button>` : '',
     ].join('');
     const lienNum = r.pdfUrl ? `<a href="${_otEsc(r.pdfUrl)}" target="_blank" rel="noopener" class="lvp-lien" title="Ouvrir le PDF"><b>${num}</b></a>` : `<b>${num}</b>`;
-    return `<div class="pb-grille-lv pb-ligne-module${l.statut !== 'apartir' ? ' pb-parti' : ''}${L.sel && L.sel === nn ? ' lvc-ligne-sel' : ''}">
+    return `<div class="pb-grille-lv pb-ligne-module${l.statut !== 'apartir' ? ' pb-parti' : ''}${L.sel && L.sel === nn ? ' lvc-ligne-sel' : ''}"${l.statut === 'apartir' ? ` data-lv="${_otEsc(nn)}"` : ''}>
       <span class="lvp-num">${lienNum} <span class="lvp-type">${_otEsc(r.type || 'LV')}</span></span>
       <span class="pb-gris2">${_otEsc(court(r.date))}</span>
       <span title="${_otEsc(titreDest)}">${_otEsc(r.destinataire || '—')}${grutage ? '<span class="lvp-grutage">grutage</span>' : ''}${commentaire ? ' <span class="pb-gris2">· ' + _otEsc(commentaire) + '</span>' : ''}</span>

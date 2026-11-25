@@ -921,11 +921,22 @@ button.pb-doc { border: 0; font-family: inherit; cursor: pointer; }
 .lvc-j:hover:not(:disabled) { border-color: var(--sx-bleu); }
 .lvc-j:disabled { cursor: default; color: var(--sx-gris); }
 .lvc-hors { opacity: .45; }
-.lvc-sembande { background: var(--sx-bleu-texte); }
 .lvc-fen { background: var(--sx-jaune-clair); border: 2px solid var(--sx-jaune); }
-.lvc-le { background: var(--sx-bleu); color: #FFFFFF; }
-.lvc-le2 { background: var(--sx-bleu-fonce); color: #FFFFFF; }
-.lvc-le.lvc-fen, .lvc-le2.lvc-fen { border: 3px solid var(--sx-jaune); }
+.lvc-le1 { background: #A9C8EE; border-color: #A9C8EE; color: var(--sx-bleu-fonce); }
+.lvc-le2 { background: #2F6DB8; border-color: #2F6DB8; color: #FFFFFF; }
+.lvc-le3 { background: #0A2A5C; border-color: #0A2A5C; color: #FFFFFF; }
+.lvc-le1.lvc-fen, .lvc-le2.lvc-fen, .lvc-le3.lvc-fen { border: 3px solid var(--sx-jaune); }
+.lvc-j.lvc-hi { outline: 3px solid var(--sx-bleu-fonce); outline-offset: 1px; z-index: 1; }
+.lvc-sem-oui.lvc-hi { outline: 2px solid var(--sx-bleu-fonce); outline-offset: 2px; }
+.pb-grille-lv.lvc-hi { background: #E7EEF9 !important; }
+.lvc-haut { display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: stretch; }
+.lvc-haut .lvc-mois-liste { flex: 999 1 600px; }
+.lvc-carte { flex: 1 1 340px; min-height: 300px; border: 1px solid var(--sx-bord); border-radius: 10px; overflow: hidden; isolation: isolate; background: #EEF2F5; }
+.lvc-carte-vide { padding: 20px; color: var(--sx-gris); font-size: 13px; }
+.lvc-carte-info { background: #FFFFFF; padding: 3px 8px; border-radius: 6px; font-size: 11.5px; color: var(--sx-gris); box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+.lvc-marq-icone { background: transparent; border: 0; }
+.lvc-marq { width: 100%; height: 100%; box-sizing: border-box; border-radius: 50%; background: var(--sx-bleu); color: #FFFFFF; border: 2px solid #FFFFFF; box-shadow: 0 1px 4px rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; font: 800 12px Inter, system-ui, sans-serif; cursor: pointer; transition: transform .12s; }
+.lvc-marq.lvc-hi { background: var(--sx-jaune); color: var(--sx-texte); transform: scale(1.3); }
 .lvc-auj:not(.lvc-fen) { border: 2px solid var(--sx-texte); }
 .lvc-choisi { outline: 3px solid var(--sx-texte); outline-offset: 1px; }
 .lvc-ap, .lvc-av { position: absolute; left: 0; right: 0; height: 5px; }
@@ -934,10 +945,8 @@ button.pb-doc { border: 0; font-family: inherit; cursor: pointer; }
 .lvc-legende { display: flex; flex-wrap: wrap; gap: 6px 18px; padding-top: 10px; border-top: 1px solid var(--sx-separateur); font-size: 12px; }
 .lvc-legende > span { display: inline-flex; align-items: center; gap: 6px; }
 .lvc-l { position: relative; overflow: hidden; display: inline-block; width: 18px; height: 18px; border-radius: 4px; border: 1px solid var(--sx-bord-champ); box-sizing: border-box; }
-.lvc-l-le { background: var(--sx-bleu); border-color: var(--sx-bleu); }
 .lvc-l-av { box-shadow: inset 0 -4px 0 var(--sx-orange); }
 .lvc-l-ap { box-shadow: inset 0 4px 0 var(--sx-vert); }
-.lvc-l-sem { background: var(--sx-bleu-texte); border-color: var(--sx-bleu-texte); }
 .lvc-l-fen { background: var(--sx-jaune-clair); border: 2px solid var(--sx-jaune); }
 .lvc-l-no { font-style: normal; padding: 1px 5px; border-radius: 4px; background: var(--sx-bleu-fonce); color: #FFFFFF; font-weight: 800; font-size: 11px; }
 .lvc-bandeau { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding: 8px 14px; margin-bottom: 8px; background: var(--sx-jaune-clair); border: 1px solid #F2DFA0; border-radius: 10px; font-size: 13px; flex-shrink: 0; }

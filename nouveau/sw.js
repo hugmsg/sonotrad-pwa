@@ -4,7 +4,7 @@
 //             Network-first pour les appels API AppScript
 // ═══════════════════════════════════════════════════════════════════════════
 
-const CACHE_NAME  = 'sonotrad-nouveau-v90';
+const CACHE_NAME  = 'sonotrad-nouveau-v91';
 const ASSETS = [
   './',
   './index.html',
@@ -59,7 +59,8 @@ self.addEventListener('fetch', evt => {
   // Appels API → réseau uniquement (jamais mis en cache).
   // La PWA passe par /api/proxy (même domaine) : sans ce test, ses GET tombaient dans
   // le cache-first ci-dessous et affichaient d'abord les données du chargement précédent.
-  if (url.hostname === 'script.google.com' ||
+  // Supabase (lectures REST de la carte LV, etc.) : jamais en cache non plus.
+  if (url.hostname === 'script.google.com' || url.hostname.endsWith('.supabase.co') ||
       (url.origin === self.location.origin && url.pathname.startsWith('/api/'))) {
     evt.respondWith(
       fetch(request).catch(() =>
