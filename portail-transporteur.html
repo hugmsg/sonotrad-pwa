@@ -491,8 +491,8 @@ function renderMapMarkers(dispo) {
     const marker = L.marker([g.lat, g.lon], { icon })
       .bindTooltip(`${g.label} (${g.count})`, { direction: 'top', offset: [0, -size / 2], className: 'city-label' })
       .on('click',     () => scrollToCity(g.key))
-      .on('mouseover',  () => highlightCity(g.key))
-      .on('mouseout',   () => clearHighlight())
+      .on('mouseover',  () => { highlightCity(g.key); highlightCalNumeros(cityToNumeros[g.key] || []); })   // + calendrier (2026-11-25)
+      .on('mouseout',   () => { clearHighlight(); document.querySelectorAll('#heat-months .heat-highlight').forEach(c => c.classList.remove('heat-highlight')); })
       .addTo(markersLayer);
     cityMarkers[g.key] = marker;
   });
