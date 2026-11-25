@@ -932,13 +932,13 @@ button.pb-doc { border: 0; font-family: inherit; cursor: pointer; }
 .lvc-sem-oui.lvc-hi { outline: 2px solid var(--sx-bleu-fonce); outline-offset: 2px; }
 .pb-grille-lv.lvc-hi { background: #E7EEF9 !important; }
 .lvc-haut { display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: stretch; }
-.lvc-haut .lvc-mois-liste { flex: 999 1 600px; }
-.lvc-carte { flex: 1 1 340px; min-height: 300px; border: 1px solid var(--sx-bord); border-radius: 10px; overflow: hidden; isolation: isolate; background: #EEF2F5; }
+.lvc-haut .lvc-mois-liste { flex: 2 1 620px; }
+.lvc-carte { flex: 1 1 460px; min-height: 380px; border: 1px solid var(--sx-bord); border-radius: 10px; overflow: hidden; isolation: isolate; background: #EEF2F5; }
 .lvc-carte-vide { padding: 20px; color: var(--sx-gris); font-size: 13px; }
 .lvc-carte-info { background: #FFFFFF; padding: 3px 8px; border-radius: 6px; font-size: 11.5px; color: var(--sx-gris); box-shadow: 0 1px 3px rgba(0,0,0,.2); }
 .lvc-marq-icone { background: transparent; border: 0; }
-.lvc-marq { width: 100%; height: 100%; box-sizing: border-box; border-radius: 50%; background: var(--sx-bleu); color: #FFFFFF; border: 2px solid #FFFFFF; box-shadow: 0 1px 4px rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; font: 800 12px Inter, system-ui, sans-serif; cursor: pointer; transition: transform .12s; }
-.lvc-marq.lvc-hi { background: var(--sx-jaune); color: var(--sx-texte); transform: scale(1.3); }
+.lvc-marq { width: 100%; height: 100%; box-sizing: border-box; border-radius: 50%; background: rgba(15, 77, 162, .55); color: #FFFFFF; border: 1.5px solid var(--sx-bleu-fonce); display: flex; align-items: center; justify-content: center; font: 800 12px Inter, system-ui, sans-serif; cursor: pointer; transition: transform .12s; }
+.lvc-marq.lvc-hi { background: var(--sx-jaune); color: var(--sx-texte); border-width: 2.5px; transform: scale(1.2); }
 .lvc-auj:not(.lvc-fen) { border: 2px solid var(--sx-texte); }
 .lvc-choisi { outline: 3px solid var(--sx-texte); outline-offset: 1px; }
 .lvc-ap, .lvc-av { position: absolute; left: 0; right: 0; height: 5px; }

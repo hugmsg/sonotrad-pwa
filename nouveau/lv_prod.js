@@ -131,7 +131,12 @@ Object.assign(App, {
 
   lvpOuvrir(lv) {
     const L = this._lvpEtat();
-    L.q = this._lvpNum(lv); L.filtre = 'toutes';
+    // Sans barre de recherche (retirée le 2026-11-25) : on ouvre le bon filtre, la LV est surlignée et amenée à l'écran
+    const n = this._lvpNum(lv), r = this._lvpTrouver(lv);
+    const l = r ? this._lvpLignes().find(x => x.row === r) : null;
+    L.q = ''; L.jour = '';
+    L.filtre = l ? l.statut : 'toutes';
+    L.sel = n; L.defiler = n;
     this.prodVue('lv');
   },
 
@@ -509,23 +514,15 @@ Object.assign(App, {
     const L = this._lvpEtat();
     const lignes = this._lvpLignes();
     const n = s => lignes.filter(l => l.statut === s).length;
-    const bcb = (L.liste || []).filter(r => this._lvpEstBcb(r)).length;
     const f = (cle, nom, nb) => `<button type="button" class="pb-onglet" aria-pressed="${L.filtre === cle}" onclick="App.lvpFiltre('${cle}')">${nom}${nb !== undefined ? ' <b>' + nb + '</b>' : ''}</button>`;
     el.innerHTML = `<div class="sx-ecran pb-ecran">
       ${this._otEntete({ retour: { texte: 'LOXAM', action: 'App.go(\'loxam-menu\')' }, titre: 'Production',
         sousTitre: 'LV / CMR · ' + (L.liste ? n('apartir') + ' à partir' : 'chargement…'), large: true, bandeau: this._pbNav('lv') })}
       <div class="pb-barre"><div class="pb-barre-in">
-        <div class="pb-ligne">
-          <div class="sx-recherche pb-recherche">${_OT_SVG_LOUPE}
-            <label for="lvp-q" class="sx-sr">Rechercher</label>
-            <input id="lvp-q" type="search" placeholder="N° de LV, code, n° module, destination, commande, BT…" value="${_otEsc(L.q)}" oninput="App.lvpRecherche(this.value)">
-          </div>
-          <button type="button" class="pb-bouton" onclick="App._lvpCharger(true)">${L.chargement ? 'Chargement…' : 'Actualiser'}</button>
-        </div>
-        ${bcb ? `<div class="pb-ligne"><span class="lvp-masquees">${bcb} LV de BCB non affichées (activité LV / CMR)</span></div>` : ''}
         <div class="pb-ligne pb-defile">
           <div class="pb-ligne" role="group" aria-label="Filtre">${f('apartir', 'À partir', n('apartir'))}${f('partie', 'Parties', n('partie'))}${f('annulee', 'Annulées', n('annulee'))}${f('toutes', 'Toutes')}</div>
           ${L.filtre === 'apartir' ? `<button type="button" class="pb-onglet lvp-cal-btn" aria-pressed="${!!L.cal}" onclick="App.lvpCalendrier()">Calendrier</button>` : ''}
+          <button type="button" class="pb-bouton${L.filtre === 'apartir' ? '' : ' lvp-cal-btn'}" onclick="App._lvpCharger(true)">${L.chargement ? 'Chargement…' : 'Actualiser'}</button>
         </div>
       </div></div>
       <main class="pb-contenu" id="lvp-corps"></main>
@@ -582,6 +579,12 @@ Object.assign(App, {
     this._lvpSurvolInit(el);
     if (avecCal) this._lvpCarte(lignes);
     else if (S._lvpMap) { try { S._lvpMap.remove(); } catch (e) { /* déjà retirée */ } S._lvpMap = null; }
+    const L = this._lvpEtat();
+    if (L.defiler) {   // LV ouverte depuis l'étiquette de Production
+      const x = el.querySelector(`.pb-grille-lv[data-num="${L.defiler}"]`);
+      L.defiler = '';
+      if (x) setTimeout(() => x.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+    }
   },
 
   _lvpHtmlLigne(l) {
@@ -612,7 +615,7 @@ Object.assign(App, {
       l.statut === 'apartir' ? `<button type="button" class="lvp-btn lvp-btn-rouge" onclick="App.openLvCancelModal('${num}')" title="Annuler la LV (reste dans l'historique, modules libérés)" aria-label="Annuler la LV ${num}">Annuler</button>` : '',
     ].join('');
     const lienNum = r.pdfUrl ? `<a href="${_otEsc(r.pdfUrl)}" target="_blank" rel="noopener" class="lvp-lien" title="Ouvrir le PDF"><b>${num}</b></a>` : `<b>${num}</b>`;
-    return `<div class="pb-grille-lv pb-ligne-module${l.statut !== 'apartir' ? ' pb-parti' : ''}${L.sel && L.sel === nn ? ' lvc-ligne-sel' : ''}"${l.statut === 'apartir' ? ` data-lv="${_otEsc(nn)}"` : ''}>
+    return `<div class="pb-grille-lv pb-ligne-module${l.statut !== 'apartir' ? ' pb-parti' : ''}${L.sel && L.sel === nn ? ' lvc-ligne-sel' : ''}"${l.statut === 'apartir' ? ` data-lv="${_otEsc(nn)}"` : ''} data-num="${_otEsc(nn)}">
       <span class="lvp-num">${lienNum} <span class="lvp-type">${_otEsc(r.type || 'LV')}</span></span>
       <span class="pb-gris2">${_otEsc(court(r.date))}</span>
       <span title="${_otEsc(titreDest)}">${_otEsc(r.destinataire || '—')}${grutage ? '<span class="lvp-grutage">grutage</span>' : ''}${commentaire ? ' <span class="pb-gris2">· ' + _otEsc(commentaire) + '</span>' : ''}</span>
