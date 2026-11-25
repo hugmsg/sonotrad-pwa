@@ -384,6 +384,70 @@ Object.assign(App, {
     }
   },
 
+  /* ─ Marquer parti depuis Production (2026-11-25, demande de Hugo) : mêmes règles que Départs LOXAM — toute la LV
+     part ensemble (modules « frères » ajoutés), action dep_mark_parti (Planning R, Départs, Archive, Demandes, portail).
+     Accès : admins et activité LOXAM (comme le changement d'étape). */
+  async prodSelParti() {
+    if (!this._pbPeutEtape()) return;
+    const toutes = this._pbLignes();
+    const choisis = toutes.filter(l => S.pb.sel.has(l.code) && !l.parti);
+    const dejaPartis = toutes.filter(l => S.pb.sel.has(l.code) && l.parti).length;
+    if (!choisis.length) { this.toast('Aucun module à marquer parti : ils sont déjà partis', 5000); return; }
+    const lvs = new Set(choisis.map(l => this._lvpNum(l.d.lv)).filter(Boolean));
+    const freres = toutes.filter(l => !l.parti && l.d.lv && lvs.has(this._lvpNum(l.d.lv)) && !choisis.includes(l));
+    const tous = [...choisis, ...freres];
+    const sansLv = tous.filter(l => !l.d.lv).map(l => l.code);
+    const n = tous.length;
+    const texte = [
+      `${n} module${n > 1 ? 's' : ''} ser${n > 1 ? 'ont' : 'a'} marqué${n > 1 ? 's' : ''} parti${n > 1 ? 's' : ''} : ${tous.map(l => l.code).join(', ')}.`,
+      freres.length ? `Dont ${freres.length} ajouté${freres.length > 1 ? 's' : ''} automatiquement : même LV, le voyage part en entier.` : '',
+      lvs.size ? `LV concernée${lvs.size > 1 ? 's' : ''} : ${[...lvs].join(', ')} (portail transporteur mis à jour).` : '',
+      sansLv.length ? `Sans LV : ${sansLv.join(', ')}.` : '',
+      dejaPartis ? `${dejaPartis} déjà parti${dejaPartis > 1 ? 's' : ''}, ignoré${dejaPartis > 1 ? 's' : ''}.` : '',
+    ].filter(Boolean).join(' ');
+    if (!(await this._otConfirmer({ titre: 'Marquer parti', texte, ok: n > 1 ? 'Marquer partis' : 'Marquer parti', annuler: 'Revenir' }))) return;
+    this.toast('⏳ Mise à jour du Planning…', 60000);
+    try {
+      const res = await this._otPost({ action: 'dep_mark_parti', codes: tous.map(l => l.d.code) }, 90000);
+      S.pb.sel.clear();
+      this.toast(`✅ ${res.count} module${res.count > 1 ? 's' : ''} marqué${res.count > 1 ? 's' : ''} parti${res.count > 1 ? 's' : ''}`, 5000);
+    } catch (e) { this.toast('❌ ' + e.message, 7000); return; }
+    await this._lvpToutRecharger();
+  },
+
+  // Après un départ ou une suppression : Planning, partis et liste des LV relus, écran redessiné
+  async _lvpToutRecharger() {
+    await Promise.allSettled([this._pbChargerProduction(), this._pbChargerArchive(), this._lvpChargerListe()]);
+    if (S.pb && S.pb.vue === 'lv') this._lvpRendre(); else if (this._pbRendre) this._pbRendre();
+  },
+
+  // Onglet LV / CMR : LV partie (toute la LV : Archive, Départs, modules au Planning, portail)
+  async lvpPartie(num) {
+    const r = this._lvpTrouver(num); if (!r) return;
+    const mods = (this._lvpModules()[this._lvpNum(num)] || []).filter(m => !m.parti).map(m => m.d.code);
+    if (!(await this._otConfirmer({ titre: 'LV ' + r.numero + ' partie', ok: 'Marquer partie', annuler: 'Revenir',
+        texte: `La LV ${r.numero} (${r.destinataire || '—'}) sera marquée partie${mods.length ? ', avec ' + mods.length + ' module' + (mods.length > 1 ? 's' : '') + ' au Planning : ' + mods.join(', ') : ''}. Le portail transporteur est mis à jour.` }))) return;
+    this.toast('⏳ LV ' + r.numero + '…', 60000);
+    try {
+      const d = await this._otPost({ action: 'lv_mark_parti_by_numero', numero: r.numero, parti: true }, 60000);
+      this.toast('✅ LV ' + r.numero + ' partie' + (d.portail_ok === false ? ' (portail non synchronisé)' : ''), 5000);
+    } catch (e) { this.toast('❌ ' + e.message, 7000); return; }
+    await this._lvpToutRecharger();
+  },
+
+  // Onglet LV / CMR : supprimer la DERNIÈRE LV créée (son numéro sera repris) — le serveur revérifie (lv_delete)
+  async lvpSupprimer(num) {
+    const r = this._lvpTrouver(num); if (!r) return;
+    if (!(await this._otConfirmer({ titre: 'Supprimer la LV ' + r.numero, ok: 'Supprimer', annuler: 'Revenir',
+        texte: `C'est la dernière LV créée : elle disparaît de l'historique, son PDF part à la corbeille, ses modules sont libérés au Planning et la prochaine LV reprendra le n° ${r.numero}. Si elle a déjà été remise au chauffeur, utilisez plutôt « Annuler ».` }))) return;
+    this.toast('⏳ Suppression de la LV ' + r.numero + '…', 60000);
+    try {
+      await this._otPost({ action: 'lv_delete', numero: r.numero }, 60000);
+      this.toast('✅ LV ' + r.numero + ' supprimée — son numéro sera repris', 5000);
+    } catch (e) { this.toast('❌ ' + e.message, 7000); return; }
+    await this._lvpToutRecharger();
+  },
+
   lvpRecherche(q) {
     this._lvpEtat().q = q;
     clearTimeout(this._lvpMinuteur);
@@ -468,6 +532,8 @@ Object.assign(App, {
     // À partir : par urgence de livraison — retard, au plus tard le plus proche, « à partir du », sans consigne ;
     // sinon les plus récentes d'abord
     if (L.filtre === 'apartir') lignes = lignes.slice().sort((a, b) => _livCleTri(a.liv) - _livCleTri(b.liv) || Number(b.row.numero) - Number(a.row.numero));
+    const dernier = (L.liste || []).reduce((m, r) => (Number(r.numero) > Number((m && m.numero) || 0) ? r : m), null);
+    L.dernier = dernier && !dernier.annulee && !dernier.parti ? this._lvpNum(dernier.numero) : '';
     const avecCal = L.filtre === 'apartir' && L.cal;
     const cal = avecCal ? this._lvpHtmlCalendrier(lignes) : '';
     const toutes = lignes;   // pour la carte : toutes les LV à partir, même quand un jour est choisi
@@ -519,6 +585,8 @@ Object.assign(App, {
     const actions = [
       r.pdfUrl ? `<a class="pb-doc pb-doc-lv" href="${_otEsc(r.pdfUrl)}" target="_blank" rel="noopener" title="Ouvrir le PDF">PDF</a>` : '',
       l.statut === 'apartir' ? `<button type="button" class="lvp-btn" onclick="App.lvuModifier('${num}', 'prod')" title="Modifier la LV sous le même numéro : modules, destinataire, transporteur, note…">Modifier</button>` : '',
+      l.statut === 'apartir' ? `<button type="button" class="lvp-btn" onclick="App.lvpPartie('${num}')" title="Marquer la LV partie (ses modules aussi au Planning, portail mis à jour)">Partie</button>` : '',
+      l.statut === 'apartir' && L.dernier === nn ? `<button type="button" class="lvp-btn lvp-btn-rouge" onclick="App.lvpSupprimer('${num}')" title="Dernière LV créée : la supprimer, son numéro sera repris">Supprimer</button>` : '',
       l.statut === 'apartir' ? `<button type="button" class="lvp-btn lvp-btn-rouge" onclick="App.openLvCancelModal('${num}')" title="Annuler la LV (reste dans l'historique, modules libérés)" aria-label="Annuler la LV ${num}">Annuler</button>` : '',
     ].join('');
     const lienNum = r.pdfUrl ? `<a href="${_otEsc(r.pdfUrl)}" target="_blank" rel="noopener" class="lvp-lien" title="Ouvrir le PDF"><b>${num}</b></a>` : `<b>${num}</b>`;

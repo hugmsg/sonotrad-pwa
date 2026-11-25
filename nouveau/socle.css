@@ -861,7 +861,7 @@ button.pb-doc { border: 0; font-family: inherit; cursor: pointer; }
 .lvp-stat { display: flex; align-items: baseline; gap: 6px; padding: 6px 12px; border-radius: 10px; background: #FFFFFF; border: 1px solid var(--sx-bord); font-size: 12.5px; color: #3D4B5C; }
 .lvp-stat b { font-size: 17px; color: #1F3A5F; }
 .lvp-masquees { font-size: 12px; color: #64748B; }
-.pb-grille-lv { display: grid; grid-template-columns: 104px 70px minmax(170px, 1.3fr) minmax(140px, 1fr) 150px 96px 84px 104px 178px; align-items: center; column-gap: 10px; padding: 0 12px; }
+.pb-grille-lv { display: grid; grid-template-columns: 104px 70px minmax(170px, 1.3fr) minmax(140px, 1fr) 150px 96px 84px 104px 236px; align-items: center; column-gap: 10px; padding: 0 12px; }
 .pb-grille-lv > * { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pb-grille-lv > .lvp-actions { overflow: visible; }
 .pb-interieur-lv { min-width: 1150px; }
