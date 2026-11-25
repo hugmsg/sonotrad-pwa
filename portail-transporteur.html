@@ -132,6 +132,23 @@
   .heat-day.heat-has-voyage { cursor: pointer; }
   .heat-day.heat-today { box-shadow: 0 0 0 2px #1d4ed8; }
   .heat-day.heat-highlight { box-shadow: 0 0 0 2px var(--navy); }
+  /* Consignes de livraison (2026-11-25, comme la PWA) : « avant le » = barre orange en bas du dernier jour,
+     « à partir du » = barre verte en haut du premier jour, « semaine n° » = n° de semaine coloré + lundi → vendredi
+     entourés discrètement (plus marqué au survol). La couleur de fond (heatmap) reste pour les dates fixes. */
+  .heat-day { position: relative; overflow: hidden; }
+  .heat-day.heat-av::after, .heat-day.heat-ap::before { content: ''; position: absolute; left: 0; right: 0; height: 3px; }
+  .heat-day.heat-av::after { bottom: 0; background: #c2410c; }
+  .heat-day.heat-ap::before { top: 0; background: #1f6f43; }
+  .heat-day.heat-sem { outline: 1px solid #9db7e0; outline-offset: -1px; }
+  .heat-day.heat-sem.heat-highlight { box-shadow: none; outline: 2px solid var(--navy); outline-offset: -2px; }
+  .heat-week-num.heat-week-sem { background: var(--navy); color: white; border-radius: 3px; cursor: pointer; }
+  .heat-week-num.heat-week-sem.heat-highlight { box-shadow: 0 0 0 2px #f59e0b; }
+  .heat-legend-item { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; }
+  .heat-legend-item .heat-swatch { position: relative; overflow: hidden; background: #eef2f6; }
+  .heat-legend-av::after, .heat-legend-ap::before { content: ''; position: absolute; left: 0; right: 0; height: 3px; }
+  .heat-legend-av::after { bottom: 0; background: #c2410c; }
+  .heat-legend-ap::before { top: 0; background: #1f6f43; }
+  .heat-legend-sem { background: var(--navy); color: white; border-radius: 2px; padding: 0 2px; font-weight: 700; }
   .heat-legend { display: flex; align-items: center; gap: 3px; justify-content: flex-end; margin-top: 8px; font-size: 8.5px; color: var(--gray-text); flex-shrink: 0; }
   .heat-legend .heat-swatch { width: 10px; height: 10px; border-radius: 2px; }
   @media (max-width: 900px) {
@@ -284,7 +301,7 @@
               <th class="col-lv">LV</th><th class="col-date">Date</th><th class="col-dest">Destination</th>
               <th class="col-march">Marchandise</th><th class="col-contrainte">Note</th>
               <th class="col-poids">Poids</th><th class="col-ml">ML</th><th class="col-grutage">Grutage</th>
-              <th class="col-livraison">Liv max</th>
+              <th class="col-livraison">Livraison</th>
             </tr>
           </thead>
           <tbody id="tbody"></tbody>
@@ -510,12 +527,58 @@ function dateKey(d) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+// Consigne de livraison d'un voyage (colonnes livraison_type / _min / _max, 2026-11-25) :
+// le | avant | apartir | semaine | aucune. Voyage plus ancien sans consigne : sa date
+// livraison_prevue est affichée comme avant (date fixe).
+function consigne(v) {
+  const t = v.livraison_type, min = v.livraison_min ? String(v.livraison_min).slice(0, 10) : '', max = v.livraison_max ? String(v.livraison_max).slice(0, 10) : '';
+  if (t === 'aucune') return { type: 'aucune' };
+  if (t === 'le' && (min || max)) return { type: 'le', min: min || max, max: max || min };
+  if (t === 'avant' && max) return { type: 'avant', max };
+  if (t === 'apartir' && min) return { type: 'apartir', min };
+  if (t === 'semaine' && min && max) return { type: 'semaine', min, max };
+  if (v.livraison_prevue) { const d = String(v.livraison_prevue).slice(0, 10); return { type: 'le', min: d, max: d }; }
+  return null;
+}
+function jjmm(key) { return key ? key.slice(8, 10) + '/' + key.slice(5, 7) : ''; }
+function semaineNo(key) { const p = key.split('-'); return isoWeekNumber(new Date(+p[0], +p[1] - 1, +p[2])); }
+function consigneCourte(c) {
+  if (!c || c.type === 'aucune') return '';
+  if (c.type === 'le') return 'le ' + jjmm(c.min);
+  if (c.type === 'avant') return 'avant le ' + jjmm(c.max);
+  if (c.type === 'apartir') return 'dès le ' + jjmm(c.min);
+  return 'Sem. ' + semaineNo(c.min);
+}
+function consigneLongue(c) {
+  if (!c) return '';
+  const fr = k => { const p = k.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]).toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }); };
+  if (c.type === 'aucune') return 'Pas de consigne';
+  if (c.type === 'le') return 'Le ' + fr(c.min);
+  if (c.type === 'avant') return 'Au plus tard le ' + fr(c.max);
+  if (c.type === 'apartir') return 'À partir du ' + fr(c.min);
+  return 'Semaine ' + semaineNo(c.min) + ' (du ' + jjmm(c.min) + ' au ' + jjmm(c.max) + ')';
+}
+
+// calIndex : jour -> voyages qui ont un repère ce jour-là (tous types) ; calLe : jour -> voyages « le »
+// (couleur de la case) ; calAv / calAp : dernier / premier jour ; calSem : jours d'une semaine demandée ;
+// calSemaines : lundi -> voyages « semaine n° » (case du n° de semaine).
+let calLe = {}, calAv = {}, calAp = {}, calSem = {}, calSemaines = {}, calTitres = {};
 function buildCalIndex(dispo) {
-  calIndex = {};
+  calIndex = {}; calLe = {}; calAv = {}; calAp = {}; calSem = {}; calSemaines = {}; calTitres = {};
+  const add = (m, k, n) => { (m[k] = m[k] || []).push(n); };
   dispo.forEach(v => {
-    if (!v.livraison_prevue) return;
-    const key = String(v.livraison_prevue).slice(0, 10);
-    (calIndex[key] = calIndex[key] || []).push(v.numero_lv);
+    const c = consigne(v), n = v.numero_lv;
+    if (!c || c.type === 'aucune') return;
+    const titre = n + ' ' + (v.destination || '') + ' — ' + consigneCourte(c);
+    const mark = k => { add(calIndex, k, n); add(calTitres, k, titre); };
+    if (c.type === 'le') { add(calLe, c.min, n); mark(c.min); }
+    if (c.type === 'avant') { add(calAv, c.max, n); mark(c.max); }
+    if (c.type === 'apartir') { add(calAp, c.min, n); mark(c.min); }
+    if (c.type === 'semaine') {
+      add(calSemaines, c.min, n);
+      const p = c.min.split('-'), d = new Date(+p[0], +p[1] - 1, +p[2]);
+      for (let i = 0; i < 5; i++) { const k = dateKey(d); add(calSem, k, n); mark(k); d.setDate(d.getDate() + 1); }
+    }
   });
 }
 
@@ -551,15 +614,19 @@ function defaultHeatBaseMonth() {
 function heatDayCell(d, todayKey, muted) {
   const key     = dateKey(d);
   const numeros = calIndex[key] || [];
-  const level   = Math.min(numeros.length, HEAT_COLORS.length - 1);
+  const level   = Math.min((calLe[key] || []).length, HEAT_COLORS.length - 1);   // couleur = livraisons à date fixe
   const classes = ['heat-day'];
   if (muted) classes.push('heat-muted');
   if (numeros.length) classes.push('heat-has-voyage');
   if (key === todayKey) classes.push('heat-today');
+  if (calAv[key]) classes.push('heat-av');
+  if (calAp[key]) classes.push('heat-ap');
+  if (calSem[key]) classes.push('heat-sem');
   const label = d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+  const titres = calTitres[key] || [];
   return `<div class="${classes.join(' ')}" style="background:${HEAT_COLORS[level]};color:${HEAT_TEXT[level]}"
     data-key="${key}" data-numeros="${numeros.join(',')}"
-    title="${label}${numeros.length ? ' — ' + numeros.length + ' voyage(s)' : ''}">${d.getDate()}</div>`;
+    title="${escapeHtml(label + (titres.length ? '\n' + titres.join('\n') : ''))}">${d.getDate()}</div>`;
 }
 
 // Grille toujours pleine (6 semaines = 42 cases), quel que soit le nombre
@@ -581,7 +648,10 @@ function renderHeatMonth(year, month, todayKey) {
   let cells = '';
   for (let w = 0; w < 6; w++) {
     const weekDays = days.slice(w * 7, w * 7 + 7);
-    cells += `<div class="heat-week-num">${isoWeekNumber(weekDays[0].d)}</div>`;
+    const sem = calSemaines[dateKey(weekDays[0].d)] || [];
+    cells += sem.length
+      ? `<div class="heat-week-num heat-week-sem" data-numeros="${sem.join(',')}" title="${escapeHtml('Livraison semaine ' + isoWeekNumber(weekDays[0].d) + ' : ' + sem.join(', '))}">${isoWeekNumber(weekDays[0].d)}</div>`
+      : `<div class="heat-week-num">${isoWeekNumber(weekDays[0].d)}</div>`;
     weekDays.forEach(({ d, muted }) => { cells += heatDayCell(d, todayKey, muted); });
   }
 
@@ -602,9 +672,12 @@ function renderHeatmap() {
   }
   document.getElementById('heat-months').innerHTML = html;
   document.getElementById('heat-legend').innerHTML =
-    `<span>Moins</span>${HEAT_COLORS.map(c => `<span class="heat-swatch" style="background:${c}"></span>`).join('')}<span>Plus</span>`;
+    `<span>Le : moins</span>${HEAT_COLORS.map(c => `<span class="heat-swatch" style="background:${c}"></span>`).join('')}<span>plus</span>`
+    + `<span class="heat-legend-item"><span class="heat-swatch heat-legend-av"></span>avant le</span>`
+    + `<span class="heat-legend-item"><span class="heat-swatch heat-legend-ap"></span>à partir du</span>`
+    + `<span class="heat-legend-item"><span class="heat-legend-sem">49</span>semaine</span>`;
 
-  document.querySelectorAll('#heat-months .heat-has-voyage').forEach(cell => {
+  document.querySelectorAll('#heat-months .heat-has-voyage, #heat-months .heat-week-sem').forEach(cell => {
     const numeros = cell.dataset.numeros.split(',').filter(Boolean);
     cell.addEventListener('mouseenter', () => highlightNumeros(numeros, cell));
     cell.addEventListener('mouseleave', () => clearNumeroHighlight());
@@ -641,9 +714,17 @@ function highlightNumeros(numeros, heatCell) {
     marker.setZIndexOffset(cities.has(name) ? 1000 : 0);
   });
   if (heatCell) heatCell.classList.add('heat-highlight');
+  highlightCalNumeros(numeros);
+}
+// Cases du calendrier (et n° de semaine) des voyages donnés : le jour, le dernier / premier jour, la semaine.
+function highlightCalNumeros(numeros) {
+  document.querySelectorAll('#heat-months [data-numeros]').forEach(c => {
+    const n = (c.dataset.numeros || '').split(',');
+    if (numeros.some(x => n.includes(x))) c.classList.add('heat-highlight');
+  });
 }
 function clearNumeroHighlight() {
-  document.querySelectorAll('#heat-months .heat-day.heat-highlight').forEach(c => c.classList.remove('heat-highlight'));
+  document.querySelectorAll('#heat-months .heat-highlight').forEach(c => c.classList.remove('heat-highlight'));
   highlightCity(selectedCity); // revient à l'état "ville sélectionnée" normal (ou rien)
 }
 function highlightCalDay(key) {
@@ -673,7 +754,8 @@ function render() {
       .map((v, idx) => {
         const marchandise = (v.marchandises_desc || '').trim();
         const city = (resolveLocation(v) || {}).key || '';
-        const livKey = v.livraison_prevue ? String(v.livraison_prevue).slice(0, 10) : '';
+        const livC = consigne(v);
+        const livKey = livC && livC.type !== 'aucune' ? (livC.min || livC.max) : '';
         return `
         <tr data-numero="${escapeHtml(v.numero_lv)}" data-city="${escapeHtml(city)}" data-livraison="${livKey}">
           <td class="col-num nowrap row-num">${idx + 1}</td>
@@ -685,7 +767,7 @@ function render() {
           <td class="col-poids nowrap">${v.poids ? escapeHtml(v.poids) + ' t' : '<span class="muted">-</span>'}</td>
           <td class="col-ml nowrap">${v.ml ? escapeHtml(v.ml) + ' ml' : '<span class="muted">-</span>'}</td>
           <td class="col-grutage nowrap">${v.grutage ? '<span class="badge badge-grutage">grutage</span>' : '<span class="muted">-</span>'}</td>
-          <td class="col-livraison nowrap">${v.livraison_prevue ? escapeHtml(new Date(v.livraison_prevue).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'})) : '<span class="muted">-</span>'}</td>
+          <td class="col-livraison nowrap ellipsis" title="${escapeHtml(consigneLongue(livC))}">${livC && livC.type !== 'aucune' ? escapeHtml(consigneCourte(livC)) : '<span class="muted">-</span>'}</td>
         </tr>`;
       }).join('');
 
@@ -696,11 +778,11 @@ function render() {
       if (city || livKey) {
         tr.addEventListener('mouseenter', () => {
           if (city) highlightCity(city);
-          if (livKey) highlightCalDay(livKey);
+          if (livKey) highlightCalNumeros([numero]);
         });
         tr.addEventListener('mouseleave', () => {
           clearHighlight();
-          clearCalDayHighlight();
+          clearNumeroHighlight();
         });
       }
       // Simple clic = zoomer/centrer la carte sur la destination. Double-clic
@@ -737,7 +819,7 @@ function openVoyageModal(numero) {
     </div>
     <div class="modal-row">
       <div class="modal-label">Livraison prévue</div>
-      <div class="modal-value">${v.livraison_prevue ? new Date(v.livraison_prevue).toLocaleDateString('fr-FR') : '<span class="muted" style="font-style:normal;">Non renseignée</span>'}</div>
+      <div class="modal-value">${consigne(v) ? escapeHtml(consigneLongue(consigne(v))) : '<span class="muted" style="font-style:normal;">Non renseignée</span>'}</div>
     </div>
     <div class="modal-row">
       <div class="modal-label">Note de livraison</div>
@@ -775,12 +857,12 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
+const COLONNES = 'numero_lv, type, date_creation, destination, destination_adresse, destination_lat, destination_lon, poids, ml, grutage, commentaire, marchandises_desc, livraison_prevue, parti';
 async function chargerVoyages() {
-  const { data, error } = await db
-    .from('voyages')
-    .select('numero_lv, type, date_creation, destination, destination_adresse, destination_lat, destination_lon, poids, ml, grutage, commentaire, marchandises_desc, livraison_prevue, parti')
-    .order('date_creation', { ascending: false })
-    .limit(300);
+  const lire = cols => db.from('voyages').select(cols).order('date_creation', { ascending: false }).limit(300);
+  // Consigne de livraison en plus ; si la base ne la donne pas (droits), on garde l'affichage d'avant.
+  let { data, error } = await lire(COLONNES + ', livraison_type, livraison_min, livraison_max');
+  if (error) ({ data, error } = await lire(COLONNES));
   if (error) {
     document.getElementById('status-text').textContent = 'Erreur de chargement';
     document.getElementById('status-dot').classList.add('off');
