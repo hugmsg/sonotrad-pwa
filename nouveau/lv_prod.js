@@ -233,6 +233,7 @@ Object.assign(App, {
           const cls = ['lvc-j'];
           if (d.getMonth() !== premier.getMonth()) cls.push('lvc-hors');
           if (sel && !we && this._lvpDansFenetre(sel.liv, k, auj)) cls.push('lvc-fen');
+          if (se.length) cls.push('lvc-semcadre');   // semaine demandée : cases entourées en permanence, plus fort au survol
           if (le.length) cls.push('lvc-le' + Math.min(le.length, 3));
           if (k === auj) cls.push('lvc-auj');
           if (L.jour === k) cls.push('lvc-choisi');
@@ -274,7 +275,8 @@ Object.assign(App, {
     el._lvcSurvol = true;
     el.addEventListener('mouseover', e => {
       const t = e.target.closest && e.target.closest('[data-lv]');
-      this._lvpSurligner(t ? t.dataset.lv : '');
+      // Une ligne fait aussi ressortir les autres LV vers la même destination (comme le portail)
+      this._lvpSurligner(!t ? '' : t.classList.contains('pb-grille-lv') ? this._lvpMemeDest(t.dataset.lv) : t.dataset.lv);
     });
     el.addEventListener('mouseleave', () => this._lvpSurligner(''));
     el.addEventListener('click', e => {   // point de la carte : amène à la première LV de la liste
@@ -285,6 +287,24 @@ Object.assign(App, {
       if (ligne) ligne.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
   },
+  // LV vers la même destination : même point de carte (adresse géocodée ou ville), sinon même destinataire
+  _lvpMemeDest(lv) {
+    const g = this._lvpGroupes || {};
+    const cle = g[lv];
+    if (!cle) return lv;
+    return Object.keys(g).filter(n => g[n] === cle).join(',');
+  },
+  _lvpGrouperDest(lignes, position) {
+    const g = {};
+    lignes.filter(l => l.statut === 'apartir').forEach(l => {
+      const p = position ? position(l) : null;
+      const nom = String(l.row.destinataire || '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+      const cle = p ? 'p:' + p.cle : (nom ? 'n:' + nom : '');
+      if (cle) g[this._lvpNum(l.row.numero)] = cle;
+    });
+    this._lvpGroupes = g;
+  },
+
   _lvpSurligner(lv) {
     if (this._lvpHiCle === lv) return;
     this._lvpHiCle = lv;
@@ -350,6 +370,7 @@ Object.assign(App, {
     try { await this._lvpLeaflet(); } catch (e) { box.innerHTML = '<div class="lvc-carte-vide">Carte indisponible (pas de réseau ?)</div>'; return; }
     const coords = await this._lvpCoordonnees();
     if (!document.body.contains(box)) return;
+    this._lvpGrouperDest(lignes, l => this._lvpPosition(l, coords));
     const LF = window.L;
     let vue = null;
     if (S._lvpMap) { try { vue = { c: S._lvpMap.getCenter(), z: S._lvpMap.getZoom() }; S._lvpMap.remove(); } catch (e) { /* carte déjà retirée */ } }
@@ -537,6 +558,7 @@ Object.assign(App, {
     const avecCal = L.filtre === 'apartir' && L.cal;
     const cal = avecCal ? this._lvpHtmlCalendrier(lignes) : '';
     const toutes = lignes;   // pour la carte : toutes les LV à partir, même quand un jour est choisi
+    this._lvpGrouperDest(toutes, S.lvpCoords ? l => this._lvpPosition(l, S.lvpCoords) : null);
     let bandeau = '';
     lignes.forEach(l => { l.raison = null; });
     if (avecCal && L.jour) {

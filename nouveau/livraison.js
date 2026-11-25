@@ -78,7 +78,7 @@ function _livTexte(c, court = false) {
   if (c.type === 'apartir') return court ? 'dès ' + _livJJMM(c.min) : 'À partir du ' + _livJour(c.min);
   if (c.type === 'semaine') {
     const s = _livSemaineDe(c.min);
-    return court ? 'S' + (s ? s.no : '?') : `Semaine ${s ? s.no : '?'} (${_livJJMM(c.min)} – ${_livJJMM(c.max)})`;
+    return court ? 'Sem. ' + (s ? s.no : '?') : `Semaine ${s ? s.no : '?'} (${_livJJMM(c.min)} – ${_livJJMM(c.max)})`;
   }
   return '';
 }

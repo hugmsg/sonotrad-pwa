@@ -926,7 +926,9 @@ button.pb-doc { border: 0; font-family: inherit; cursor: pointer; }
 .lvc-le2 { background: #2F6DB8; border-color: #2F6DB8; color: #FFFFFF; }
 .lvc-le3 { background: #0A2A5C; border-color: #0A2A5C; color: #FFFFFF; }
 .lvc-le1.lvc-fen, .lvc-le2.lvc-fen, .lvc-le3.lvc-fen { border: 3px solid var(--sx-jaune); }
+.lvc-semcadre { box-shadow: inset 0 0 0 2px #9DB7E0; }
 .lvc-j.lvc-hi { outline: 3px solid var(--sx-bleu-fonce); outline-offset: 1px; z-index: 1; }
+.lvc-semcadre.lvc-hi { box-shadow: inset 0 0 0 3px var(--sx-bleu-fonce); }
 .lvc-sem-oui.lvc-hi { outline: 2px solid var(--sx-bleu-fonce); outline-offset: 2px; }
 .pb-grille-lv.lvc-hi { background: #E7EEF9 !important; }
 .lvc-haut { display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: stretch; }
