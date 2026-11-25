@@ -114,8 +114,10 @@ Object.assign(App, {
     const lignes = (S.lvu.marchandises || []).filter(r => String(r.description || '').trim() || String(r.qte || '').trim());
     const res = [];   // { niveau: ok|attention|info, texte, bloquant }
     const destNom = v('lvu-f-dest-nom'), destVille = v('lvu-f-dest-ville');
-    if (destNom && destVille) res.push({ niveau: 'ok', texte: 'Destinataire : ' + destNom });
-    else res.push({ niveau: 'attention', texte: 'Destinataire à compléter (nom et ville)', bloquant: true });
+    // Seul le nom est obligatoire : l'adresse n'est pas toujours connue, le chauffeur la complète (2026-11-25)
+    if (!destNom) res.push({ niveau: 'attention', texte: 'Nom du destinataire à saisir', bloquant: true });
+    else if (destVille || v('lvu-f-dest-adresse')) res.push({ niveau: 'ok', texte: 'Destinataire : ' + destNom });
+    else res.push({ niveau: 'info', texte: 'Destinataire : ' + destNom + ' — sans adresse, le chauffeur la complétera' });
     if (lignes.length) res.push({ niveau: 'ok', texte: lignes.length + ' ligne' + (lignes.length > 1 ? 's' : '') + ' de marchandise' });
     else res.push({ niveau: 'attention', texte: 'Aucune marchandise', bloquant: true });
     // Modules LOXAM : même agence ?
