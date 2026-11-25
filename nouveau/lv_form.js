@@ -194,7 +194,7 @@ Object.assign(App, {
     if (fen) fen.location.href = url; else window.open(url, '_blank');
     if (!S.lvu.modif && !S.lvu.enregistree) {
       const t = document.getElementById('lvu-result-title');
-      if (t) t.textContent = 'Aperçu ouvert — pas encore enregistrée (n° provisoire)';
+      if (t) t.textContent = 'Aperçu ouvert — pas encore enregistrée (n° provisoire, ne pas imprimer)';
     }
   },
 });

@@ -369,6 +369,9 @@ Object.assign(App, {
 
   async lvuGenerate() {
     if (S.lvu.generating) return false;
+    // LV déjà enregistrée : on garde SON PDF. Sans ça, l'aperçu après l'enregistrement redemandait un numéro
+    // (le suivant) et « Imprimer » sortait un PDF au mauvais numéro (incident CMR 01865 / 01866, 2026-11-25).
+    if (S.lvu.enregistree && !S.lvu.modif && S.lvu.lastDoc) return true;
     S.lvu.generating = true;
     const btnText = document.getElementById('lvu-btn-generate-text');
     if (btnText) btnText.textContent = 'Préparation du PDF…';
@@ -406,6 +409,9 @@ Object.assign(App, {
 
   lvuPrint() {
     if (!S.lvu.lastDoc || !S.lvu.lastData) return;
+    // Le numéro n'est réservé qu'à l'enregistrement : imprimer avant, c'est risquer un papier dont le numéro
+    // sera pris par une autre LV (CMR PB Private imprimée en 01865 sans être enregistrée, 2026-11-25).
+    if (!S.lvu.enregistree && !S.lvu.modif) { this.toast('Enregistrez d’abord la LV : son numéro n’est réservé qu’à l’enregistrement', 6000); return; }
     const d = S.lvu.lastData;
     S.lvu.lastDoc.save(`LV_${d.display}_${(d.destinataire?.nom || 'transport').replace(/[^a-zA-Z0-9]/g,'_')}.pdf`);
   },
