@@ -54,6 +54,7 @@ Object.assign(App, {
     if (!S.archiveLoaded) attentes.push(this._pbChargerArchive());
     if (S.pb.fiches === null && !S.pb.fichesChargement && this._otAutorise()) attentes.push(this._pbChargerFiches());
     if (this._lvpPeut() && !(S.lvp && (S.lvp.liste || S.lvp.chargement))) attentes.push(this._lvpChargerListe());
+    attentes.push(...this._pbChargerCdes());
     if (!attentes.length) return;
     await Promise.allSettled(attentes);
     this._pbRendre();
@@ -62,7 +63,7 @@ Object.assign(App, {
   async prodActualiser() {
     S.depsLoaded = false; S.archiveLoaded = false; S.pb.fiches = null;
     this._pbRendre();
-    await Promise.allSettled([this._pbChargerProduction(), this._pbChargerArchive(), this._otAutorise() ? this._pbChargerFiches() : null]);
+    await Promise.allSettled([this._pbChargerProduction(), this._pbChargerArchive(), this._otAutorise() ? this._pbChargerFiches() : null, ...this._pbChargerCdes(true)]);
     this._pbRendre();
   },
 
@@ -85,6 +86,59 @@ Object.assign(App, {
       S.archive = Array.isArray(d) ? d : (d.data || []);
       S.archiveLoaded = true;
     } catch (e) { this.toast('Partis indisponibles : ' + e.message, 4000); }
+  },
+
+  // Ordres d'expédition (admins + LOXAM) et commandes de reconditionnement (admins) pour la colonne Documents.
+  // Renvoie les chargements lancés (aucun si déjà en mémoire).
+  _pbChargerCdes(force = false) {
+    const p = [];
+    if (this._expPeut()) {
+      const E = this._expEtat();
+      if ((force || !E.liste) && !E.chargement) {
+        E.chargement = true;
+        p.push(this._otGet({ action: 'exp_liste' }, 60000).then(d => { E.liste = d.expeditions || []; })
+          .catch(() => { E.liste = E.liste || []; }).finally(() => { E.chargement = false; }));
+      }
+    }
+    if (this._otAdmin()) {
+      S.cde = S.cde || { liste: null, chargement: false, filtre: 'aexporter', q: '', sel: new Set(), imp: null };
+      if ((force || !S.cde.liste) && !S.cde.chargement) {
+        S.cde.chargement = true;
+        p.push(this._otGet({ action: 'cde_liste' }, 60000).then(d => { S.cde.liste = d.commandes || []; })
+          .catch(() => { S.cde.liste = S.cde.liste || []; }).finally(() => { S.cde.chargement = false; }));
+      }
+    }
+    return p;
+  },
+
+  // Code planning → ordres d'expédition / commandes de reconditionnement (hors annulés), recalculé si les listes changent.
+  _pbCdesIndex() {
+    const exp = (S.exp && S.exp.liste) || null, cde = (S.cde && S.cde.liste) || null;
+    const I = this._pbCdesIdx;
+    if (I && I.exp === exp && I.cde === cde) return I;
+    const parCode = new Map();
+    const ajouter = (code, cle, x) => {
+      const c = String(code || '').trim().toUpperCase();
+      if (!c) return;
+      if (!parCode.has(c)) parCode.set(c, { exp: [], cde: [] });
+      parCode.get(c)[cle].push(x);
+    };
+    (exp || []).filter(x => x.statut !== 'annulee').forEach(x => (x.modules || []).forEach(m => ajouter(m.code, 'exp', x)));
+    (cde || []).filter(x => x.statut !== 'annulee').forEach(x => ajouter(x.code_planning, 'cde', x));
+    return (this._pbCdesIdx = { exp, cde, parCode });
+  },
+
+  // Étiquettes de la colonne Documents : « Exp. n° » (ordre d'expédition) et le n° d'affaire de la commande de
+  // reconditionnement en clair (demande de Hugo, 26/11 : voir les trous dans la suite). Clic = PDF (aperçu PWA).
+  _pbHtmlDocCdes(code) {
+    const e = this._pbCdesIndex().parCode.get(String(code || '').trim().toUpperCase());
+    if (!e) return '';
+    const lien = (pdf, classe, titre, texte) => pdf && pdf.url
+      ? `<a class="pb-doc ${classe}" href="${_otEsc(pdf.url)}" target="_blank" rel="noopener" title="${_otEsc(titre)}">${_otEsc(texte)}</a>`
+      : `<span class="pb-doc ${classe}" title="${_otEsc(titre)}">${_otEsc(texte)}</span>`;
+    return e.exp.map(x => lien(x.pdf, 'pb-doc-exp', 'Ordre d’expédition ' + x.numero + (x.bt ? ' · BT ' + x.bt : '') + (x.destination ? ' · ' + x.destination : ''), 'Exp. ' + x.numero)).join('')
+      + e.cde.map(x => lien(x.pdf, 'pb-doc-cde', 'Commande de reconditionnement ' + x.numero + (x.affaire ? ' · affaire ' + x.affaire : '') + (x.ebp_le ? ' · dans EBP' : ' · à exporter dans EBP'),
+        x.affaire ? 'Aff. ' + x.affaire : 'Cde ' + x.numero)).join('');
   },
 
   async _pbChargerFiches() {
@@ -348,7 +402,7 @@ Object.assign(App, {
 
     const sel = this._pbPeutSel();
     const entete = `<div class="pb-grille pb-tete"><span class="pb-code-cell">${sel ? `<input type="checkbox" class="pb-sel" id="pb-sel-tout" aria-label="Tout sélectionner (lignes affichées)" onclick="App.prodSelTout(this.checked)">` : ''}Code</span><span>N° module</span><span>Type</span><span>Agence · chantier</span>${P.desc ? '<span>Travaux</span>' : ''}
-      <span>Étape</span><span>Durée</span><span>Livraison</span><span>OT</span><span title="Fournitures sorties du stock">Stock</span><span class="pb-droite">${admin ? 'Montant' : ''}</span><span>${admin || this._lvpPeut() ? 'Documents' : ''}</span></div>`;
+      <span>Étape</span><span>Durée</span><span>Livraison</span><span>OT</span><span title="Fournitures sorties du stock">Stock</span><span class="pb-droite">${admin ? 'Montant' : ''}</span><span>${admin || this._lvpPeut() || this._expPeut() ? 'Documents' : ''}</span></div>`;
     el.innerHTML = `<div class="pb-tableau${P.desc ? ' pb-avec-desc' : ''}"><div class="pb-interieur">${entete}${groupes.map(g => `
       <button type="button" class="pb-groupe pb-g-${g.cle}" aria-expanded="${!P.replies[g.cle]}" onclick="App.prodReplier('${g.cle}')">
         ${_PB_SVG_CHEVRON}<span>${_otEsc(g.titre)}</span><span class="pb-groupe-n">${g.ls.length} module${g.ls.length > 1 ? 's' : ''}</span>
@@ -372,7 +426,7 @@ Object.assign(App, {
         ot = `<button type="button" class="pb-ot pb-ot-${_otEsc(f.statut)}" onclick="App.prodOuvrirFiche(${Number(f.id)})" title="Ouvrir la fiche d'opérations">${_otEsc(lib || f.numero_ot || 'Validée')}${f.statut === 'validee' ? ' · à envoyer' : ''}</button>`;
       } else ot = this._pbHtmlOtSansFiche(l, true, `App.prodPoses(${l.parti}, ${l.idx})`);
     }
-    const docs = this._lvpHtmlDocLv(d.lv) + ((admin && f && f.documents) ? (() => {
+    const docs = this._lvpHtmlDocLv(d.lv) + this._pbHtmlDocCdes(d.code) + ((admin && f && f.documents) ? (() => {
       const pdf = (f.documents.fichiers || []).find(x => x.type === 'pdf');
       return `${pdf && pdf.url ? `<a class="pb-doc" href="${_otEsc(pdf.url)}" target="_blank" rel="noopener" title="PDF de l'OT">OT</a>` : ''}
         ${f.documents.dossier ? `<a class="pb-doc" href="${_otEsc(f.documents.dossier)}" target="_blank" rel="noopener">Dossier OT</a>` : ''}`;
@@ -611,11 +665,11 @@ Object.assign(App, {
         ot = `<button type="button" class="pb-ot pb-ot-${_otEsc(f.statut)}" onclick="App.prodOuvrirFiche(${Number(f.id)})" title="Ouvrir la fiche d'opérations">${_otEsc(lib || f.numero_ot || 'Validée')}</button>`;
       } else ot = this._pbHtmlOtSansFiche(l, false, `App.prodPosesCode('${_otEsc(a.code || '')}', '${_otEsc(a.numModule || '')}')`);
     }
-    const docs = (admin && f && f.documents) ? (() => {
+    const docs = this._pbHtmlDocCdes(a.code) + ((admin && f && f.documents) ? (() => {
       const pdf = (f.documents.fichiers || []).find(x => x.type === 'pdf');
       return `${pdf && pdf.url ? `<a class="pb-doc" href="${_otEsc(pdf.url)}" target="_blank" rel="noopener">PDF</a>` : ''}
         ${f.documents.dossier ? `<a class="pb-doc" href="${_otEsc(f.documents.dossier)}" target="_blank" rel="noopener">Dossier OT</a>` : ''}`;
-    })() : '';
+    })() : '');
     const code = _otEsc(a.code || '');
     const dest = (pl && pl.chantier) || a.destination || '';
     const numero = pl
@@ -1041,6 +1095,7 @@ Object.assign(App, {
         ${ot}
         ${f && f.stock_le ? this._pbHtmlStock(f, true) : ''}
         ${pdf && pdf.url ? `<a class="pb-doc" href="${_otEsc(pdf.url)}" target="_blank" rel="noopener">PDF</a>` : ''}
+        ${this._pbHtmlDocCdes(d.code)}
         ${admin && f && f.documents && f.documents.dossier ? `<a class="pb-doc" href="${_otEsc(f.documents.dossier)}" target="_blank" rel="noopener">Dossier OT</a>` : ''}
         <button type="button" class="pb-poses${l.sansOt ? ' pb-poses-off' : ''}" onclick="App.prodPoses(${l.parti}, ${l.idx})">${_PB_SVG_CLE}Poses</button>
       </div>

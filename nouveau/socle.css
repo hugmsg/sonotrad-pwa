@@ -797,7 +797,11 @@ span.pb-ot-sans { cursor: default; }
 .cd-tableau .cd-case { width: 28px; }
 .cd-tableau .cd-fin { white-space: nowrap; text-align: right; }
 .cd-annulee td { color: var(--sx-gris); text-decoration: line-through; }
-.cd-annulee td.cd-fin, .cd-annulee td:nth-child(8) { text-decoration: none; }
+.cd-annulee td.cd-fin, .cd-annulee td:nth-child(9) { text-decoration: none; }
+.cd-affaire { font-weight: 700; color: var(--sx-bleu); text-decoration: none; font-variant-numeric: tabular-nums; }
+.cd-affaire:hover { text-decoration: underline; }
+.cd-trous { margin: 2px 0 0; font-size: 13px; color: var(--sx-attention); }
+.cd-dejaebp { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--sx-texte); cursor: pointer; }
 .cd-ligne-bloquee { background: var(--sx-rouge-fond); }
 .cd-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: var(--sx-attention-fond); color: var(--sx-attention); border: 1px solid #F3D8A8; }
 .cd-ok { color: var(--sx-vert); font-weight: 600; }

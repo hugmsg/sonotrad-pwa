@@ -256,7 +256,33 @@ Object.assign(App, {
       </div>
       <div class="pb-ligne pb-defile" role="group" aria-label="Filtre">
         ${f('aexporter', 'À exporter dans EBP <b>' + nbAExporter + '</b>')}${f('toutes', 'Toutes')}${f('annulees', 'Annulées')}
-      </div>`;
+      </div>${this._cdeHtmlTrous()}`;
+  },
+
+  // N° d'affaire (« 2026-098 ») manquants dans la suite des commandes enregistrées (hors annulées), par année,
+  // entre le plus petit et le plus grand connus — demande de Hugo (26/11) : repérer une commande oubliée.
+  _cdeTrous() {
+    const parAn = new Map();
+    (S.cde.liste || []).filter(c => c.statut !== 'annulee').forEach(c => {
+      const m = String(c.affaire || '').trim().match(/^(\d{4})-(\d{1,5})$/);
+      if (!m) return;
+      if (!parAn.has(m[1])) parAn.set(m[1], { nums: new Set(), larg: m[2].length });
+      parAn.get(m[1]).nums.add(Number(m[2]));
+    });
+    const trous = [];
+    [...parAn.keys()].sort().forEach(an => {
+      const { nums, larg } = parAn.get(an), l = [...nums].sort((a, b) => a - b);
+      for (let n = l[0] + 1; n < l[l.length - 1]; n++) if (!nums.has(n)) trous.push(an + '-' + String(n).padStart(larg, '0'));
+    });
+    return trous;
+  },
+
+  _cdeHtmlTrous() {
+    if (!S.cde.liste) return '';
+    const t = this._cdeTrous();
+    if (!t.length) return '';
+    const vus = t.slice(0, 30);
+    return `<p class="cd-trous"><b>N° d’affaire manquant${t.length > 1 ? 's' : ''} dans la suite :</b> ${vus.map(x => _otEsc(x)).join(', ')}${t.length > vus.length ? ' … (' + t.length + ' en tout)' : ''}</p>`;
   },
 
   _cdeListeFiltree() {
@@ -281,7 +307,7 @@ Object.assign(App, {
     return `<div class="sx-carte cd-tableau-cadre"><table class="cd-tableau">
       <thead><tr>
         <th class="cd-case">${selectionnables.length ? `<input type="checkbox" aria-label="Tout sélectionner" ${tout ? 'checked' : ''} onclick="App.cdeSelTout(this.checked)">` : ''}</th>
-        <th>N° commande</th><th>Date</th><th>Module</th><th>Agence</th><th class="cd-num">Montant HT</th><th>Prix / OT</th><th>EBP</th><th></th>
+        <th>N° commande</th><th>Affaire</th><th>Date</th><th>Module</th><th>Agence</th><th class="cd-num">Montant HT</th><th>Prix / OT</th><th>EBP</th><th></th>
       </tr></thead><tbody>
       ${l.map(c => {
         const m = this._cdeModuleParCode(c.code_planning);
@@ -289,7 +315,8 @@ Object.assign(App, {
         const pdf = c.pdf && c.pdf.url ? `<a class="pb-doc" href="${_otEsc(c.pdf.url)}" target="_blank" rel="noopener">PDF</a>` : '';
         return `<tr class="${annulee ? 'cd-annulee' : ''}">
           <td class="cd-case">${annulee ? '' : `<input type="checkbox" ${C.sel.has(c.id) ? 'checked' : ''} aria-label="Sélectionner ${_otEsc(c.numero)}" onclick="App.cdeSel(${Number(c.id)}, this.checked)">`}</td>
-          <td><b>${_otEsc(c.numero)}</b>${c.source === 'ocr' ? ' <span class="cd-badge">OCR</span>' : ''}<div class="sx-aide">${_otEsc(c.affaire || '')}</div></td>
+          <td><b>${_otEsc(c.numero)}</b>${c.source === 'ocr' ? ' <span class="cd-badge">OCR</span>' : ''}</td>
+          <td>${c.affaire ? (c.pdf && c.pdf.url ? `<a class="cd-affaire" href="${_otEsc(c.pdf.url)}" target="_blank" rel="noopener" title="PDF de la commande ${_otEsc(c.numero)}">${_otEsc(c.affaire)}</a>` : `<b>${_otEsc(c.affaire)}</b>`) : '<span class="sx-aide">—</span>'}</td>
           <td>${_otEsc(_cdeEbpDate(c.date_commande))}</td>
           <td><b>${_otEsc(c.code_planning || '—')}</b> <span class="sx-aide">${_otEsc(c.ref_module || '')}${m ? ' · ' + (m.parti ? 'parti' : 'sur parc') : ''}</span></td>
           <td>${_otEsc(c.destination || c.client || '')}</td>
@@ -352,7 +379,9 @@ Object.assign(App, {
   async cdeImporter(fichiers, recues = null) {
     fichiers = [...(fichiers || [])].filter(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
     if (!fichiers.length) return this.toast('Choisissez un ou plusieurs fichiers PDF');
-    S.cde.imp = { etat: 'lecture', items: [], ignorees: [], progression: 'Chargement de la lecture des PDF…', recues };
+    // Mails reçus avant la mise en service de la relève (26/11/2026) = reprise de l'historique, déjà saisie dans EBP
+    const dejaEbp = !!(recues && recues.length && recues.every(r => r.recu && r.recu < '2026-11-26'));
+    S.cde.imp = { etat: 'lecture', items: [], ignorees: [], progression: 'Chargement de la lecture des PDF…', recues, dejaEbp };
     this._cdeRendre();
     try { await this._cdeLibs(); }
     catch (e) { S.cde.imp = null; this._cdeRendre(); return this.toast(e.message, 6000); }
@@ -494,6 +523,8 @@ Object.assign(App, {
         <span class="cd-ok">${prets} à enregistrer</span>${bloques ? ` · <span class="cd-bloque">${bloques} bloqué${bloques > 1 ? 's' : ''}</span>` : ''}
         ${imp.ignorees.length ? ` · ${imp.ignorees.length} page${imp.ignorees.length > 1 ? 's' : ''} ignorée${imp.ignorees.length > 1 ? 's' : ''}` : ''}</span>
       <span class="cd-espace"></span>
+      <label class="cd-dejaebp" title="Reprise de l’historique : commandes déjà saisies à la main dans EBP — elles n’iront pas dans « À exporter dans EBP »">
+        <input type="checkbox" ${imp.dejaEbp ? 'checked' : ''} ${imp.enCours ? 'disabled' : ''} onchange="S.cde.imp.dejaEbp = this.checked"> Déjà saisies dans EBP</label>
       <button type="button" class="pb-bouton" onclick="App.cdeAbandonner()">Abandonner</button>
       <button type="button" class="sx-btn sx-btn-principal" ${prets && !imp.enCours ? '' : 'disabled'} onclick="App.cdeEnregistrer()">${imp.enCours ? 'Enregistrement…' : 'Enregistrer ' + prets + ' commande' + (prets > 1 ? 's' : '')}</button>
     </div>
@@ -656,7 +687,7 @@ Object.assign(App, {
     if (!aFaire.length || imp.enCours) return;
     imp.enCours = true;
     this._cdeRendre();
-    let faits = 0; const notes = [];
+    let faits = 0; const notes = [], nouveaux = [];
     for (const it of aFaire) {
       this.toast('⏳ ' + (faits + 1) + ' / ' + aFaire.length + ' — commande ' + it.d.numero + '…', 60000);
       const d = it.d, ot = it.ver && it.ver.ot;
@@ -669,12 +700,17 @@ Object.assign(App, {
       try {
         const r = await this._otPost({ action: 'cde_enregistrer', commande, pdf: it.b64, nom: it.fichier }, 90000);
         it.enregistre = true; faits++;
+        if (r.commande && r.commande.id) nouveaux.push(r.commande.id);
         const p = String(r.planning || '');
         if (p === 'ecrit' && it.module) it.module.d.commande = d.numero;
         if (p.startsWith('autre:')) notes.push(d.numero + ' : le Planning garde la commande ' + p.slice(6));
         else if (p.startsWith('erreur:')) notes.push(d.numero + ' : Planning non mis à jour (' + p.slice(7) + ')');
         else if (p === 'absent') notes.push(d.numero + ' : module absent du Planning (commande enregistrée)');
       } catch (e) { it.erreurEnr = e.message; }
+    }
+    if (imp.dejaEbp && nouveaux.length) {
+      try { await this._otPost({ action: 'cde_ebp', ids: nouveaux }, 60000); notes.push('marquées « déjà dans EBP »'); }
+      catch (e) { notes.push('NON marquées « déjà dans EBP » (' + e.message + ') : à cocher puis « Fichier d’import EBP » sans l’importer'); }
     }
     imp.enCours = false;
     await this._recApresEnregistrement(imp, imp.items);

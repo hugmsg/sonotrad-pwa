@@ -366,6 +366,7 @@ Object.assign(App, {
         <span class="cd-ok">${prets} à enregistrer</span>${bloques ? ` · <span class="cd-bloque">${bloques} bloqué${bloques > 1 ? 's' : ''}</span>` : ''}
         ${imp.ignorees.length ? ` · ${imp.ignorees.length} page${imp.ignorees.length > 1 ? 's' : ''} ignorée${imp.ignorees.length > 1 ? 's' : ''}` : ''}</span>
       <span class="cd-espace"></span>
+      ${imp.items.some(it => !it.bloque && !it.coche) && !imp.enCours ? '<button type="button" class="pb-bouton" onclick="App.expCocherTout()" title="Coche toutes les lignes sans blocage (points d’attention compris)">Cocher tout ce qui n’est pas bloqué</button>' : ''}
       <button type="button" class="pb-bouton" onclick="App.expAbandonner()">Abandonner</button>
       <button type="button" class="sx-btn sx-btn-principal" ${prets && !imp.enCours ? '' : 'disabled'} onclick="App.expEnregistrer()">${imp.enCours ? 'Enregistrement…' : 'Enregistrer ' + prets + ' ordre' + (prets > 1 ? 's' : '')}</button>
     </div>
@@ -396,6 +397,11 @@ Object.assign(App, {
           <td class="cd-fin"><button type="button" class="cd-lien" ${imp.enCours ? 'disabled' : ''} onclick="App.expCorriger(${it.id})">Vérifier / corriger…</button></td>
         </tr>`;
       }).join('')}</tbody></table></div>${ign}`;
+  },
+
+  expCocherTout() {
+    S.exp.imp.items.forEach(it => { if (!it.bloque) it.coche = true; });
+    this._expRendre();
   },
 
   expCocher(id, on) {
