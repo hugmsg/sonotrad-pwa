@@ -974,6 +974,33 @@ async function _post(url, payload, timeoutMs = 60000) {
     });
   };
 })();
+// Garde la position de défilement des listes d'un écran redessiné par innerHTML (2026-11-26 : cocher une case
+// faisait remonter en haut d'une liste de cent lignes). À appeler JUSTE AVANT « el.innerHTML = … » : les éléments
+// défilés sont repérés par balise + id/classes + rang, et leur position est remise après le remplacement (microtâche,
+// donc avant l'affichage).
+function _sxGarderDefilement(el) {
+  if (!el) return;
+  const cle = n => n.tagName + '#' + (n.id || '') + '.' + (typeof n.className === 'string' ? n.className : '');
+  const relever = () => {
+    const vus = {}, l = [];
+    el.querySelectorAll('*').forEach(n => {
+      const k = cle(n); const i = vus[k] = (vus[k] || 0) + 1;
+      if (n.scrollTop || n.scrollLeft) l.push({ k, i, t: n.scrollTop, g: n.scrollLeft });
+    });
+    return l;
+  };
+  const avant = relever();
+  if (!avant.length) return;
+  queueMicrotask(() => {
+    const vus = {}, par = {};
+    avant.forEach(p => { par[p.k + '|' + p.i] = p; });
+    el.querySelectorAll('*').forEach(n => {
+      const k = cle(n); const i = vus[k] = (vus[k] || 0) + 1;
+      const p = par[k + '|' + i];
+      if (p) { n.scrollTop = p.t; n.scrollLeft = p.g; }
+    });
+  });
+}
 function _compress(file, maxW = 1200, q = 0.82) {
   return new Promise(resolve => {
     const img = new Image();

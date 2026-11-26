@@ -515,6 +515,7 @@ Object.assign(App, {
     const lignes = this._lvpLignes();
     const n = s => lignes.filter(l => l.statut === s).length;
     const f = (cle, nom, nb) => `<button type="button" class="pb-onglet" aria-pressed="${L.filtre === cle}" onclick="App.lvpFiltre('${cle}')">${nom}${nb !== undefined ? ' <b>' + nb + '</b>' : ''}</button>`;
+    _sxGarderDefilement(el);
     el.innerHTML = `<div class="sx-ecran pb-ecran">
       ${this._otEntete({ retour: { texte: 'LOXAM', action: 'App.go(\'loxam-menu\')' }, titre: 'Production',
         sousTitre: 'LV / CMR · ' + (L.liste ? n('apartir') + ' à partir' : 'chargement…'), large: true, bandeau: this._pbNav('lv') })}

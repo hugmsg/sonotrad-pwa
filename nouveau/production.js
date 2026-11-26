@@ -347,6 +347,7 @@ Object.assign(App, {
     const puce = (cle, n, texte, classe) => n ? `<button type="button" class="pb-puce pb-puce-${classe}" aria-pressed="${P.filtre === cle}" onclick="App.prodFiltre('${cle}')">${n} ${texte}</button>` : '';
     const maj = pret ? 'à jour à ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : 'chargement…';
 
+    _sxGarderDefilement(el);
     el.innerHTML = `<div class="sx-ecran pb-ecran">
       ${this._otEntete({ retour: { texte: 'LOXAM', action: 'App.go(\'loxam-menu\')' }, titre: 'Production',
         sousTitre: (pret ? surParc + ' modules sur parc · ' : '') + maj, large: true, bandeau: this._pbNav('prod') })}
@@ -623,6 +624,7 @@ Object.assign(App, {
       <select id="${id}" class="pb-select" onchange="App.prodArr('${champ}', this.value)">
         <option value="">${tous}</option>${options.map(o => `<option${String(A[champ]) === String(o) ? ' selected' : ''}>${_otEsc(o)}</option>`).join('')}
       </select>`;
+    _sxGarderDefilement(el);
     el.innerHTML = `<div class="sx-ecran pb-ecran">
       ${this._otEntete({ retour: { texte: 'LOXAM', action: 'App.go(\'loxam-menu\')' }, titre: 'Production',
         sousTitre: pret ? toutes.length + ' arrivées enregistrées' : 'chargement des arrivées…', large: true, bandeau: this._pbNav('arr') })}

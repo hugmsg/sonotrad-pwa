@@ -234,6 +234,7 @@ Object.assign(App, {
     const nbAExporter = liste.filter(c => c.statut !== 'annulee' && !c.ebp_le).length;
     const sous = imp ? (imp.etat === 'lecture' ? 'lecture des PDF…' : imp.items.length + ' bon' + (imp.items.length > 1 ? 's' : '') + ' lu' + (imp.items.length > 1 ? 's' : ''))
       : (C.liste ? nbAExporter + ' à exporter dans EBP' : 'chargement…');
+    _sxGarderDefilement(el);
     el.innerHTML = `<div class="sx-ecran pb-ecran">
       ${this._otEntete({ retour: this._otRetourListe(), titre: 'Commandes',
         sousTitre: 'Reconditionnement · ' + sous, large: true, bandeau: this._otNav('cde') })}

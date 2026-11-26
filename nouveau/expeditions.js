@@ -159,6 +159,7 @@ Object.assign(App, {
     const aFaire = actives.filter(x => this._expLvAFaire(x).length).length;
     const sous = imp ? (imp.etat === 'lecture' ? 'lecture des PDF…' : imp.items.length + ' ordre' + (imp.items.length > 1 ? 's' : '') + ' lu' + (imp.items.length > 1 ? 's' : ''))
       : (E.liste ? aFaire + ' LV à faire' : 'chargement…');
+    _sxGarderDefilement(el);
     el.innerHTML = `<div class="sx-ecran pb-ecran">
       ${this._otEntete({ retour: { texte: 'LOXAM', action: 'App.go(\'loxam-menu\')' }, titre: 'Production',
         sousTitre: 'Expéditions · ' + sous, large: true, bandeau: this._pbNav('exp') })}
