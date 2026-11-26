@@ -212,13 +212,27 @@ Object.assign(App, {
     return [...actifs, ...partis];
   },
 
-  _pbCorrespond(l) {
+  _pbCorrespond(l, sansType) {
     const P = S.pb;
-    if (P.types && P.types.length && !P.types.includes((l.d.module || '').trim())) return false;
+    if (!sansType && P.types && P.types.length && !P.types.includes((l.d.module || '').trim())) return false;
     const q = P.q.trim().toLowerCase();
     if (q && ![l.d.code, l.d.codeModule, l.d.chantier, l.d.ag, l.d.module, l.d.lv, l.d.commande, l.fiche?.numero_ot, l.d.description]
       .some(v => String(v || '').toLowerCase().includes(q))) return false;
     return true;
+  },
+
+  // Filtre « À traiter » ou étapes choisies (après la recherche et le type) : les lignes affichées dans le tableau.
+  _pbFiltreVue(lignes) {
+    const P = S.pb;
+    if (P.filtre === 'retard') return lignes.filter(l => l.retard);
+    if (P.filtre === 'otAFaire') return lignes.filter(l => l.otAFaire && !l.parti);
+    if (P.filtre === 'otAValider') return lignes.filter(l => l.otAValider && !l.parti);
+    if (P.filtre === 'otAEnvoyer') return lignes.filter(l => l.otAEnvoyer);
+    if (P.filtre === 'partisSansOt') return lignes.filter(l => l.otManquant && l.parti);
+    if (P.filtre === 'annoncer') return lignes.filter(l => this._pbAAnnoncer(l));
+    if ((P.etapes || []).length) return lignes.filter(l => P.etapes.includes(l.etape) || (l.deCote && P.etapes.includes('decote')));
+    // « Tous » : le parc, plus les partis encore sans OT (départs précipités) pour ne pas les perdre de vue
+    return lignes.filter(l => !l.parti || l.otManquant);
   },
 
   /* ─ Actions ─ */
@@ -235,8 +249,10 @@ Object.assign(App, {
   // Filtre Type à cases à cocher, façon filtre Excel (2026-11-26) : aucune case = « Tous ».
   _pbHtmlTypes(types, lignes) {
     const P = S.pb, sel = (P.types || []).filter(t => types.includes(t));
+    // Totaux façon Excel : ce que chaque type afficherait avec les autres filtres actuels (étapes, À traiter, recherche)
     const n = {};
-    lignes.forEach(l => { const t = (l.d.module || '').trim(); if (t) n[t] = (n[t] || 0) + 1; });
+    this._pbFiltreVue(lignes.filter(l => this._pbCorrespond(l, true)))
+      .forEach(l => { const t = (l.d.module || '').trim(); if (t) n[t] = (n[t] || 0) + 1; });
     const libelle = !sel.length ? 'Tous' : sel.length === 1 ? sel[0] : sel.length + ' types';
     return `<span class="pb-etiquette pb-sans-tel" id="pb-type-lib">Type</span>
       <details class="pb-multi" id="pb-types" ${P.typesOuvert ? 'open' : ''} ontoggle="App.prodTypesOuvert(this.open)">
@@ -396,16 +412,7 @@ Object.assign(App, {
     const P = S.pb;
     if (!S.depsLoaded) { el.innerHTML = '<div class="sx-chargement">Chargement du Planning…</div>'; return; }
     const admin = this._otAdmin();
-    let lignes = this._pbLignes().filter(l => this._pbCorrespond(l));
-    if (P.filtre === 'retard') lignes = lignes.filter(l => l.retard);
-    else if (P.filtre === 'otAFaire') lignes = lignes.filter(l => l.otAFaire && !l.parti);
-    else if (P.filtre === 'otAValider') lignes = lignes.filter(l => l.otAValider && !l.parti);
-    else if (P.filtre === 'otAEnvoyer') lignes = lignes.filter(l => l.otAEnvoyer);
-    else if (P.filtre === 'partisSansOt') lignes = lignes.filter(l => l.otManquant && l.parti);
-    else if (P.filtre === 'annoncer') lignes = lignes.filter(l => this._pbAAnnoncer(l));
-    else if ((P.etapes || []).length) lignes = lignes.filter(l => P.etapes.includes(l.etape) || (l.deCote && P.etapes.includes('decote')));
-    // « Tous » : le parc, plus les partis encore sans OT (départs précipités) pour ne pas les perdre de vue
-    else lignes = lignes.filter(l => !l.parti || l.otManquant);
+    const lignes = this._pbFiltreVue(this._pbLignes().filter(l => this._pbCorrespond(l)));
 
     const ordre = ['demarrer', 'atelier', 'controle', 'termine', 'pret', 'parti'];   // de côté : étiquette, pas un groupe
     const groupes = ordre.map(cle => {
