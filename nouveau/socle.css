@@ -523,6 +523,9 @@ body.pb-plein #view-prod-bureau.active, body.pb-plein #view-ot-commandes.active 
 .pb-puce-violet { background: #F1ECFA; color: #4B3A7A; border-color: #D8CDEE; }
 .pb-contenu { flex: 1; min-height: 0; width: 100%; max-width: none; margin: 0 auto; padding: 10px 16px 12px; box-sizing: border-box; display: flex; flex-direction: column; }
 .pb-contenu > .sx-carte, .pb-contenu > .sx-chargement { flex-shrink: 0; }
+/* Tableaux des Commandes / Expéditions (import ou liste) : ils défilent eux-mêmes, titres collés en haut — la page
+   ne défile pas (.main-content en overflow hidden), sans cela une longue liste était coupée (26/11, 115 commandes). */
+.pb-contenu > .cd-tableau-cadre { flex: 0 1 auto; min-height: 0; overflow: auto; }
 .pb-tableau { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; background: #FFFFFF; border: 1px solid var(--sx-bord); border-radius: 12px; }
 .pb-interieur { min-width: 1336px; font-size: 13px; }
 .pb-tete { position: sticky; top: 0; z-index: 3; }
