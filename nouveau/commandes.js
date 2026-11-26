@@ -193,6 +193,7 @@ Object.assign(App, {
         .catch(e => { S.cde.liste = S.cde.liste || []; this.toast('Commandes indisponibles : ' + e.message, 5000); })
         .finally(() => { S.cde.chargement = false; }));
     }
+    this._recCharger(force);   // « Commandes reçues » (relève Outlook), en arrière-plan
     if (!S.depsLoaded && !S.depsLoading) attentes.push(this._pbChargerProduction());
     if (!S.archiveLoaded) attentes.push(this._pbChargerArchive());
     if (!attentes.length) return;
@@ -250,6 +251,7 @@ Object.assign(App, {
           <label for="cd-q" class="sx-sr">Rechercher</label>
           <input id="cd-q" type="search" placeholder="N° de commande, code, n° module, agence, affaire…" value="${_otEsc(C.q)}" oninput="App.cdeRecherche(this.value)">
         </div>
+        ${this._recBouton('cde')}
         <button type="button" class="pb-bouton" onclick="App._cdeCharger(true)">Actualiser</button>
       </div>
       <div class="pb-ligne pb-defile" role="group" aria-label="Filtre">
@@ -346,10 +348,11 @@ Object.assign(App, {
     window.pdfjsLib.GlobalWorkerOptions.workerSrc = CDE_LIB.worker;
   },
 
-  async cdeImporter(fichiers) {
+  // recues : PDF venus de « Commandes reçues » (recues.js), rangés dans « Traités » une fois enregistrés.
+  async cdeImporter(fichiers, recues = null) {
     fichiers = [...(fichiers || [])].filter(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
     if (!fichiers.length) return this.toast('Choisissez un ou plusieurs fichiers PDF');
-    S.cde.imp = { etat: 'lecture', items: [], ignorees: [], progression: 'Chargement de la lecture des PDF…' };
+    S.cde.imp = { etat: 'lecture', items: [], ignorees: [], progression: 'Chargement de la lecture des PDF…', recues };
     this._cdeRendre();
     try { await this._cdeLibs(); }
     catch (e) { S.cde.imp = null; this._cdeRendre(); return this.toast(e.message, 6000); }
@@ -674,6 +677,7 @@ Object.assign(App, {
       } catch (e) { it.erreurEnr = e.message; }
     }
     imp.enCours = false;
+    await this._recApresEnregistrement(imp, imp.items);
     imp.items = imp.items.filter(it => !it.enregistre);
     const echecs = imp.items.filter(it => it.erreurEnr).length;
     this.toast('✓ ' + faits + ' commande' + (faits > 1 ? 's' : '') + ' enregistrée' + (faits > 1 ? 's' : '')

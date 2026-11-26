@@ -127,6 +127,7 @@ Object.assign(App, {
         .catch(e => { E.liste = E.liste || []; this.toast('Expéditions indisponibles : ' + e.message, 5000); })
         .finally(() => { E.chargement = false; }));
     }
+    this._recCharger(force);   // « Commandes reçues » (relève Outlook), en arrière-plan
     if (force || (!S.depsLoaded && !S.depsLoading)) attentes.push(this._pbChargerProduction());
     if (!S.archiveLoaded) attentes.push(this._pbChargerArchive());
     if (!attentes.length) return;
@@ -176,6 +177,7 @@ Object.assign(App, {
           <label for="exp-q" class="sx-sr">Rechercher</label>
           <input id="exp-q" type="search" placeholder="N° de commande, BT, code, n° module, agence…" value="${_otEsc(E.q)}" oninput="App.expRecherche(this.value)">
         </div>
+        ${this._recBouton('exp')}
         <button type="button" class="pb-bouton" onclick="App._expCharger(true)">Actualiser</button>
       </div>
       <div class="pb-ligne pb-defile" role="group" aria-label="Filtre">
@@ -241,11 +243,12 @@ Object.assign(App, {
 
   /* ─ Import ─ */
 
-  async expImporter(fichiers) {
+  // recues : PDF venus de « Commandes reçues » (recues.js), rangés dans « Traités » une fois enregistrés.
+  async expImporter(fichiers, recues = null) {
     fichiers = [...(fichiers || [])].filter(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
     if (!fichiers.length) return this.toast('Choisissez un ou plusieurs fichiers PDF');
     const E = this._expEtat();
-    E.imp = { etat: 'lecture', items: [], ignorees: [], progression: 'Chargement de la lecture des PDF…' };
+    E.imp = { etat: 'lecture', items: [], ignorees: [], progression: 'Chargement de la lecture des PDF…', recues };
     this._expRendre();
     try { await this._cdeLibs(); }
     catch (e) { E.imp = null; this._expRendre(); return this.toast(e.message, 6000); }
@@ -345,6 +348,9 @@ Object.assign(App, {
       if (m.d.lv && !m.parti) info(nom + ' : LV ' + m.d.lv + ' déjà faite');
     });
     if (it.source === 'ocr' && !it.corrige) attention('Lu par OCR : vérifier n° de commande, modules et BT');
+    const objet = this._recObjet(S.exp && S.exp.imp, it.fichier);
+    if (/ANNUL/i.test(objet)) attention('Mail « ' + objet + ' » : comparer avec l’ordre déjà enregistré (Modifier… ou Annuler…)');
+    if (/ENLEV/i.test(objet)) attention('Mail d’enlèvement : ce n’est pas un ordre d’expédition');
     it.alertes = a;
     it.bloque = a.some(x => x.niv === 'bloque');
     it.coche = !it.bloque && (it.corrige || !a.some(x => x.niv === 'attention'));
@@ -528,6 +534,7 @@ Object.assign(App, {
       } catch (e) { it.erreurEnr = e.message; }
     }
     imp.enCours = false;
+    await this._recApresEnregistrement(imp, imp.items);
     imp.items = imp.items.filter(it => !it.enregistre);
     const echecs = imp.items.filter(it => it.erreurEnr).length;
     this.toast('✓ ' + faits + ' ordre' + (faits > 1 ? 's' : '') + ' enregistré' + (faits > 1 ? 's' : '') + ', n° écrit au Planning'

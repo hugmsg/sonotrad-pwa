@@ -816,6 +816,10 @@ span.pb-ot-sans { cursor: default; }
 .cd-progression { font-size: 14px; color: var(--sx-texte); }
 .cd-ignorees { margin-top: 10px; padding: 10px 14px; font-size: 13px; }
 .cd-ignorees summary { cursor: pointer; color: var(--sx-gris); }
+/* Commandes reçues par mail (recues.js, 2026-11-26) */
+.rec-fenetre { max-width: 860px; }
+.rec-cadre { max-height: 55dvh; overflow: auto; border: 1px solid var(--sx-bord); border-radius: 8px; }
+.rec-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .cd-ignorees ul { margin: 8px 0 0 18px; padding: 0; }
 /* Vérifier / corriger : PDF au-dessus (téléphone) ou à gauche (grand écran), champs à côté */
 .cd-fenetre { max-width: 1180px; }
