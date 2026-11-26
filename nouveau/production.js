@@ -214,7 +214,7 @@ Object.assign(App, {
 
   _pbCorrespond(l) {
     const P = S.pb;
-    if (P.type && (l.d.module || '').trim() !== P.type) return false;
+    if (P.types && P.types.length && !P.types.includes((l.d.module || '').trim())) return false;
     const q = P.q.trim().toLowerCase();
     if (q && ![l.d.code, l.d.codeModule, l.d.chantier, l.d.ag, l.d.module, l.d.lv, l.d.commande, l.fiche?.numero_ot, l.d.description]
       .some(v => String(v || '').toLowerCase().includes(q))) return false;
@@ -232,7 +232,40 @@ Object.assign(App, {
     this._pbRendre();
   },
   prodFiltre(cle) { S.pb.filtre = S.pb.filtre === cle ? '' : cle; S.pb.etapes = []; this._pbRendre(); },
-  prodType(v) { S.pb.type = v; this._pbRendre(); },
+  // Filtre Type à cases à cocher, façon filtre Excel (2026-11-26) : aucune case = « Tous ».
+  _pbHtmlTypes(types, lignes) {
+    const P = S.pb, sel = (P.types || []).filter(t => types.includes(t));
+    const n = {};
+    lignes.forEach(l => { const t = (l.d.module || '').trim(); if (t) n[t] = (n[t] || 0) + 1; });
+    const libelle = !sel.length ? 'Tous' : sel.length === 1 ? sel[0] : sel.length + ' types';
+    return `<span class="pb-etiquette pb-sans-tel" id="pb-type-lib">Type</span>
+      <details class="pb-multi" id="pb-types" ${P.typesOuvert ? 'open' : ''} ontoggle="App.prodTypesOuvert(this.open)">
+        <summary class="pb-select" aria-labelledby="pb-type-lib">${_otEsc(libelle)}</summary>
+        <div class="pb-multi-liste" role="group" aria-label="Types de module">
+          <label class="pb-multi-tous"><input type="checkbox" ${!sel.length ? 'checked' : ''} onchange="App.prodTypesTous()"> Tous</label>
+          ${types.map(t => `<label><input type="checkbox" value="${_otEsc(t)}" ${sel.includes(t) ? 'checked' : ''} onchange="App.prodTypeCoche(this.value, this.checked)"> <span>${_otEsc(t)}</span> <span class="pb-gris">${n[t] || 0}</span></label>`).join('')}
+        </div>
+      </details>`;
+  },
+  prodTypeCoche(t, on) {
+    const s = new Set(S.pb.types || []);
+    if (on) s.add(t); else s.delete(t);
+    S.pb.types = [...s]; S.pb.typesOuvert = true;
+    this._pbRendre();
+  },
+  prodTypesTous() { S.pb.types = []; S.pb.typesOuvert = true; this._pbRendre(); },
+  prodTypesOuvert(ouvert) {
+    S.pb.typesOuvert = ouvert;
+    if (!ouvert || this._pbTypesFermer) return;
+    // Clic en dehors ou Échap : la liste se referme (une seule fois installé)
+    this._pbTypesFermer = e => {
+      const d = document.getElementById('pb-types');
+      if (!d || !d.open) return;
+      if (e.type === 'keydown' ? e.key === 'Escape' : !d.contains(e.target)) d.open = false;
+    };
+    document.addEventListener('click', this._pbTypesFermer);
+    document.addEventListener('keydown', this._pbTypesFermer);
+  },
   prodRecherche(v) {
     S.pb.q = v;
     clearTimeout(this._pbMinuterie);
@@ -323,10 +356,7 @@ Object.assign(App, {
             <label for="pb-q" class="sx-sr">Rechercher</label>
             <input id="pb-q" type="search" placeholder="Code, n° module, agence, chantier, n° OT, LV…" value="${_otEsc(P.q)}" oninput="App.prodRecherche(this.value)">
           </div>
-          <label for="pb-type" class="pb-etiquette pb-sans-tel">Type</label>
-          <select id="pb-type" class="pb-select" onchange="App.prodType(this.value)">
-            <option value="">Tous</option>${types.map(t => `<option${P.type === t ? ' selected' : ''}>${_otEsc(t)}</option>`).join('')}
-          </select>
+          ${this._pbHtmlTypes(types, lignes)}
           <div class="pb-bascule" role="group" aria-label="Affichage">
             <button type="button" aria-pressed="true">Tableau</button>
             <button type="button" aria-pressed="false" onclick="App.prodColonnes()">Colonnes</button>

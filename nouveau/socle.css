@@ -508,6 +508,17 @@ body.pb-plein #view-prod-bureau.active, body.pb-plein #view-ot-commandes.active 
 .pb-recherche input { height: 38px; font-size: 14px; }
 .pb-etiquette { color: var(--sx-gris); font-weight: 600; }
 .pb-select { height: 34px; border: 1px solid var(--sx-bord-champ); border-radius: 8px; font-family: inherit; font-size: 13px; padding: 0 8px; background: #FFFFFF; color: var(--sx-texte); }
+/* Filtre Type à cases à cocher (2026-11-26) */
+.pb-multi { position: relative; }
+.pb-multi > summary { display: flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; min-width: 110px; }
+.pb-multi > summary::-webkit-details-marker { display: none; }
+.pb-multi > summary::after { content: ''; margin-left: auto; border: 4px solid transparent; border-top: 5px solid var(--sx-gris); transform: translateY(3px); }
+.pb-multi-liste { position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; min-width: 220px; max-height: min(60vh, 420px); overflow: auto;
+  background: #FFFFFF; border: 1px solid var(--sx-bord); border-radius: 8px; box-shadow: 0 6px 20px rgba(20, 36, 51, .14); padding: 4px 0; }
+.pb-multi-liste label { display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.pb-multi-liste label:hover { background: var(--sx-bleu-clair); }
+.pb-multi-liste label .pb-gris { margin-left: auto; padding-left: 12px; }
+.pb-multi-tous { border-bottom: 1px solid var(--sx-separateur); font-weight: 600; }
 .pb-bouton { height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--sx-bord-champ); background: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--sx-texte); cursor: pointer; }
 .pb-bascule { display: flex; height: 34px; border: 1px solid var(--sx-bord-champ); border-radius: 8px; overflow: hidden; }
 .pb-bascule button { border: 0; padding: 0 12px; font-family: inherit; font-size: 13px; font-weight: 600; background: #FFFFFF; color: var(--sx-texte); cursor: pointer; }
