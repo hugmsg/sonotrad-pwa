@@ -1615,7 +1615,7 @@ Object.assign(App, {
     const noms = { loxam: 'Excel LOXAM', sonotrad: 'Excel SONOTRAD', pdf: 'PDF (version LOXAM)' };
     const nb = d && d.fichiers ? d.fichiers.length : 0;
     const aSono = !!(d && d.fichiers && d.fichiers.some(x => x.type === 'sonotrad'));
-    const liens = d && d.fichiers ? d.fichiers.map(x => `<a class="sx-btn sx-btn-second" href="${_otEsc(x.url)}" target="_blank" rel="noopener"
+    const liens = d && d.fichiers ? d.fichiers.map(x => `<a class="sx-btn sx-btn-second" href="${_otEsc(x.url)}" target="_blank" rel="noopener" ${x.type === 'pdf' ? '' : 'data-onglet'}
         title="${_otEsc(x.nom)}">${_otEsc(noms[x.type] || x.nom)}</a>`).join('') : '';
     return `<section class="sx-carte sx-carte-pad" style="display:flex;flex-direction:column;gap:8px;">
       <span class="sx-h2" style="font-size:16px;">Documents</span>

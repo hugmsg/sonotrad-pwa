@@ -188,13 +188,14 @@ Object.assign(App, {
     }
   },
 
+  // Aperçu dans la PWA (apercu.js) ; pas d'onglet pour une LV non enregistrée (n° provisoire : ne pas l'imprimer).
   async lvuApercu() {
-    const fen = window.open('', '_blank');     // ouvert tout de suite (sinon bloqué après l'attente)
     const ok = await this.lvuGenerate();
-    if (!ok || !S.lvu.lastDoc) { if (fen) fen.close(); return; }
-    const url = S.lvu.lastDoc.output('bloburl');
-    if (fen) fen.location.href = url; else window.open(url, '_blank');
-    if (!S.lvu.modif && !S.lvu.enregistree) {
+    if (!ok || !S.lvu.lastDoc) return;
+    const provisoire = !S.lvu.modif && !S.lvu.enregistree;
+    this.pdfApercu({ titre: 'Aperçu de la ' + ((S.lvu.type || 'LV').toUpperCase()), octets: new Uint8Array(S.lvu.lastDoc.output('arraybuffer')),
+      onglet: !provisoire, bandeau: provisoire ? 'Pas encore enregistrée : n° provisoire, ne pas imprimer' : '' });
+    if (provisoire) {
       const t = document.getElementById('lvu-result-title');
       if (t) t.textContent = 'Aperçu ouvert — pas encore enregistrée (n° provisoire, ne pas imprimer)';
     }
