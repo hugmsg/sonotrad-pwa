@@ -820,6 +820,8 @@ span.pb-ot-sans { cursor: default; }
 .rec-fenetre { max-width: 860px; }
 .rec-cadre { max-height: 55dvh; overflow: auto; border: 1px solid var(--sx-bord); border-radius: 8px; }
 .rec-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rec-voir { max-width: 900px; }
+.rec-voir .rec-apercu { max-height: none; flex: 1; min-height: 50dvh; height: calc(100dvh - 220px); }
 .cd-ignorees ul { margin: 8px 0 0 18px; padding: 0; }
 /* Vérifier / corriger : PDF au-dessus (téléphone) ou à gauche (grand écran), champs à côté */
 .cd-fenetre { max-width: 1180px; }

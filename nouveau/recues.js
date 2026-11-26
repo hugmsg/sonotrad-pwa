@@ -23,8 +23,25 @@ function _recDate(iso) {
 Object.assign(App, {
 
   _recEtat() {
-    S.rec = S.rec || { liste: null, chargement: false };
+    S.rec = S.rec || { liste: null, chargement: false, pdfs: {} };
     return S.rec;
+  },
+
+  // PDF d'un fichier reçu (base64), gardé en mémoire : « Voir » et « Importer » ne le téléchargent qu'une fois.
+  _recPdfB64(id) {
+    const P = this._recEtat().pdfs;
+    if (!P[id]) {
+      P[id] = this._otPost({ action: 'rec_pdf', id }, 90000).then(r => r.pdf);
+      P[id].catch(() => { delete P[id]; });
+    }
+    return P[id];
+  },
+
+  // Téléchargement en arrière-plan, deux à la fois, dès que la liste s'ouvre.
+  async _recPrecharger(l) {
+    const file = l.map(r => r.id);
+    const ouvrier = async () => { while (file.length) { try { await this._recPdfB64(file.shift()); } catch (e) { /* réessayé au besoin */ } } };
+    await Promise.all([ouvrier(), ouvrier()]);
   },
 
   // Liste du dossier « Commandes reçues » (silencieuse : sans elle, l'import manuel reste là).
@@ -80,12 +97,13 @@ Object.assign(App, {
         <button type="button" class="sx-btn sx-btn-discret" data-r="classer">Classer sans importer</button>
         <button type="button" class="sx-btn sx-btn-principal" data-r="importer">Importer</button>
       </div></div>`;
+    this._recPrecharger(l);
     const choix = await new Promise(resolve => {
       const fin = x => { voile.remove(); resolve(x); };
       voile.addEventListener('click', e => {
         if (e.target === voile) return fin(null);
         const voir = e.target.closest('[data-voir]');
-        if (voir) return this._recVoir(voir.dataset.voir);
+        if (voir) return this._recVoir(l.find(r => r.id === voir.dataset.voir));
         const r = e.target.closest('[data-r]');
         if (!r) return;
         if (r.dataset.r === 'fermer') return fin(null);
@@ -106,14 +124,34 @@ Object.assign(App, {
     await this._recImporter(vue, sel);
   },
 
-  async _recVoir(id) {
-    const w = window.open('', '_blank');
+  // Aperçu dans la PWA (pages dessinées par pdf.js, comme « Vérifier / corriger »), par-dessus la liste.
+  async _recVoir(r) {
+    if (!r) return;
+    const voile = document.createElement('div');
+    voile.className = 'sx-voile';
+    voile.innerHTML = `<div class="sx-fenetre pb-fenetre rec-voir" role="dialog" aria-modal="true" aria-labelledby="rec-voir-titre">
+      <h3 id="rec-voir-titre">${_otEsc(r.objet)}</h3>
+      <div class="sx-aide">${_otEsc(_recDate(r.recu))} · ${_otEsc(r.piece)}</div>
+      <div class="cd-apercu rec-apercu"><div class="sx-chargement">Chargement du PDF…</div></div>
+      <div class="sx-fenetre-boutons">
+        <button type="button" class="sx-btn sx-btn-discret" data-onglet="1">Ouvrir dans un onglet</button>
+        <button type="button" class="sx-btn sx-btn-principal" data-fermer="1">Fermer</button>
+      </div></div>`;
+    let b64 = null;
+    voile.addEventListener('click', e => {
+      if (e.target === voile || e.target.closest('[data-fermer]')) return voile.remove();
+      if (e.target.closest('[data-onglet]') && b64) {
+        const url = URL.createObjectURL(new Blob([_cdeOctets(b64)], { type: 'application/pdf' }));
+        window.open(url, '_blank', 'noopener');
+        setTimeout(() => URL.revokeObjectURL(url), 120000);
+      }
+    });
+    document.body.appendChild(voile);
+    const cadre = voile.querySelector('.rec-apercu');
     try {
-      const r = await this._otPost({ action: 'rec_pdf', id }, 90000);
-      const url = URL.createObjectURL(new Blob([_cdeOctets(r.pdf)], { type: 'application/pdf' }));
-      if (w) w.location = url; else window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 120000);
-    } catch (e) { if (w) w.close(); this.toast('PDF indisponible : ' + e.message, 5000); }
+      b64 = await this._recPdfB64(r.id);
+      if (cadre.isConnected) await this._cdeApercu({ b64 }, cadre);
+    } catch (e) { cadre.innerHTML = `<div class="sx-vide">PDF indisponible : ${_otEsc(e.message)}</div>`; }
   },
 
   async _recImporter(vue, sel) {
@@ -121,8 +159,7 @@ Object.assign(App, {
     for (let i = 0; i < sel.length; i++) {
       this.toast('⏳ Téléchargement ' + (i + 1) + ' / ' + sel.length + '…', 60000);
       try {
-        const r = await this._otPost({ action: 'rec_pdf', id: sel[i].id }, 90000);
-        fichiers.push(new File([_cdeOctets(r.pdf)], sel[i].nom, { type: 'application/pdf' }));
+        fichiers.push(new File([_cdeOctets(await this._recPdfB64(sel[i].id))], sel[i].nom, { type: 'application/pdf' }));
       } catch (e) { this.toast(sel[i].objet + ' : ' + e.message, 6000); }
     }
     if (!fichiers.length) return;
