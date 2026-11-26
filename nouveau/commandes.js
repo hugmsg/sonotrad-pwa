@@ -160,6 +160,8 @@ function _cdeEuros(n) {
 }
 function _cdeNorm(s) { return String(s || '').replace(/\s+/g, '').toUpperCase(); }
 function _cdeAgence(s) { return String(s || '').replace(/\D/g, '').replace(/^0+/, ''); }
+// Agence d'un passage au Planning ({d, parti}) : colonne D, sinon le code en tête du libellé
+function _cdeAgPlan(m) { return m ? (m.d.ag || ((m.d.chantier || '').match(/^(\d{3,6})/) || [])[1] || '') : ''; }
 
 const _cdeScripts = {};
 function _cdeScript(src) {
@@ -459,13 +461,43 @@ Object.assign(App, {
       it.candidats = cands;
       if (!it.codeChoisi) it.code = cands.length ? String(cands[0].d.code || '').toUpperCase() : '';
     });
+    // Plusieurs passages du module au Planning : chaque passage est contrôlé (son OT, ses autres commandes),
+    // puis on retient celui dont l'OT a le montant du bon et l'agence celle du bon (sinon le plus récent).
+    const lignes = [];
+    items.forEach(it => {
+      it.debutVer = lignes.length;
+      const codesCands = it.candidats.map(c => String(c.d.code || '').toUpperCase());
+      it.parPassages = codesCands.length > 1 && (!it.codeChoisi || codesCands.includes(it.code));   // code tapé hors Planning : contrôlé seul
+      const codes = it.parPassages ? codesCands : [it.code];
+      codes.forEach(code => lignes.push({ numero: it.d.numero, ref_module: it.d.ref_module, code }));
+    });
     let ver = [];
     try {
-      const r = await this._otPost({ action: 'cde_verifier', lignes: items.map(it => ({ numero: it.d.numero, ref_module: it.d.ref_module, code: it.code })) }, 60000);
-      ver = r.lignes || [];
-    } catch (e) { this.toast('Contrôle impossible : ' + e.message, 6000); }
-    items.forEach((it, i) => {
-      it.ver = ver[i] || null;
+      for (let i = 0; i < lignes.length; i += 150) {
+        const r = await this._otPost({ action: 'cde_verifier', lignes: lignes.slice(i, i + 150) }, 60000);
+        ver = ver.concat(r.lignes || []);
+      }
+    } catch (e) { ver = []; this.toast('Contrôle impossible : ' + e.message, 6000); }
+    items.forEach(it => {
+      it.passages = null; it.passageAuto = '';
+      if (it.parPassages) {
+        it.passages = it.candidats.map((c, k) => {
+          const v = ver[it.debutVer + k] || null, ot = v && v.ot;
+          const ag = _cdeAgPlan(c);
+          let score = 0;
+          if (ot && ot.total != null && it.d.total_ht != null && Math.abs(Number(ot.total) - Number(it.d.total_ht)) <= 0.01) score += 2;
+          if (ag && it.d.client && _cdeAgence(ag) === _cdeAgence(it.d.client)) score += 1;
+          return { code: String(c.d.code || '').toUpperCase(), c, v, ot, ag, score };
+        });
+        let p = it.passages.find(x => x.code === it.code) || it.passages[0];
+        if (!it.codeChoisi) {
+          const max = Math.max(...it.passages.map(x => x.score));
+          p = it.passages.find(x => x.score === max);
+          it.code = p.code;
+          it.passageAuto = max === 3 ? 'ot+agence' : max === 2 ? 'ot' : max === 1 ? 'agence' : '';
+        }
+        it.ver = p.v;
+      } else it.ver = ver[it.debutVer] || null;
       // Module absent du Planning : code trouvé par l'historique des OT (même n° de module)
       if (!it.code && it.ver && it.ver.ot && it.ver.ot.code) { it.code = it.ver.ot.code; it.codeParOt = true; }
       this._cdeAlertes(it);
@@ -490,9 +522,12 @@ Object.assign(App, {
     it.module = m;
     if (!it.code) bloque('Module introuvable au Planning et dans les OT : choisir le code (Vérifier / corriger)');
     else if (it.codeParOt) attention('Module absent du Planning — code trouvé par l’historique des OT');
-    if (it.candidats && it.candidats.length > 1 && !it.codeChoisi) attention(it.candidats.length + ' passages de ce module au Planning : vérifier le code');
+    if (it.candidats && it.candidats.length > 1 && !it.codeChoisi) {
+      if (it.passageAuto === 'ot+agence') info(it.candidats.length + ' passages au Planning : ' + it.code + ' retenu (même agence, OT au même montant)');
+      else attention(it.candidats.length + ' passages de ce module au Planning : vérifier le passage (Vérifier / corriger)');
+    }
     // Agence : celle de la commande, sinon celle du Planning
-    const agPlan = m ? (m.d.ag || ((m.d.chantier || '').match(/^(\d{3,6})/) || [])[1] || '') : '';
+    const agPlan = _cdeAgPlan(m);
     if (!d.client && agPlan) { d.client = String(agPlan).padStart(4, '0'); it.clientParPlanning = true; info('Agence absente du bon : ' + d.client + ' prise au Planning'); }
     else if (!d.client) attention('Code agence absent du bon');
     else if (agPlan && _cdeAgence(agPlan) !== _cdeAgence(d.client)) attention('Agence ' + d.client + ' sur le bon, ' + agPlan + ' au Planning');
@@ -632,8 +667,8 @@ Object.assign(App, {
       ${champ('numero', 'N° de commande', d.numero, lu.numero && lu.numero !== d.numero ? 'lu : ' + lu.numero : '')}
       ${champ('ref_module', 'N° du module (Commentaires)', d.ref_module, lu.ref_module && lu.ref_module !== d.ref_module ? 'lu : ' + lu.ref_module : '')}
       ${cands.length > 1 ? `<label class="cd-champ"><span>Passage au Planning</span><select class="sx-select" data-c="choix">
-          ${cands.map(c => `<option value="${_otEsc(c.d.code)}" ${String(c.d.code).toUpperCase() === it.code ? 'selected' : ''}>${_otEsc(c.d.code)} — ${c.parti ? 'parti le ' + _otEsc(_fmtDateShort(c.d.fin)) : 'sur parc'}</option>`).join('')}
-        </select></label>` : ''}
+          ${(it.passages || cands.map(c => ({ code: String(c.d.code || '').toUpperCase(), c, ag: _cdeAgPlan(c) }))).map(p => `<option value="${_otEsc(p.code)}" ${p.code === it.code ? 'selected' : ''}>${_otEsc(p.code)} — ${p.c.parti ? 'parti le ' + _otEsc(_fmtDateShort(p.c.d.fin)) : 'sur parc'}${p.ag ? ' · ag. ' + _otEsc(p.ag) : ''} · ${p.ot ? 'OT ' + _otEsc(p.ot.numero || '') + ' ' + _otEsc(_cdeEuros(p.ot.total)) : 'sans OT'}</option>`).join('')}
+        </select><span class="sx-aide">L’OT comparé est celui du passage choisi.</span></label>` : ''}
       ${champ('code', 'Code SONOTRAD du module', it.code, 'Colonne B du Planning — laisser vide pour le retrouver par le n° du module')}
       ${champ('total_ht', 'Montant HT (€)', d.total_ht == null ? '' : String(d.total_ht).replace('.', ','), lu.total_ht != null && lu.total_ht !== d.total_ht ? 'lu : ' + _cdeEuros(lu.total_ht) : '')}
       ${champ('client', 'Code agence', d.client)}
