@@ -4,7 +4,7 @@
 //             Network-first pour les appels API AppScript
 // ═══════════════════════════════════════════════════════════════════════════
 
-const CACHE_NAME  = 'sonotrad-nouveau-v107';
+const CACHE_NAME  = 'sonotrad-nouveau-v108';
 const ASSETS = [
   './',
   './index.html',
@@ -30,6 +30,11 @@ const ASSETS = [
   './socle.css',
   './icon-192.png',
   './icon-512.png',
+  './marque/sonotrad_S_horizontal_blanc.svg',
+  './marque/sonotrad_S_horizontal_couleur.svg',
+  './marque/sonotrad_S_empile_blanc.svg',
+  './marque/icone-180.png',
+  './marque/icone-32.png',
   './supabase.js',
   'https://cdn.tailwindcss.com',
 ];

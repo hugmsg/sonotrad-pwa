@@ -605,7 +605,7 @@ Object.assign(App, {
       .map(([ref, qty]) => ({ ref, des: dmap[ref], qty }))
       .sort((a, b) => b.qty - a.qty).slice(0, 7);
     const maxQ = top[0]?.qty || 1;
-    const barColors = ['#1A5276','#1D9E75','#D85A30','#3266AD','#BA7517','#0F6E56','#993C1D'];
+    const barColors = ['#0C4EA2','#1D9E75','#D85A30','#3266AD','#BA7517','#0F6E56','#993C1D'];
     const el = document.getElementById('shist-top-list');
     if (!el) return;
     if (!top.length) {
@@ -715,7 +715,7 @@ Object.assign(App, {
     }));
     const pts  = px.map(p => p.x + ',' + p.y).join(' ');
     const area = `M${px[0].x},${H - pad} ` + px.map(p => `L${p.x},${p.y}`).join(' ') + ` L${px[px.length - 1].x},${H - pad}Z`;
-    const stroke = '#1A5276', fill = 'rgba(26,82,118,0.07)';
+    const stroke = '#0C4EA2', fill = 'rgba(12,78,162,0.07)';
     const dots = px.filter((_, i) => i === 0 || i === px.length - 1 || vals[i] !== vals[i - 1])
       .map(p => `<circle cx="${p.x}" cy="${p.y}" r="3" fill="${stroke}"/>`).join('');
     return `<svg viewBox="0 0 ${W} ${H + 10}" style="width:100%;height:52px;" preserveAspectRatio="none">
@@ -2238,7 +2238,7 @@ Object.assign(App, {
           <div style="font-size:12px;color:#78350F;">Aucun snapshot enregistré. Le catalogue PIDEM contient
             <strong>${sd.new.length} références</strong>. Valider pour enregistrer la photo initiale.</div>
         </div>
-        <button onclick="App.applySnapshot()" style="width:100%;padding:12px;border:none;background:#1A5276;color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
+        <button onclick="App.applySnapshot()" style="width:100%;padding:12px;border:none;background:#0C4EA2;color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
           📸 Enregistrer snapshot initial (${sd.new.length} refs)
         </button>`;
       return;
@@ -2299,7 +2299,7 @@ Object.assign(App, {
       </div>`;
     }
 
-    html += `<button onclick="App.applySnapshot()" style="width:100%;padding:12px;border:none;background:#1A5276;color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px;">
+    html += `<button onclick="App.applySnapshot()" style="width:100%;padding:12px;border:none;background:#0C4EA2;color:white;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px;">
       ✅ Valider et mettre à jour le snapshot
     </button>`;
 
@@ -2474,7 +2474,7 @@ Object.assign(App, {
     display.forEach((row, i) => {
       const isHeader = (i === cfg.headerRowIdx);
       const isData   = (i >= cfg.dataRowIdx);
-      const rowBg    = isHeader ? '#1A5276' : isData ? 'white' : '#F8FAFC';
+      const rowBg    = isHeader ? '#0C4EA2' : isData ? 'white' : '#F8FAFC';
       const rowColor = isHeader ? 'white'   : '#334155';
       const rowFw    = isHeader ? '700'     : '400';
       html += `<tr style="background:${rowBg};color:${rowColor};font-weight:${rowFw};">`;
@@ -2596,7 +2596,7 @@ Object.assign(App, {
 
     if (btn) {
       btn.disabled = parsed.length === 0;
-      btn.style.background = parsed.length ? '#1A5276' : '#94A3B8';
+      btn.style.background = parsed.length ? '#0C4EA2' : '#94A3B8';
       btn.style.cursor = parsed.length ? 'pointer' : 'not-allowed';
       btn.textContent = parsed.length
         ? `✅ Importer ${parsed.length} références dans le catalogue`

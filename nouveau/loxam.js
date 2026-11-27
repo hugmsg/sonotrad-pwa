@@ -787,7 +787,7 @@ Object.assign(App, {
       fab.style.background = S.depSelectMode ? '#1D4ED8' : 'var(--brand)';
       fab.style.boxShadow  = S.depSelectMode
         ? '0 4px 16px rgba(29,78,216,0.5)'
-        : '0 4px 16px rgba(26,82,118,0.45)';
+        : '0 4px 16px rgba(12,78,162,0.45)';
     }
     this._updateDepLvBar();
     this._renderDepList();
@@ -891,7 +891,7 @@ Object.assign(App, {
         S.depSelectMode = false;
         S.depSelected.clear();
         const fab = document.getElementById('fab-dep');
-        if (fab) { fab.style.background = 'var(--brand)'; fab.style.boxShadow = '0 4px 16px rgba(26,82,118,0.45)'; }
+        if (fab) { fab.style.background = 'var(--brand)'; fab.style.boxShadow = '0 4px 16px rgba(12,78,162,0.45)'; }
         this._updateDepLvBar();
         this._renderDepList();
         this.toast(`✅ ${res.count} module${res.count > 1 ? 's' : ''} marqué${res.count > 1 ? 's' : ''} parti${res.count > 1 ? 's' : ''}`);

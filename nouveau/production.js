@@ -1735,7 +1735,7 @@ Object.assign(App, {
     const el = document.getElementById('sig-apercu');
     if (!el || !S.sig) return;
     el.innerHTML = this._sigTexteHtml(document.getElementById('sig-dessus').value, '11pt') + '<br>'
-      + `<img src="${S.sig.logo}" width="120" height="64" alt="SONOTRAD" style="display:block;border:0"><br>`
+      + `<img src="${S.sig.logo}" width="180" alt="SONOTRAD" style="height:auto" style="display:block;border:0"><br>`
       + this._sigTexteHtml(document.getElementById('sig-dessous').value, '8pt');
   },
 

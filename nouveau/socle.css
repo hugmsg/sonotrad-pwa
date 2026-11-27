@@ -6,11 +6,11 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  --sx-bleu:        #0F4DA2;
-  --sx-bleu-fonce:  #0A3A7E;
+  --sx-bleu:        #0C4EA2;   /* charte SONOTRAD nov. 2026 */
+  --sx-bleu-fonce:  #0A2F66;
   --sx-bleu-clair:  #E6EEFA;
   --sx-bleu-texte:  #D9E5F7;
-  --sx-jaune:       #FECA14;
+  --sx-jaune:       #F5A800;
   --sx-jaune-clair: #FFF6D6;
   --sx-fond:        #F4F6FA;
   --sx-carte:       #FFFFFF;
@@ -572,7 +572,7 @@ body.pb-plein #view-prod-bureau.active, body.pb-plein #view-ot-commandes.active 
 .pb-etape { display: flex; gap: 3px; }
 .pb-seg { width: 15px; height: 6px; border-radius: 3px; background: #E1E6EE; }
 .pb-seg-1 { background: #9AA6B5; } .pb-seg-2 { background: #2F6FD0; } .pb-seg-3 { background: #E0A100; }
-.pb-seg-4 { background: #1F9254; } .pb-seg-5 { background: #0F4DA2; } .pb-seg-6 { background: #7A5AC8; }
+.pb-seg-4 { background: #1F9254; } .pb-seg-5 { background: #0C4EA2; } .pb-seg-6 { background: #7A5AC8; }
 .pb-gris { color: #9AA6B5; } .pb-gris2 { color: #3D4B5C; white-space: nowrap; } .pb-rouge { color: #9B1C1C; font-weight: 700; }
 .pb-droite { text-align: right; }
 .pb-montant { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }

@@ -16,7 +16,7 @@ const SK = {
 };
 const CODES_TTL = 30 * 60 * 1000; // 30 min
 const ARR_SOURCES = {
-  loxam:      { label: 'LOXAM',      icon: '🏗️', bg: '#EBF5FB', color: '#1A5276' },
+  loxam:      { label: 'LOXAM',      icon: '🏗️', bg: '#EBF5FB', color: '#0C4EA2' },
   bcb:        { label: 'BCB',        icon: '🚛', bg: '#FEF3E8', color: '#7D2A00' },
   agorastore: { label: 'Agorastore', icon: '🏷️', bg: '#F5EEF8', color: '#5B2C6F' },
   rapido:     { label: 'Rapido',     icon: '⚡', bg: '#F0FDF4', color: '#14532D' },
@@ -362,7 +362,8 @@ const App = {
     const subtitleEl = document.getElementById('header-subtitle');
     if (titleEl && subtitleEl) {
       if (onHome) {
-        titleEl.textContent    = 'SONOTRAD';
+        // Logo de la charte (nov. 2026) : version blanche sur l'en-tête bleu
+        titleEl.innerHTML      = '<img src="marque/sonotrad_S_horizontal_blanc.svg" alt="SONOTRAD" style="height:22px;width:auto;display:block;">';
         subtitleEl.textContent = 'Multi-activités';
       } else {
         const meta = S.activity ? activityMeta[S.activity] : null;
