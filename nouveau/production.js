@@ -26,6 +26,21 @@ const _PB_SVG_DOSSIER = '<svg width="15" height="15" viewBox="0 0 24 24" fill="n
 const _PB_SVG_CLE = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L3 17.8V21h3.2l6.3-6.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.4-.4-2.4z"></path></svg>';
 const _PB_SVG_CHEVRON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>';
 
+// Filtre Type à cases à cocher (façon Excel), commun à Production et Arrivées : sel = types cochés, n = totaux par type,
+// arr = '' (Production) ou 'true' (Arrivées), passé tel quel aux actions. Un seul des deux écrans est affiché à la fois (id pb-types).
+function _pbHtmlMultiTypes(types, sel, n, ouvert, arr) {
+  const a = arr ? ', true' : '';
+  const libelle = !sel.length ? 'Tous' : sel.length === 1 ? sel[0] : sel.length + ' types';
+  return `<span class="pb-etiquette pb-sans-tel" id="pb-type-lib">Type</span>
+    <details class="pb-multi" id="pb-types" ${ouvert ? 'open' : ''} ontoggle="App.prodTypesOuvert(this.open${a})">
+      <summary class="pb-select" aria-labelledby="pb-type-lib">${_otEsc(libelle)}</summary>
+      <div class="pb-multi-liste" role="group" aria-label="Types de module">
+        <label class="pb-multi-tous"><input type="checkbox" ${!sel.length ? 'checked' : ''} onchange="App.prodTypesTous(${arr ? 'true' : ''})"> Tous</label>
+        ${types.map(t => `<label><input type="checkbox" value="${_otEsc(t)}" ${sel.includes(t) ? 'checked' : ''} onchange="App.prodTypeCoche(this.value, this.checked${a})"> <span>${_otEsc(t)}</span> <span class="pb-gris">${n[t] || 0}</span></label>`).join('')}
+      </div>
+    </details>`;
+}
+
 Object.assign(App, {
 
   /* ─ Entrée ─ */
@@ -253,25 +268,25 @@ Object.assign(App, {
     const n = {};
     this._pbFiltreVue(lignes.filter(l => this._pbCorrespond(l, true)))
       .forEach(l => { const t = (l.d.module || '').trim(); if (t) n[t] = (n[t] || 0) + 1; });
-    const libelle = !sel.length ? 'Tous' : sel.length === 1 ? sel[0] : sel.length + ' types';
-    return `<span class="pb-etiquette pb-sans-tel" id="pb-type-lib">Type</span>
-      <details class="pb-multi" id="pb-types" ${P.typesOuvert ? 'open' : ''} ontoggle="App.prodTypesOuvert(this.open)">
-        <summary class="pb-select" aria-labelledby="pb-type-lib">${_otEsc(libelle)}</summary>
-        <div class="pb-multi-liste" role="group" aria-label="Types de module">
-          <label class="pb-multi-tous"><input type="checkbox" ${!sel.length ? 'checked' : ''} onchange="App.prodTypesTous()"> Tous</label>
-          ${types.map(t => `<label><input type="checkbox" value="${_otEsc(t)}" ${sel.includes(t) ? 'checked' : ''} onchange="App.prodTypeCoche(this.value, this.checked)"> <span>${_otEsc(t)}</span> <span class="pb-gris">${n[t] || 0}</span></label>`).join('')}
-        </div>
-      </details>`;
+    return _pbHtmlMultiTypes(types, sel, n, P.typesOuvert, '');
   },
-  prodTypeCoche(t, on) {
-    const s = new Set(S.pb.types || []);
+  // Etat du filtre Type : Production (S.pb) ou Arrivées (S.pb.arr, arr = true)
+  _pbTypesEtat(arr) { return arr ? S.pb.arr : S.pb; },
+  prodTypeCoche(t, on, arr) {
+    const E = this._pbTypesEtat(arr), s = new Set(E.types || []);
     if (on) s.add(t); else s.delete(t);
-    S.pb.types = [...s]; S.pb.typesOuvert = true;
+    E.types = [...s]; E.typesOuvert = true;
+    if (arr) E.mois = PB_MOIS_PAR_PAGE;
     this._pbRendre();
   },
-  prodTypesTous() { S.pb.types = []; S.pb.typesOuvert = true; this._pbRendre(); },
-  prodTypesOuvert(ouvert) {
-    S.pb.typesOuvert = ouvert;
+  prodTypesTous(arr) {
+    const E = this._pbTypesEtat(arr);
+    E.types = []; E.typesOuvert = true;
+    if (arr) E.mois = PB_MOIS_PAR_PAGE;
+    this._pbRendre();
+  },
+  prodTypesOuvert(ouvert, arr) {
+    this._pbTypesEtat(arr).typesOuvert = ouvert;
     if (!ouvert || this._pbTypesFermer) return;
     // Clic en dehors ou Échap : la liste se referme (une seule fois installé)
     this._pbTypesFermer = e => {
@@ -550,7 +565,11 @@ Object.assign(App, {
     A.mois = PB_MOIS_PAR_PAGE;
     this._pbRendre();
   },
-  prodArrType(t) { const A = S.pb.arr; A.type = A.type === t ? '' : t; A.mois = PB_MOIS_PAR_PAGE; this._pbRendre(); },
+  // Clic sur un total « Sur parc par type » : ce type seul, ou retour à « Tous » s'il était déjà seul coché
+  prodArrType(t) {
+    const A = S.pb.arr, seul = (A.types || []).length === 1 && A.types[0] === t;
+    A.types = seul ? [] : [t]; A.mois = PB_MOIS_PAR_PAGE; this._pbRendre();
+  },
   prodArrPlus() { S.pb.arr.mois += PB_MOIS_PAR_PAGE; this._pbArrRendreCorps(); },
 
   // Une ligne par arrivée, avec ce que le Planning et les fiches en disent
@@ -580,13 +599,14 @@ Object.assign(App, {
     });
   },
 
-  _pbArrFiltrees(lignes, sansStatut = false) {
+  _pbArrFiltrees(lignes, sansStatut = false, sansType = false) {
     const A = S.pb.arr;
     const q = A.q.trim().toLowerCase();
+    const types = sansType ? [] : (A.types || []);
     return lignes.filter(l => {
       if (A.annee && (!l.date || String(l.date.getFullYear()) !== A.annee)) return false;
       if (A.agence && (l.a.agence || '') !== A.agence) return false;
-      if (A.type && (l.a.type || '') !== A.type) return false;
+      if (types.length && !types.includes(l.a.type || '')) return false;
       if (q && ![l.a.code, l.a.numModule, l.a.agence, l.a.destination, l.a.lv, l.pl?.d.chantier, l.pl?.d.lv, l.fiche?.numero_ot, l.a.numSerie]
         .some(v => String(v || '').toLowerCase().includes(q))) return false;
       const st = A.statuts || [];
@@ -643,7 +663,11 @@ Object.assign(App, {
           </div>
           ${select('annee', 'pb-an', 'Année', annees, 'Toutes')}
           ${select('agence', 'pb-ag', 'Provenance', agences, 'Toutes')}
-          ${select('type', 'pb-ty', 'Type', types, 'Tous')}
+          ${(() => {   // totaux façon Excel : ce que chaque type afficherait avec les autres filtres actuels (statut compris)
+            const nt = {};
+            this._pbArrFiltrees(toutes, false, true).forEach(l => { const t = l.a.type || ''; if (t) nt[t] = (nt[t] || 0) + 1; });
+            return _pbHtmlMultiTypes(types, (A.types || []).filter(t => types.includes(t)), nt, A.typesOuvert, 'arr');
+          })()}
           <button type="button" class="pb-bouton" onclick="App._pbArrCharger(true)">Actualiser</button>
         </div>
         <div class="pb-ligne pb-defile" role="group" aria-label="Statut">
@@ -653,7 +677,7 @@ Object.assign(App, {
         </div>
         ${totaux.length ? `<div class="pb-ligne pb-defile pb-totaux" role="group" aria-label="Sur parc par type">
           <span class="pb-etiquette">Sur parc par type :</span>
-          ${totaux.map(([t, v]) => `<button type="button" class="pb-total" aria-pressed="${A.type === t}" onclick="App.prodArrType('${_otEsc(t).replace(/'/g, '&#39;')}')" title="Filtrer sur ${_otEsc(t)}">${_otEsc(t)} <b>${Number(v)}</b></button>`).join('')}
+          ${totaux.map(([t, v]) => `<button type="button" class="pb-total" aria-pressed="${(A.types || []).includes(t)}" onclick="App.prodArrType('${_otEsc(t).replace(/'/g, '&#39;')}')" title="Filtrer sur ${_otEsc(t)}">${_otEsc(t)} <b>${Number(v)}</b></button>`).join('')}
           <span class="pb-total pb-total-somme">Total <b>${totalParc}</b></span>
         </div>` : ''}
       </div></div>

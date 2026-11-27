@@ -463,7 +463,8 @@ Object.assign(App, {
       if (!it.codeChoisi) it.code = cands.length ? String(cands[0].d.code || '').toUpperCase() : '';
     });
     // Plusieurs passages du module au Planning : chaque passage est contrôlé (son OT, ses autres commandes),
-    // puis on retient celui dont l'OT a le montant du bon et l'agence celle du bon (sinon le plus récent).
+    // puis on retient celui dont l'OT est le plus récent (n° AAMMJJ-NNNN : ordre alphabétique = ordre chronologique) ;
+    // aucun OT → le passage le plus récent (actifs d'abord, puis partis du plus récent au plus ancien).
     const lignes = [];
     items.forEach(it => {
       it.debutVer = lignes.length;
@@ -485,17 +486,15 @@ Object.assign(App, {
         it.passages = it.candidats.map((c, k) => {
           const v = ver[it.debutVer + k] || null, ot = v && v.ot;
           const ag = _cdeAgPlan(c);
-          let score = 0;
-          if (ot && ot.total != null && it.d.total_ht != null && Math.abs(Number(ot.total) - Number(it.d.total_ht)) <= 0.01) score += 2;
-          if (ag && it.d.client && _cdeAgence(ag) === _cdeAgence(it.d.client)) score += 1;
-          return { code: String(c.d.code || '').toUpperCase(), c, v, ot, ag, score };
+          const cle = ot ? ((String(ot.numero || '').match(/\d{6}-\d{4}/) || [])[0] || '') : '';
+          return { code: String(c.d.code || '').toUpperCase(), c, v, ot, ag, cle };
         });
         let p = it.passages.find(x => x.code === it.code) || it.passages[0];
         if (!it.codeChoisi) {
-          const max = Math.max(...it.passages.map(x => x.score));
-          p = it.passages.find(x => x.score === max);
+          const avecOt = it.passages.filter(x => x.cle);
+          p = avecOt.length ? avecOt.reduce((a, b) => (b.cle > a.cle ? b : a)) : it.passages[0];
           it.code = p.code;
-          it.passageAuto = max === 3 ? 'ot+agence' : max === 2 ? 'ot' : max === 1 ? 'agence' : '';
+          it.passageAuto = avecOt.length ? 'ot_recent' : '';
         }
         it.ver = p.v;
       } else it.ver = ver[it.debutVer] || null;
@@ -524,7 +523,7 @@ Object.assign(App, {
     if (!it.code) bloque('Module introuvable au Planning et dans les OT : choisir le code (Vérifier / corriger)');
     else if (it.codeParOt) attention('Module absent du Planning — code trouvé par l’historique des OT');
     if (it.candidats && it.candidats.length > 1 && !it.codeChoisi) {
-      if (it.passageAuto === 'ot+agence') info(it.candidats.length + ' passages au Planning : ' + it.code + ' retenu (même agence, OT au même montant)');
+      if (it.passageAuto === 'ot_recent') info(it.candidats.length + ' passages au Planning : ' + it.code + ' retenu (OT le plus récent)');
       else attention(it.candidats.length + ' passages de ce module au Planning : vérifier le passage (Vérifier / corriger)');
     }
     // Agence : celle de la commande, sinon celle du Planning
